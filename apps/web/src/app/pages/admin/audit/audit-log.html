@@ -1,0 +1,93 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('audit.title') }}</h1>
+      <p class="page__subtitle">{{ t('audit.subtitle') }}</p>
+    </div>
+  </header>
+
+  <div class="ds-card">
+    <div class="audit-filters">
+      <input
+        type="search"
+        class="field__input"
+        [ngModel]="filters().actor"
+        (ngModelChange)="setFilter('actor', $event)"
+        [placeholder]="t('audit.filter.actor')"
+        [attr.aria-label]="t('audit.filter.actor')"
+      />
+      <select
+        class="field__input"
+        [ngModel]="filters().action"
+        (ngModelChange)="setFilter('action', $event)"
+        [attr.aria-label]="t('audit.col.action')"
+      >
+        <option value="">{{ t('audit.filter.allActions') }}</option>
+        @for (a of actions(); track a) { <option [value]="a">{{ a }}</option> }
+      </select>
+      <select
+        class="field__input"
+        [ngModel]="filters().entityType"
+        (ngModelChange)="setFilter('entityType', $event)"
+        [attr.aria-label]="t('audit.col.entity')"
+      >
+        <option value="">{{ t('audit.filter.allEntities') }}</option>
+        @for (e of entityTypes(); track e) { <option [value]="e">{{ e }}</option> }
+      </select>
+      <label class="audit-filters__date">
+        <span>{{ t('audit.filter.from') }}</span>
+        <input type="date" class="field__input" [ngModel]="filters().from" (ngModelChange)="setFilter('from', $event)" />
+      </label>
+      <label class="audit-filters__date">
+        <span>{{ t('audit.filter.to') }}</span>
+        <input type="date" class="field__input" [ngModel]="filters().to" (ngModelChange)="setFilter('to', $event)" />
+      </label>
+      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="reset()">{{ t('audit.reset') }}</button>
+    </div>
+
+    @if (state() === 'loading') {
+      <p>{{ t('crud.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('audit.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (entries().length === 0) {
+      <div class="empty"><p>{{ t('audit.empty') }}</p></div>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('audit.col.time') }}</th>
+              <th>{{ t('audit.col.actor') }}</th>
+              <th>{{ t('audit.col.action') }}</th>
+              <th>{{ t('audit.col.entity') }}</th>
+              <th>{{ t('audit.col.details') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of entries(); track e.id) {
+              <tr>
+                <td class="nowrap">{{ formatTime(e.createdAt) }}</td>
+                <td>{{ e.actor }}</td>
+                <td><code class="audit-action">{{ e.action }}</code></td>
+                <td>
+                  <span class="audit-entity">{{ e.entityType }}</span>
+                  @if (e.entityId) { <span class="audit-entity-id">{{ e.entityId }}</span> }
+                </td>
+                <td class="audit-meta">{{ formatMeta(e.metadata) || t('audit.noDetails') }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pager
+        [page]="page()"
+        [pageSize]="pageSize()"
+        [total]="total()"
+        [totalPages]="totalPages()"
+        (pageChange)="goToPage($event)"
+      />
+    }
+  </div>
+</section>

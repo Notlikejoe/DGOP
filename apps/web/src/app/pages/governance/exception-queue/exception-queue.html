@@ -1,0 +1,80 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('exc.title') }}</h1>
+      <p class="page__subtitle">{{ t('exc.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
+    </div>
+  </header>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('exc.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('exc.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (items().length === 0) {
+      <div class="empty"><p>{{ t('exc.empty') }}</p></div>
+    } @else {
+      <div class="toolbar">
+        <span class="toolbar__count">{{ items().length }} {{ t('exc.records') }}</span>
+      </div>
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('exc.col.code') }}</th>
+              <th>{{ t('exc.col.name') }}</th>
+              <th>{{ t('exc.col.domain') }}</th>
+              <th>{{ t('exc.col.classification') }}</th>
+              <th class="actions-col">{{ t('exc.col.action') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of items(); track a.id) {
+              <tr>
+                <td><code>{{ a.code }}</code></td>
+                <td>{{ name(a) }}</td>
+                <td>{{ name(a.domain) }}</td>
+                <td>
+                  @if (a.classification) {
+                    <span class="swatch-cell"><span class="swatch-dot" [style.background]="a.classification.color"></span>{{ name(a.classification) }}</span>
+                  } @else { - }
+                </td>
+                <td class="actions-col">
+                  @if (canAssign) {
+                    <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openAssign(a)">{{ t('exc.assign') }}</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @if (modalOpen() && target(); as item) {
+    <app-modal [title]="t('exc.assignTitle')" (close)="close()">
+      <div class="form">
+        <p class="hint">{{ t('exc.assignHint') }}</p>
+        <p><strong><code>{{ item.code }}</code></strong> — {{ name(item) }}</p>
+        <label class="field">
+          <span class="field__label">{{ t('exc.field.person') }}<span class="req">*</span></span>
+          <select class="field__input" [ngModel]="personId()" (ngModelChange)="personId.set($event)" name="personId">
+            <option value="">-</option>
+            @for (p of people(); track p.id) { <option [value]="p.id">{{ personName(p) }}</option> }
+          </select>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!personId() || saving()" (click)="assign()">
+          {{ saving() ? t('crud.saving') : t('exc.assign') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

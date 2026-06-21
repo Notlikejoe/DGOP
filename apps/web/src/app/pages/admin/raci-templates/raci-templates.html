@@ -1,0 +1,150 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('nav.raci') }}</h1>
+      <p class="page__subtitle">{{ t('raci.subtitle') }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">
+      + {{ t('crud.new') }}
+    </button>
+  </header>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('crud.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (templates().length === 0) {
+      <div class="empty">
+        <p>{{ t('crud.empty') }}</p>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate()">+ {{ t('crud.new') }}</button>
+      </div>
+    } @else {
+      <div class="toolbar">
+        <input
+          type="search"
+          class="toolbar__search"
+          [value]="search()"
+          (input)="search.set($any($event.target).value)"
+          [placeholder]="t('crud.searchPlaceholder')"
+          [attr.aria-label]="t('crud.search')"
+        />
+        <span class="toolbar__count">{{ filtered().length }} {{ t('crud.records') }}</span>
+      </div>
+      @if (filtered().length === 0) {
+        <div class="empty"><p>{{ t('crud.noMatches') }}</p></div>
+      } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('crud.code') }}</th>
+              <th>{{ t('crud.name') }}</th>
+              <th>{{ t('raci.processType') }}</th>
+              <th>{{ t('raci.roles') }}</th>
+              <th>{{ t('crud.status') }}</th>
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (tpl of filtered(); track tpl.id) {
+              <tr>
+                <td>{{ tpl.code }}</td>
+                <td>{{ name(tpl) }}</td>
+                <td>{{ tpl.processType || '-' }}</td>
+                <td>
+                  <span class="raci-pills">
+                    @for (item of tpl.items; track item.roleTypeId) {
+                      <span class="raci-pill raci-pill--{{ item.responsibility }}" [title]="roleName(item.roleTypeId)">
+                        {{ item.responsibility }}
+                      </span>
+                    }
+                  </span>
+                </td>
+                <td>
+                  @if (tpl.isActive) {
+                    <app-status-chip kind="success" [label]="t('crud.active')" />
+                  } @else {
+                    <app-status-chip kind="muted" [label]="t('crud.inactive')" />
+                  }
+                </td>
+                <td class="actions-col">
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(tpl)">{{ t('crud.edit') }}</button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="deleteTemplate(tpl)">{{ t('crud.delete') }}</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      }
+    }
+  </div>
+
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? 'raci.editTitle' : 'raci.newTitle')" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        <label class="field">
+          <span class="field__label">{{ t('crud.code') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="code" [ngModel]="draft().code" (ngModelChange)="set('code', $event)" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('crud.nameEn') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="nameEn" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('crud.nameAr') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="nameAr" dir="rtl" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('raci.processType') }}</span>
+          <input type="text" class="field__input" name="processType" [ngModel]="draft().processType" (ngModelChange)="set('processType', $event)" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('crud.description') }}</span>
+          <textarea class="field__input" rows="2" name="description" [ngModel]="draft().description" (ngModelChange)="set('description', $event)"></textarea>
+        </label>
+
+        <div class="items">
+          <div class="items__head">
+            <span class="field__label">{{ t('raci.items') }}<span class="req">*</span></span>
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="addItem()">+ {{ t('raci.addItem') }}</button>
+          </div>
+          @if (draft().items.length === 0) {
+            <p class="items__empty">{{ t('raci.noItems') }}</p>
+          }
+          @for (item of draft().items; track $index) {
+            <div class="item-row">
+              <select class="field__input" [ngModel]="item.roleTypeId" [name]="'role_' + $index"
+                (ngModelChange)="updateItem($index, 'roleTypeId', $event)">
+                @for (rt of roleTypes(); track rt.id) {
+                  <option [value]="rt.id">{{ name(rt) }}</option>
+                }
+              </select>
+              <select class="field__input item-row__resp" [ngModel]="item.responsibility" [name]="'resp_' + $index"
+                (ngModelChange)="updateItem($index, 'responsibility', $event)">
+                @for (r of responsibilities; track r) {
+                  <option [value]="r">{{ r }} — {{ t('raci.resp.' + r) }}</option>
+                }
+              </select>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="removeItem($index)" aria-label="Remove">✕</button>
+            </div>
+          }
+        </div>
+
+        <label class="field field--inline">
+          <input type="checkbox" class="field__checkbox" name="isActive" [ngModel]="draft().isActive" (ngModelChange)="set('isActive', $event)" />
+          <span class="field__label">{{ t('crud.active') }}</span>
+        </label>
+      </form>
+
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

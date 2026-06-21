@@ -1,0 +1,98 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t(config().titleKey) }}</h1>
+      <p class="page__subtitle">{{ t(config().subtitleKey) }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate(null)">
+      + {{ t(config().addRootKey) }}
+    </button>
+  </header>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('crud.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (nodes().length === 0) {
+      <div class="empty">
+        <p>{{ t('crud.empty') }}</p>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate(null)">+ {{ t(config().addRootKey) }}</button>
+      </div>
+    } @else {
+      <div class="toolbar">
+        <input
+          type="search"
+          class="toolbar__search"
+          [value]="search()"
+          (input)="search.set($any($event.target).value)"
+          [placeholder]="t('crud.searchPlaceholder')"
+          [attr.aria-label]="t('crud.search')"
+        />
+      </div>
+      @if (rows().length === 0) {
+        <div class="empty"><p>{{ t('crud.noMatches') }}</p></div>
+      } @else {
+        <app-tree-view
+          [rows]="rows()"
+          [showActions]="true"
+          (add)="openCreate($event)"
+          (edit)="openEditById($event)"
+          (remove)="removeById($event)"
+        />
+      }
+    }
+  </div>
+
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? config().editTitleKey : config().newTitleKey)" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        <label class="field">
+          <span class="field__label">{{ t('crud.code') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="code"
+            [ngModel]="model().code" (ngModelChange)="setField('code', $event)" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('crud.nameEn') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="nameEn"
+            [ngModel]="model().nameEn" (ngModelChange)="setField('nameEn', $event)" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('crud.nameAr') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="nameAr" dir="rtl"
+            [ngModel]="model().nameAr" (ngModelChange)="setField('nameAr', $event)" />
+        </label>
+        @if (config().showDescription !== false) {
+          <label class="field">
+            <span class="field__label">{{ t('crud.description') }}</span>
+            <textarea class="field__input" rows="2" name="description"
+              [ngModel]="model().description" (ngModelChange)="setField('description', $event)"></textarea>
+          </label>
+        }
+        <label class="field">
+          <span class="field__label">{{ t('hierarchy.parent') }}</span>
+          <select class="field__input" name="parentId"
+            [ngModel]="model().parentId" (ngModelChange)="setField('parentId', $event)">
+            <option [ngValue]="null">{{ t('hierarchy.noParent') }}</option>
+            @for (n of parentOptions(); track n.id) {
+              <option [ngValue]="n.id">{{ name(n) }} ({{ n.code }})</option>
+            }
+          </select>
+        </label>
+        <label class="field field--inline">
+          <input type="checkbox" class="field__checkbox" name="isActive"
+            [ngModel]="model().isActive" (ngModelChange)="setField('isActive', $event)" />
+          <span class="field__label">{{ t('crud.active') }}</span>
+        </label>
+      </form>
+
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

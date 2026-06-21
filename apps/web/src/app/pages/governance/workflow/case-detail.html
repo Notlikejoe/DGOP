@@ -1,0 +1,171 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <a class="back-link" routerLink="/governance/workflow">&larr; {{ t('wf.backToInbox') }}</a>
+      @if (wfCase(); as c) {
+        <h1><code>{{ c.code }}</code> {{ c.title }}</h1>
+        <p class="page__subtitle">{{ typeLabel(c.type) }}</p>
+      } @else {
+        <h1>{{ t('wf.caseTitle') }}</h1>
+      }
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
+      @if (canSubmit()) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="submitCase()">{{ t('wf.submitCase') }}</button>
+      }
+    </div>
+  </header>
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('crud.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card"><p class="error">{{ t('crud.loadError') }}</p></div>
+  } @else if (wfCase(); as c) {
+    <div class="detail-grid">
+      <div class="ds-card">
+        <h2 class="card-title">{{ t('wf.overview') }}</h2>
+        <dl class="meta">
+          <dt>{{ t('wf.col.status') }}</dt>
+          <dd>
+            @if (canEdit) {
+              <select class="field__input inline-select" [ngModel]="c.status" (ngModelChange)="changeStatus($event)" name="status">
+                @for (s of caseStatuses; track s) { <option [value]="s">{{ t('case.' + s) }}</option> }
+              </select>
+            } @else {
+              <app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" />
+            }
+          </dd>
+          <dt>{{ t('wf.field.asset') }}</dt>
+          <dd>@if (c.asset) { <code>{{ c.asset.code }}</code> {{ name(c.asset) }} } @else { - }</dd>
+          @if (c.description) { <dt>{{ t('wf.field.description') }}</dt><dd>{{ c.description }}</dd> }
+        </dl>
+
+        @if (c.assignment; as a) {
+          <h3 class="sub-title">{{ t('wf.proposedAssignment') }}</h3>
+          <p>
+            {{ name(a.roleType) }} &mdash; {{ personName(a.person) }}
+            <app-status-chip [kind]="approvalKind(a.approvalStatus)" [label]="t('approval.' + a.approvalStatus)" />
+          </p>
+        }
+      </div>
+
+      <div class="ds-card">
+        <h2 class="card-title">{{ t('wf.timeline') }}</h2>
+        @if (!c.events || c.events.length === 0) {
+          <p class="muted">{{ t('wf.noEvents') }}</p>
+        } @else {
+          <ul class="timeline">
+            @for (e of c.events; track e.id) {
+              <li class="timeline__item">
+                <span class="timeline__dot" aria-hidden="true"></span>
+                <div>
+                  <p class="timeline__action">{{ t('wf.event.' + e.action) }}
+                    @if (e.toStatus) { <span class="muted">&rarr; {{ t('case.' + e.toStatus) }}</span> }
+                  </p>
+                  @if (e.comment) { <p class="timeline__comment">{{ e.comment }}</p> }
+                  <p class="timeline__meta">{{ e.actor }} · {{ fmtDateTime(e.createdAt) }}</p>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="ds-card card--wide">
+        <div class="card-head">
+          <h2 class="card-title">{{ t('wf.tasks') }}</h2>
+          @if (canAddTask) {
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openAddTask()">{{ t('wf.addTask') }}</button>
+          }
+        </div>
+        @if (c.tasks.length === 0) {
+          <p class="muted">{{ t('wf.noTasksCase') }}</p>
+        } @else {
+          <div class="table-wrap">
+            <table class="ds-table">
+              <thead>
+                <tr>
+                  <th>{{ t('wf.col.task') }}</th>
+                  <th>{{ t('wf.col.assignee') }}</th>
+                  <th>{{ t('wf.col.due') }}</th>
+                  <th>{{ t('wf.col.sla') }}</th>
+                  <th>{{ t('wf.col.outcome') }}</th>
+                  <th class="actions-col">{{ t('crud.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (task of c.tasks; track task.id) {
+                  <tr>
+                    <td>{{ task.title }}</td>
+                    <td>{{ task.assignee?.displayName ?? '-' }}</td>
+                    <td>{{ fmtDate(task.dueDate) }}</td>
+                    <td><app-status-chip [kind]="slaKind(task.slaStatus)" [label]="t('sla.' + task.slaStatus)" /></td>
+                    <td>
+                      @if (task.decision) {
+                        {{ t('wf.decision.' + task.decision) }}
+                        @if (task.decisionComment) { <span class="muted"> — {{ task.decisionComment }}</span> }
+                      } @else { <span class="muted">{{ t('wf.taskStatus.' + task.status) }}</span> }
+                    </td>
+                    <td class="actions-col">
+                      @if (canDecide(task)) {
+                        <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openDecision(task, 'approved')">{{ t('wf.approve') }}</button>
+                        <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'rejected')">{{ t('wf.reject') }}</button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (decideTask(); as task) {
+    <app-modal [title]="decision() === 'approved' ? t('wf.approveTitle') : t('wf.rejectTitle')" (close)="closeDecision()">
+      <div class="form">
+        <p><strong>{{ task.title }}</strong></p>
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.comment') }}</span>
+          <textarea class="field__input" rows="3" [ngModel]="comment()" (ngModelChange)="comment.set($event)" name="comment"></textarea>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeDecision()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="submitDecision()">
+          {{ saving() ? t('crud.saving') : (decision() === 'approved' ? t('wf.approve') : t('wf.reject')) }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (taskModalOpen()) {
+    <app-modal [title]="t('wf.addTask')" (close)="closeAddTask()">
+      <div class="form">
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.title') }}<span class="req">*</span></span>
+          <input class="field__input" [ngModel]="taskTitle()" (ngModelChange)="taskTitle.set($event)" name="title" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.col.assignee') }}</span>
+          <select class="field__input" [ngModel]="taskAssignee()" (ngModelChange)="taskAssignee.set($event)" name="assignee">
+            <option value="">{{ t('wf.unassigned') }}</option>
+            @for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }}</option> }
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.col.due') }}</span>
+          <input type="date" class="field__input" [ngModel]="taskDue()" (ngModelChange)="taskDue.set($event)" name="due" />
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeAddTask()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!taskTitle().trim() || saving()" (click)="addTask()">
+          {{ saving() ? t('crud.saving') : t('wf.addTask') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

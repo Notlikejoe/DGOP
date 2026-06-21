@@ -1,0 +1,52 @@
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+
+  .field__input {
+    min-width: 11rem;
+  }
+
+  &__date {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--ds-text-muted, #6b7280);
+
+    .field__input {
+      min-width: 9rem;
+    }
+  }
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.audit-action {
+  font-size: 0.82rem;
+  background: var(--ds-surface-muted, #f3f4f6);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.audit-entity {
+  font-weight: 600;
+}
+
+.audit-entity-id {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ds-text-muted, #6b7280);
+  font-family: var(--ds-font-mono, monospace);
+}
+
+.audit-meta {
+  font-size: 0.82rem;
+  color: var(--ds-text-muted, #6b7280);
+  max-width: 28rem;
+  word-break: break-word;
+}

@@ -1,0 +1,257 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('nav.roles') }}</h1>
+      <p class="page__subtitle">{{ t('roles.subtitle') }}</p>
+    </div>
+    @if (auth.hasPermission('roles.create')) {
+      <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">
+        + {{ t('roles.new') }}
+      </button>
+    }
+  </header>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('crud.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('roles.col.role') }}</th>
+              <th>{{ t('crud.code') }}</th>
+              <th>{{ t('roles.col.type') }}</th>
+              <th>{{ t('roles.col.users') }}</th>
+              <th>{{ t('roles.col.permissions') }}</th>
+              <th>{{ t('crud.status') }}</th>
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of roles(); track r.id) {
+              <tr>
+                <td>{{ name(r) }}</td>
+                <td><code>{{ r.code }}</code></td>
+                <td>
+                  @if (r.isSystem) {
+                    <app-status-chip kind="info" [label]="t('roles.system')" />
+                  } @else {
+                    <app-status-chip kind="muted" [label]="t('roles.custom')" />
+                  }
+                </td>
+                <td>{{ r.userCount }}</td>
+                <td>{{ isSysAdmin(r) ? '∞' : r.permissionCount }}</td>
+                <td>
+                  @if (r.isActive) {
+                    <app-status-chip kind="success" [label]="t('crud.active')" />
+                  } @else {
+                    <app-status-chip kind="muted" [label]="t('crud.inactive')" />
+                  }
+                </td>
+                <td class="actions-col">
+                  <div class="row-actions">
+                    @if (auth.hasPermission('roles.edit')) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openPerms(r)">
+                        {{ t('roles.action.permissions') }}
+                      </button>
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openScope(r)">
+                        {{ t('roles.action.scope') }}
+                      </button>
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(r)">
+                        {{ t('crud.edit') }}
+                      </button>
+                    }
+                    @if (auth.hasPermission('roles.delete') && !r.isSystem) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm danger" (click)="remove(r)">
+                        {{ t('crud.delete') }}
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>
+
+<!-- Create / Edit details -->
+@if (mode() === 'create' || mode() === 'edit') {
+  <app-modal [title]="mode() === 'create' ? t('roles.newTitle') : t('roles.editTitle')" (close)="close()">
+    <form class="form" (ngSubmit)="saveDetails()">
+      @if (mode() === 'create') {
+        <label class="field">
+          <span class="field__label">{{ t('crud.code') }}<span class="req">*</span></span>
+          <input type="text" class="field__input" name="code" [(ngModel)]="form.code" />
+        </label>
+      }
+      <label class="field">
+        <span class="field__label">{{ t('crud.nameEn') }}<span class="req">*</span></span>
+        <input type="text" class="field__input" name="nameEn" [(ngModel)]="form.nameEn" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('crud.nameAr') }}<span class="req">*</span></span>
+        <input type="text" class="field__input" name="nameAr" dir="rtl" [(ngModel)]="form.nameAr" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('crud.description') }}</span>
+        <textarea class="field__input" rows="2" name="description" [(ngModel)]="form.description"></textarea>
+      </label>
+      <label class="field field--inline">
+        <input type="checkbox" class="field__checkbox" name="isActive" [(ngModel)]="form.isActive" />
+        <span class="field__label">{{ t('crud.active') }}</span>
+      </label>
+      @if (formError()) {
+        <p class="error">{{ t('crud.saveError') }}</p>
+      }
+    </form>
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveDetails()">
+        {{ saving() ? t('crud.saving') : t('crud.save') }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Permission matrix -->
+@if (mode() === 'perms' && active()) {
+  <app-modal [title]="t('roles.permissions.title') + ' — ' + name(active()!)" (close)="close()">
+    @if (isSysAdmin(active()!)) {
+      <p class="note">{{ t('roles.permissions.systemImmutable') }}</p>
+    } @else {
+      <p class="page__subtitle">{{ t('roles.permissions.hint') }}</p>
+      <div class="table-wrap">
+        <table class="ds-table matrix">
+          <thead>
+            <tr>
+              <th>{{ t('roles.permissions.resource') }}</th>
+              @for (a of actions; track a) {
+                <th class="matrix__act">{{ t('act.' + a) }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of resourceRows(); track row.resource) {
+              <tr>
+                <td>
+                  <button type="button" class="matrix__res" (click)="toggleResourceAll(row.resource, row.actions)">
+                    {{ t('res.' + row.resource) }}
+                  </button>
+                </td>
+                @for (a of actions; track a) {
+                  <td class="matrix__act">
+                    @if (row.actions.has(a)) {
+                      <input
+                        type="checkbox"
+                        [checked]="hasPerm(row.resource, a)"
+                        (change)="togglePerm(row.resource, a)"
+                        [attr.aria-label]="t('res.' + row.resource) + ' ' + t('act.' + a)"
+                      />
+                    } @else {
+                      <span class="matrix__na">—</span>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      @if (!isSysAdmin(active()!)) {
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="savePerms()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      }
+    </div>
+  </app-modal>
+}
+
+<!-- Data scope -->
+@if (mode() === 'scope' && active()) {
+  <app-modal [title]="t('roles.scope.title') + ' — ' + name(active()!)" (close)="close()">
+    @if (isSysAdmin(active()!)) {
+      <p class="note">{{ t('roles.permissions.systemImmutable') }}</p>
+    } @else {
+      <p class="page__subtitle">{{ t('roles.scope.hint') }}</p>
+
+      <div class="scope-grid">
+        <div class="scope-col">
+          <h3 class="scope-col__title">{{ t('roles.scope.orgUnits') }}</h3>
+          <div class="scope-list">
+            @for (o of orgUnits(); track o.id) {
+              <div class="scope-item">
+                <label class="field field--inline">
+                  <input type="checkbox" class="field__checkbox" [checked]="orgChecked(o.id)" (change)="toggleScope('org', o.id)" />
+                  <span>{{ name(o) }}</span>
+                </label>
+                @if (orgChecked(o.id)) {
+                  <label class="field field--inline scope-sub">
+                    <input type="checkbox" class="field__checkbox" [checked]="descChecked('org', o.id)" (change)="toggleDesc('org', o.id)" />
+                    <span>{{ t('roles.scope.includeDescendants') }}</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <div class="scope-col">
+          <h3 class="scope-col__title">{{ t('roles.scope.domains') }}</h3>
+          <div class="scope-list">
+            @for (d of domains(); track d.id) {
+              <div class="scope-item">
+                <label class="field field--inline">
+                  <input type="checkbox" class="field__checkbox" [checked]="domChecked(d.id)" (change)="toggleScope('dom', d.id)" />
+                  <span>{{ name(d) }}</span>
+                </label>
+                @if (domChecked(d.id)) {
+                  <label class="field field--inline scope-sub">
+                    <input type="checkbox" class="field__checkbox" [checked]="descChecked('dom', d.id)" (change)="toggleDesc('dom', d.id)" />
+                    <span>{{ t('roles.scope.includeDescendants') }}</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="field__label">{{ t('roles.scope.maxClass') }}</span>
+        <select class="field__input" [value]="maxClass() ?? ''" (change)="onMaxClassChange($any($event.target).value)">
+          <option value="">{{ t('roles.scope.unrestricted') }}</option>
+          @for (c of classifications(); track c.id) {
+            <option [value]="c.rank">{{ name(c) }}</option>
+          }
+        </select>
+      </label>
+
+      @if (preview()) {
+        <div class="preview">
+          <span class="preview__label">{{ t('roles.scope.preview') }}:</span>
+          <span class="preview__chip">{{ t('roles.scope.previewOrg') }}: {{ previewOrgCount() === 'all' ? t('roles.scope.previewAll') : previewOrgCount() }}</span>
+          <span class="preview__chip">{{ t('roles.scope.previewDomains') }}: {{ previewDomCount() === 'all' ? t('roles.scope.previewAll') : previewDomCount() }}</span>
+          <span class="preview__chip">{{ t('roles.scope.previewClass') }}: {{ previewClass() }}</span>
+        </div>
+      }
+    }
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      @if (!isSysAdmin(active()!)) {
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveScope()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      }
+    </div>
+  </app-modal>
+}

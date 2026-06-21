@@ -1,0 +1,56 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('ndi.title') }}</h1>
+      <p class="page__subtitle">{{ t('ndi.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      @if (canScore) {
+        <a class="ds-btn ds-btn--ghost" routerLink="/governance/ndi/readiness">{{ t('nav.ndiReadiness') }}</a>
+        <a class="ds-btn ds-btn--ghost" routerLink="/governance/ndi/gaps">{{ t('nav.ndiGaps') }}</a>
+      }
+      <a class="ds-btn ds-btn--primary" routerLink="/governance/ndi/specifications">{{ t('ndi.openRegistry') }}</a>
+    </div>
+  </header>
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('crud.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card">
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    </div>
+  } @else {
+    <div class="stats">
+      <div class="ds-card stat">
+        <span class="stat__value">{{ totalSpecs() }}</span>
+        <span class="stat__label">{{ t('ndi.stat.specs') }}</span>
+      </div>
+      <div class="ds-card stat">
+        <span class="stat__value">{{ coveredDomains() }} / {{ domains().length }}</span>
+        <span class="stat__label">{{ t('ndi.stat.domains') }}</span>
+      </div>
+    </div>
+
+    <div class="domain-grid">
+      @for (d of domains(); track d.id) {
+        <a
+          class="ds-card domain-card"
+          [class.domain-card--empty]="d.specCount === 0"
+          [routerLink]="['/governance/ndi/specifications']"
+          [queryParams]="{ domainId: d.id }"
+        >
+          <span class="domain-card__name">{{ name(d) }}</span>
+          <span class="domain-card__code">{{ d.code }}</span>
+          @if (d.specCount > 0) {
+            <span class="domain-card__count">
+              {{ d.specCount }} <span class="muted">{{ t('ndi.specsShort') }}</span>
+            </span>
+          } @else {
+            <span class="domain-card__count domain-card__count--empty">{{ t('ndi.noSpecsYet') }}</span>
+          }
+        </a>
+      }
+    </div>
+  }
+</section>

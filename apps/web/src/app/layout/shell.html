@@ -1,0 +1,86 @@
+<div class="shell">
+  <aside class="shell__sidebar">
+    <div class="brand">
+      <div class="brand__mark" aria-hidden="true">DG</div>
+      <div class="brand__text">
+        <span class="brand__name">{{ t('app.shortTitle') }}</span>
+        <span class="brand__sub">{{ t('app.title') }}</span>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="Primary">
+      @for (section of sections(); track section.titleKey) {
+        <span class="nav__section">{{ t(section.titleKey) }}</span>
+        @for (item of section.items; track item.link) {
+          <a class="nav__item" [routerLink]="item.link" routerLinkActive="nav__item--active">
+            <span class="nav__icon" aria-hidden="true">{{ item.icon }}</span>
+            <span>{{ t(item.labelKey) }}</span>
+            @if (item.badge && openTasks() > 0) {
+              <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+            }
+          </a>
+        }
+      }
+    </nav>
+  </aside>
+
+  <div class="shell__main">
+    <header class="topbar">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <span class="crumbs__root">{{ t('app.shortTitle') }}</span>
+        @if (crumbKey()) {
+          <span class="crumbs__sep" aria-hidden="true">/</span>
+          <span class="crumbs__current">{{ t(crumbKey()) }}</span>
+        }
+      </nav>
+
+      <div class="topbar__actions">
+        <button
+          type="button"
+          class="ds-btn ds-btn--ghost"
+          (click)="i18n.toggle()"
+          [attr.aria-label]="t('action.language')"
+        >
+          {{ t('action.language') }}
+        </button>
+        <button
+          type="button"
+          class="ds-btn ds-btn--ghost"
+          (click)="theme.toggle()"
+          [attr.aria-label]="t('action.theme')"
+        >
+          {{ theme.theme() === 'dark' ? '☀' : '☾' }}
+        </button>
+
+        <div class="profile">
+          <button
+            type="button"
+            class="profile__btn"
+            (click)="menuOpen.set(!menuOpen())"
+            [attr.aria-expanded]="menuOpen()"
+            aria-haspopup="menu"
+          >
+            <span class="profile__avatar" aria-hidden="true">{{ initials() }}</span>
+            <span class="profile__meta">
+              <span class="profile__name">{{ auth.currentUser()?.displayName }}</span>
+              <span class="profile__role">{{ primaryRole() }}</span>
+            </span>
+          </button>
+
+          @if (menuOpen()) {
+            <div class="profile__menu" role="menu">
+              <div class="profile__email">{{ auth.currentUser()?.email }}</div>
+              <button type="button" class="profile__menu-item" role="menuitem" (click)="logout()">
+                {{ t('action.logout') }}
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </header>
+
+    <main class="content" id="main-content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

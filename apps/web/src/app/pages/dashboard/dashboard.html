@@ -1,0 +1,243 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('dashboard.title') }}</h1>
+      <p class="page__subtitle">{{ t('dashboard.subtitle') }}</p>
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    @if (hasNoSections()) {
+      <p class="muted">{{ t('db.empty') }}</p>
+    }
+
+    <!-- My work -->
+    @if (s.myWork || s.workflow) {
+      <section class="db-section" aria-labelledby="db-mywork">
+        <div class="db-section__head">
+          <h2 id="db-mywork">{{ t('db.myWork.title') }}</h2>
+          <p class="db-section__sub">{{ t('db.myWork.subtitle') }}</p>
+        </div>
+        <div class="db-grid">
+          @if (s.myWork; as mw) {
+            <app-kpi-card
+              [value]="mw.ownedAssets"
+              [label]="t('db.myWork.ownedAssets')"
+              [hint]="t('db.myWork.ownedAssetsHint')"
+              tone="info"
+              link="/governance/ownership"
+            />
+            <app-kpi-card
+              [value]="mw.ownedSpecs"
+              [label]="t('db.myWork.ownedSpecs')"
+              [hint]="t('db.myWork.ownedSpecsHint')"
+              tone="info"
+              link="/governance/ndi"
+            />
+            @if (mw.evidenceToReview !== null) {
+              <app-kpi-card
+                [value]="mw.evidenceToReview"
+                [label]="t('db.myWork.evidenceToReview')"
+                [hint]="t('db.myWork.evidenceToReviewHint')"
+                [tone]="mw.evidenceToReview > 0 ? 'warning' : 'neutral'"
+                link="/governance/ndi"
+              />
+            }
+          }
+          @if (s.workflow; as wf) {
+            <app-kpi-card
+              [value]="wf.myOpenTasks"
+              [label]="t('db.myWork.openTasks')"
+              [hint]="t('db.myWork.openTasksHint')"
+              tone="neutral"
+              link="/governance/workflow"
+            />
+            <app-kpi-card
+              [value]="wf.myOverdueTasks"
+              [label]="t('db.myWork.overdue')"
+              [hint]="t('db.myWork.overdueHint')"
+              [tone]="wf.myOverdueTasks > 0 ? 'danger' : 'neutral'"
+              link="/governance/workflow"
+            />
+          }
+        </div>
+      </section>
+    }
+
+    <!-- Governance overview -->
+    @if (s.governance; as g) {
+      <section class="db-section" aria-labelledby="db-gov">
+        <div class="db-section__head">
+          <h2 id="db-gov">{{ t('db.gov.title') }}</h2>
+          <p class="db-section__sub">{{ t('db.gov.subtitle') }}</p>
+        </div>
+        <div class="db-cols">
+          <article class="ds-card db-coverage">
+            <div class="db-coverage__top">
+              <span class="db-coverage__label">{{ t('db.gov.ownership') }}</span>
+              <span class="db-coverage__pct">{{ g.ownershipCoveragePct }}%</span>
+            </div>
+            <app-progress-bar
+              [value]="g.ownershipCoveragePct"
+              [kind]="coverageBar(g.ownershipCoveragePct)"
+              [label]="t('db.gov.ownership')"
+            />
+            <p class="db-coverage__hint">
+              {{ g.assets.withOwner }}/{{ g.assets.total }} {{ t('db.gov.ofAssets') }}
+            </p>
+
+            <div class="db-coverage__top">
+              <span class="db-coverage__label">{{ t('db.gov.stewardship') }}</span>
+              <span class="db-coverage__pct">{{ g.stewardshipCoveragePct }}%</span>
+            </div>
+            <app-progress-bar
+              [value]="g.stewardshipCoveragePct"
+              [kind]="coverageBar(g.stewardshipCoveragePct)"
+              [label]="t('db.gov.stewardship')"
+            />
+          </article>
+
+          <div class="db-grid db-grid--tight">
+            <app-kpi-card
+              [value]="g.assets.unassigned"
+              [label]="t('dash.tile.unassigned')"
+              [hint]="t('dash.tile.unassignedHint')"
+              [tone]="g.assets.unassigned > 0 ? 'warning' : 'success'"
+              link="/governance/exception-queue"
+            />
+            <app-kpi-card
+              [value]="g.pendingApprovals"
+              [label]="t('dash.tile.pending')"
+              [hint]="t('dash.tile.pendingHint')"
+              [tone]="g.pendingApprovals > 0 ? 'info' : 'neutral'"
+              link="/governance/ownership"
+            />
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- NDI readiness -->
+    @if (s.ndi; as ndi) {
+      <section class="db-section" aria-labelledby="db-ndi">
+        <div class="db-section__head">
+          <h2 id="db-ndi">{{ t('db.ndi.title') }}</h2>
+          <p class="db-section__sub">{{ t('db.ndi.subtitle') }}</p>
+        </div>
+        <div class="db-cols">
+          <article class="ds-card db-coverage">
+            <div class="db-coverage__top">
+              <span class="db-coverage__label">{{ t('db.ndi.readiness') }}</span>
+              <span class="db-readiness">
+                <span class="db-coverage__pct">{{ ndi.readinessPct }}%</span>
+                <app-status-chip
+                  [kind]="maturityChipKind(ndi.maturity)"
+                  [label]="t('scoring.maturity.' + ndi.maturity)"
+                />
+              </span>
+            </div>
+            <app-progress-bar
+              [value]="ndi.readinessPct"
+              [kind]="readinessBar(ndi.readinessPct)"
+              [label]="t('db.ndi.readiness')"
+            />
+            <p class="db-coverage__hint">
+              {{ ndi.satisfied }}/{{ ndi.specifications }} {{ t('db.ndi.satisfied') }}
+            </p>
+            <a class="ds-btn ds-btn--ghost db-link" routerLink="/governance/ndi/readiness">
+              {{ t('db.ndi.viewReadiness') }}
+            </a>
+          </article>
+
+          <article class="ds-card">
+            <h3 class="db-card__title">{{ t('db.ndi.gapsTitle') }}</h3>
+            @if (gapItems().length) {
+              <app-mini-bar-chart [items]="gapItems()" />
+              <a class="ds-btn ds-btn--ghost db-link" routerLink="/governance/ndi/gaps">
+                {{ t('scoring.viewGaps') }}
+              </a>
+            } @else {
+              <p class="muted">{{ t('db.ndi.noGaps') }}</p>
+            }
+          </article>
+        </div>
+      </section>
+    }
+
+    <!-- Reference -->
+    @if (s.reference; as ref) {
+      <section class="db-section" aria-labelledby="db-ref">
+        <div class="db-section__head">
+          <h2 id="db-ref">{{ t('db.ref.title') }}</h2>
+          <p class="db-section__sub">{{ t('db.ref.subtitle') }}</p>
+        </div>
+        <div class="db-grid">
+          <app-kpi-card
+            [value]="ref.people"
+            [label]="t('dash.tile.people')"
+            [hint]="t('dash.tile.peopleHint')"
+            tone="neutral"
+            link="/admin/people"
+          />
+        </div>
+      </section>
+    }
+  } @else if (summaryError()) {
+    <p class="error">{{ t('db.error') }}</p>
+    <button type="button" class="ds-btn ds-btn--primary" (click)="loadSummary()">
+      {{ t('db.retry') }}
+    </button>
+  } @else {
+    <div class="db-grid">
+      <div class="skeleton skeleton--tile" aria-hidden="true"></div>
+      <div class="skeleton skeleton--tile" aria-hidden="true"></div>
+      <div class="skeleton skeleton--tile" aria-hidden="true"></div>
+    </div>
+  }
+
+  <!-- System health -->
+  <section class="db-section" aria-labelledby="db-health">
+    <article class="ds-card health">
+      <div class="health__head">
+        <h2 id="db-health">{{ t('health.title') }}</h2>
+
+        @if (state() === 'ok') {
+          <app-status-chip kind="success" [label]="t('health.ok')" />
+        } @else if (state() === 'error') {
+          <app-status-chip kind="danger" [label]="t('health.error')" />
+        } @else {
+          <app-status-chip kind="info" [label]="t('health.checking')" />
+        }
+      </div>
+
+      @if (state() === 'loading') {
+        <div class="skeleton" aria-hidden="true"></div>
+        <div class="skeleton skeleton--short" aria-hidden="true"></div>
+      } @else if (state() === 'ok') {
+        <dl class="kv">
+          <div class="kv__row">
+            <dt>{{ t('health.db') }}</dt>
+            <dd>{{ health()?.database?.name }} ({{ health()?.database?.status }})</dd>
+          </div>
+          <div class="kv__row">
+            <dt>Service</dt>
+            <dd>{{ health()?.service }} v{{ health()?.version }}</dd>
+          </div>
+          <div class="kv__row">
+            <dt>Environment</dt>
+            <dd>{{ health()?.environment }}</dd>
+          </div>
+          <div class="kv__row">
+            <dt>{{ t('health.uptime') }}</dt>
+            <dd>{{ health()?.uptimeSeconds }}</dd>
+          </div>
+        </dl>
+      } @else {
+        <p class="health__error">{{ t('health.error') }}</p>
+        <button type="button" class="ds-btn ds-btn--primary" (click)="load()">
+          {{ t('health.retry') }}
+        </button>
+      }
+    </article>
+  </section>
+</section>

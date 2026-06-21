@@ -1,0 +1,147 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('wf.title') }}</h1>
+      <p class="page__subtitle">{{ t('wf.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="loadAll()">{{ t('crud.retry') }}</button>
+      @if (canCreateCase) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openNewCase()">{{ t('wf.newCase') }}</button>
+      }
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button type="button" class="tab" [class.tab--active]="tab() === 'tasks'" (click)="tab.set('tasks')">
+      {{ t('wf.tab.myTasks') }} <span class="tab__count">{{ tasks().length }}</span>
+    </button>
+    @if (canViewCases) {
+      <button type="button" class="tab" [class.tab--active]="tab() === 'cases'" (click)="tab.set('cases')">
+        {{ t('wf.tab.cases') }} <span class="tab__count">{{ cases().length }}</span>
+      </button>
+    }
+  </div>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('crud.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="loadAll()">{{ t('crud.retry') }}</button>
+    } @else if (tab() === 'tasks') {
+      @if (tasks().length === 0) {
+        <div class="empty"><p>{{ t('wf.noTasks') }}</p></div>
+      } @else {
+        <div class="table-wrap">
+          <table class="ds-table">
+            <thead>
+              <tr>
+                <th>{{ t('wf.col.task') }}</th>
+                <th>{{ t('wf.col.case') }}</th>
+                <th>{{ t('wf.col.due') }}</th>
+                <th>{{ t('wf.col.sla') }}</th>
+                <th class="actions-col">{{ t('crud.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (task of tasks(); track task.id) {
+                <tr>
+                  <td>{{ task.title }}</td>
+                  <td>
+                    @if (task.case) {
+                      <a [routerLink]="['/governance/workflow/cases', task.caseId]"><code>{{ task.case.code }}</code></a>
+                      <span class="muted"> {{ task.case.title }}</span>
+                    } @else { - }
+                  </td>
+                  <td>{{ fmtDate(task.dueDate) }}</td>
+                  <td><app-status-chip [kind]="slaKind(task.slaStatus)" [label]="t('sla.' + task.slaStatus)" /></td>
+                  <td class="actions-col">
+                    <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openDecision(task, 'approved')">{{ t('wf.approve') }}</button>
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'rejected')">{{ t('wf.reject') }}</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    } @else {
+      @if (cases().length === 0) {
+        <div class="empty"><p>{{ t('wf.noCases') }}</p></div>
+      } @else {
+        <div class="table-wrap">
+          <table class="ds-table">
+            <thead>
+              <tr>
+                <th>{{ t('wf.col.code') }}</th>
+                <th>{{ t('wf.col.caseTitle') }}</th>
+                <th>{{ t('wf.col.type') }}</th>
+                <th>{{ t('wf.col.status') }}</th>
+                <th>{{ t('wf.col.open') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (c of cases(); track c.id) {
+                <tr>
+                  <td><a [routerLink]="['/governance/workflow/cases', c.id]"><code>{{ c.code }}</code></a></td>
+                  <td>{{ c.title }}</td>
+                  <td>{{ typeLabel(c.type) }}</td>
+                  <td><app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" /></td>
+                  <td>{{ c.openTasks }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  </div>
+
+  @if (decideTask(); as task) {
+    <app-modal [title]="decision() === 'approved' ? t('wf.approveTitle') : t('wf.rejectTitle')" (close)="closeDecision()">
+      <div class="form">
+        <p><strong>{{ task.title }}</strong></p>
+        @if (task.case) { <p class="muted"><code>{{ task.case.code }}</code> — {{ task.case.title }}</p> }
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.comment') }}</span>
+          <textarea class="field__input" rows="3" [ngModel]="comment()" (ngModelChange)="comment.set($event)" name="comment"></textarea>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeDecision()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="submitDecision()">
+          {{ saving() ? t('crud.saving') : (decision() === 'approved' ? t('wf.approve') : t('wf.reject')) }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (caseModalOpen()) {
+    <app-modal [title]="t('wf.newCase')" (close)="closeNewCase()">
+      <div class="form">
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.title') }}<span class="req">*</span></span>
+          <input class="field__input" [ngModel]="newTitle()" (ngModelChange)="newTitle.set($event)" name="title" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.description') }}</span>
+          <textarea class="field__input" rows="2" [ngModel]="newDescription()" (ngModelChange)="newDescription.set($event)" name="description"></textarea>
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.asset') }}</span>
+          <select class="field__input" [ngModel]="newAssetId()" (ngModelChange)="newAssetId.set($event)" name="asset">
+            <option value="">{{ t('wf.noAsset') }}</option>
+            @for (a of assets(); track a.id) { <option [value]="a.id">{{ name(a) }}</option> }
+          </select>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeNewCase()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!newTitle().trim() || saving()" (click)="createCase()">
+          {{ saving() ? t('crud.saving') : t('wf.createCase') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

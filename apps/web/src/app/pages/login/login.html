@@ -1,0 +1,64 @@
+<div class="auth">
+  <div class="auth__toggles">
+    <button type="button" class="ds-btn ds-btn--ghost" (click)="i18n.toggle()">
+      {{ t('action.language') }}
+    </button>
+    <button type="button" class="ds-btn ds-btn--ghost" (click)="theme.toggle()">
+      {{ theme.theme() === 'dark' ? '☀' : '☾' }}
+    </button>
+  </div>
+
+  <div class="auth__card ds-card">
+    <div class="auth__brand">
+      <div class="auth__mark" aria-hidden="true">DG</div>
+      <div>
+        <h1 class="auth__title">{{ t('app.shortTitle') }}</h1>
+        <p class="auth__subtitle">{{ t('login.subtitle') }}</p>
+      </div>
+    </div>
+
+    <form (ngSubmit)="submit()" #f="ngForm" novalidate>
+      <label class="field">
+        <span class="field__label">{{ t('login.email') }}</span>
+        <input
+          class="field__input"
+          type="email"
+          name="email"
+          autocomplete="username"
+          required
+          [ngModel]="email()"
+          (ngModelChange)="email.set($event)"
+          [attr.aria-invalid]="!!error()"
+        />
+      </label>
+
+      <label class="field">
+        <span class="field__label">{{ t('login.password') }}</span>
+        <input
+          class="field__input"
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          required
+          [ngModel]="password()"
+          (ngModelChange)="password.set($event)"
+          [attr.aria-invalid]="!!error()"
+        />
+      </label>
+
+      @if (error()) {
+        <p class="auth__error" role="alert">{{ error() }}</p>
+      }
+
+      <button
+        type="submit"
+        class="ds-btn ds-btn--primary auth__submit"
+        [disabled]="loading() || !email() || !password()"
+      >
+        {{ loading() ? t('login.signingIn') : t('login.signIn') }}
+      </button>
+    </form>
+
+    <p class="auth__hint">{{ t('login.devHint') }}</p>
+  </div>
+</div>

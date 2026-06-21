@@ -1,0 +1,214 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t(config().titleKey) }}</h1>
+      <p class="page__subtitle">{{ t(config().subtitleKey) }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">
+      + {{ t('crud.new') }}
+    </button>
+  </header>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('crud.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (rows().length === 0) {
+      <div class="empty">
+        <p>{{ t('crud.empty') }}</p>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate()">+ {{ t('crud.new') }}</button>
+      </div>
+    } @else {
+      <div class="toolbar">
+        <input
+          type="search"
+          class="toolbar__search"
+          [value]="search()"
+          (input)="onSearch($any($event.target).value)"
+          [placeholder]="t('crud.searchPlaceholder')"
+          [attr.aria-label]="t('crud.search')"
+        />
+        <select
+          class="toolbar__status"
+          [value]="statusFilter()"
+          (change)="onStatusFilter($any($event.target).value)"
+          [attr.aria-label]="t('crud.status')"
+        >
+          <option value="all">{{ t('crud.filterAll') }}</option>
+          <option value="active">{{ t('crud.active') }}</option>
+          <option value="inactive">{{ t('crud.inactive') }}</option>
+        </select>
+        <span class="toolbar__count">{{ filtered().length }} {{ t('crud.records') }}</span>
+      </div>
+
+      @if (filtered().length === 0) {
+        <div class="empty"><p>{{ t('crud.noMatches') }}</p></div>
+      } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              @for (col of config().columns; track col.key) {
+                <th>{{ t(col.labelKey) }}</th>
+              }
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of paged(); track row.id) {
+              <tr>
+                @for (col of config().columns; track col.key) {
+                  <td>
+                    @switch (col.kind) {
+                      @case ('boolean') {
+                        @if (row[col.key]) {
+                          <app-status-chip kind="success" [label]="t('crud.active')" />
+                        } @else {
+                          <app-status-chip kind="muted" [label]="t('crud.inactive')" />
+                        }
+                      }
+                      @case ('color') {
+                        <span class="swatch-cell">
+                          <span class="swatch-dot" [style.background]="$any(row[col.key])"></span>
+                          {{ row[col.key] }}
+                        </span>
+                      }
+                      @case ('ref') {
+                        {{ localized(row[col.refKey!]) }}
+                      }
+                      @case ('i18nName') {
+                        {{ i18nName(row) }}
+                      }
+                      @default {
+                        {{ row[col.key] ?? '-' }}
+                      }
+                    }
+                  </td>
+                }
+                <td class="actions-col">
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(row)">
+                    {{ t('crud.edit') }}
+                  </button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="deleteRow(row)">
+                    {{ t('crud.delete') }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      @if (totalPages() > 1) {
+        <div class="pager">
+          <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="page() === 1" (click)="prevPage()">
+            ‹ {{ t('crud.prev') }}
+          </button>
+          <span class="pager__info">{{ t('crud.page') }} {{ page() }} / {{ totalPages() }}</span>
+          <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="page() === totalPages()" (click)="nextPage()">
+            {{ t('crud.next') }} ›
+          </button>
+        </div>
+      }
+      }
+    }
+  </div>
+
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? 'crud.editTitle' : 'crud.newTitle')" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        @for (field of config().fields; track field.key) {
+          <label class="field">
+            <span class="field__label">
+              {{ t(field.labelKey) }}@if (field.required) {<span class="req">*</span>}
+            </span>
+
+            @switch (field.type) {
+              @case ('textarea') {
+                <textarea
+                  class="field__input"
+                  rows="3"
+                  [ngModel]="model()[field.key]"
+                  (ngModelChange)="setField(field.key, $event)"
+                  [name]="field.key"
+                ></textarea>
+              }
+              @case ('checkbox') {
+                <input
+                  type="checkbox"
+                  class="field__checkbox"
+                  [ngModel]="model()[field.key]"
+                  (ngModelChange)="setField(field.key, $event)"
+                  [name]="field.key"
+                />
+              }
+              @case ('select') {
+                <select
+                  class="field__input"
+                  [ngModel]="model()[field.key]"
+                  (ngModelChange)="setField(field.key, $event)"
+                  [name]="field.key"
+                >
+                  <option value="">{{ t('crud.none') }}</option>
+                  @if (field.options) {
+                    @for (opt of field.options; track opt.value) {
+                      <option [value]="opt.value">{{ opt.label }}</option>
+                    }
+                  } @else {
+                    @for (opt of fieldOptions(field); track opt.value) {
+                      <option [value]="opt.value">{{ optionLabel(opt) }}</option>
+                    }
+                  }
+                </select>
+              }
+              @case ('color') {
+                <span class="color-row">
+                  <input
+                    type="color"
+                    [ngModel]="model()[field.key]"
+                    (ngModelChange)="setField(field.key, $event)"
+                    [name]="field.key + '_picker'"
+                  />
+                  <input
+                    type="text"
+                    class="field__input"
+                    [ngModel]="model()[field.key]"
+                    (ngModelChange)="setField(field.key, $event)"
+                    [name]="field.key"
+                  />
+                </span>
+              }
+              @case ('number') {
+                <input
+                  type="number"
+                  class="field__input"
+                  [ngModel]="model()[field.key]"
+                  (ngModelChange)="setField(field.key, $event)"
+                  [name]="field.key"
+                />
+              }
+              @default {
+                <input
+                  type="text"
+                  class="field__input"
+                  [ngModel]="model()[field.key]"
+                  (ngModelChange)="setField(field.key, $event)"
+                  [name]="field.key"
+                />
+              }
+            }
+          </label>
+        }
+      </form>
+
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

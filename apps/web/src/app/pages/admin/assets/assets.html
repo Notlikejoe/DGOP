@@ -1,0 +1,448 @@
+<section class="page">
+  @if (view() === 'list') {
+    <header class="page__header">
+      <div>
+        <h1>{{ t('assets.title') }}</h1>
+        <p class="page__subtitle">{{ t('assets.subtitle') }}</p>
+      </div>
+      <div class="header-actions">
+        @if (canImport) {
+          <button type="button" class="ds-btn ds-btn--ghost" (click)="openImport()">
+            {{ t('assets.import') }}
+          </button>
+        }
+        @if (canCreate) {
+          <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">
+            + {{ t('assets.new') }}
+          </button>
+        }
+      </div>
+    </header>
+
+    <div class="ds-card">
+      <!-- Filters -->
+      <div class="toolbar">
+        <input
+          type="search"
+          class="toolbar__search"
+          [ngModel]="filters().search"
+          (ngModelChange)="setFilter('search', $event)"
+          [placeholder]="t('assets.searchPlaceholder')"
+          [attr.aria-label]="t('assets.searchPlaceholder')"
+        />
+        <select class="toolbar__status" [ngModel]="filters().domainId" (ngModelChange)="setFilter('domainId', $event)" [attr.aria-label]="t('assets.field.domain')">
+          <option value="">{{ t('assets.filter.domain') }}</option>
+          @for (d of domains(); track d.id) { <option [value]="d.id">{{ name(d) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().subjectId" (ngModelChange)="setFilter('subjectId', $event)" [attr.aria-label]="t('assets.field.subjects')">
+          <option value="">{{ t('assets.filter.subject') }}</option>
+          @for (s of subjects(); track s.id) { <option [value]="s.id">{{ name(s) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().classificationId" (ngModelChange)="setFilter('classificationId', $event)" [attr.aria-label]="t('assets.field.classification')">
+          <option value="">{{ t('assets.filter.classification') }}</option>
+          @for (c of classifications(); track c.id) { <option [value]="c.id">{{ name(c) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().systemId" (ngModelChange)="setFilter('systemId', $event)" [attr.aria-label]="t('assets.field.system')">
+          <option value="">{{ t('assets.filter.system') }}</option>
+          @for (sy of systems(); track sy.id) { <option [value]="sy.id">{{ name(sy) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().lifecycleStatus" (ngModelChange)="setFilter('lifecycleStatus', $event)" [attr.aria-label]="t('assets.field.lifecycle')">
+          <option value="">{{ t('assets.filter.lifecycle') }}</option>
+          @for (l of lifecycles; track l) { <option [value]="l">{{ t('assets.lifecycle.' + l) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().ownerStatus" (ngModelChange)="setFilter('ownerStatus', $event)" [attr.aria-label]="t('assets.col.owner')">
+          <option value="">{{ t('assets.filter.owner') }}</option>
+          <option value="assigned">{{ t('assets.owner.assigned') }}</option>
+          <option value="unassigned">{{ t('assets.owner.unassigned') }}</option>
+        </select>
+        <span class="toolbar__count">{{ assets().length }} {{ t('assets.records') }}</span>
+      </div>
+
+      @if (state() === 'loading') {
+        <p>{{ t('assets.loading') }}</p>
+      } @else if (state() === 'error') {
+        <p class="error">{{ t('assets.error') }}</p>
+        <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+      } @else if (assets().length === 0) {
+        <div class="empty">
+          <p>{{ t('assets.noMatches') }}</p>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="ds-table">
+            <thead>
+              <tr>
+                <th>{{ t('assets.col.code') }}</th>
+                <th>{{ t('assets.col.name') }}</th>
+                <th>{{ t('assets.col.domain') }}</th>
+                <th>{{ t('assets.col.classification') }}</th>
+                <th>{{ t('assets.col.owner') }}</th>
+                <th>{{ t('assets.col.lifecycle') }}</th>
+                <th class="actions-col">{{ t('crud.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of assets(); track a.id) {
+                <tr>
+                  <td><code>{{ a.code }}</code></td>
+                  <td>
+                    <button type="button" class="link-btn" (click)="openDetail(a.id)">{{ name(a) }}</button>
+                  </td>
+                  <td>{{ name(a.domain) }}</td>
+                  <td>
+                    @if (a.classification) {
+                      <span class="swatch-cell">
+                        <span class="swatch-dot" [style.background]="a.classification.color"></span>
+                        {{ name(a.classification) }}
+                      </span>
+                    } @else { - }
+                  </td>
+                  <td>
+                    <app-status-chip [kind]="ownerKind(a.ownerStatus)" [label]="a.ownerName || t('assets.owner.' + a.ownerStatus)" />
+                  </td>
+                  <td>
+                    <app-status-chip [kind]="lifecycleKind(a.lifecycleStatus)" [label]="t('assets.lifecycle.' + a.lifecycleStatus)" />
+                  </td>
+                  <td class="actions-col">
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDetail(a.id)">{{ t('assets.view360') }}</button>
+                    @if (canEdit) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(a)">{{ t('crud.edit') }}</button>
+                    }
+                    @if (canDelete) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm danger" (click)="deleteAsset(a)">{{ t('crud.delete') }}</button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Asset 360 -->
+  @if (view() === 'detail' && detail(); as a) {
+    <header class="page__header">
+      <div>
+        <button type="button" class="link-btn" (click)="backToList()">‹ {{ t('assets.back') }}</button>
+        <h1>{{ name(a) }}</h1>
+        <p class="page__subtitle"><code>{{ a.code }}</code></p>
+      </div>
+      <div class="header-actions">
+        @if (canEdit) {
+          <button type="button" class="ds-btn ds-btn--primary" (click)="openEdit(a)">{{ t('crud.edit') }}</button>
+        }
+      </div>
+    </header>
+
+    <div class="detail-grid">
+      <div class="ds-card">
+        <h2 class="card-title">{{ t('assets.overview') }}</h2>
+        <dl class="facts">
+          <div class="fact"><dt>{{ t('assets.field.lifecycle') }}</dt><dd><app-status-chip [kind]="lifecycleKind(a.lifecycleStatus)" [label]="t('assets.lifecycle.' + a.lifecycleStatus)" /></dd></div>
+          <div class="fact"><dt>{{ t('assets.col.owner') }}</dt><dd><app-status-chip [kind]="ownerKind(a.ownerStatus)" [label]="a.ownerName || t('assets.owner.' + a.ownerStatus)" /></dd></div>
+          <div class="fact"><dt>{{ t('assets.field.domain') }}</dt><dd>{{ name(a.domain) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.classification') }}</dt>
+            <dd>
+              @if (a.classification) {
+                <span class="swatch-cell"><span class="swatch-dot" [style.background]="a.classification.color"></span>{{ name(a.classification) }}</span>
+              } @else { {{ t('assets.none') }} }
+            </dd>
+          </div>
+          <div class="fact"><dt>{{ t('assets.field.orgUnit') }}</dt><dd>{{ name(a.orgUnit) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.system') }}</dt><dd>{{ name(a.system) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.capability') }}</dt><dd>{{ name(a.capability) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.subjects') }}</dt><dd>{{ subjectNames(a) }}</dd></div>
+          @if (a.description) {
+            <div class="fact fact--wide"><dt>{{ t('assets.field.description') }}</dt><dd>{{ a.description }}</dd></div>
+          }
+        </dl>
+      </div>
+
+      <div class="ds-card">
+        <h2 class="card-title">{{ t('assets.relationships') }}</h2>
+
+        @if (!(a.outgoingRelations?.length) && !(a.incomingRelations?.length)) {
+          <p class="muted">{{ t('assets.relationships.none') }}</p>
+        } @else {
+          @if (a.outgoingRelations?.length) {
+            <h3 class="rel-head">{{ t('assets.relationships.outgoing') }}</h3>
+            <ul class="rel-list">
+              @for (r of a.outgoingRelations; track r.id) {
+                <li>
+                  <span class="rel-type">{{ relTypeLabel(r.type) }}</span>
+                  <span>{{ name(r.targetAsset) }}</span>
+                  @if (canEdit) {
+                    <button type="button" class="link-btn danger" (click)="removeRelationship(r)">✕</button>
+                  }
+                </li>
+              }
+            </ul>
+          }
+          @if (a.incomingRelations?.length) {
+            <h3 class="rel-head">{{ t('assets.relationships.incoming') }}</h3>
+            <ul class="rel-list">
+              @for (r of a.incomingRelations; track r.id) {
+                <li>
+                  <span class="rel-type">{{ relTypeLabel(r.type) }}</span>
+                  <span>{{ name(r.sourceAsset) }}</span>
+                </li>
+              }
+            </ul>
+          }
+        }
+
+        @if (canEdit) {
+          <div class="rel-add">
+            <h3 class="rel-head">{{ t('assets.relationships.add') }}</h3>
+            <div class="rel-form">
+              <select class="field__input" [ngModel]="relType()" (ngModelChange)="relType.set($event)" [attr.aria-label]="t('assets.rel.type')">
+                @for (rt of relTypes; track rt) { <option [value]="rt">{{ relTypeLabel(rt) }}</option> }
+              </select>
+              <select class="field__input" [ngModel]="relTargetId()" (ngModelChange)="relTargetId.set($event)" [attr.aria-label]="t('assets.rel.target')">
+                <option value="">{{ t('assets.rel.target') }}</option>
+                @for (o of otherAssets(); track o.id) { <option [value]="o.id">{{ name(o) }}</option> }
+              </select>
+              <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="!relTargetId() || relSaving()" (click)="addRelationship()">
+                {{ t('assets.relationships.add') }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (canViewOwnership) {
+        <div class="ds-card card--wide">
+          <h2 class="card-title">{{ t('assets.ownership') }}</h2>
+          @if (visibleRecommendations().length === 0) {
+            <p class="muted">{{ t('assets.ownership.none') }}</p>
+          } @else {
+            <div class="table-wrap">
+              <table class="ds-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('assets.own.role') }}</th>
+                    <th>{{ t('assets.own.assigned') }}</th>
+                    <th>{{ t('assets.own.recommended') }}</th>
+                    <th class="actions-col">{{ t('crud.actions') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of visibleRecommendations(); track r.roleType.id) {
+                    <tr>
+                      <td>
+                        {{ name(r.roleType) }}
+                        <app-status-chip [kind]="ownStatusKind(r.status)" [label]="t('assets.own.' + r.status)" />
+                      </td>
+                      <td>{{ personName(r.current?.person) }}</td>
+                      <td>
+                        @if (r.recommended) {
+                          {{ personName(r.recommended.person) }}
+                          <span class="hint">({{ t('assets.own.via') }} {{ scopeLabel(r.recommended.scopeType) }})</span>
+                        } @else { {{ t('assets.own.noRec') }} }
+                      </td>
+                      <td class="actions-col">
+                        @if (r.status === 'recommended' && canApplyOwnership) {
+                          <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="applyingRole() === r.roleType.id" (click)="applyRecommendation(r)">
+                            {{ t('assets.own.apply') }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+
+      @if (canViewOwnership && assetAssignments().length > 0) {
+        <div class="ds-card card--wide">
+          <h2 class="card-title">{{ t('assets.approvals') }}</h2>
+          <div class="table-wrap">
+            <table class="ds-table">
+              <thead>
+                <tr>
+                  <th>{{ t('assets.own.role') }}</th>
+                  <th>{{ t('assets.approval.person') }}</th>
+                  <th>{{ t('assets.approval.status') }}</th>
+                  <th class="actions-col">{{ t('crud.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of assetAssignments(); track a.id) {
+                  <tr>
+                    <td>{{ name(a.roleType) }} @if (a.isPrimary) { <span class="hint">({{ t('assets.approval.primary') }})</span> }</td>
+                    <td>{{ personName(a.person) }}</td>
+                    <td><app-status-chip [kind]="approvalKind(a.approvalStatus)" [label]="t('approval.' + a.approvalStatus)" /></td>
+                    <td class="actions-col">
+                      @if (canSubmit(a)) {
+                        <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openSubmit(a)">{{ t('assets.approval.submit') }}</button>
+                      } @else if (a.approvalStatus === 'pending') {
+                        <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/governance/workflow">{{ t('assets.approval.viewInbox') }}</a>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (submitTarget(); as a) {
+    <app-modal [title]="t('assets.approval.submitTitle')" (close)="closeSubmit()">
+      <div class="form">
+        <p><strong>{{ name(a.roleType) }}</strong> — {{ personName(a.person) }}</p>
+        <label class="field">
+          <span class="field__label">{{ t('assets.approval.approver') }}<span class="req">*</span></span>
+          <select class="field__input" [ngModel]="approverId()" (ngModelChange)="approverId.set($event)" name="approver">
+            <option value="">{{ t('assets.approval.selectApprover') }}</option>
+            @for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }}</option> }
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('assets.approval.due') }}</span>
+          <input type="date" class="field__input" [ngModel]="submitDue()" (ngModelChange)="submitDue.set($event)" name="due" />
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeSubmit()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!approverId() || submitting()" (click)="submitForApproval()">
+          {{ submitting() ? t('crud.saving') : t('assets.approval.submit') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  <!-- Create / edit modal -->
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? 'assets.editTitle' : 'assets.newTitle')" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        <div class="grid-2">
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.code') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().code" (ngModelChange)="set('code', $event)" name="code" [disabled]="!!editingId()" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.lifecycle') }}</span>
+            <select class="field__input" [ngModel]="draft().lifecycleStatus" (ngModelChange)="set('lifecycleStatus', $event)" name="lifecycleStatus">
+              @for (l of lifecycles; track l) { <option [value]="l">{{ t('assets.lifecycle.' + l) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.nameEn') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.nameAr') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" name="nameAr" dir="rtl" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field__label">{{ t('assets.field.description') }}</span>
+          <textarea class="field__input" rows="2" [ngModel]="draft().description" (ngModelChange)="set('description', $event)" name="description"></textarea>
+        </label>
+
+        <div class="grid-2">
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.domain') }}</span>
+            <select class="field__input" [ngModel]="draft().domainId" (ngModelChange)="set('domainId', $event)" name="domainId">
+              <option value="">{{ t('assets.none') }}</option>
+              @for (d of domains(); track d.id) { <option [value]="d.id">{{ name(d) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.classification') }}</span>
+            <select class="field__input" [ngModel]="draft().classificationId" (ngModelChange)="set('classificationId', $event)" name="classificationId">
+              <option value="">{{ t('assets.none') }}</option>
+              @for (c of classifications(); track c.id) { <option [value]="c.id">{{ name(c) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.orgUnit') }}</span>
+            <select class="field__input" [ngModel]="draft().orgUnitId" (ngModelChange)="set('orgUnitId', $event)" name="orgUnitId">
+              <option value="">{{ t('assets.none') }}</option>
+              @for (o of orgUnits(); track o.id) { <option [value]="o.id">{{ name(o) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.system') }}</span>
+            <select class="field__input" [ngModel]="draft().systemId" (ngModelChange)="set('systemId', $event)" name="systemId">
+              <option value="">{{ t('assets.none') }}</option>
+              @for (sy of systems(); track sy.id) { <option [value]="sy.id">{{ name(sy) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.capability') }}</span>
+            <select class="field__input" [ngModel]="draft().capabilityId" (ngModelChange)="set('capabilityId', $event)" name="capabilityId">
+              <option value="">{{ t('assets.none') }}</option>
+              @for (cap of capabilities(); track cap.id) { <option [value]="cap.id">{{ name(cap) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.owner') }}</span>
+            <input type="text" class="field__input" [ngModel]="draft().ownerName" (ngModelChange)="set('ownerName', $event)" name="ownerName" />
+            <span class="hint">{{ t('assets.field.ownerHint') }}</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <span class="field__label">{{ t('assets.field.subjects') }}</span>
+          <div class="chips-select">
+            @for (s of subjects(); track s.id) {
+              <label class="chip-check" [class.chip-check--on]="isSubjectSelected(s.id)">
+                <input type="checkbox" [checked]="isSubjectSelected(s.id)" (change)="toggleSubject(s.id)" />
+                {{ name(s) }}
+              </label>
+            }
+          </div>
+        </div>
+      </form>
+
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  <!-- CSV import modal -->
+  @if (importOpen()) {
+    <app-modal [title]="t('assets.import.title')" (close)="closeImport()">
+      <div class="form">
+        <p class="hint">{{ t('assets.import.help') }}</p>
+        <textarea class="field__input mono" rows="8" [ngModel]="importCsv()" (ngModelChange)="importCsv.set($event)" name="csv"></textarea>
+        <button type="button" class="ds-btn ds-btn--ghost btn-sm self-start" (click)="insertSample()">{{ t('assets.import.sample') }}</button>
+
+        @if (importResult(); as r) {
+          <div class="import-result">
+            <p>{{ importSummary() }}</p>
+            @if (r.errors.length) {
+              <h4>{{ t('assets.import.errorsTitle') }}</h4>
+              <ul class="rel-list">
+                @for (e of r.errors; track e.row) {
+                  <li class="danger">Row {{ e.row }}: {{ e.message }}</li>
+                }
+              </ul>
+            }
+          </div>
+        }
+      </div>
+
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeImport()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!importCsv().trim() || importing()" (click)="runImport()">
+          {{ importing() ? t('assets.import.running') : t('assets.import.run') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

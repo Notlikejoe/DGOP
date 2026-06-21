@@ -1,0 +1,108 @@
+.auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  position: relative;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, var(--primary-soft), transparent 60%),
+    var(--bg);
+}
+
+.auth__toggles {
+  position: absolute;
+  top: var(--space-5);
+  inset-inline-end: var(--space-5);
+  display: flex;
+  gap: var(--space-2);
+}
+
+.auth__card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-6);
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.auth__mark {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--on-primary);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+}
+
+.auth__title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.auth__subtitle {
+  margin: 0;
+  color: var(--on-surface-muted);
+  font-size: var(--font-size-sm);
+}
+
+.field {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+.field__label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.field__input {
+  width: 100%;
+  font: inherit;
+  color: var(--on-surface);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  transition: border-color var(--motion-fast) var(--easing-standard);
+}
+
+.field__input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.field__input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.auth__error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.auth__submit {
+  width: 100%;
+  justify-content: center;
+  padding: var(--space-3);
+}
+
+.auth__hint {
+  margin: var(--space-5) 0 0;
+  text-align: center;
+  color: var(--on-surface-muted);
+  font-size: var(--font-size-xs);
+}

@@ -1,0 +1,132 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('rule.title') }}</h1>
+      <p class="page__subtitle">{{ t('rule.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">+ {{ t('rule.new') }}</button>
+      }
+    </div>
+  </header>
+
+  <div class="banner banner--info">{{ t('rule.priorityNote') }}</div>
+
+  <div class="ds-card">
+    <div class="toolbar">
+      <select class="toolbar__status" [ngModel]="filters().scopeType" (ngModelChange)="setFilter('scopeType', $event)" [attr.aria-label]="t('rule.field.scopeType')">
+        <option value="">{{ t('rule.filter.scope') }}</option>
+        @for (s of scopeTypes; track s) { <option [value]="s">{{ scopeLabel(s) }}</option> }
+      </select>
+      <select class="toolbar__status" [ngModel]="filters().roleTypeId" (ngModelChange)="setFilter('roleTypeId', $event)" [attr.aria-label]="t('rule.field.role')">
+        <option value="">{{ t('rule.filter.role') }}</option>
+        @for (r of roleTypes(); track r.id) { <option [value]="r.id">{{ name(r) }}</option> }
+      </select>
+      <span class="toolbar__count">{{ rules().length }} {{ t('rule.records') }}</span>
+    </div>
+
+    @if (state() === 'loading') {
+      <p>{{ t('rule.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('rule.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (rules().length === 0) {
+      <div class="empty"><p>{{ t('rule.noMatches') }}</p></div>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('rule.col.name') }}</th>
+              <th>{{ t('rule.col.scope') }}</th>
+              <th>{{ t('rule.col.role') }}</th>
+              <th>{{ t('rule.col.person') }}</th>
+              <th>{{ t('rule.col.priority') }}</th>
+              <th>{{ t('rule.col.status') }}</th>
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of rules(); track r.id) {
+              <tr>
+                <td>{{ name(r) }}</td>
+                <td><span class="tag">{{ scopeLabel(r.scopeType) }}</span> {{ name(r.ref) }}</td>
+                <td>{{ name(r.roleType) }}</td>
+                <td>{{ personName(r.person) }}</td>
+                <td>{{ r.priority }}</td>
+                <td><app-status-chip [kind]="r.isActive ? 'success' : 'muted'" [label]="t(r.isActive ? 'rule.active' : 'rule.inactive')" /></td>
+                <td class="actions-col">
+                  @if (canEdit) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(r)">{{ t('crud.edit') }}</button>
+                  }
+                  @if (canDelete) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm danger" (click)="remove(r)">{{ t('crud.delete') }}</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? 'rule.editTitle' : 'rule.newTitle')" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        <div class="grid-2">
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.nameEn') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.nameAr') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" name="nameAr" dir="rtl" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.scopeType') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().scopeType" (ngModelChange)="set('scopeType', $event)" name="scopeType">
+              @for (s of scopeTypes; track s) { <option [value]="s">{{ scopeLabel(s) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.ref') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().refId" (ngModelChange)="set('refId', $event)" name="refId">
+              <option value="">-</option>
+              @for (o of refOptions(); track o.id) { <option [value]="o.id">{{ name(o) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.role') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().roleTypeId" (ngModelChange)="set('roleTypeId', $event)" name="roleTypeId">
+              <option value="">-</option>
+              @for (r of roleTypes(); track r.id) { <option [value]="r.id">{{ name(r) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.person') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().personId" (ngModelChange)="set('personId', $event)" name="personId">
+              <option value="">-</option>
+              @for (p of people(); track p.id) { <option [value]="p.id">{{ personName(p) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.priority') }}</span>
+            <input type="number" min="1" class="field__input" [ngModel]="draft().priority" (ngModelChange)="set('priority', $event)" name="priority" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">{{ t('rule.field.description') }}</span>
+          <textarea class="field__input" rows="2" [ngModel]="draft().description" (ngModelChange)="set('description', $event)" name="description"></textarea>
+        </label>
+      </form>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

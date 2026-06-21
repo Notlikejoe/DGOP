@@ -1,0 +1,187 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('users.title') }}</h1>
+      <p class="page__subtitle">{{ t('users.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('users.refresh') }}</button>
+      @if (auth.hasPermission('users.create')) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">+ {{ t('users.new') }}</button>
+      }
+    </div>
+  </header>
+
+  <div class="ds-card">
+    @if (state() === 'loading') {
+      <p>{{ t('users.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('users.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('users.refresh') }}</button>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('users.col.name') }}</th>
+              <th>{{ t('users.col.email') }}</th>
+              <th>{{ t('users.col.roles') }}</th>
+              <th>{{ t('users.col.status') }}</th>
+              <th>{{ t('users.col.lastLogin') }}</th>
+              @if (auth.hasPermission('users.edit')) {
+                <th class="actions-col">{{ t('crud.actions') }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of users(); track u.id) {
+              <tr>
+                <td>{{ u.displayName }}</td>
+                <td>{{ u.email }}</td>
+                <td>{{ roleNames(u) }}</td>
+                <td>
+                  @if (u.isActive) {
+                    <app-status-chip kind="success" [label]="t('users.active')" />
+                  } @else {
+                    <app-status-chip kind="muted" [label]="t('users.inactive')" />
+                  }
+                </td>
+                <td>{{ u.lastLoginAt ? (u.lastLoginAt | date: 'medium') : '-' }}</td>
+                @if (auth.hasPermission('users.edit')) {
+                  <td class="actions-col">
+                    <div class="row-actions">
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRoles(u)">
+                        {{ t('users.assignRoles') }}
+                      </button>
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(u)">
+                        {{ t('crud.edit') }}
+                      </button>
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openReset(u)">
+                        {{ t('users.resetPassword') }}
+                      </button>
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="toggleActive(u)">
+                        {{ u.isActive ? t('users.deactivate') : t('users.activate') }}
+                      </button>
+                    </div>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>
+
+<!-- Create -->
+@if (mode() === 'create') {
+  <app-modal [title]="t('users.newTitle')" (close)="close()">
+    <form class="form" (ngSubmit)="saveCreate()">
+      <label class="field">
+        <span class="field__label">{{ t('users.col.email') }}<span class="req">*</span></span>
+        <input type="email" class="field__input" name="email" [(ngModel)]="form.email" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('users.displayName') }}<span class="req">*</span></span>
+        <input type="text" class="field__input" name="displayName" [(ngModel)]="form.displayName" />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('users.password') }}<span class="req">*</span></span>
+        <input type="password" class="field__input" name="password" [(ngModel)]="form.password" />
+        <span class="hint">{{ t('users.passwordHint') }}</span>
+      </label>
+      <div class="field">
+        <span class="field__label">{{ t('users.roles') }}</span>
+        <div class="role-list">
+          @for (r of roleOptions(); track r.id) {
+            <label class="field field--inline">
+              <input type="checkbox" class="field__checkbox" [checked]="roleChecked(r.code)" (change)="toggleRole(r.code)" />
+              <span>{{ name(r) }}</span>
+            </label>
+          }
+        </div>
+      </div>
+      @if (formError()) {
+        <p class="error">{{ t('users.saveError') }}</p>
+      }
+    </form>
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveCreate()">
+        {{ saving() ? t('crud.saving') : t('crud.save') }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Edit -->
+@if (mode() === 'edit' && active()) {
+  <app-modal [title]="t('users.editTitle')" (close)="close()">
+    <form class="form" (ngSubmit)="saveEdit()">
+      <label class="field">
+        <span class="field__label">{{ t('users.col.email') }}</span>
+        <input type="email" class="field__input" [value]="form.email" disabled />
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('users.displayName') }}<span class="req">*</span></span>
+        <input type="text" class="field__input" name="displayName" [(ngModel)]="form.displayName" />
+      </label>
+      <label class="field field--inline">
+        <input type="checkbox" class="field__checkbox" name="isActive" [(ngModel)]="form.isActive" />
+        <span class="field__label">{{ t('users.active') }}</span>
+      </label>
+      @if (formError()) {
+        <p class="error">{{ t('users.saveError') }}</p>
+      }
+    </form>
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveEdit()">
+        {{ saving() ? t('crud.saving') : t('crud.save') }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Assign roles -->
+@if (mode() === 'roles' && active()) {
+  <app-modal [title]="t('users.assignRolesTitle') + ' — ' + active()!.displayName" (close)="close()">
+    <div class="role-list role-list--tall">
+      @for (r of roleOptions(); track r.id) {
+        <label class="field field--inline">
+          <input type="checkbox" class="field__checkbox" [checked]="roleChecked(r.code)" (change)="toggleRole(r.code)" />
+          <span>{{ name(r) }}</span>
+        </label>
+      }
+    </div>
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveRoles()">
+        {{ saving() ? t('crud.saving') : t('crud.save') }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Reset password -->
+@if (mode() === 'reset' && active()) {
+  <app-modal [title]="t('users.resetPasswordTitle') + ' — ' + active()!.displayName" (close)="close()">
+    <form class="form" (ngSubmit)="saveReset()">
+      <label class="field">
+        <span class="field__label">{{ t('users.newPassword') }}<span class="req">*</span></span>
+        <input type="password" class="field__input" name="resetPwd" [(ngModel)]="resetPwd" />
+        <span class="hint">{{ t('users.passwordHint') }}</span>
+      </label>
+      @if (formError()) {
+        <p class="error">{{ t('users.saveError') }}</p>
+      }
+    </form>
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveReset()">
+        {{ saving() ? t('crud.saving') : t('crud.save') }}
+      </button>
+    </div>
+  </app-modal>
+}

@@ -1,0 +1,680 @@
+// DGOP Prisma schema - Sprint 0 foundation.
+// Lookups and audit scaffolding; domain entities are added in later sprints.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Application roles (RBAC).
+model Role {
+  id                    String           @id @default(uuid())
+  code                  String           @unique
+  nameEn                String
+  nameAr                String
+  description           String?
+  isSystem              Boolean          @default(false)
+  isActive              Boolean          @default(true)
+  deletedAt             DateTime?
+  /// Max classification rank this role may view (null = unrestricted).
+  maxClassificationRank Int?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  userRoles             UserRole[]
+  permissions           RolePermission[]
+  dataScopes            RoleDataScope[]
+
+  @@map("roles")
+}
+
+/// Catalog of granular permissions as resource + action pairs.
+model Permission {
+  id            String           @id @default(uuid())
+  resource      String
+  action        String
+  descriptionEn String?
+  descriptionAr String?
+  createdAt     DateTime         @default(now())
+  roles         RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+/// Many-to-many assignment of permissions to roles.
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+enum DataScopeType {
+  org_unit
+  data_domain
+}
+
+/// Per-role data visibility scope (org unit / data domain memberships).
+model RoleDataScope {
+  id                String        @id @default(uuid())
+  roleId            String
+  scopeType         DataScopeType
+  refId             String
+  includeDescendants Boolean      @default(true)
+  role              Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, scopeType, refId])
+  @@index([roleId])
+  @@map("role_data_scopes")
+}
+
+/// Application users (local authentication for development).
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  displayName  String
+  isActive     Boolean    @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  userRoles    UserRole[]
+  person       Person?
+  workflowTasks WorkflowTask[]
+
+  @@map("users")
+}
+
+/// Many-to-many assignment of roles to users.
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+/// Directory of people (governance actors); optionally linked to a login account.
+model Person {
+  id           String                  @id @default(uuid())
+  fullNameEn   String
+  fullNameAr   String
+  email        String?                 @unique
+  jobTitle     String?
+  organization String?
+  userId       String?                 @unique
+  user         User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isActive     Boolean                 @default(true)
+  deletedAt    DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  assignments  StewardshipAssignment[]
+  rules        AssignmentRule[]
+  ownedNdiSpecs NdiSpecification[]     @relation("NdiSpecOwner")
+
+  @@map("people")
+}
+
+/// Data classification levels (e.g. Public..Top Secret).
+model Classification {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  nameEn      String
+  nameAr      String
+  rank        Int
+  color       String
+  description String?
+  isActive    Boolean     @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  assets      DataAsset[]
+
+  @@map("classifications")
+}
+
+/// Organizational hierarchy (entities, departments, sections).
+model OrganizationUnit {
+  id        String             @id @default(uuid())
+  code      String             @unique
+  nameEn    String
+  nameAr    String
+  parentId  String?
+  parent    OrganizationUnit?  @relation("OrgTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  OrganizationUnit[] @relation("OrgTree")
+  systems   SystemPlatform[]
+  assets    DataAsset[]
+  isActive  Boolean            @default(true)
+  deletedAt DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([parentId])
+  @@map("organization_units")
+}
+
+/// Systems / platforms that host or process data assets.
+model SystemPlatform {
+  id             String            @id @default(uuid())
+  code           String            @unique
+  nameEn         String
+  nameAr         String
+  description    String?
+  vendor         String?
+  type           String?
+  ownerOrgUnitId String?
+  ownerOrgUnit   OrganizationUnit? @relation(fields: [ownerOrgUnitId], references: [id], onDelete: SetNull)
+  assets         DataAsset[]
+  isActive       Boolean           @default(true)
+  deletedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@map("systems")
+}
+
+/// Governance role types (used by RACI templates and assignments).
+model RoleType {
+  id          String             @id @default(uuid())
+  code        String             @unique
+  nameEn      String
+  nameAr      String
+  description String?
+  isActive    Boolean            @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  raciItems   RaciTemplateItem[]
+  assignments StewardshipAssignment[]
+  rules       AssignmentRule[]
+
+  @@map("role_types")
+}
+
+enum RaciResponsibility {
+  R
+  A
+  C
+  I
+}
+
+/// RACI templates that can be applied to governance process types.
+model RaciTemplate {
+  id          String             @id @default(uuid())
+  code        String             @unique
+  nameEn      String
+  nameAr      String
+  description String?
+  processType String?
+  isActive    Boolean            @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  items       RaciTemplateItem[]
+
+  @@map("raci_templates")
+}
+
+model RaciTemplateItem {
+  id             String             @id @default(uuid())
+  templateId     String
+  roleTypeId     String
+  responsibility RaciResponsibility
+  template       RaciTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  roleType       RoleType           @relation(fields: [roleTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, roleTypeId])
+  @@map("raci_template_items")
+}
+
+/// Reusable status values grouped by domain (workflow, compliance, etc.).
+model StatusValue {
+  id        String    @id @default(uuid())
+  domain    String
+  code      String
+  nameEn    String
+  nameAr    String
+  color     String
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([domain, code])
+  @@map("status_values")
+}
+
+/// National Data Index (NDI) governance domains.
+model NdiDomain {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  /// Optional short abbreviation for charts/labels (e.g. DG, DQ, PDP). Display only.
+  shortCode String?
+  nameEn    String
+  nameAr    String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  specifications NdiSpecification[]
+
+  @@map("ndi_domains")
+}
+
+/// Type of an NDI specification entry.
+enum NdiSpecType {
+  policy
+  standard
+  control
+  procedure
+  guideline
+}
+
+/// NDI maturity level a specification targets (1 = initial ... 5 = optimized).
+enum NdiMaturityLevel {
+  level_1
+  level_2
+  level_3
+  level_4
+  level_5
+}
+
+/// A single NDI (National Data Index) specification / control requirement,
+/// grouped under an NDI domain. Used by the NDI Compliance Hub registry.
+model NdiSpecification {
+  id                 String           @id @default(uuid())
+  code               String           @unique
+  domainId           String
+  criterion          String?
+  type               NdiSpecType      @default(standard)
+  maturityLevel      NdiMaturityLevel @default(level_1)
+  nameEn             String
+  nameAr             String
+  descriptionEn      String?
+  descriptionAr      String?
+  acceptanceCriteria String?
+  reference          String?
+  /// Optional accountable owner for this specification (drives evidence ownership/routing).
+  ownerPersonId      String?
+  isActive           Boolean          @default(true)
+  sortOrder          Int              @default(0)
+  deletedAt          DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  domain    NdiDomain     @relation(fields: [domainId], references: [id])
+  owner     Person?       @relation("NdiSpecOwner", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  evidence  NdiEvidence[]
+
+  @@index([domainId])
+  @@index([type])
+  @@index([maturityLevel])
+  @@index([isActive])
+  @@index([ownerPersonId])
+  @@map("ndi_specifications")
+}
+
+/// Lifecycle states for a piece of NDI compliance evidence.
+enum NdiEvidenceStatus {
+  draft
+  submitted
+  under_review
+  approved
+  rejected
+  expired
+  revoked
+}
+
+/// A piece of evidence (an uploaded file) demonstrating compliance with an
+/// NDI specification. Goes through a submit -> review lifecycle and can expire.
+model NdiEvidence {
+  id            String            @id @default(uuid())
+  specId        String
+  title         String
+  descriptionEn String?
+  status        NdiEvidenceStatus @default(draft)
+  // Stored file metadata
+  fileName      String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  sha256        String
+  // Lifecycle / review
+  submittedBy   String
+  submittedAt   DateTime?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  reviewComment String?
+  expiryDate    DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  spec NdiSpecification @relation(fields: [specId], references: [id], onDelete: Cascade)
+
+  @@index([specId])
+  @@index([status])
+  @@index([expiryDate])
+  @@map("ndi_evidence")
+}
+
+/// Business data domains (hierarchical taxonomy of data areas).
+model DataDomain {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  nameEn      String
+  nameAr      String
+  description String?
+  parentId    String?
+  parent      DataDomain?  @relation("DomainTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    DataDomain[] @relation("DomainTree")
+  assets      DataAsset[]
+  isActive    Boolean      @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([parentId])
+  @@map("data_domains")
+}
+
+/// Data subjects (categories of individuals/entities the data is about).
+model DataSubject {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  nameEn      String
+  nameAr      String
+  description String?
+  isActive    Boolean        @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  assetLinks  AssetSubject[]
+
+  @@map("data_subjects")
+}
+
+/// Business capabilities (hierarchical map of what the organization does).
+model BusinessCapability {
+  id          String               @id @default(uuid())
+  code        String               @unique
+  nameEn      String
+  nameAr      String
+  description String?
+  parentId    String?
+  parent      BusinessCapability?  @relation("CapabilityTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    BusinessCapability[] @relation("CapabilityTree")
+  assets      DataAsset[]
+  isActive    Boolean              @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([parentId])
+  @@map("business_capabilities")
+}
+
+/// Governed data assets (the core inventory of data the organization manages).
+model DataAsset {
+  id                String    @id @default(uuid())
+  code              String    @unique
+  nameEn            String
+  nameAr            String
+  description       String?
+  /// Lifecycle status code (see StatusValue domain "lifecycle"): draft, active, deprecated, retired.
+  lifecycleStatus   String    @default("draft")
+  /// Ownership state for filtering: unassigned | assigned (full registry arrives in Sprint 5).
+  ownerStatus       String    @default("unassigned")
+  ownerName         String?
+  domainId          String?
+  orgUnitId         String?
+  systemId          String?
+  capabilityId      String?
+  classificationId  String?
+  domain            DataDomain?         @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  orgUnit           OrganizationUnit?   @relation(fields: [orgUnitId], references: [id], onDelete: SetNull)
+  system            SystemPlatform?     @relation(fields: [systemId], references: [id], onDelete: SetNull)
+  capability        BusinessCapability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  classification    Classification?     @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  subjects          AssetSubject[]
+  outgoingRelations AssetRelationship[] @relation("AssetRelSource")
+  incomingRelations AssetRelationship[] @relation("AssetRelTarget")
+  workflowCases     WorkflowCase[]
+  isActive          Boolean   @default(true)
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([domainId])
+  @@index([orgUnitId])
+  @@index([systemId])
+  @@index([capabilityId])
+  @@index([classificationId])
+  @@index([lifecycleStatus])
+  @@index([ownerStatus])
+  @@map("data_assets")
+}
+
+/// Many-to-many mapping of data assets to the data subjects they describe.
+model AssetSubject {
+  assetId       String
+  dataSubjectId String
+  asset         DataAsset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  dataSubject   DataSubject @relation(fields: [dataSubjectId], references: [id], onDelete: Cascade)
+
+  @@id([assetId, dataSubjectId])
+  @@index([dataSubjectId])
+  @@map("asset_subjects")
+}
+
+/// Directed relationship between two data assets (lineage / association).
+model AssetRelationship {
+  id            String    @id @default(uuid())
+  sourceAssetId String
+  targetAssetId String
+  /// Relationship type code: derived_from, feeds, replicates, related_to.
+  type          String
+  description   String?
+  createdAt     DateTime  @default(now())
+  sourceAsset   DataAsset @relation("AssetRelSource", fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  targetAsset   DataAsset @relation("AssetRelTarget", fields: [targetAssetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceAssetId, targetAssetId, type])
+  @@index([targetAssetId])
+  @@map("asset_relationships")
+}
+
+/// Governance dimensions a stewardship assignment or rule can target.
+enum AssignmentTargetType {
+  asset
+  domain
+  capability
+  subject
+  org_unit
+  system
+}
+
+/// Who is responsible (owner/steward) for a specific governed target.
+model StewardshipAssignment {
+  id            String               @id @default(uuid())
+  targetType    AssignmentTargetType
+  targetId      String
+  roleTypeId    String
+  personId      String
+  isPrimary     Boolean              @default(true)
+  effectiveDate DateTime             @default(now())
+  expiryDate    DateTime?
+  justification String?
+  /// How this assignment was created: manual | rule | override.
+  source        String               @default("manual")
+  /// Approval state; only `approved` assignments are authoritative (set owner / clear exception).
+  approvalStatus ApprovalStatus      @default(approved)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  isActive      Boolean              @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  roleType      RoleType             @relation(fields: [roleTypeId], references: [id], onDelete: Cascade)
+  person        Person               @relation(fields: [personId], references: [id], onDelete: Cascade)
+  workflowCases WorkflowCase[]
+
+  @@index([targetType, targetId])
+  @@index([roleTypeId])
+  @@index([personId])
+  @@map("stewardship_assignments")
+}
+
+/// Rule that recommends an owner/steward for assets matching a governance dimension.
+model AssignmentRule {
+  id          String               @id @default(uuid())
+  nameEn      String
+  nameAr      String
+  description String?
+  /// Dimension the rule matches against (asset is not allowed: rules drive recommendations).
+  scopeType   AssignmentTargetType
+  refId       String
+  roleTypeId  String
+  personId    String
+  isPrimary   Boolean              @default(true)
+  /// Tiebreaker within the same scope level (lower wins).
+  priority    Int                  @default(100)
+  isActive    Boolean              @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  roleType    RoleType             @relation(fields: [roleTypeId], references: [id], onDelete: Cascade)
+  person      Person               @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([scopeType, refId])
+  @@index([roleTypeId])
+  @@map("assignment_rules")
+}
+
+/// Approval state of a stewardship assignment.
+enum ApprovalStatus {
+  draft
+  pending
+  approved
+  rejected
+}
+
+/// Lifecycle states for a governance workflow case.
+enum CaseStatus {
+  draft
+  submitted
+  under_review
+  awaiting_information
+  decision_made
+  approved
+  rejected
+  implemented
+  closed
+}
+
+/// Lifecycle states for a workflow task.
+enum TaskStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+/// Decision recorded on a workflow task.
+enum TaskDecision {
+  approved
+  rejected
+}
+
+/// A governance workflow case (a controlled piece of work, e.g. an assignment approval).
+model WorkflowCase {
+  id           String                 @id @default(uuid())
+  code         String                 @unique
+  title        String
+  description  String?
+  /// Case type: general | owner_assignment_approval | steward_assignment_approval.
+  type         String                 @default("general")
+  status       CaseStatus             @default(draft)
+  assetId      String?
+  assignmentId String?
+  createdBy    String
+  asset        DataAsset?             @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  assignment   StewardshipAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  tasks        WorkflowTask[]
+  events       WorkflowEvent[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([assetId])
+  @@map("workflow_cases")
+}
+
+/// A unit of work inside a workflow case, assigned to a user account.
+model WorkflowTask {
+  id              String          @id @default(uuid())
+  caseId          String
+  title           String
+  /// Task type: approval | review | information.
+  type            String          @default("review")
+  status          TaskStatus      @default(pending)
+  assigneeUserId  String?
+  dueDate         DateTime?
+  decision        TaskDecision?
+  decisionComment String?
+  completedAt     DateTime?
+  case            WorkflowCase    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  assignee        User?           @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  events          WorkflowEvent[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([caseId])
+  @@index([assigneeUserId])
+  @@index([status])
+  @@map("workflow_tasks")
+}
+
+/// Append-only timeline of events for a workflow case (and optionally a task).
+model WorkflowEvent {
+  id         String        @id @default(uuid())
+  caseId     String
+  taskId     String?
+  actor      String
+  action     String
+  fromStatus String?
+  toStatus   String?
+  comment    String?
+  createdAt  DateTime      @default(now())
+  case       WorkflowCase  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  task       WorkflowTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@map("workflow_events")
+}
+
+/// Append-only audit log foundation.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actor      String
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}

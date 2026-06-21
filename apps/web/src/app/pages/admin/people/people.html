@@ -1,0 +1,128 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('people.title') }}</h1>
+      <p class="page__subtitle">{{ t('people.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">+ {{ t('people.new') }}</button>
+      }
+    </div>
+  </header>
+
+  <div class="ds-card">
+    <div class="toolbar">
+      <input
+        type="search"
+        class="toolbar__search"
+        [ngModel]="search()"
+        (ngModelChange)="setSearch($event)"
+        [placeholder]="t('people.searchPlaceholder')"
+        [attr.aria-label]="t('people.searchPlaceholder')"
+      />
+      <span class="toolbar__count">{{ filtered().length }} {{ t('people.records') }}</span>
+    </div>
+
+    @if (state() === 'loading') {
+      <p>{{ t('people.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('people.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (filtered().length === 0) {
+      <div class="empty"><p>{{ t('people.noMatches') }}</p></div>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('people.col.name') }}</th>
+              <th>{{ t('people.col.email') }}</th>
+              <th>{{ t('people.col.jobTitle') }}</th>
+              <th>{{ t('people.col.organization') }}</th>
+              <th>{{ t('people.col.user') }}</th>
+              <th>{{ t('people.col.status') }}</th>
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of paged(); track p.id) {
+              <tr>
+                <td>{{ name(p) }}</td>
+                <td>{{ p.email || '-' }}</td>
+                <td>{{ p.jobTitle || '-' }}</td>
+                <td>{{ p.organization || '-' }}</td>
+                <td>{{ userLabel(p) }}</td>
+                <td>
+                  <app-status-chip [kind]="p.isActive ? 'success' : 'muted'" [label]="t(p.isActive ? 'people.active' : 'people.inactive')" />
+                </td>
+                <td class="actions-col">
+                  @if (canEdit) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(p)">{{ t('crud.edit') }}</button>
+                  }
+                  @if (canDelete) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm danger" (click)="remove(p)">{{ t('crud.delete') }}</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <app-pager
+        [page]="page()"
+        [pageSize]="pageSize()"
+        [total]="filtered().length"
+        [totalPages]="totalPages()"
+        (pageChange)="goToPage($event)"
+      />
+    }
+  </div>
+
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? 'people.editTitle' : 'people.newTitle')" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        <div class="grid-2">
+          <label class="field">
+            <span class="field__label">{{ t('people.field.nameEn') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().fullNameEn" (ngModelChange)="set('fullNameEn', $event)" name="fullNameEn" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('people.field.nameAr') }}<span class="req">*</span></span>
+            <input type="text" class="field__input" [ngModel]="draft().fullNameAr" (ngModelChange)="set('fullNameAr', $event)" name="fullNameAr" dir="rtl" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('people.field.email') }}</span>
+            <input type="email" class="field__input" [ngModel]="draft().email" (ngModelChange)="set('email', $event)" name="email" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('people.field.jobTitle') }}</span>
+            <input type="text" class="field__input" [ngModel]="draft().jobTitle" (ngModelChange)="set('jobTitle', $event)" name="jobTitle" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('people.field.organization') }}</span>
+            <input type="text" class="field__input" [ngModel]="draft().organization" (ngModelChange)="set('organization', $event)" name="organization" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('people.field.user') }}</span>
+            <select class="field__input" [ngModel]="draft().userId" (ngModelChange)="set('userId', $event)" name="userId">
+              <option value="">{{ t('people.noUser') }}</option>
+              @for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }} ({{ u.email }})</option> }
+            </select>
+          </label>
+          <label class="field field--check">
+            <input type="checkbox" [checked]="draft().isActive" (change)="set('isActive', !draft().isActive)" />
+            <span class="field__label">{{ t('people.field.active') }}</span>
+          </label>
+        </div>
+      </form>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

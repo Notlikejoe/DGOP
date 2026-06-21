@@ -1,0 +1,19 @@
+{
+  "name": "dgop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Data Governance Operations Platform (DGOP) - Angular + Node.js + PostgreSQL",
+  "scripts": {
+    "install:all": "npm --prefix apps/api install && npm --prefix apps/web install",
+    "db:generate": "bash scripts/db.sh generate",
+    "db:migrate": "bash scripts/db.sh migrate",
+    "db:deploy": "bash scripts/db.sh deploy",
+    "db:seed": "bash scripts/db.sh seed",
+    "build:web": "npm --prefix apps/web run build",
+    "build:api": "npm --prefix apps/api run build",
+    "build": "npm run build:web && npm run build:api",
+    "start": "node apps/api/dist/main.js",
+    "dev": "bash scripts/dev.sh",
+    "publish:external": "bash scripts/publish.sh"
+  }
+}

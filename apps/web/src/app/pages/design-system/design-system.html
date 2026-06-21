@@ -1,0 +1,70 @@
+<section class="page">
+  <header class="page__header">
+    <h1>{{ t('ds.title') }}</h1>
+    <p class="page__subtitle">{{ t('ds.subtitle') }}</p>
+  </header>
+
+  <article class="ds-card section">
+    <h2>{{ t('ds.colors') }}</h2>
+    <div class="swatches">
+      <div class="swatch"><span class="swatch__box" style="background: var(--success)"></span>success</div>
+      <div class="swatch"><span class="swatch__box" style="background: var(--warning)"></span>warning</div>
+      <div class="swatch"><span class="swatch__box" style="background: var(--danger)"></span>danger</div>
+      <div class="swatch"><span class="swatch__box" style="background: var(--info)"></span>info</div>
+      <div class="swatch"><span class="swatch__box" style="background: var(--muted)"></span>muted</div>
+    </div>
+  </article>
+
+  <article class="ds-card section">
+    <h2>{{ t('ds.chips') }}</h2>
+    <div class="row">
+      <app-status-chip kind="success" [label]="t('status.onTrack')" />
+      <app-status-chip kind="warning" [label]="t('status.atRisk')" />
+      <app-status-chip kind="danger" [label]="t('status.overdue')" />
+      <app-status-chip kind="info" [label]="t('status.underReview')" />
+      <app-status-chip kind="muted" [label]="t('status.notStarted')" />
+    </div>
+  </article>
+
+  <article class="ds-card section">
+    <h2>{{ t('ds.buttons') }}</h2>
+    <div class="row">
+      <button type="button" class="ds-btn ds-btn--primary">Primary</button>
+      <button type="button" class="ds-btn ds-btn--ghost">Secondary</button>
+    </div>
+  </article>
+
+  <article class="ds-card section">
+    <h2>{{ t('ds.tree') }}</h2>
+    <app-tree-view [rows]="demoTree" />
+  </article>
+
+  <article class="ds-card section">
+    <h2>{{ t('ds.forms') }}</h2>
+    <div class="ds-form-demo">
+      <label class="ds-field">
+        <span class="ds-field__label">{{ t('crud.nameEn') }}</span>
+        <input type="text" class="ds-field__input" placeholder="Example value" />
+      </label>
+      <label class="ds-field">
+        <span class="ds-field__label">{{ t('ds.lookup') }}</span>
+        <select class="ds-field__input">
+          <option>Public</option>
+          <option>Internal</option>
+          <option>Restricted</option>
+          <option>Secret</option>
+          <option>Top Secret</option>
+        </select>
+      </label>
+    </div>
+  </article>
+
+  <article class="ds-card section">
+    <h2>{{ t('ds.typography') }}</h2>
+    <h1>Heading 1</h1>
+    <h2>Heading 2</h2>
+    <h3>Heading 3</h3>
+    <p>Body text - the quick brown fox jumps over the lazy dog.</p>
+    <p style="font-family: 'IBM Plex Sans Arabic', sans-serif">نص عربي - النص التجريبي لعرض الخط العربي.</p>
+  </article>
+</section>

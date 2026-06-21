@@ -1,0 +1,95 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import bcrypt from 'bcryptjs';
+import { UsersService } from '../users/users.service';
+import { AuditService } from '../audit/audit.service';
+import { AuthUser, JwtPayload } from './auth.types';
+import { AccessService } from '../access/access.service';
+import { ScopeService } from '../access/scope.service';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly users: UsersService,
+    private readonly jwt: JwtService,
+    private readonly audit: AuditService,
+    private readonly access: AccessService,
+    private readonly scope: ScopeService,
+  ) {}
+
+  async login(email: string, password: string, ip?: string) {
+    const user = await this.users.findByEmailWithRoles(email);
+    const passwordOk = user ? await bcrypt.compare(password, user.passwordHash) : false;
+
+    if (!user || !user.isActive || !passwordOk) {
+      await this.audit.log({
+        actor: email,
+        action: 'auth.login.failed',
+        entityType: 'user',
+        entityId: user?.id ?? null,
+        metadata: { ip, reason: !user ? 'not_found' : !user.isActive ? 'inactive' : 'bad_password' },
+      });
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    await this.users.updateLastLogin(user.id);
+    const roles = user.userRoles.map((ur) => ur.role.code);
+    const payload: JwtPayload = { sub: user.id, email: user.email, roles };
+    const accessToken = this.jwt.sign(payload);
+
+    await this.audit.log({
+      actor: user.email,
+      action: 'auth.login.success',
+      entityType: 'user',
+      entityId: user.id,
+      metadata: { ip },
+    });
+
+    return { accessToken, user: await this.toProfile(user) };
+  }
+
+  async me(userId: string) {
+    const user = await this.users.findByIdWithRoles(userId);
+    if (!user) throw new UnauthorizedException();
+    return this.toProfile(user);
+  }
+
+  async logout(user: AuthUser) {
+    await this.audit.log({
+      actor: user.email,
+      action: 'auth.logout',
+      entityType: 'user',
+      entityId: user.id,
+    });
+    return { success: true };
+  }
+
+  private async toProfile(user: {
+    id: string;
+    email: string;
+    displayName: string;
+    isActive: boolean;
+    lastLoginAt: Date | null;
+    userRoles: { role: { code: string; nameEn: string; nameAr: string } }[];
+  }) {
+    const roleCodes = user.userRoles.map((ur) => ur.role.code);
+    const [permissions, scopes] = await Promise.all([
+      this.access.permissionsForRoleCodes(roleCodes),
+      this.scope.resolve(roleCodes),
+    ]);
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      isActive: user.isActive,
+      lastLoginAt: user.lastLoginAt,
+      roles: user.userRoles.map((ur) => ({
+        code: ur.role.code,
+        nameEn: ur.role.nameEn,
+        nameAr: ur.role.nameAr,
+      })),
+      permissions,
+      scopes,
+    };
+  }
+}

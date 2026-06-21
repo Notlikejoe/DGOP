@@ -1,0 +1,191 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('own.title') }}</h1>
+      <p class="page__subtitle">{{ t('own.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">+ {{ t('own.new') }}</button>
+      }
+    </div>
+  </header>
+
+  @if (conflictCount() > 0) {
+    <div class="banner banner--warn">{{ conflictBanner() }}</div>
+  }
+
+  <div class="ds-card">
+    <div class="toolbar">
+      <select class="toolbar__status" [ngModel]="filters().targetType" (ngModelChange)="setFilter('targetType', $event)" [attr.aria-label]="t('own.field.targetType')">
+        <option value="">{{ t('own.filter.targetType') }}</option>
+        @for (tt of targetTypes; track tt) { <option [value]="tt">{{ targetTypeLabel(tt) }}</option> }
+      </select>
+      <select class="toolbar__status" [ngModel]="filters().roleTypeId" (ngModelChange)="setFilter('roleTypeId', $event)" [attr.aria-label]="t('own.field.role')">
+        <option value="">{{ t('own.filter.role') }}</option>
+        @for (r of roleTypes(); track r.id) { <option [value]="r.id">{{ name(r) }}</option> }
+      </select>
+      <select class="toolbar__status" [ngModel]="filters().personId" (ngModelChange)="setFilter('personId', $event)" [attr.aria-label]="t('own.field.person')">
+        <option value="">{{ t('own.filter.person') }}</option>
+        @for (p of people(); track p.id) { <option [value]="p.id">{{ personName(p) }}</option> }
+      </select>
+      <select class="toolbar__status" [ngModel]="filters().status" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('own.col.status')">
+        <option value="">{{ t('own.filter.status') }}</option>
+        <option value="active">{{ t('own.statusFilter.active') }}</option>
+        <option value="inactive">{{ t('own.statusFilter.inactive') }}</option>
+      </select>
+      <span class="toolbar__count">{{ assignments().length }} {{ t('own.records') }}</span>
+    </div>
+
+    @if (state() === 'loading') {
+      <p>{{ t('own.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('own.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    } @else if (assignments().length === 0) {
+      <div class="empty"><p>{{ t('own.noMatches') }}</p></div>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('own.col.target') }}</th>
+              <th>{{ t('own.col.role') }}</th>
+              <th>{{ t('own.col.person') }}</th>
+              <th>{{ t('own.col.primary') }}</th>
+              <th>{{ t('own.col.window') }}</th>
+              <th>{{ t('own.col.source') }}</th>
+              <th>{{ t('own.col.approval') }}</th>
+              <th>{{ t('own.col.status') }}</th>
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of assignments(); track a.id) {
+              <tr [class.row--conflict]="isConflict(a)">
+                <td>
+                  <span class="tag">{{ targetTypeLabel(a.targetType) }}</span>
+                  <div>{{ name(a.target) }}</div>
+                </td>
+                <td>{{ name(a.roleType) }}</td>
+                <td>{{ personName(a.person) }}</td>
+                <td>
+                  <span class="tag" [class.tag--primary]="a.isPrimary">{{ t(a.isPrimary ? 'own.primary' : 'own.backup') }}</span>
+                  @if (isConflict(a)) { <span class="tag tag--danger">{{ t('own.conflictBadge') }}</span> }
+                </td>
+                <td class="nowrap">{{ fmtDate(a.effectiveDate) }} → {{ fmtDate(a.expiryDate) }}</td>
+                <td>{{ sourceLabel(a.source) }}</td>
+                <td><app-status-chip [kind]="approvalKind(a.approvalStatus)" [label]="t('approval.' + a.approvalStatus)" /></td>
+                <td><app-status-chip [kind]="statusOf(a).kind" [label]="t(statusOf(a).key)" /></td>
+                <td class="actions-col">
+                  @if (canSubmitForApproval && a.approvalStatus !== 'pending') {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openSubmit(a)">{{ t('own.submitForApproval') }}</button>
+                  }
+                  @if (canEdit) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(a)">{{ t('crud.edit') }}</button>
+                  }
+                  @if (canDelete) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm danger" (click)="remove(a)">{{ t('crud.delete') }}</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @if (modalOpen()) {
+    <app-modal [title]="t(editingId() ? 'own.editTitle' : 'own.newTitle')" (close)="close()">
+      <form class="form" (ngSubmit)="save()">
+        <div class="grid-2">
+          <label class="field">
+            <span class="field__label">{{ t('own.field.targetType') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().targetType" (ngModelChange)="set('targetType', $event)" name="targetType" [disabled]="!!editingId()">
+              @for (tt of targetTypes; track tt) { <option [value]="tt">{{ targetTypeLabel(tt) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('own.field.target') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().targetId" (ngModelChange)="set('targetId', $event)" name="targetId" [disabled]="!!editingId()">
+              <option value="">{{ t('own.selectTarget') }}</option>
+              @for (o of targetOptions(); track o.id) { <option [value]="o.id">{{ name(o) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('own.field.role') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().roleTypeId" (ngModelChange)="set('roleTypeId', $event)" name="roleTypeId" [disabled]="!!editingId()">
+              <option value="">{{ t('own.selectRole') }}</option>
+              @for (r of roleTypes(); track r.id) { <option [value]="r.id">{{ name(r) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('own.field.person') }}<span class="req">*</span></span>
+            <select class="field__input" [ngModel]="draft().personId" (ngModelChange)="set('personId', $event)" name="personId">
+              <option value="">{{ t('own.selectPerson') }}</option>
+              @for (p of people(); track p.id) { <option [value]="p.id">{{ personName(p) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('own.field.primary') }}</span>
+            <select class="field__input" [ngModel]="draft().isPrimary" (ngModelChange)="set('isPrimary', $event)" name="isPrimary">
+              <option [ngValue]="true">{{ t('own.primary') }}</option>
+              <option [ngValue]="false">{{ t('own.backup') }}</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('own.field.effective') }}<span class="req">*</span></span>
+            <input type="date" class="field__input" [ngModel]="draft().effectiveDate" (ngModelChange)="set('effectiveDate', $event)" name="effectiveDate" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('own.field.expiry') }}</span>
+            <input type="date" class="field__input" [ngModel]="draft().expiryDate" (ngModelChange)="set('expiryDate', $event)" name="expiryDate" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field__label">{{ t('own.field.justification') }}</span>
+          <textarea class="field__input" rows="2" [ngModel]="draft().justification" (ngModelChange)="set('justification', $event)" name="justification"></textarea>
+        </label>
+        @if (!editingId() && draft().isPrimary) {
+          <label class="check">
+            <input type="checkbox" [ngModel]="draft().demoteExisting" (ngModelChange)="set('demoteExisting', $event)" name="demoteExisting" />
+            <span>{{ t('own.demoteExisting') }}</span>
+          </label>
+        }
+      </form>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canSave() || saving()" (click)="save()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (submitTarget(); as a) {
+    <app-modal [title]="t('own.submitForApproval')" (close)="closeSubmit()">
+      <div class="form">
+        <p class="hint">{{ t('own.submitHint') }}</p>
+        <p><strong>{{ name(a.roleType) }}</strong> — {{ personName(a.person) }} ({{ name(a.target) }})</p>
+        <label class="field">
+          <span class="field__label">{{ t('own.field.approver') }}<span class="req">*</span></span>
+          <select class="field__input" [ngModel]="approverId()" (ngModelChange)="approverId.set($event)" name="approver">
+            <option value="">-</option>
+            @for (u of users(); track u.id) { <option [value]="u.id">{{ personNameByUser(u) }}</option> }
+          </select>
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('own.field.dueDate') }}</span>
+          <input type="date" class="field__input" [ngModel]="submitDue()" (ngModelChange)="submitDue.set($event)" name="due" />
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeSubmit()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!approverId() || submitting()" (click)="submitForApproval()">
+          {{ submitting() ? t('crud.saving') : t('own.submitForApproval') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+</section>

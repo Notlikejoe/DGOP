@@ -1,0 +1,134 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('scoring.readiness.title') }}</h1>
+      <p class="page__subtitle">{{ t('scoring.readiness.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <a class="ds-btn ds-btn--ghost" routerLink="/governance/ndi">{{ t('ndi.backToHub') }}</a>
+      <a class="ds-btn ds-btn--ghost" routerLink="/governance/ndi/gaps">{{ t('scoring.viewGaps') }}</a>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="toggleExplanation()">{{ t('scoring.howCalculated') }}</button>
+    </div>
+  </header>
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('crud.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card">
+      <p class="error">{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    </div>
+  } @else if (data(); as d) {
+    @if (showExplanation()) {
+      <div class="ds-card explain">
+        <h3 class="sub-title">{{ t('scoring.explain.title') }}</h3>
+        <p>{{ t('scoring.explain.body') }}</p>
+        <ul>
+          <li>{{ t('scoring.explain.satisfied') }}</li>
+          <li>{{ t('scoring.explain.weight') }}</li>
+          <li>{{ t('scoring.explain.formula') }}</li>
+          <li>{{ t('scoring.explain.bands') }}</li>
+        </ul>
+      </div>
+    }
+
+    <!-- Overall KPIs -->
+    <div class="kpi-row">
+      <div class="ds-card kpi">
+        <span class="kpi__label">{{ t('scoring.overallReadiness') }}</span>
+        <span class="kpi__value">{{ d.overall.score }}%</span>
+        <app-status-chip [kind]="maturityKind(d.overall.maturity)" [label]="t('scoring.maturity.' + d.overall.maturity)" />
+      </div>
+      <div class="ds-card kpi">
+        <span class="kpi__label">{{ t('scoring.specsSatisfied') }}</span>
+        <span class="kpi__value">{{ d.overall.satisfiedCount }} / {{ d.overall.specCount }}</span>
+      </div>
+      @for (g of gapTypes; track g) {
+        @if (gapCount(g) > 0) {
+          <a class="ds-card kpi kpi--link" routerLink="/governance/ndi/gaps" [queryParams]="{ gapType: g }">
+            <span class="kpi__label">{{ t('scoring.gap.' + g) }}</span>
+            <span class="kpi__value">{{ gapCount(g) }}</span>
+          </a>
+        }
+      }
+    </div>
+
+    <!-- Domain readiness -->
+    <div class="ds-card">
+      <h2 class="card-title">{{ t('scoring.byDomain') }}</h2>
+      <p class="muted">{{ t('scoring.byDomainHint') }}</p>
+      <div class="domain-readiness">
+        @for (dm of d.domains; track dm.domainId) {
+          <button
+            type="button"
+            class="readiness-row"
+            [class.readiness-row--empty]="dm.specCount === 0"
+            [class.readiness-row--active]="selectedDomainId() === dm.domainId"
+            [attr.aria-expanded]="selectedDomainId() === dm.domainId"
+            (click)="selectDomain(dm)"
+          >
+            <span class="readiness-row__name">
+              @if (dm.shortCode) { <span class="badge-code">{{ dm.shortCode }}</span> }
+              {{ name(dm) }}
+            </span>
+            <span class="bar-cell" [attr.title]="dm.score + '%'">
+              <app-progress-bar [value]="dm.score" [kind]="barKind(dm.score)" [label]="name(dm)" />
+            </span>
+            <span class="readiness-row__score">{{ dm.score }}%</span>
+            <span class="readiness-row__count">{{ dm.satisfiedCount }}/{{ dm.specCount }}</span>
+            <app-status-chip [kind]="maturityKind(dm.maturity)" [label]="t('scoring.maturity.' + dm.maturity)" />
+          </button>
+
+          @if (selectedDomainId() === dm.domainId) {
+            <div class="drill">
+              @if (detailLoading()) {
+                <p>{{ t('crud.loading') }}</p>
+              } @else if (detail(); as dd) {
+                <div class="table-wrap">
+                  <table class="ds-table">
+                    <thead>
+                      <tr>
+                        <th>{{ t('ndi.col.code') }}</th>
+                        <th>{{ t('ndi.col.name') }}</th>
+                        <th>{{ t('ndi.col.type') }}</th>
+                        <th>{{ t('scoring.col.weight') }}</th>
+                        <th>{{ t('scoring.col.evidence') }}</th>
+                        <th>{{ t('scoring.col.score') }}</th>
+                        <th>{{ t('scoring.col.gaps') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (s of dd.specs; track s.id) {
+                        <tr>
+                          <td>
+                            <a routerLink="/governance/ndi/specifications/{{ s.id }}"><code>{{ s.code }}</code></a>
+                          </td>
+                          <td>{{ specName(s) }}</td>
+                          <td>{{ t('ndi.type.' + s.type) }}</td>
+                          <td>{{ s.weight }}</td>
+                          <td>
+                            <app-status-chip
+                              [kind]="s.satisfied ? 'success' : 'muted'"
+                              [label]="t('scoring.ev.' + s.evidenceStatus)"
+                            />
+                          </td>
+                          <td><strong>{{ s.score }}</strong></td>
+                          <td>
+                            @if (s.gaps.length === 0) { <span class="muted">—</span> }
+                            @for (g of s.gaps; track g) {
+                              <span class="gap-tag gap-tag--{{ g }}">{{ t('scoring.gap.' + g) }}</span>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+</section>

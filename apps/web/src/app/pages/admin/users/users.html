@@ -1,83 +1,226 @@
-<section class="page">
-  <header class="page__header">
-    <div>
-      <h1>{{ t('users.title') }}</h1>
-      <p class="page__subtitle">{{ t('users.subtitle') }}</p>
+<section class="access-page">
+  <header class="access-hero">
+    <div class="access-hero__main">
+      <span class="access-hero__icon" aria-hidden="true">
+        <app-icon name="users" />
+      </span>
+      <div>
+        <p class="access-hero__eyebrow">{{ t('nav.section.accessManagement') }}</p>
+        <h1>{{ t('users.title') }}</h1>
+        <p class="access-hero__copy">{{ t('users.subtitle') }}</p>
+      </div>
     </div>
-    <div class="header-actions">
-      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('users.refresh') }}</button>
+    <div class="access-hero__actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">
+        <app-icon name="refresh" />
+        {{ t('users.refresh') }}
+      </button>
       @if (auth.hasPermission('users.create')) {
-        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">+ {{ t('users.new') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">
+          <app-icon name="plus" />
+          {{ t('users.new') }}
+        </button>
       }
     </div>
   </header>
 
-  <div class="ds-card">
-    @if (state() === 'loading') {
-      <p>{{ t('users.loading') }}</p>
-    } @else if (state() === 'error') {
-      <p class="error">{{ t('users.error') }}</p>
-      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('users.refresh') }}</button>
-    } @else {
-      <div class="table-wrap">
-        <table class="ds-table">
-          <thead>
-            <tr>
-              <th>{{ t('users.col.name') }}</th>
-              <th>{{ t('users.col.email') }}</th>
-              <th>{{ t('users.col.roles') }}</th>
-              <th>{{ t('users.col.status') }}</th>
-              <th>{{ t('users.col.lastLogin') }}</th>
-              @if (auth.hasPermission('users.edit')) {
-                <th class="actions-col">{{ t('crud.actions') }}</th>
-              }
-            </tr>
-          </thead>
-          <tbody>
-            @for (u of users(); track u.id) {
-              <tr>
-                <td>{{ u.displayName }}</td>
-                <td>{{ u.email }}</td>
-                <td>{{ roleNames(u) }}</td>
-                <td>
-                  @if (u.isActive) {
-                    <app-status-chip kind="success" [label]="t('users.active')" />
-                  } @else {
-                    <app-status-chip kind="muted" [label]="t('users.inactive')" />
-                  }
-                </td>
-                <td>{{ u.lastLoginAt ? (u.lastLoginAt | date: 'medium') : '-' }}</td>
-                @if (auth.hasPermission('users.edit')) {
-                  <td class="actions-col">
-                    <div class="row-actions">
-                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRoles(u)">
-                        {{ t('users.assignRoles') }}
-                      </button>
-                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(u)">
-                        {{ t('crud.edit') }}
-                      </button>
-                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openReset(u)">
-                        {{ t('users.resetPassword') }}
-                      </button>
-                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="toggleActive(u)">
-                        {{ u.isActive ? t('users.deactivate') : t('users.activate') }}
-                      </button>
-                    </div>
-                  </td>
-                }
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
+  <div class="metric-strip" aria-label="User access summary">
+    <article class="metric-card metric-card--primary">
+      <span>{{ t('users.metric.total') }}</span>
+      <strong>{{ metrics().total }}</strong>
+      <small>{{ t('users.metric.totalHint') }}</small>
+    </article>
+    <article class="metric-card metric-card--success">
+      <span>{{ t('users.metric.active') }}</span>
+      <strong>{{ metrics().active }}</strong>
+      <small>{{ t('users.metric.activeHint') }}</small>
+    </article>
+    <article class="metric-card metric-card--muted">
+      <span>{{ t('users.metric.inactive') }}</span>
+      <strong>{{ metrics().inactive }}</strong>
+      <small>{{ t('users.metric.inactiveHint') }}</small>
+    </article>
+    <article class="metric-card metric-card--warning">
+      <span>{{ t('users.metric.noRoles') }}</span>
+      <strong>{{ metrics().noRoles }}</strong>
+      <small>{{ t('users.metric.noRolesHint') }}</small>
+    </article>
   </div>
+
+  @if (state() === 'loading') {
+    <div class="empty-state">
+      <app-icon name="refresh" />
+      <p>{{ t('users.loading') }}</p>
+    </div>
+  } @else if (state() === 'error') {
+    <div class="empty-state empty-state--error">
+      <app-icon name="alert" />
+      <p>{{ t('users.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('users.refresh') }}</button>
+    </div>
+  } @else {
+    <section class="access-toolbar" [attr.aria-label]="t('users.filter.title')">
+      <label class="field field--search">
+        <span class="field__label">{{ t('users.filter.search') }}</span>
+        <span class="field__control field__control--icon">
+          <app-icon name="search" />
+          <input
+            type="search"
+            [placeholder]="t('users.searchPlaceholder')"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+          />
+        </span>
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('users.filter.status') }}</span>
+        <select class="field__input" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($any($event))">
+          <option value="all">{{ t('users.filter.allStatuses') }}</option>
+          <option value="active">{{ t('users.active') }}</option>
+          <option value="inactive">{{ t('users.inactive') }}</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field__label">{{ t('users.filter.role') }}</span>
+        <select class="field__input" [ngModel]="roleFilter()" (ngModelChange)="roleFilter.set($event)">
+          <option value="all">{{ t('users.filter.allRoles') }}</option>
+          @for (role of roleOptions(); track role.id) {
+            <option [value]="role.code">{{ name(role) }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="ds-btn ds-btn--ghost access-toolbar__clear" (click)="clearFilters()">
+        <app-icon name="filter" />
+        {{ t('users.filter.clear') }}
+      </button>
+    </section>
+
+    <section class="access-workspace">
+      <div class="access-panel access-panel--list">
+        <div class="panel-head">
+          <div>
+            <h2>{{ t('users.directoryTitle') }}</h2>
+            <p>{{ filteredUsers().length }} {{ t('users.directoryCount') }}</p>
+          </div>
+        </div>
+
+        <div class="user-list" role="list">
+          @for (user of filteredUsers(); track user.id) {
+            <button
+              type="button"
+              class="user-row"
+              role="listitem"
+              [class.user-row--selected]="selectedUser()?.id === user.id"
+              (click)="selectUser(user)"
+              [attr.aria-label]="user.displayName + ', ' + user.email"
+            >
+              <span class="user-row__avatar" aria-hidden="true">{{ initials(user) }}</span>
+              <span class="user-row__body">
+                <span class="user-row__name">{{ user.displayName }}</span>
+                <span class="user-row__meta">{{ user.email }}</span>
+                <span class="user-row__roles">{{ roleSummary(user) }}</span>
+              </span>
+              <span class="user-row__status">
+                @if (user.isActive) {
+                  <app-status-chip kind="success" [label]="t('users.active')" />
+                } @else {
+                  <app-status-chip kind="muted" [label]="t('users.inactive')" />
+                }
+              </span>
+            </button>
+          } @empty {
+            <div class="empty-state empty-state--compact">
+              <app-icon name="search" />
+              <p>{{ t('users.emptyFiltered') }}</p>
+            </div>
+          }
+        </div>
+      </div>
+
+      <aside class="access-panel detail-panel">
+        @if (selectedUser(); as user) {
+          <div class="detail-panel__head">
+            <span class="detail-panel__avatar" aria-hidden="true">{{ initials(user) }}</span>
+            <div>
+              <p class="detail-panel__eyebrow">{{ t('users.detailTitle') }}</p>
+              <h2>{{ user.displayName }}</h2>
+              <p>{{ user.email }}</p>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-stat">
+              <span>{{ t('users.col.status') }}</span>
+              @if (user.isActive) {
+                <app-status-chip kind="success" [label]="t('users.active')" />
+              } @else {
+                <app-status-chip kind="muted" [label]="t('users.inactive')" />
+              }
+            </div>
+            <div class="detail-stat">
+              <span>{{ t('users.col.roles') }}</span>
+              <strong>{{ user.roles.length }}</strong>
+            </div>
+            <div class="detail-stat">
+              <span>{{ t('users.col.lastLogin') }}</span>
+              <strong>{{ user.lastLoginAt ? (user.lastLoginAt | date: 'medium') : t('users.lastLoginNever') }}</strong>
+            </div>
+            <div class="detail-stat">
+              <span>{{ t('users.createdAt') }}</span>
+              <strong>{{ user.createdAt | date: 'mediumDate' }}</strong>
+            </div>
+          </div>
+
+          <div class="role-tags">
+            <div class="section-label">{{ t('users.accountAccess') }}</div>
+            @for (role of user.roles; track role.code) {
+              <span class="role-tag">
+                <app-icon name="shield" />
+                {{ name(role) }}
+              </span>
+            } @empty {
+              <span class="role-tag role-tag--warning">
+                <app-icon name="alert" />
+                {{ t('users.noRoles') }}
+              </span>
+            }
+          </div>
+
+          @if (auth.hasPermission('users.edit')) {
+            <div class="detail-actions">
+              <button type="button" class="ds-btn ds-btn--primary" (click)="openRoles(user)">
+                <app-icon name="shield" />
+                {{ t('users.assignRoles') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost" (click)="openEdit(user)">
+                <app-icon name="edit" />
+                {{ t('crud.edit') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost" (click)="openReset(user)">
+                <app-icon name="keyRound" />
+                {{ t('users.resetPassword') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost" (click)="toggleActive(user)">
+                <app-icon [name]="user.isActive ? 'lock' : 'unlock'" />
+                {{ user.isActive ? t('users.deactivate') : t('users.activate') }}
+              </button>
+            </div>
+          }
+        } @else {
+          <div class="empty-state empty-state--compact">
+            <app-icon name="users" />
+            <p>{{ t('users.noSelection') }}</p>
+          </div>
+        }
+      </aside>
+    </section>
+  }
 </section>
 
-<!-- Create -->
 @if (mode() === 'create') {
   <app-modal [title]="t('users.newTitle')" (close)="close()">
     <form class="form" (ngSubmit)="saveCreate()">
+      <p class="modal-note">{{ t('users.createHint') }}</p>
       <label class="field">
         <span class="field__label">{{ t('users.col.email') }}<span class="req">*</span></span>
         <input type="email" class="field__input" name="email" [(ngModel)]="form.email" />
@@ -93,11 +236,17 @@
       </label>
       <div class="field">
         <span class="field__label">{{ t('users.roles') }}</span>
-        <div class="role-list">
-          @for (r of roleOptions(); track r.id) {
-            <label class="field field--inline">
-              <input type="checkbox" class="field__checkbox" [checked]="roleChecked(r.code)" (change)="toggleRole(r.code)" />
-              <span>{{ name(r) }}</span>
+        <div class="role-picker">
+          @for (role of roleOptions(); track role.id) {
+            <label class="role-card" [class.role-card--selected]="roleChecked(role.code)">
+              <input type="checkbox" [checked]="roleChecked(role.code)" (change)="toggleRole(role.code)" />
+              <span class="role-card__main">
+                <span class="role-card__name">{{ name(role) }}</span>
+                <code>{{ role.code }}</code>
+              </span>
+              @if (isSensitiveRole(role)) {
+                <span class="role-card__warning">{{ t('users.systemRoleWarning') }}</span>
+              }
             </label>
           }
         </div>
@@ -115,10 +264,10 @@
   </app-modal>
 }
 
-<!-- Edit -->
 @if (mode() === 'edit' && active()) {
   <app-modal [title]="t('users.editTitle')" (close)="close()">
     <form class="form" (ngSubmit)="saveEdit()">
+      <p class="modal-note">{{ t('users.editHint') }}</p>
       <label class="field">
         <span class="field__label">{{ t('users.col.email') }}</span>
         <input type="email" class="field__input" [value]="form.email" disabled />
@@ -144,44 +293,60 @@
   </app-modal>
 }
 
-<!-- Assign roles -->
-@if (mode() === 'roles' && active()) {
-  <app-modal [title]="t('users.assignRolesTitle') + ' — ' + active()!.displayName" (close)="close()">
-    <div class="role-list role-list--tall">
-      @for (r of roleOptions(); track r.id) {
-        <label class="field field--inline">
-          <input type="checkbox" class="field__checkbox" [checked]="roleChecked(r.code)" (change)="toggleRole(r.code)" />
-          <span>{{ name(r) }}</span>
-        </label>
-      }
-    </div>
-    <div footer>
-      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
-      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveRoles()">
-        {{ saving() ? t('crud.saving') : t('crud.save') }}
-      </button>
-    </div>
-  </app-modal>
+@if (mode() === 'roles') {
+  @if (active(); as user) {
+    <app-modal [title]="t('users.assignRolesTitle') + ' - ' + user.displayName" (close)="close()">
+      <div class="modal-summary">
+        <div>
+          <strong>{{ selectedRoleCount() }}</strong>
+          <span>{{ t('users.selectedRoles') }}</span>
+        </div>
+        <p>{{ t('users.roleAssignmentHint') }}</p>
+      </div>
+      <div class="role-picker role-picker--modal">
+        @for (role of roleOptions(); track role.id) {
+          <label class="role-card" [class.role-card--selected]="roleChecked(role.code)">
+            <input type="checkbox" [checked]="roleChecked(role.code)" (change)="toggleRole(role.code)" />
+            <span class="role-card__main">
+              <span class="role-card__name">{{ name(role) }}</span>
+              <code>{{ role.code }}</code>
+            </span>
+            @if (isSensitiveRole(role)) {
+              <span class="role-card__warning">{{ t('users.systemRoleWarning') }}</span>
+            }
+          </label>
+        }
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveRoles()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
 }
 
-<!-- Reset password -->
-@if (mode() === 'reset' && active()) {
-  <app-modal [title]="t('users.resetPasswordTitle') + ' — ' + active()!.displayName" (close)="close()">
-    <form class="form" (ngSubmit)="saveReset()">
-      <label class="field">
-        <span class="field__label">{{ t('users.newPassword') }}<span class="req">*</span></span>
-        <input type="password" class="field__input" name="resetPwd" [(ngModel)]="resetPwd" />
-        <span class="hint">{{ t('users.passwordHint') }}</span>
-      </label>
-      @if (formError()) {
-        <p class="error">{{ t('users.saveError') }}</p>
-      }
-    </form>
-    <div footer>
-      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
-      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveReset()">
-        {{ saving() ? t('crud.saving') : t('crud.save') }}
-      </button>
-    </div>
-  </app-modal>
+@if (mode() === 'reset') {
+  @if (active(); as user) {
+    <app-modal [title]="t('users.resetPasswordTitle') + ' - ' + user.displayName" (close)="close()">
+      <form class="form" (ngSubmit)="saveReset()">
+        <p class="modal-note modal-note--warning">{{ t('users.passwordResetHint') }}</p>
+        <label class="field">
+          <span class="field__label">{{ t('users.newPassword') }}<span class="req">*</span></span>
+          <input type="password" class="field__input" name="resetPwd" [(ngModel)]="resetPwd" />
+          <span class="hint">{{ t('users.passwordHint') }}</span>
+        </label>
+        @if (formError()) {
+          <p class="error">{{ t('users.saveError') }}</p>
+        }
+      </form>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveReset()">
+          {{ saving() ? t('crud.saving') : t('crud.save') }}
+        </button>
+      </div>
+    </app-modal>
+  }
 }

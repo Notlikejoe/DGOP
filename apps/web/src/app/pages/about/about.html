@@ -1,0 +1,99 @@
+<section class="about-page">
+  <header class="about-hero">
+    <div class="about-hero__copy">
+      <p class="about-hero__eyebrow">{{ t('about.eyebrow') }}</p>
+      <h1>{{ t('about.title') }}</h1>
+      <p>{{ t('about.subtitle') }}</p>
+
+      <div class="alignment-chips" [attr.aria-label]="t('about.alignmentLabel')">
+        @for (key of alignmentKeys; track key) {
+          <span>{{ t(key) }}</span>
+        }
+      </div>
+    </div>
+
+    <aside class="about-hero__statement">
+      <span aria-hidden="true">DG</span>
+      <strong>{{ t('about.positioning.title') }}</strong>
+      <p>{{ t('about.positioning.body') }}</p>
+    </aside>
+  </header>
+
+  <section class="about-panel">
+    <div class="about-panel__head">
+      <div>
+        <h2>{{ t('about.what.title') }}</h2>
+        <p>{{ t('about.what.copy') }}</p>
+      </div>
+    </div>
+
+    <div class="principle-grid">
+      @for (item of principles; track item.titleKey) {
+        <article class="principle-card" [class]="'principle-card principle-card--' + item.tone">
+          <strong>{{ t(item.titleKey) }}</strong>
+          <p>{{ t(item.bodyKey) }}</p>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section class="about-panel">
+    <div class="about-panel__head">
+      <div>
+        <h2>{{ t('about.flow.title') }}</h2>
+        <p>{{ t('about.flow.copy') }}</p>
+      </div>
+    </div>
+
+    <div class="operating-flow">
+      @for (step of operatingModel; track step.titleKey) {
+        <article class="flow-step">
+          <span aria-hidden="true">{{ step.icon }}</span>
+          <strong>{{ t(step.titleKey) }}</strong>
+          <p>{{ t(step.bodyKey) }}</p>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section class="about-panel">
+    <div class="about-panel__head">
+      <div>
+        <h2>{{ t('about.towers.title') }}</h2>
+        <p>{{ t('about.towers.copy') }}</p>
+      </div>
+    </div>
+
+    <div class="tower-grid">
+      @for (tower of towers; track tower.titleKey) {
+        <article class="tower-card" [class]="'tower-card tower-card--' + tower.tone">
+          <strong>{{ t(tower.titleKey) }}</strong>
+          <p>{{ t(tower.bodyKey) }}</p>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section class="integration-panel">
+    <div>
+      <p class="integration-panel__eyebrow">{{ t('about.integration.eyebrow') }}</p>
+      <h2>{{ t('about.integration.title') }}</h2>
+      <p>{{ t('about.integration.body') }}</p>
+    </div>
+
+    <div class="integration-tools" [attr.aria-label]="t('about.integration.toolsLabel')">
+      @for (key of integrationKeys; track key) {
+        <span>{{ t(key) }}</span>
+      }
+    </div>
+  </section>
+
+  <section class="quick-links" [attr.aria-label]="t('about.links.title')">
+    @for (link of quickLinks; track link.link) {
+      <a [routerLink]="link.link">
+        <strong>{{ t(link.labelKey) }}</strong>
+        <span>{{ t(link.bodyKey) }}</span>
+      </a>
+    }
+  </section>
+</section>

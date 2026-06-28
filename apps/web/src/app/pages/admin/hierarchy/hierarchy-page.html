@@ -1,49 +1,158 @@
-<section class="page">
-  <header class="page__header">
-    <div>
-      <h1>{{ t(config().titleKey) }}</h1>
-      <p class="page__subtitle">{{ t(config().subtitleKey) }}</p>
+<section class="hierarchy-page">
+  <header class="hierarchy-hero">
+    <div class="hierarchy-hero__mark" aria-hidden="true">
+      <app-icon [name]="pageIcon()" />
     </div>
-    <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate(null)">
-      + {{ t(config().addRootKey) }}
+    <div class="hierarchy-hero__copy">
+      <span class="hierarchy-hero__eyebrow">{{ t('hierarchy.operatingMap') }}</span>
+      <h1>{{ t(config().titleKey) }}</h1>
+      <p>{{ t(config().subtitleKey) }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--primary hierarchy-hero__action" (click)="openCreate(null)">
+      <app-icon name="plus" />
+      {{ t(config().addRootKey) }}
     </button>
   </header>
 
-  <div class="ds-card">
-    @if (state() === 'loading') {
-      <p>{{ t('crud.loading') }}</p>
-    } @else if (state() === 'error') {
-      <p class="error">{{ t('crud.loadError') }}</p>
-      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
-    } @else if (nodes().length === 0) {
-      <div class="empty">
-        <p>{{ t('crud.empty') }}</p>
-        <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate(null)">+ {{ t(config().addRootKey) }}</button>
-      </div>
-    } @else {
-      <div class="toolbar">
-        <input
-          type="search"
-          class="toolbar__search"
-          [value]="search()"
-          (input)="search.set($any($event.target).value)"
-          [placeholder]="t('crud.searchPlaceholder')"
-          [attr.aria-label]="t('crud.search')"
-        />
-      </div>
-      @if (rows().length === 0) {
-        <div class="empty"><p>{{ t('crud.noMatches') }}</p></div>
-      } @else {
-        <app-tree-view
-          [rows]="rows()"
-          [showActions]="true"
-          (add)="openCreate($event)"
-          (edit)="openEditById($event)"
-          (remove)="removeById($event)"
-        />
-      }
+  <div class="metric-strip" [attr.aria-label]="t('hierarchy.summary')">
+    @for (metric of metrics(); track metric.labelKey) {
+      <section class="metric" [class]="'metric metric--' + metric.tone">
+        <span class="metric__label">{{ t(metric.labelKey) }}</span>
+        <strong class="metric__value">{{ metric.value }}</strong>
+      </section>
     }
   </div>
+
+  @if (state() === 'loading') {
+    <section class="state-panel">
+      <p>{{ t('crud.loading') }}</p>
+    </section>
+  } @else if (state() === 'error') {
+    <section class="state-panel state-panel--error">
+      <p>{{ t('crud.loadError') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    </section>
+  } @else if (nodes().length === 0) {
+    <section class="state-panel state-panel--empty">
+      <div class="state-panel__icon" aria-hidden="true">
+        <app-icon [name]="pageIcon()" />
+      </div>
+      <p>{{ t('crud.empty') }}</p>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate(null)">
+        <app-icon name="plus" />
+        {{ t(config().addRootKey) }}
+      </button>
+    </section>
+  } @else {
+    <div class="hierarchy-board">
+      <section class="map-panel" [attr.aria-label]="t('hierarchy.treeMap')">
+        <div class="panel-head">
+          <div>
+            <h2>{{ t('hierarchy.treeMap') }}</h2>
+            <p>{{ t('hierarchy.treeMapHint') }}</p>
+          </div>
+          <span class="panel-head__count">{{ visibleCount() }} {{ t('crud.records') }}</span>
+        </div>
+
+        <div class="toolbar">
+          <label class="toolbar__search">
+            <span class="sr-only">{{ t('crud.search') }}</span>
+            <app-icon name="searchAlert" />
+            <input
+              type="search"
+              [value]="search()"
+              (input)="search.set($any($event.target).value)"
+              [placeholder]="t('crud.searchPlaceholder')"
+              [attr.aria-label]="t('crud.search')"
+            />
+          </label>
+        </div>
+
+        @if (rows().length === 0) {
+          <div class="empty">
+            <p>{{ t('crud.noMatches') }}</p>
+          </div>
+        } @else {
+          <app-tree-view
+            [rows]="rows()"
+            [selectedId]="selectedNodeId()"
+            [showActions]="true"
+            (select)="selectNode($event)"
+            (add)="openCreate($event)"
+            (edit)="openEditById($event)"
+          />
+        }
+      </section>
+
+      <aside class="detail-panel" [attr.aria-label]="t('hierarchy.detailTitle')">
+        @if (selectedNode(); as selected) {
+          <div class="detail-panel__top">
+            <span class="detail-panel__icon" aria-hidden="true">
+              <app-icon [name]="pageIcon()" />
+            </span>
+            <div>
+              <span class="detail-panel__eyebrow">{{ t('hierarchy.selectedNode') }}</span>
+              <h2>{{ name(selected) }}</h2>
+              <span class="detail-panel__code">{{ selected.code }}</span>
+            </div>
+          </div>
+
+          <div class="detail-grid">
+            <div>
+              <span>{{ t('hierarchy.parent') }}</span>
+              <strong>{{ selectedParentName() }}</strong>
+            </div>
+            <div>
+              <span>{{ t('hierarchy.level') }}</span>
+              <strong>{{ selectedLevel() }}</strong>
+            </div>
+            <div>
+              <span>{{ t('hierarchy.children') }}</span>
+              <strong>{{ selectedChildren().length }}</strong>
+            </div>
+            <div>
+              <span>{{ t('hierarchy.status') }}</span>
+              <strong>{{ selected.isActive ? t('crud.active') : t('crud.inactive') }}</strong>
+            </div>
+          </div>
+
+          <section class="detail-section">
+            <h3>{{ t('crud.description') }}</h3>
+            <p>{{ selected.description || t('hierarchy.noDescription') }}</p>
+          </section>
+
+          @if (selectedChildren().length > 0) {
+            <section class="detail-section">
+              <h3>{{ t('hierarchy.childBranches') }}</h3>
+              <div class="child-list">
+                @for (child of selectedChildren(); track child.id) {
+                  <button type="button" class="child-pill" (click)="selectNode(child.id)">
+                    <span>{{ name(child) }}</span>
+                    <small>{{ child.code }}</small>
+                  </button>
+                }
+              </div>
+            </section>
+          }
+
+          <div class="detail-actions">
+            <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate(selected.id)">
+              <app-icon name="plus" />
+              {{ t('hierarchy.addChild') }}
+            </button>
+            <button type="button" class="ds-btn ds-btn--ghost" (click)="openEditById(selected.id)">
+              <app-icon name="edit" />
+              {{ t('crud.edit') }}
+            </button>
+            <button type="button" class="ds-btn ds-btn--danger" (click)="removeById(selected.id)">
+              <app-icon name="trash" />
+              {{ t('crud.delete') }}
+            </button>
+          </div>
+        }
+      </aside>
+    </div>
+  }
 
   @if (modalOpen()) {
     <app-modal [title]="t(editingId() ? config().editTitleKey : config().newTitleKey)" (close)="close()">
@@ -75,8 +184,8 @@
           <select class="field__input" name="parentId"
             [ngModel]="model().parentId" (ngModelChange)="setField('parentId', $event)">
             <option [ngValue]="null">{{ t('hierarchy.noParent') }}</option>
-            @for (n of parentOptions(); track n.id) {
-              <option [ngValue]="n.id">{{ name(n) }} ({{ n.code }})</option>
+            @for (node of parentOptions(); track node.id) {
+              <option [ngValue]="node.id">{{ name(node) }} ({{ node.code }})</option>
             }
           </select>
         </label>

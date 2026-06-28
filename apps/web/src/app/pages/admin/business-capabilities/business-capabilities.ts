@@ -15,5 +15,6 @@ export class BusinessCapabilitiesPage {
     addRootKey: 'capabilities.addRoot',
     newTitleKey: 'capabilities.newTitle',
     editTitleKey: 'capabilities.editTitle',
+    iconName: 'briefcase',
   };
 }

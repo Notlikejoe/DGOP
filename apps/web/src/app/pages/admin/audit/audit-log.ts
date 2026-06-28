@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { I18nService } from '../../../core/i18n.service';
@@ -58,6 +58,10 @@ export class AuditLogPage implements OnInit {
     from: '',
     to: '',
   });
+
+  protected readonly activeFilterCount = computed(() =>
+    Object.values(this.filters()).filter((value) => !!value).length,
+  );
 
   ngOnInit(): void {
     this.http
@@ -124,11 +128,54 @@ export class AuditLogPage implements OnInit {
       .join(', ');
   }
 
+  protected actionLabel(action: string): string {
+    const key = `audit.action.${this.actionKey(action)}`;
+    const translated = this.t(key);
+    if (translated !== key) return translated;
+    return action
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  protected actionTone(action: string): string {
+    const normalized = action.toLowerCase();
+    if (normalized.includes('fail') || normalized.includes('error') || normalized.includes('delete')) {
+      return 'danger';
+    }
+    if (normalized.includes('logout') || normalized.includes('revoke') || normalized.includes('archive')) {
+      return 'warning';
+    }
+    if (normalized.includes('login') || normalized.includes('create') || normalized.includes('approve')) {
+      return 'success';
+    }
+    if (normalized.includes('update') || normalized.includes('assign') || normalized.includes('change')) {
+      return 'info';
+    }
+    return 'muted';
+  }
+
+  protected actionIcon(action: string): string {
+    const normalized = action.toLowerCase();
+    if (normalized.includes('login')) return 'IN';
+    if (normalized.includes('logout')) return 'OUT';
+    if (normalized.includes('delete')) return 'DEL';
+    if (normalized.includes('create')) return 'NEW';
+    if (normalized.includes('update') || normalized.includes('change')) return 'UPD';
+    if (normalized.includes('assign')) return 'ASN';
+    return 'ACT';
+  }
+
   private stringify(v: unknown): string {
     if (v === null || v === undefined) return '-';
     if (Array.isArray(v)) return v.join(' / ');
     if (typeof v === 'object') return JSON.stringify(v);
     return String(v);
+  }
+
+  private actionKey(action: string): string {
+    return action.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   }
 
   protected t(key: string): string {

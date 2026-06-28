@@ -14,6 +14,7 @@ import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
 import { TreeView, TreeRow } from '../../../shared/tree-view';
+import { AppIcon, AppIconName } from '../../../shared/app-icon';
 
 export interface HierarchyPageConfig {
   apiBase: string;
@@ -22,11 +23,12 @@ export interface HierarchyPageConfig {
   addRootKey: string;
   newTitleKey: string;
   editTitleKey: string;
+  iconName?: AppIconName;
   /** Show the description field in the form (default true). */
   showDescription?: boolean;
 }
 
-interface Node {
+interface HierarchyNode {
   id: string;
   code: string;
   nameEn: string;
@@ -36,10 +38,16 @@ interface Node {
   isActive: boolean;
 }
 
+interface Metric {
+  labelKey: string;
+  value: string | number;
+  tone: 'accent' | 'success' | 'warning' | 'neutral';
+}
+
 @Component({
   selector: 'app-hierarchy-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Modal, TreeView],
+  imports: [FormsModule, Modal, TreeView, AppIcon],
   templateUrl: './hierarchy-page.html',
   styleUrl: './hierarchy-page.scss',
 })
@@ -51,31 +59,65 @@ export class HierarchyPage implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
-  protected readonly nodes = signal<Node[]>([]);
+  protected readonly nodes = signal<HierarchyNode[]>([]);
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly search = signal('');
+  protected readonly selectedId = signal<string | null>(null);
 
   protected readonly modalOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
-  protected readonly model = signal<Partial<Node>>({});
+  protected readonly model = signal<Partial<HierarchyNode>>({});
   protected readonly saving = signal(false);
 
-  protected readonly rows = computed<TreeRow[]>(() => {
-    const all = this.flatten(this.nodes());
-    const term = this.search().trim().toLowerCase();
-    if (!term) return all;
-    return all.filter(
-      (r) => r.label.toLowerCase().includes(term) || (r.sublabel ?? '').toLowerCase().includes(term),
-    );
+  protected readonly childrenOf = computed(() => this.buildChildrenMap(this.nodes()));
+
+  protected readonly rows = computed<TreeRow[]>(() => this.flatten(this.nodes(), this.search()));
+
+  protected readonly selectedNode = computed(() => {
+    const nodes = this.nodes();
+    if (nodes.length === 0) return null;
+    const selected = nodes.find((node) => node.id === this.selectedId());
+    return selected ?? nodes[0];
   });
 
-  protected readonly parentOptions = computed<Node[]>(() => {
-    const editing = this.editingId();
-    if (!editing) return this.nodes();
-    const blocked = this.descendants(editing);
-    blocked.add(editing);
-    return this.nodes().filter((n) => !blocked.has(n.id));
+  protected readonly selectedNodeId = computed(() => this.selectedNode()?.id ?? null);
+
+  protected readonly selectedChildren = computed(() => {
+    const selected = this.selectedNode();
+    if (!selected) return [];
+    return this.childrenOf().get(selected.id) ?? [];
   });
+
+  protected readonly selectedParentName = computed(() => {
+    const selected = this.selectedNode();
+    if (!selected?.parentId) return this.t('hierarchy.topLevel');
+    const parent = this.nodes().find((node) => node.id === selected.parentId);
+    return parent ? this.name(parent) : this.t('hierarchy.topLevel');
+  });
+
+  protected readonly selectedLevel = computed(() => {
+    const selected = this.selectedNode();
+    if (!selected) return 0;
+    return this.depthOf(selected.id, this.nodes()) + 1;
+  });
+
+  protected readonly metrics = computed<Metric[]>(() => {
+    const nodes = this.nodes();
+    const inactive = nodes.filter((node) => !node.isActive).length;
+    return [
+      { labelKey: 'hierarchy.totalNodes', value: nodes.length, tone: 'accent' },
+      { labelKey: 'hierarchy.topLevel', value: this.rootCount(nodes), tone: 'success' },
+      { labelKey: 'hierarchy.maxDepth', value: this.maxDepth(nodes), tone: 'neutral' },
+      {
+        labelKey: 'hierarchy.needsReview',
+        value: inactive,
+        tone: inactive > 0 ? 'warning' : 'success',
+      },
+    ];
+  });
+
+  protected readonly visibleCount = computed(() => this.rows().length);
+  protected readonly pageIcon = computed<AppIconName>(() => this.config().iconName ?? 'network');
 
   ngOnInit(): void {
     this.load();
@@ -83,46 +125,114 @@ export class HierarchyPage implements OnInit {
 
   protected load(): void {
     this.state.set('loading');
-    this.http.get<Node[]>(this.config().apiBase).subscribe({
+    this.http.get<HierarchyNode[]>(this.config().apiBase).subscribe({
       next: (nodes) => {
         this.nodes.set(nodes);
+        this.ensureSelection(nodes);
         this.state.set('ok');
       },
       error: () => this.state.set('error'),
     });
   }
 
-  private flatten(nodes: Node[]): TreeRow[] {
-    const childrenOf = new Map<string | null, Node[]>();
-    for (const n of nodes) {
-      const key = n.parentId && nodes.some((p) => p.id === n.parentId) ? n.parentId : null;
-      const arr = childrenOf.get(key) ?? [];
-      arr.push(n);
-      childrenOf.set(key, arr);
-    }
+  private flatten(nodes: HierarchyNode[], searchTerm: string): TreeRow[] {
+    const childrenOf = this.buildChildrenMap(nodes);
+    const visibleIds = this.visibleNodeIds(nodes, searchTerm, childrenOf);
     const rows: TreeRow[] = [];
+    const visited = new Set<string>();
+
     const walk = (parentId: string | null, depth: number) => {
-      for (const n of childrenOf.get(parentId) ?? []) {
-        rows.push({
-          id: n.id,
-          label: this.name(n),
-          sublabel: n.code + (n.isActive ? '' : ' · ' + this.i18n.t('crud.inactive')),
-          depth,
-        });
-        walk(n.id, depth + 1);
+      for (const node of childrenOf.get(parentId) ?? []) {
+        if (visited.has(node.id)) continue;
+        visited.add(node.id);
+        if (!visibleIds || visibleIds.has(node.id)) {
+          rows.push({
+            id: node.id,
+            label: this.name(node),
+            sublabel: node.description || '',
+            code: node.code,
+            childCount: (childrenOf.get(node.id) ?? []).length,
+            depth,
+            isActive: node.isActive,
+          });
+        }
+        walk(node.id, depth + 1);
       }
     };
+
     walk(null, 0);
     return rows;
+  }
+
+  private visibleNodeIds(
+    nodes: HierarchyNode[],
+    searchTerm: string,
+    childrenOf: Map<string | null, HierarchyNode[]>,
+  ): Set<string> | null {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return null;
+
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const visible = new Set<string>();
+
+    const markAncestors = (node: HierarchyNode) => {
+      let current: HierarchyNode | undefined = node;
+      const seen = new Set<string>();
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        visible.add(current.id);
+        current = current.parentId ? byId.get(current.parentId) : undefined;
+      }
+    };
+
+    const markDescendants = (id: string, seen = new Set<string>()) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      for (const child of childrenOf.get(id) ?? []) {
+        visible.add(child.id);
+        markDescendants(child.id, seen);
+      }
+    };
+
+    for (const node of nodes) {
+      if (this.matches(node, term)) {
+        markAncestors(node);
+        markDescendants(node.id);
+      }
+    }
+
+    return visible;
+  }
+
+  private matches(node: HierarchyNode, term: string): boolean {
+    return [this.name(node), node.code, node.description ?? '']
+      .some((value) => value.toLowerCase().includes(term));
+  }
+
+  private buildChildrenMap(nodes: HierarchyNode[]): Map<string | null, HierarchyNode[]> {
+    const ids = new Set(nodes.map((node) => node.id));
+    const childrenOf = new Map<string | null, HierarchyNode[]>();
+    for (const node of nodes) {
+      const key = node.parentId && ids.has(node.parentId) ? node.parentId : null;
+      const children = childrenOf.get(key) ?? [];
+      children.push(node);
+      childrenOf.set(key, children);
+    }
+
+    for (const children of childrenOf.values()) {
+      children.sort((a, b) => this.name(a).localeCompare(this.name(b), this.i18n.lang()));
+    }
+
+    return childrenOf;
   }
 
   private descendants(id: string): Set<string> {
     const result = new Set<string>();
     const walk = (pid: string) => {
-      for (const n of this.nodes()) {
-        if (n.parentId === pid && !result.has(n.id)) {
-          result.add(n.id);
-          walk(n.id);
+      for (const node of this.nodes()) {
+        if (node.parentId === pid && !result.has(node.id)) {
+          result.add(node.id);
+          walk(node.id);
         }
       }
     };
@@ -130,8 +240,54 @@ export class HierarchyPage implements OnInit {
     return result;
   }
 
-  protected name(n: { nameEn: string; nameAr: string }): string {
-    return this.i18n.lang() === 'ar' ? n.nameAr : n.nameEn;
+  private ensureSelection(nodes: HierarchyNode[]): void {
+    const selected = this.selectedId();
+    if (selected && nodes.some((node) => node.id === selected)) return;
+    this.selectedId.set(this.firstRoot(nodes)?.id ?? nodes[0]?.id ?? null);
+  }
+
+  private firstRoot(nodes: HierarchyNode[]): HierarchyNode | null {
+    const ids = new Set(nodes.map((node) => node.id));
+    return nodes.find((node) => !node.parentId || !ids.has(node.parentId)) ?? null;
+  }
+
+  private rootCount(nodes: HierarchyNode[]): number {
+    const ids = new Set(nodes.map((node) => node.id));
+    return nodes.filter((node) => !node.parentId || !ids.has(node.parentId)).length;
+  }
+
+  private maxDepth(nodes: HierarchyNode[]): number {
+    if (nodes.length === 0) return 0;
+    return Math.max(...nodes.map((node) => this.depthOf(node.id, nodes) + 1));
+  }
+
+  private depthOf(id: string, nodes: HierarchyNode[]): number {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    let depth = 0;
+    let current = byId.get(id);
+    const seen = new Set<string>();
+    while (current?.parentId && byId.has(current.parentId) && !seen.has(current.id)) {
+      seen.add(current.id);
+      depth += 1;
+      current = byId.get(current.parentId);
+    }
+    return depth;
+  }
+
+  protected readonly parentOptions = computed<HierarchyNode[]>(() => {
+    const editing = this.editingId();
+    if (!editing) return this.nodes();
+    const blocked = this.descendants(editing);
+    blocked.add(editing);
+    return this.nodes().filter((node) => !blocked.has(node.id));
+  });
+
+  protected name(node: { nameEn: string; nameAr: string }): string {
+    return this.i18n.lang() === 'ar' ? node.nameAr : node.nameEn;
+  }
+
+  protected selectNode(id: string): void {
+    this.selectedId.set(id);
   }
 
   protected openCreate(parentId: string | null = null): void {
@@ -141,14 +297,14 @@ export class HierarchyPage implements OnInit {
   }
 
   protected openEditById(id: string): void {
-    const n = this.nodes().find((x) => x.id === id);
-    if (!n) return;
-    this.model.set({ ...n });
+    const node = this.nodes().find((item) => item.id === id);
+    if (!node) return;
+    this.model.set({ ...node });
     this.editingId.set(id);
     this.modalOpen.set(true);
   }
 
-  protected setField(key: keyof Node, value: unknown): void {
+  protected setField(key: keyof HierarchyNode, value: unknown): void {
     this.model.update((m) => ({ ...m, [key]: value }));
   }
 

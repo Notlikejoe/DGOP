@@ -4,12 +4,11 @@ import { RouterLink } from '@angular/router';
 import { ApiService, HealthResponse } from '../../core/api.service';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
-import { KpiCard, KpiTone } from '../../shared/kpi-card';
 import { ProgressBar, BarKind } from '../../shared/progress-bar';
-import { MiniBarChart, MiniBarItem } from '../../shared/mini-bar-chart';
 
 type State = 'loading' | 'ok' | 'error';
 type GapType = 'missing' | 'expired' | 'rejected' | 'unassigned' | 'stuck';
+type Severity = 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
 interface DashboardSummary {
   governance: {
@@ -30,18 +29,25 @@ interface DashboardSummary {
   reference: { people: number } | null;
 }
 
-const GAP_KINDS: Record<GapType, BarKind> = {
-  missing: 'danger',
-  expired: 'danger',
-  rejected: 'warning',
-  stuck: 'warning',
-  unassigned: 'info',
-};
+interface ActionItem {
+  label: string;
+  detail: string;
+  value: number | string;
+  kind: Severity;
+  link: string;
+}
+
+interface JourneyNode {
+  label: string;
+  value: string;
+  detail: string;
+  kind: Severity;
+}
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusChip, RouterLink, KpiCard, ProgressBar, MiniBarChart],
+  imports: [StatusChip, RouterLink, ProgressBar],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -62,18 +68,161 @@ export class Dashboard implements OnInit {
     return !!s && !s.governance && !s.ndi && !s.workflow && !s.myWork && !s.reference;
   });
 
-  protected readonly gapItems = computed<MiniBarItem[]>(() => {
-    const ndi = this.summary()?.ndi;
-    if (!ndi) return [];
-    return (Object.keys(ndi.gaps) as GapType[])
-      .map((type) => ({
-        label: this.t(`scoring.gap.${type}`),
-        value: ndi.gaps[type],
-        kind: GAP_KINDS[type],
+  protected readonly riskTotal = computed(() => {
+    const s = this.summary();
+    if (!s) return 0;
+    return (
+      (s.governance?.assets.unassigned ?? 0) +
+      (s.governance?.pendingApprovals ?? 0) +
+      (s.workflow?.myOverdueTasks ?? 0) +
+      this.gapTotal(s.ndi)
+    );
+  });
+
+  protected readonly healthKind = computed<Severity>(() => {
+    if (this.state() === 'error') return 'danger';
+    const s = this.summary();
+    if (!s) return 'info';
+    if ((s.workflow?.myOverdueTasks ?? 0) > 0) return 'danger';
+    if ((s.ndi?.readinessPct ?? 100) < 40) return 'danger';
+    if (this.riskTotal() > 0) return 'warning';
+    return 'success';
+  });
+
+  protected readonly healthLabel = computed(() => {
+    const kind = this.healthKind();
+    if (kind === 'success') return this.t('cmd.health.healthy');
+    if (kind === 'danger') return this.t('cmd.health.critical');
+    if (kind === 'warning') return this.t('cmd.health.review');
+    return this.t('cmd.health.checking');
+  });
+
+  protected readonly primaryAction = computed<ActionItem | null>(() => {
+    const s = this.summary();
+    if (!s) return null;
+    if ((s.workflow?.myOverdueTasks ?? 0) > 0) {
+      return {
+        label: this.t('cmd.action.overdue'),
+        detail: this.t('cmd.action.overdueDetail'),
+        value: s.workflow?.myOverdueTasks ?? 0,
+        kind: 'danger',
+        link: '/governance/workflow',
+      };
+    }
+    if ((s.governance?.assets.unassigned ?? 0) > 0) {
+      return {
+        label: this.t('cmd.action.assignOwners'),
+        detail: this.t('cmd.action.assignOwnersDetail'),
+        value: s.governance?.assets.unassigned ?? 0,
+        kind: 'warning',
+        link: '/governance/exception-queue',
+      };
+    }
+    if (this.gapTotal(s.ndi) > 0) {
+      return {
+        label: this.t('cmd.action.closeGaps'),
+        detail: this.t('cmd.action.closeGapsDetail'),
+        value: this.gapTotal(s.ndi),
+        kind: 'warning',
         link: '/governance/ndi/gaps',
-      }))
-      .filter((i) => i.value > 0)
-      .sort((a, b) => b.value - a.value);
+      };
+    }
+    return {
+      label: this.t('cmd.action.readinessReport'),
+      detail: this.t('cmd.action.readinessReportDetail'),
+      value: s.ndi ? `${s.ndi.readinessPct}%` : this.t('cmd.ready'),
+      kind: 'success',
+      link: '/governance/ndi/readiness',
+    };
+  });
+
+  protected readonly actionItems = computed<ActionItem[]>(() => {
+    const s = this.summary();
+    if (!s) return [];
+    const items: ActionItem[] = [];
+    if (s.workflow) {
+      items.push({
+        label: this.t('cmd.queue.workflow'),
+        detail: s.workflow.myOverdueTasks
+          ? this.t('cmd.queue.workflowOverdue')
+          : this.t('cmd.queue.workflowOpen'),
+        value: s.workflow.myOverdueTasks || s.workflow.myOpenTasks,
+        kind: s.workflow.myOverdueTasks ? 'danger' : s.workflow.myOpenTasks ? 'info' : 'muted',
+        link: '/governance/workflow',
+      });
+    }
+    if (s.governance) {
+      items.push({
+        label: this.t('cmd.queue.ownership'),
+        detail: this.t('cmd.queue.ownershipDetail'),
+        value: s.governance.assets.unassigned,
+        kind: s.governance.assets.unassigned ? 'warning' : 'success',
+        link: '/governance/exception-queue',
+      });
+      items.push({
+        label: this.t('cmd.queue.approvals'),
+        detail: this.t('cmd.queue.approvalsDetail'),
+        value: s.governance.pendingApprovals,
+        kind: s.governance.pendingApprovals ? 'info' : 'muted',
+        link: '/governance/ownership',
+      });
+    }
+    if (s.ndi) {
+      items.push({
+        label: this.t('cmd.queue.ndiGaps'),
+        detail: this.t('cmd.queue.ndiGapsDetail'),
+        value: this.gapTotal(s.ndi),
+        kind: this.gapTotal(s.ndi) ? 'warning' : 'success',
+        link: '/governance/ndi/gaps',
+      });
+    }
+    if (s.myWork?.evidenceToReview !== null && s.myWork?.evidenceToReview !== undefined) {
+      items.push({
+        label: this.t('cmd.queue.evidence'),
+        detail: this.t('cmd.queue.evidenceDetail'),
+        value: s.myWork.evidenceToReview,
+        kind: s.myWork.evidenceToReview ? 'warning' : 'muted',
+        link: '/governance/ndi',
+      });
+    }
+    return items;
+  });
+
+  protected readonly journeyNodes = computed<JourneyNode[]>(() => {
+    const s = this.summary();
+    if (!s) return [];
+    return [
+      {
+        label: this.t('cmd.journey.catalog'),
+        value: `${s.governance?.assets.total ?? 0}`,
+        detail: this.t('cmd.journey.catalogDetail'),
+        kind: 'info',
+      },
+      {
+        label: this.t('cmd.journey.ownership'),
+        value: `${s.governance?.ownershipCoveragePct ?? 0}%`,
+        detail: this.t('cmd.journey.ownershipDetail'),
+        kind: this.coverageTone(s.governance?.ownershipCoveragePct ?? 0),
+      },
+      {
+        label: this.t('cmd.journey.stewardship'),
+        value: `${s.governance?.stewardshipCoveragePct ?? 0}%`,
+        detail: this.t('cmd.journey.stewardshipDetail'),
+        kind: this.coverageTone(s.governance?.stewardshipCoveragePct ?? 0),
+      },
+      {
+        label: this.t('cmd.journey.evidence'),
+        value: s.ndi ? `${s.ndi.satisfied}/${s.ndi.specifications}` : '0',
+        detail: this.t('cmd.journey.evidenceDetail'),
+        kind: this.readinessTone(s.ndi?.readinessPct ?? 0),
+      },
+      {
+        label: this.t('cmd.journey.audit'),
+        value: s.ndi ? `${s.ndi.readinessPct}%` : '0%',
+        detail: this.t('cmd.journey.auditDetail'),
+        kind: this.readinessTone(s.ndi?.readinessPct ?? 0),
+      },
+    ];
   });
 
   ngOnInit(): void {
@@ -100,8 +249,7 @@ export class Dashboard implements OnInit {
     });
   }
 
-  /** Coverage tone: green when strong, amber mid, red when weak. */
-  protected coverageTone(pct: number): KpiTone {
+  protected coverageTone(pct: number): Severity {
     if (pct >= 80) return 'success';
     if (pct >= 50) return 'warning';
     return 'danger';
@@ -118,6 +266,34 @@ export class Dashboard implements OnInit {
     if (pct >= 40) return 'info';
     if (pct >= 20) return 'warning';
     return 'danger';
+  }
+
+  protected readinessTone(pct: number): Severity {
+    if (pct >= 80) return 'success';
+    if (pct >= 40) return 'info';
+    if (pct >= 20) return 'warning';
+    return 'danger';
+  }
+
+  protected gapTotal(ndi: DashboardSummary['ndi']): number {
+    if (!ndi) return 0;
+    return (Object.keys(ndi.gaps) as GapType[]).reduce((sum, type) => sum + ndi.gaps[type], 0);
+  }
+
+  protected gapRows(ndi: DashboardSummary['ndi']): Array<{ label: string; value: number; kind: Severity }> {
+    if (!ndi) return [];
+    return (Object.keys(ndi.gaps) as GapType[])
+      .map((type) => {
+        const kind: Severity =
+          type === 'missing' || type === 'expired' ? 'danger' : type === 'unassigned' ? 'info' : 'warning';
+        return {
+          label: this.t(`scoring.gap.${type}`),
+          value: ndi.gaps[type],
+          kind,
+        };
+      })
+      .filter((row) => row.value > 0)
+      .sort((a, b) => b.value - a.value);
   }
 
   protected maturityChipKind(maturity: string): 'success' | 'warning' | 'danger' | 'info' | 'muted' {

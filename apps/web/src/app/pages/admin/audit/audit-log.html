@@ -6,44 +6,109 @@
     </div>
   </header>
 
-  <div class="ds-card">
-    <div class="audit-filters">
-      <input
-        type="search"
-        class="field__input"
-        [ngModel]="filters().actor"
-        (ngModelChange)="setFilter('actor', $event)"
-        [placeholder]="t('audit.filter.actor')"
-        [attr.aria-label]="t('audit.filter.actor')"
-      />
-      <select
-        class="field__input"
-        [ngModel]="filters().action"
-        (ngModelChange)="setFilter('action', $event)"
-        [attr.aria-label]="t('audit.col.action')"
-      >
-        <option value="">{{ t('audit.filter.allActions') }}</option>
-        @for (a of actions(); track a) { <option [value]="a">{{ a }}</option> }
-      </select>
-      <select
-        class="field__input"
-        [ngModel]="filters().entityType"
-        (ngModelChange)="setFilter('entityType', $event)"
-        [attr.aria-label]="t('audit.col.entity')"
-      >
-        <option value="">{{ t('audit.filter.allEntities') }}</option>
-        @for (e of entityTypes(); track e) { <option [value]="e">{{ e }}</option> }
-      </select>
-      <label class="audit-filters__date">
-        <span>{{ t('audit.filter.from') }}</span>
-        <input type="date" class="field__input" [ngModel]="filters().from" (ngModelChange)="setFilter('from', $event)" />
-      </label>
-      <label class="audit-filters__date">
-        <span>{{ t('audit.filter.to') }}</span>
-        <input type="date" class="field__input" [ngModel]="filters().to" (ngModelChange)="setFilter('to', $event)" />
-      </label>
-      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="reset()">{{ t('audit.reset') }}</button>
-    </div>
+  <div class="audit-card">
+    <section class="audit-controls" [attr.aria-label]="t('audit.filtersTitle')">
+      <div class="audit-controls__head">
+        <div class="audit-controls__mark" aria-hidden="true">AU</div>
+        <div>
+          <h2>{{ t('audit.filtersTitle') }}</h2>
+          <p>{{ t('audit.filtersSubtitle') }}</p>
+        </div>
+        <div class="audit-controls__status" aria-live="polite">
+          <strong>{{ total() }}</strong>
+          <span>{{ t('audit.results') }}</span>
+        </div>
+      </div>
+
+      <div class="audit-filters">
+        <label class="filter-field filter-field--search">
+          <span>{{ t('audit.filter.actorLabel') }}</span>
+          <span class="filter-control">
+            <span class="filter-control__icon" aria-hidden="true">AC</span>
+            <input
+              type="search"
+              [ngModel]="filters().actor"
+              (ngModelChange)="setFilter('actor', $event)"
+              [placeholder]="t('audit.filter.actor')"
+              [attr.aria-label]="t('audit.filter.actor')"
+            />
+          </span>
+        </label>
+
+        <label class="filter-field">
+          <span>{{ t('audit.filter.actionLabel') }}</span>
+          <span class="filter-control">
+            <span class="filter-control__icon" aria-hidden="true">EV</span>
+            <select
+              [ngModel]="filters().action"
+              (ngModelChange)="setFilter('action', $event)"
+              [attr.aria-label]="t('audit.col.action')"
+            >
+              <option value="">{{ t('audit.filter.allActions') }}</option>
+              @for (a of actions(); track a) { <option [value]="a">{{ actionLabel(a) }}</option> }
+            </select>
+          </span>
+        </label>
+
+        <label class="filter-field">
+          <span>{{ t('audit.filter.entityLabel') }}</span>
+          <span class="filter-control">
+            <span class="filter-control__icon" aria-hidden="true">EN</span>
+            <select
+              [ngModel]="filters().entityType"
+              (ngModelChange)="setFilter('entityType', $event)"
+              [attr.aria-label]="t('audit.col.entity')"
+            >
+              <option value="">{{ t('audit.filter.allEntities') }}</option>
+              @for (e of entityTypes(); track e) { <option [value]="e">{{ e }}</option> }
+            </select>
+          </span>
+        </label>
+
+        <label class="filter-field">
+          <span id="audit-filter-from-label">{{ t('audit.filter.from') }}</span>
+          <span class="filter-control">
+            <span class="filter-control__icon" aria-hidden="true">FR</span>
+            <input
+              id="audit-filter-from"
+              type="date"
+              [ngModel]="filters().from"
+              (ngModelChange)="setFilter('from', $event)"
+              [attr.aria-labelledby]="'audit-filter-from-label'"
+            />
+          </span>
+        </label>
+
+        <label class="filter-field">
+          <span id="audit-filter-to-label">{{ t('audit.filter.to') }}</span>
+          <span class="filter-control">
+            <span class="filter-control__icon" aria-hidden="true">TO</span>
+            <input
+              id="audit-filter-to"
+              type="date"
+              [ngModel]="filters().to"
+              (ngModelChange)="setFilter('to', $event)"
+              [attr.aria-labelledby]="'audit-filter-to-label'"
+            />
+          </span>
+        </label>
+
+        <button type="button" class="audit-reset" (click)="reset()">
+          <span aria-hidden="true">RS</span>
+          {{ t('audit.reset') }}
+        </button>
+      </div>
+
+      <div class="audit-filter-summary">
+        <span>{{ activeFilterCount() }} {{ t('audit.activeFilters') }}</span>
+        @if (filters().action) {
+          <span>{{ t('audit.col.action') }}: {{ actionLabel(filters().action) }}</span>
+        }
+        @if (filters().entityType) {
+          <span>{{ t('audit.col.entity') }}: {{ filters().entityType }}</span>
+        }
+      </div>
+    </section>
 
     @if (state() === 'loading') {
       <p>{{ t('crud.loading') }}</p>
@@ -69,7 +134,23 @@
               <tr>
                 <td class="nowrap">{{ formatTime(e.createdAt) }}</td>
                 <td>{{ e.actor }}</td>
-                <td><code class="audit-action">{{ e.action }}</code></td>
+                <td>
+                  <span
+                    class="audit-action"
+                    [class.audit-action--success]="actionTone(e.action) === 'success'"
+                    [class.audit-action--warning]="actionTone(e.action) === 'warning'"
+                    [class.audit-action--danger]="actionTone(e.action) === 'danger'"
+                    [class.audit-action--info]="actionTone(e.action) === 'info'"
+                    [class.audit-action--muted]="actionTone(e.action) === 'muted'"
+                    [attr.title]="e.action"
+                  >
+                    <span class="audit-action__icon" aria-hidden="true">{{ actionIcon(e.action) }}</span>
+                    <span class="audit-action__text">
+                      <strong>{{ actionLabel(e.action) }}</strong>
+                      <small>{{ e.action }}</small>
+                    </span>
+                  </span>
+                </td>
                 <td>
                   <span class="audit-entity">{{ e.entityType }}</span>
                   @if (e.entityId) { <span class="audit-entity-id">{{ e.entityId }}</span> }
@@ -79,6 +160,52 @@
             }
           </tbody>
         </table>
+      </div>
+
+      <div class="audit-event-list" [attr.aria-label]="t('audit.title')">
+        @for (e of entries(); track e.id) {
+          <article class="audit-event-card">
+            <header class="audit-event-card__head">
+              <div>
+                <span class="audit-event-card__label">{{ t('audit.col.time') }}</span>
+                <strong>{{ formatTime(e.createdAt) }}</strong>
+              </div>
+              <span
+                class="audit-action"
+                [class.audit-action--success]="actionTone(e.action) === 'success'"
+                [class.audit-action--warning]="actionTone(e.action) === 'warning'"
+                [class.audit-action--danger]="actionTone(e.action) === 'danger'"
+                [class.audit-action--info]="actionTone(e.action) === 'info'"
+                [class.audit-action--muted]="actionTone(e.action) === 'muted'"
+                [attr.title]="e.action"
+              >
+                <span class="audit-action__icon" aria-hidden="true">{{ actionIcon(e.action) }}</span>
+                <span class="audit-action__text">
+                  <strong>{{ actionLabel(e.action) }}</strong>
+                  <small>{{ e.action }}</small>
+                </span>
+              </span>
+            </header>
+
+            <dl class="audit-event-card__details">
+              <div>
+                <dt>{{ t('audit.col.actor') }}</dt>
+                <dd>{{ e.actor }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('audit.col.entity') }}</dt>
+                <dd>
+                  <span class="audit-entity">{{ e.entityType }}</span>
+                  @if (e.entityId) { <span class="audit-entity-id">{{ e.entityId }}</span> }
+                </dd>
+              </div>
+              <div>
+                <dt>{{ t('audit.col.details') }}</dt>
+                <dd class="audit-meta">{{ formatMeta(e.metadata) || t('audit.noDetails') }}</dd>
+              </div>
+            </dl>
+          </article>
+        }
       </div>
 
       <app-pager

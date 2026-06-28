@@ -1,0 +1,136 @@
+<section class="workspace">
+  <header class="workspace-hero">
+    <div class="workspace-hero__copy">
+      <p class="workspace-hero__eyebrow">{{ t(config().eyebrowKey) }}</p>
+      <h1>{{ t(config().titleKey) }}</h1>
+      <p>{{ t(config().subtitleKey) }}</p>
+    </div>
+
+    <aside class="workspace-hero__summary" [attr.aria-label]="t('hub.summary')">
+      <div>
+        <span>{{ t('hub.availableTools') }}</span>
+        <strong>{{ toolCount() }}</strong>
+      </div>
+      <div>
+        <span>{{ t('hub.workAreas') }}</span>
+        <strong>{{ groupCount() }}</strong>
+      </div>
+    </aside>
+  </header>
+
+  @if (toolCount() === 0) {
+    <div class="workspace-empty">
+      <h2>{{ t('hub.empty.title') }}</h2>
+      <p>{{ t('hub.empty.copy') }}</p>
+    </div>
+  } @else {
+    <section class="console-metrics" [attr.aria-label]="t('console.metrics')">
+      @for (metric of metrics(); track metric.labelKey) {
+        <article class="console-metric" [class]="'console-metric console-metric--' + metric.tone">
+          <span>{{ t(metric.labelKey) }}</span>
+          <strong>{{ metric.value }}</strong>
+          <small>{{ t(metric.hintKey) }}</small>
+        </article>
+      }
+    </section>
+
+    <div class="console-layout">
+      <section class="console-panel console-panel--map">
+        <div class="console-panel__head">
+          <div>
+            <h2>{{ t('console.systemTrees') }}</h2>
+            <p>{{ t('console.systemTreesCopy') }}</p>
+          </div>
+          <span class="console-live"><span aria-hidden="true"></span>{{ t('console.liveMap') }}</span>
+        </div>
+
+        <div class="tool-tree">
+          @for (group of groups(); track group.key) {
+            <article class="tool-tree__branch">
+              <header>
+                <h3>{{ t(group.key + '.title') }}</h3>
+                <p>{{ t(group.key + '.summary') }}</p>
+              </header>
+
+              <div class="tool-tree__root">
+                <span aria-hidden="true">{{ group.items[0].icon }}</span>
+                <strong>{{ t(group.key + '.title') }}</strong>
+              </div>
+
+              <div class="tool-tree__leaves">
+                @for (item of group.items; track item.link) {
+                  <a class="tool-node" [routerLink]="item.link">
+                    <span class="tool-node__icon" aria-hidden="true">{{ item.icon }}</span>
+                    <span class="tool-node__text">
+                      <strong>{{ t(item.labelKey) }}</strong>
+                      <small>{{ t(item.descriptionKey) }}</small>
+                    </span>
+                  </a>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+
+      <aside class="console-side">
+        <section class="console-panel">
+          <div class="console-panel__head">
+            <div>
+              <h2>{{ t('console.quickActions') }}</h2>
+              <p>{{ t('console.quickActionsCopy') }}</p>
+            </div>
+          </div>
+
+          <div class="console-actions">
+            @for (item of featuredItems(); track item.link) {
+              <a class="console-action" [routerLink]="item.link">
+                <span>{{ t(item.labelKey) }}</span>
+                <small>{{ t(item.descriptionKey) }}</small>
+              </a>
+            }
+          </div>
+        </section>
+
+        <section class="console-panel">
+          <div class="console-panel__head">
+            <div>
+              <h2>{{ t('console.reviewQueue') }}</h2>
+              <p>{{ t('console.reviewQueueCopy') }}</p>
+            </div>
+          </div>
+
+          <div class="review-queue">
+            @for (item of queue(); track item.titleKey) {
+              <a class="review-item" [class]="'review-item review-item--' + item.tone" [routerLink]="item.link">
+                <span>
+                  <strong>{{ t(item.titleKey) }}</strong>
+                  <small>{{ t(item.metaKey) }}</small>
+                </span>
+                <b>{{ t(item.actionKey) }}</b>
+              </a>
+            }
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <section class="console-panel console-panel--overview">
+      <div class="console-panel__head">
+        <div>
+          <h2>{{ t(config().checklistTitleKey) }}</h2>
+          <p>{{ t('console.operatingGuideCopy') }}</p>
+        </div>
+      </div>
+
+      <ul class="workspace-checklist">
+        @for (check of config().checklistKeys; track check) {
+          <li>
+            <span class="workspace-checklist__mark" aria-hidden="true"></span>
+            <span>{{ t(check) }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</section>

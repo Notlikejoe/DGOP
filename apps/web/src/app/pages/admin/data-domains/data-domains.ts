@@ -15,5 +15,6 @@ export class DataDomainsPage {
     addRootKey: 'dataDomains.addRoot',
     newTitleKey: 'dataDomains.newTitle',
     editTitleKey: 'dataDomains.editTitle',
+    iconName: 'database',
   };
 }

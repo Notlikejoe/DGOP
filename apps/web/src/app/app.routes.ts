@@ -22,9 +22,19 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/dashboard/dashboard').then((m) => m.Dashboard),
       },
       {
+        path: 'about',
+        loadComponent: () => import('./pages/about/about').then((m) => m.AboutPage),
+      },
+      {
         path: 'design-system',
         loadComponent: () =>
           import('./pages/design-system/design-system').then((m) => m.DesignSystem),
+      },
+      {
+        path: 'governance',
+        loadComponent: () =>
+          import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),
+        data: { hubId: 'governance' },
       },
       {
         path: 'assets',
@@ -93,6 +103,12 @@ export const routes: Routes = [
         canActivate: [permissionGuard('ndi_specifications.view')],
         loadComponent: () =>
           import('./pages/governance/ndi/ndi-registry').then((m) => m.NdiRegistryPage),
+      },
+      {
+        path: 'admin',
+        loadComponent: () =>
+          import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),
+        data: { hubId: 'administration' },
       },
       {
         path: 'admin/people',

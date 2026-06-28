@@ -1,32 +1,103 @@
 <div class="shell">
-  <aside class="shell__sidebar">
+  <aside class="shell__sidebar" [class.shell__sidebar--open]="mobileNavOpen()" [attr.aria-label]="t('nav.primary')">
     <div class="brand">
-      <div class="brand__mark" aria-hidden="true">DG</div>
+      <div class="brand__mark" aria-hidden="true">
+        <app-icon name="shield" />
+      </div>
       <div class="brand__text">
         <span class="brand__name">{{ t('app.shortTitle') }}</span>
         <span class="brand__sub">{{ t('app.title') }}</span>
       </div>
+      <button type="button" class="sidebar-close" (click)="closeMobileNav()" [attr.aria-label]="t('nav.closeMenu')">
+        <app-icon name="x" />
+      </button>
     </div>
 
-    <nav class="nav" aria-label="Primary">
-      @for (section of sections(); track section.titleKey) {
-        <span class="nav__section">{{ t(section.titleKey) }}</span>
-        @for (item of section.items; track item.link) {
-          <a class="nav__item" [routerLink]="item.link" routerLinkActive="nav__item--active">
-            <span class="nav__icon" aria-hidden="true">{{ item.icon }}</span>
-            <span>{{ t(item.labelKey) }}</span>
-            @if (item.badge && openTasks() > 0) {
-              <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+    <nav class="nav" [attr.aria-label]="t('nav.primary')">
+      @for (section of sections(); track section.id) {
+        @if (isWorkspaceSection(section)) {
+          <section
+            class="nav-workspace"
+            [class.nav-workspace--active]="isSectionActive(section)"
+            [class.nav-workspace--open]="isSectionOpen(section)"
+          >
+            <div class="nav-workspace__head">
+              <a
+                class="nav-workspace__summary"
+                [routerLink]="section.homeLink"
+                routerLinkActive="nav-workspace__summary--active"
+                (click)="closeMobileNav()"
+              >
+                <span class="nav-workspace__icon" aria-hidden="true">
+                  @if (section.iconName) {
+                    <app-icon [name]="section.iconName" />
+                  }
+                </span>
+                <span class="nav-workspace__text">
+                  <span class="nav-workspace__title">{{ t(section.titleKey) }}</span>
+                  <span class="nav-workspace__copy">{{ t(section.summaryKey!) }}</span>
+                </span>
+                <span class="nav-workspace__count">{{ section.items.length }} {{ t('nav.tools') }}</span>
+              </a>
+              <button
+                type="button"
+                class="nav-workspace__toggle"
+                (click)="toggleSection(section)"
+                [attr.aria-expanded]="isSectionOpen(section)"
+                [attr.aria-label]="sectionToggleLabel(section)"
+              >
+                <span aria-hidden="true">{{ isSectionOpen(section) ? '-' : '+' }}</span>
+              </button>
+            </div>
+
+            @if (isSectionOpen(section)) {
+              <div class="nav-workspace__items">
+                @for (item of section.items; track item.link) {
+                  <a
+                    class="nav__item nav__item--nested"
+                    [routerLink]="item.link"
+                    routerLinkActive="nav__item--active"
+                    (click)="closeMobileNav()"
+                  >
+                    <span class="nav__icon" aria-hidden="true">
+                      <app-icon [name]="item.iconName" />
+                    </span>
+                    <span>{{ t(item.labelKey) }}</span>
+                    @if (item.badge && openTasks() > 0) {
+                      <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+                    }
+                  </a>
+                }
+              </div>
             }
-          </a>
+          </section>
+        } @else {
+          <span class="nav__section">{{ t(section.titleKey) }}</span>
+          @for (item of section.items; track item.link) {
+            <a class="nav__item" [routerLink]="item.link" routerLinkActive="nav__item--active" (click)="closeMobileNav()">
+              <span class="nav__icon" aria-hidden="true">
+                <app-icon [name]="item.iconName" />
+              </span>
+              <span>{{ t(item.labelKey) }}</span>
+              @if (item.badge && openTasks() > 0) {
+                <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+              }
+            </a>
+          }
         }
       }
     </nav>
   </aside>
+  @if (mobileNavOpen()) {
+    <button type="button" class="shell__scrim" (click)="closeMobileNav()" [attr.aria-label]="t('nav.closeMenu')"></button>
+  }
 
   <div class="shell__main">
     <header class="topbar">
-      <nav class="crumbs" aria-label="Breadcrumb">
+      <button type="button" class="topbar__nav-toggle" (click)="mobileNavOpen.set(true)" [attr.aria-label]="t('nav.openMenu')">
+        <app-icon name="menu" />
+      </button>
+      <nav class="crumbs" [attr.aria-label]="t('nav.breadcrumb')">
         <span class="crumbs__root">{{ t('app.shortTitle') }}</span>
         @if (crumbKey()) {
           <span class="crumbs__sep" aria-hidden="true">/</span>
@@ -49,7 +120,7 @@
           (click)="theme.toggle()"
           [attr.aria-label]="t('action.theme')"
         >
-          {{ theme.theme() === 'dark' ? '☀' : '☾' }}
+          {{ theme.theme() === 'dark' ? t('theme.light') : t('theme.dark') }}
         </button>
 
         <div class="profile">

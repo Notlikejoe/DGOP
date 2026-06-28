@@ -1,70 +1,165 @@
-<section class="page">
-  <header class="page__header">
-    <h1>{{ t('ds.title') }}</h1>
-    <p class="page__subtitle">{{ t('ds.subtitle') }}</p>
+<section class="design-console">
+  <header class="design-hero">
+    <div>
+      <p class="design-hero__eyebrow">{{ t('ds.console.eyebrow') }}</p>
+      <h1>{{ t('ds.console.title') }}</h1>
+      <p>{{ t('ds.console.subtitle') }}</p>
+    </div>
+
+    <div class="design-hero__actions">
+      <a class="ds-btn ds-btn--ghost" routerLink="/governance">{{ t('nav.section.governance') }}</a>
+      <a class="ds-btn ds-btn--primary" routerLink="/admin">{{ t('nav.section.administration') }}</a>
+    </div>
   </header>
 
-  <article class="ds-card section">
-    <h2>{{ t('ds.colors') }}</h2>
-    <div class="swatches">
-      <div class="swatch"><span class="swatch__box" style="background: var(--success)"></span>success</div>
-      <div class="swatch"><span class="swatch__box" style="background: var(--warning)"></span>warning</div>
-      <div class="swatch"><span class="swatch__box" style="background: var(--danger)"></span>danger</div>
-      <div class="swatch"><span class="swatch__box" style="background: var(--info)"></span>info</div>
-      <div class="swatch"><span class="swatch__box" style="background: var(--muted)"></span>muted</div>
+  <section class="metric-strip" [attr.aria-label]="t('console.metrics')">
+    @for (metric of metrics; track metric.labelKey) {
+      <article class="metric-card" [class]="'metric-card metric-card--' + metric.tone">
+        <span>{{ t(metric.labelKey) }}</span>
+        <strong>{{ metric.value }}</strong>
+        <small>{{ t(metric.hintKey) }}</small>
+      </article>
+    }
+  </section>
+
+  <section class="console-grid">
+    <article class="design-panel design-panel--trees">
+      <div class="panel-head">
+        <div>
+          <h2>{{ t('ds.console.treesTitle') }}</h2>
+          <p>{{ t('ds.console.treesCopy') }}</p>
+        </div>
+        <span class="live-chip"><span aria-hidden="true"></span>{{ t('console.liveMap') }}</span>
+      </div>
+
+      <div class="tree-switcher" [attr.aria-label]="t('ds.console.treesTitle')">
+        @for (tree of trees; track tree.titleKey; let treeIndex = $index) {
+          <button
+            type="button"
+            [class.tree-switcher__button--active]="activeTreeIndex() === treeIndex"
+            [attr.aria-pressed]="activeTreeIndex() === treeIndex"
+            (click)="showTree(treeIndex)"
+          >
+            {{ t(tree.rootKey) }}
+          </button>
+        }
+      </div>
+
+      <div class="design-trees">
+        @for (tree of trees; track tree.titleKey; let treeIndex = $index) {
+          <section class="design-tree" [class.design-tree--mobile-hidden]="activeTreeIndex() !== treeIndex">
+            <header>
+              <h3>{{ t(tree.titleKey) }}</h3>
+              <p>{{ t(tree.subtitleKey) }}</p>
+            </header>
+
+            <div class="tree-map">
+              <div class="tree-root">
+                <strong>{{ t(tree.rootKey) }}</strong>
+              </div>
+
+              <div class="tree-groups">
+                @for (group of tree.groups; track group.titleKey) {
+                  <article class="tree-group">
+                    <div class="tree-group__head">
+                      <h4>{{ t(group.titleKey) }}</h4>
+                      <p>{{ t(group.summaryKey) }}</p>
+                    </div>
+                    <div class="tree-nodes">
+                      @for (item of group.items; track item.link) {
+                        <a class="tree-node" [routerLink]="item.link">
+                          <span aria-hidden="true">{{ item.icon }}</span>
+                          <span class="tree-node__text">
+                            <b>{{ t(item.labelKey) }}</b>
+                            <small>{{ t(item.descriptionKey) }}</small>
+                          </span>
+                        </a>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            </div>
+          </section>
+        }
+      </div>
+    </article>
+
+    <aside class="design-side">
+      <section class="design-panel">
+        <div class="panel-head">
+          <div>
+            <h2>{{ t('ds.console.quickTitle') }}</h2>
+            <p>{{ t('ds.console.quickCopy') }}</p>
+          </div>
+        </div>
+
+        <div class="quick-stack">
+          <a routerLink="/governance/ndi/readiness">{{ t('nav.ndiReadiness') }} <span>{{ t('ds.quick.ready') }}</span></a>
+          <a routerLink="/governance/exception-queue">{{ t('nav.exceptions') }} <span>{{ t('ds.quick.gaps') }}</span></a>
+          <a routerLink="/admin/audit">{{ t('nav.audit') }} <span>{{ t('ds.quick.trace') }}</span></a>
+          <a routerLink="/admin/users">{{ t('nav.users') }} <span>{{ t('ds.quick.access') }}</span></a>
+        </div>
+      </section>
+
+      <section class="design-panel">
+        <div class="panel-head">
+          <div>
+            <h2>{{ t('ds.console.rulesTitle') }}</h2>
+            <p>{{ t('ds.console.rulesCopy') }}</p>
+          </div>
+        </div>
+
+        <div class="rule-stack">
+          @for (rule of rules; track rule.titleKey) {
+            <article class="rule-card" [class]="'rule-card rule-card--' + rule.tone">
+              <strong>{{ t(rule.titleKey) }}</strong>
+              <p>{{ t(rule.bodyKey) }}</p>
+            </article>
+          }
+        </div>
+      </section>
+    </aside>
+  </section>
+
+  <section class="design-panel">
+    <div class="panel-head">
+      <div>
+        <h2>{{ t('ds.console.componentsTitle') }}</h2>
+        <p>{{ t('ds.console.componentsCopy') }}</p>
+      </div>
     </div>
-  </article>
 
-  <article class="ds-card section">
-    <h2>{{ t('ds.chips') }}</h2>
-    <div class="row">
-      <app-status-chip kind="success" [label]="t('status.onTrack')" />
-      <app-status-chip kind="warning" [label]="t('status.atRisk')" />
-      <app-status-chip kind="danger" [label]="t('status.overdue')" />
-      <app-status-chip kind="info" [label]="t('status.underReview')" />
-      <app-status-chip kind="muted" [label]="t('status.notStarted')" />
+    <div class="component-showcase">
+      <div class="component-block">
+        <h3>{{ t('ds.chips') }}</h3>
+        <div class="component-row">
+          <app-status-chip kind="success" [label]="t('status.onTrack')" />
+          <app-status-chip kind="warning" [label]="t('status.atRisk')" />
+          <app-status-chip kind="danger" [label]="t('status.overdue')" />
+          <app-status-chip kind="info" [label]="t('status.underReview')" />
+          <app-status-chip kind="muted" [label]="t('status.notStarted')" />
+        </div>
+      </div>
+
+      <div class="component-block">
+        <h3>{{ t('ds.colors') }}</h3>
+        <div class="swatches">
+          <span style="--swatch: var(--success)">success</span>
+          <span style="--swatch: var(--warning)">warning</span>
+          <span style="--swatch: var(--danger)">danger</span>
+          <span style="--swatch: var(--info)">info</span>
+          <span style="--swatch: var(--muted)">muted</span>
+        </div>
+      </div>
+
+      <div class="component-block">
+        <h3>{{ t('ds.forms') }}</h3>
+        <label class="sample-field">
+          <span>{{ t('crud.search') }}</span>
+          <input type="search" [placeholder]="t('ds.console.searchPlaceholder')" />
+        </label>
+      </div>
     </div>
-  </article>
-
-  <article class="ds-card section">
-    <h2>{{ t('ds.buttons') }}</h2>
-    <div class="row">
-      <button type="button" class="ds-btn ds-btn--primary">Primary</button>
-      <button type="button" class="ds-btn ds-btn--ghost">Secondary</button>
-    </div>
-  </article>
-
-  <article class="ds-card section">
-    <h2>{{ t('ds.tree') }}</h2>
-    <app-tree-view [rows]="demoTree" />
-  </article>
-
-  <article class="ds-card section">
-    <h2>{{ t('ds.forms') }}</h2>
-    <div class="ds-form-demo">
-      <label class="ds-field">
-        <span class="ds-field__label">{{ t('crud.nameEn') }}</span>
-        <input type="text" class="ds-field__input" placeholder="Example value" />
-      </label>
-      <label class="ds-field">
-        <span class="ds-field__label">{{ t('ds.lookup') }}</span>
-        <select class="ds-field__input">
-          <option>Public</option>
-          <option>Internal</option>
-          <option>Restricted</option>
-          <option>Secret</option>
-          <option>Top Secret</option>
-        </select>
-      </label>
-    </div>
-  </article>
-
-  <article class="ds-card section">
-    <h2>{{ t('ds.typography') }}</h2>
-    <h1>Heading 1</h1>
-    <h2>Heading 2</h2>
-    <h3>Heading 3</h3>
-    <p>Body text - the quick brown fox jumps over the lazy dog.</p>
-    <p style="font-family: 'IBM Plex Sans Arabic', sans-serif">نص عربي - النص التجريبي لعرض الخط العربي.</p>
-  </article>
+  </section>
 </section>

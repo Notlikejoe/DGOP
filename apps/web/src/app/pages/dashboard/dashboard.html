@@ -1,243 +1,235 @@
-<section class="page">
-  <header class="page__header">
-    <div>
-      <h1>{{ t('dashboard.title') }}</h1>
-      <p class="page__subtitle">{{ t('dashboard.subtitle') }}</p>
-    </div>
-  </header>
-
+<section class="command-page">
   @if (summary(); as s) {
     @if (hasNoSections()) {
-      <p class="muted">{{ t('db.empty') }}</p>
-    }
-
-    <!-- My work -->
-    @if (s.myWork || s.workflow) {
-      <section class="db-section" aria-labelledby="db-mywork">
-        <div class="db-section__head">
-          <h2 id="db-mywork">{{ t('db.myWork.title') }}</h2>
-          <p class="db-section__sub">{{ t('db.myWork.subtitle') }}</p>
-        </div>
-        <div class="db-grid">
-          @if (s.myWork; as mw) {
-            <app-kpi-card
-              [value]="mw.ownedAssets"
-              [label]="t('db.myWork.ownedAssets')"
-              [hint]="t('db.myWork.ownedAssetsHint')"
-              tone="info"
-              link="/governance/ownership"
-            />
-            <app-kpi-card
-              [value]="mw.ownedSpecs"
-              [label]="t('db.myWork.ownedSpecs')"
-              [hint]="t('db.myWork.ownedSpecsHint')"
-              tone="info"
-              link="/governance/ndi"
-            />
-            @if (mw.evidenceToReview !== null) {
-              <app-kpi-card
-                [value]="mw.evidenceToReview"
-                [label]="t('db.myWork.evidenceToReview')"
-                [hint]="t('db.myWork.evidenceToReviewHint')"
-                [tone]="mw.evidenceToReview > 0 ? 'warning' : 'neutral'"
-                link="/governance/ndi"
-              />
+      <article class="empty-state">
+        <h1>{{ t('dashboard.title') }}</h1>
+        <p>{{ t('db.empty') }}</p>
+      </article>
+    } @else {
+      <header class="command-hero">
+        <div class="command-hero__copy">
+          <span class="eyebrow">{{ t('cmd.eyebrow') }}</span>
+          <h1>{{ t('cmd.healthPrefix') }} {{ healthLabel() }}</h1>
+          <p>
+            {{ t('cmd.heroCopy') }}
+          </p>
+          <div class="command-hero__actions">
+            @if (primaryAction(); as action) {
+              <a class="ds-btn ds-btn--primary" [routerLink]="action.link">
+                {{ action.label }}
+              </a>
             }
-          }
-          @if (s.workflow; as wf) {
-            <app-kpi-card
-              [value]="wf.myOpenTasks"
-              [label]="t('db.myWork.openTasks')"
-              [hint]="t('db.myWork.openTasksHint')"
-              tone="neutral"
-              link="/governance/workflow"
-            />
-            <app-kpi-card
-              [value]="wf.myOverdueTasks"
-              [label]="t('db.myWork.overdue')"
-              [hint]="t('db.myWork.overdueHint')"
-              [tone]="wf.myOverdueTasks > 0 ? 'danger' : 'neutral'"
-              link="/governance/workflow"
-            />
-          }
-        </div>
-      </section>
-    }
-
-    <!-- Governance overview -->
-    @if (s.governance; as g) {
-      <section class="db-section" aria-labelledby="db-gov">
-        <div class="db-section__head">
-          <h2 id="db-gov">{{ t('db.gov.title') }}</h2>
-          <p class="db-section__sub">{{ t('db.gov.subtitle') }}</p>
-        </div>
-        <div class="db-cols">
-          <article class="ds-card db-coverage">
-            <div class="db-coverage__top">
-              <span class="db-coverage__label">{{ t('db.gov.ownership') }}</span>
-              <span class="db-coverage__pct">{{ g.ownershipCoveragePct }}%</span>
-            </div>
-            <app-progress-bar
-              [value]="g.ownershipCoveragePct"
-              [kind]="coverageBar(g.ownershipCoveragePct)"
-              [label]="t('db.gov.ownership')"
-            />
-            <p class="db-coverage__hint">
-              {{ g.assets.withOwner }}/{{ g.assets.total }} {{ t('db.gov.ofAssets') }}
-            </p>
-
-            <div class="db-coverage__top">
-              <span class="db-coverage__label">{{ t('db.gov.stewardship') }}</span>
-              <span class="db-coverage__pct">{{ g.stewardshipCoveragePct }}%</span>
-            </div>
-            <app-progress-bar
-              [value]="g.stewardshipCoveragePct"
-              [kind]="coverageBar(g.stewardshipCoveragePct)"
-              [label]="t('db.gov.stewardship')"
-            />
-          </article>
-
-          <div class="db-grid db-grid--tight">
-            <app-kpi-card
-              [value]="g.assets.unassigned"
-              [label]="t('dash.tile.unassigned')"
-              [hint]="t('dash.tile.unassignedHint')"
-              [tone]="g.assets.unassigned > 0 ? 'warning' : 'success'"
-              link="/governance/exception-queue"
-            />
-            <app-kpi-card
-              [value]="g.pendingApprovals"
-              [label]="t('dash.tile.pending')"
-              [hint]="t('dash.tile.pendingHint')"
-              [tone]="g.pendingApprovals > 0 ? 'info' : 'neutral'"
-              link="/governance/ownership"
-            />
+            <a class="ds-btn ds-btn--ghost" routerLink="/assets">{{ t('cmd.openAssetMap') }}</a>
           </div>
         </div>
-      </section>
-    }
 
-    <!-- NDI readiness -->
-    @if (s.ndi; as ndi) {
-      <section class="db-section" aria-labelledby="db-ndi">
-        <div class="db-section__head">
-          <h2 id="db-ndi">{{ t('db.ndi.title') }}</h2>
-          <p class="db-section__sub">{{ t('db.ndi.subtitle') }}</p>
-        </div>
-        <div class="db-cols">
-          <article class="ds-card db-coverage">
-            <div class="db-coverage__top">
-              <span class="db-coverage__label">{{ t('db.ndi.readiness') }}</span>
-              <span class="db-readiness">
-                <span class="db-coverage__pct">{{ ndi.readinessPct }}%</span>
-                <app-status-chip
-                  [kind]="maturityChipKind(ndi.maturity)"
-                  [label]="t('scoring.maturity.' + ndi.maturity)"
-                />
-              </span>
+        <aside class="command-hero__signal" [attr.aria-label]="t('cmd.governanceSignal')">
+          <app-status-chip [kind]="healthKind()" [label]="healthLabel()" />
+          <span class="signal__value">{{ riskTotal() }}</span>
+          <span class="signal__label">{{ t('cmd.itemsNeedAttention') }}</span>
+          @if (primaryAction(); as action) {
+            <p>{{ action.detail }}</p>
+          }
+        </aside>
+      </header>
+
+      <section class="status-strip" [attr.aria-label]="t('cmd.governanceStatus')">
+        <a class="status-metric" routerLink="/assets">
+          <span class="status-metric__label">{{ t('cmd.metric.assets') }}</span>
+          <strong>{{ s.governance ? s.governance.assets.total : 0 }}</strong>
+          <span>{{ s.governance ? s.governance.assets.withOwner : 0 }} {{ t('cmd.metric.owned') }}</span>
+        </a>
+        <a class="status-metric" routerLink="/governance/ownership">
+          <span class="status-metric__label">{{ t('cmd.metric.ownershipCoverage') }}</span>
+          <strong>{{ s.governance?.ownershipCoveragePct ?? 0 }}%</strong>
+          <span>{{ s.governance ? s.governance.assets.unassigned : 0 }} {{ t('cmd.metric.missingOwners') }}</span>
+        </a>
+        <a class="status-metric" routerLink="/governance/ndi/readiness">
+          <span class="status-metric__label">{{ t('cmd.metric.ndiReadiness') }}</span>
+          <strong>{{ s.ndi?.readinessPct ?? 0 }}%</strong>
+          <span>{{ s.ndi?.satisfied ?? 0 }}/{{ s.ndi?.specifications ?? 0 }} {{ t('cmd.metric.controlsProven') }}</span>
+        </a>
+        <a class="status-metric" routerLink="/governance/workflow">
+          <span class="status-metric__label">{{ t('cmd.metric.workflow') }}</span>
+          <strong>{{ s.workflow?.myOpenTasks ?? 0 }}</strong>
+          <span>{{ s.workflow?.myOverdueTasks ?? 0 }} {{ t('cmd.metric.overdue') }}</span>
+        </a>
+      </section>
+
+      <section class="dashboard-workbench">
+        <div class="dashboard-main">
+          <article class="panel panel--wide panel--posture">
+            <div class="panel__head">
+              <div>
+                <span class="eyebrow">{{ t('cmd.executiveView') }}</span>
+                <h2>{{ t('cmd.governancePosture') }}</h2>
+              </div>
+              <app-status-chip [kind]="healthKind()" [label]="healthLabel()" />
             </div>
-            <app-progress-bar
-              [value]="ndi.readinessPct"
-              [kind]="readinessBar(ndi.readinessPct)"
-              [label]="t('db.ndi.readiness')"
-            />
-            <p class="db-coverage__hint">
-              {{ ndi.satisfied }}/{{ ndi.specifications }} {{ t('db.ndi.satisfied') }}
-            </p>
-            <a class="ds-btn ds-btn--ghost db-link" routerLink="/governance/ndi/readiness">
-              {{ t('db.ndi.viewReadiness') }}
-            </a>
+
+            <div class="posture-grid">
+              <div class="posture">
+                <div class="posture__top">
+                  <span>{{ t('cmd.metric.ownershipCoverage') }}</span>
+                  <strong>{{ s.governance?.ownershipCoveragePct ?? 0 }}%</strong>
+                </div>
+                <app-progress-bar
+                  [value]="s.governance?.ownershipCoveragePct ?? 0"
+                  [kind]="coverageBar(s.governance?.ownershipCoveragePct ?? 0)"
+                  [label]="t('cmd.metric.ownershipCoverage')"
+                />
+                <p>{{ s.governance ? s.governance.assets.withOwner : 0 }} {{ t('cmd.of') }} {{ s.governance ? s.governance.assets.total : 0 }} {{ t('cmd.namedAccountability') }}</p>
+              </div>
+
+              <div class="posture">
+                <div class="posture__top">
+                  <span>{{ t('cmd.stewardshipCoverage') }}</span>
+                  <strong>{{ s.governance?.stewardshipCoveragePct ?? 0 }}%</strong>
+                </div>
+                <app-progress-bar
+                  [value]="s.governance?.stewardshipCoveragePct ?? 0"
+                  [kind]="coverageBar(s.governance?.stewardshipCoveragePct ?? 0)"
+                  [label]="t('cmd.stewardshipCoverage')"
+                />
+                <p>{{ t('cmd.stewardshipCopy') }}</p>
+              </div>
+
+              <div class="posture">
+                <div class="posture__top">
+                  <span>{{ t('cmd.metric.ndiReadiness') }}</span>
+                  <strong>{{ s.ndi?.readinessPct ?? 0 }}%</strong>
+                </div>
+                <app-progress-bar
+                  [value]="s.ndi?.readinessPct ?? 0"
+                  [kind]="readinessBar(s.ndi?.readinessPct ?? 0)"
+                  [label]="t('cmd.metric.ndiReadiness')"
+                />
+                <p>{{ s.ndi?.satisfied ?? 0 }} {{ t('cmd.evidenceLinksOutOf') }} {{ s.ndi?.specifications ?? 0 }} {{ t('cmd.requiredSpecifications') }}</p>
+              </div>
+            </div>
           </article>
 
-          <article class="ds-card">
-            <h3 class="db-card__title">{{ t('db.ndi.gapsTitle') }}</h3>
-            @if (gapItems().length) {
-              <app-mini-bar-chart [items]="gapItems()" />
-              <a class="ds-btn ds-btn--ghost db-link" routerLink="/governance/ndi/gaps">
-                {{ t('scoring.viewGaps') }}
-              </a>
+          <article class="panel journey-panel panel--journey">
+            <div class="panel__head">
+              <div>
+                <span class="eyebrow">{{ t('cmd.dataJourney') }}</span>
+                <h2>{{ t('cmd.fromCatalog') }}</h2>
+              </div>
+            </div>
+
+            <div class="journey">
+              @for (node of journeyNodes(); track node.label) {
+                <div class="journey__node journey__node--{{ node.kind }}">
+                  <span>{{ node.label }}</span>
+                  <strong>{{ node.value }}</strong>
+                  <small>{{ node.detail }}</small>
+                </div>
+              }
+            </div>
+          </article>
+        </div>
+
+        <aside class="dashboard-rail">
+          <section class="panel action-panel panel--review">
+            <div class="panel__head">
+              <div>
+                <span class="eyebrow">{{ t('cmd.nextActions') }}</span>
+                <h2>{{ t('cmd.reviewQueue') }}</h2>
+              </div>
+            </div>
+
+            <div class="action-list">
+              @for (item of actionItems(); track item.label) {
+                <a class="action-item action-item--{{ item.kind }}" [routerLink]="item.link">
+                  <span class="action-item__value">{{ item.value }}</span>
+                  <span class="action-item__body">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </span>
+                </a>
+              }
+            </div>
+          </section>
+
+          <article class="panel panel--gaps">
+            <div class="panel__head">
+              <div>
+                <span class="eyebrow">{{ t('cmd.complianceFocus') }}</span>
+                <h2>{{ t('cmd.openNdiGaps') }}</h2>
+              </div>
+              <a class="panel__link" routerLink="/governance/ndi/gaps">{{ t('cmd.viewGaps') }}</a>
+            </div>
+
+            @if (gapRows(s.ndi).length) {
+              <div class="gap-list">
+                @for (gap of gapRows(s.ndi); track gap.label) {
+                  <div class="gap-row gap-row--{{ gap.kind }}">
+                    <span>{{ gap.label }}</span>
+                    <strong>{{ gap.value }}</strong>
+                  </div>
+                }
+              </div>
             } @else {
-              <p class="muted">{{ t('db.ndi.noGaps') }}</p>
+              <p class="muted">{{ t('cmd.noOpenGaps') }}</p>
             }
           </article>
-        </div>
-      </section>
-    }
 
-    <!-- Reference -->
-    @if (s.reference; as ref) {
-      <section class="db-section" aria-labelledby="db-ref">
-        <div class="db-section__head">
-          <h2 id="db-ref">{{ t('db.ref.title') }}</h2>
-          <p class="db-section__sub">{{ t('db.ref.subtitle') }}</p>
-        </div>
-        <div class="db-grid">
-          <app-kpi-card
-            [value]="ref.people"
-            [label]="t('dash.tile.people')"
-            [hint]="t('dash.tile.peopleHint')"
-            tone="neutral"
-            link="/admin/people"
-          />
-        </div>
+          <article class="panel system-panel panel--system">
+            <div class="panel__head">
+              <div>
+                <span class="eyebrow">{{ t('cmd.platformSignal') }}</span>
+                <h2>{{ t('cmd.systemReadiness') }}</h2>
+              </div>
+              @if (state() === 'ok') {
+                <app-status-chip kind="success" [label]="t('cmd.online')" />
+              } @else if (state() === 'error') {
+                <app-status-chip kind="danger" [label]="t('cmd.offline')" />
+              } @else {
+                <app-status-chip kind="info" [label]="t('cmd.checking')" />
+              }
+            </div>
+
+            @if (state() === 'loading') {
+              <div class="skeleton" aria-hidden="true"></div>
+              <div class="skeleton skeleton--short" aria-hidden="true"></div>
+            } @else if (state() === 'ok') {
+              <dl class="kv">
+                <div class="kv__row">
+                  <dt>{{ t('cmd.database') }}</dt>
+                  <dd>{{ health()?.database?.status }}</dd>
+                </div>
+                <div class="kv__row">
+                  <dt>{{ t('cmd.environment') }}</dt>
+                  <dd>{{ health()?.environment }}</dd>
+                </div>
+                <div class="kv__row">
+                  <dt>{{ t('cmd.service') }}</dt>
+                  <dd>{{ health()?.version }}</dd>
+                </div>
+              </dl>
+            } @else {
+              <p class="error">{{ t('health.error') }}</p>
+              <button type="button" class="ds-btn ds-btn--primary" (click)="load()">
+                {{ t('health.retry') }}
+              </button>
+            }
+          </article>
+        </aside>
       </section>
     }
   } @else if (summaryError()) {
-    <p class="error">{{ t('db.error') }}</p>
-    <button type="button" class="ds-btn ds-btn--primary" (click)="loadSummary()">
-      {{ t('db.retry') }}
-    </button>
+    <article class="empty-state">
+      <h1>{{ t('cmd.dashboardUnavailable') }}</h1>
+      <p>{{ t('db.error') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="loadSummary()">
+        {{ t('db.retry') }}
+      </button>
+    </article>
   } @else {
-    <div class="db-grid">
-      <div class="skeleton skeleton--tile" aria-hidden="true"></div>
-      <div class="skeleton skeleton--tile" aria-hidden="true"></div>
-      <div class="skeleton skeleton--tile" aria-hidden="true"></div>
+    <div class="loading-grid" [attr.aria-label]="t('cmd.loadingDashboard')">
+      <div class="skeleton skeleton--hero" aria-hidden="true"></div>
+      <div class="skeleton skeleton--panel" aria-hidden="true"></div>
+      <div class="skeleton skeleton--panel" aria-hidden="true"></div>
     </div>
   }
-
-  <!-- System health -->
-  <section class="db-section" aria-labelledby="db-health">
-    <article class="ds-card health">
-      <div class="health__head">
-        <h2 id="db-health">{{ t('health.title') }}</h2>
-
-        @if (state() === 'ok') {
-          <app-status-chip kind="success" [label]="t('health.ok')" />
-        } @else if (state() === 'error') {
-          <app-status-chip kind="danger" [label]="t('health.error')" />
-        } @else {
-          <app-status-chip kind="info" [label]="t('health.checking')" />
-        }
-      </div>
-
-      @if (state() === 'loading') {
-        <div class="skeleton" aria-hidden="true"></div>
-        <div class="skeleton skeleton--short" aria-hidden="true"></div>
-      } @else if (state() === 'ok') {
-        <dl class="kv">
-          <div class="kv__row">
-            <dt>{{ t('health.db') }}</dt>
-            <dd>{{ health()?.database?.name }} ({{ health()?.database?.status }})</dd>
-          </div>
-          <div class="kv__row">
-            <dt>Service</dt>
-            <dd>{{ health()?.service }} v{{ health()?.version }}</dd>
-          </div>
-          <div class="kv__row">
-            <dt>Environment</dt>
-            <dd>{{ health()?.environment }}</dd>
-          </div>
-          <div class="kv__row">
-            <dt>{{ t('health.uptime') }}</dt>
-            <dd>{{ health()?.uptimeSeconds }}</dd>
-          </div>
-        </dl>
-      } @else {
-        <p class="health__error">{{ t('health.error') }}</p>
-        <button type="button" class="ds-btn ds-btn--primary" (click)="load()">
-          {{ t('health.retry') }}
-        </button>
-      }
-    </article>
-  </section>
 </section>

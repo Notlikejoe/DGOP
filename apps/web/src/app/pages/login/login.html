@@ -4,61 +4,89 @@
       {{ t('action.language') }}
     </button>
     <button type="button" class="ds-btn ds-btn--ghost" (click)="theme.toggle()">
-      {{ theme.theme() === 'dark' ? '☀' : '☾' }}
+      {{ theme.theme() === 'dark' ? t('theme.light') : t('theme.dark') }}
     </button>
   </div>
 
-  <div class="auth__card ds-card">
-    <div class="auth__brand">
-      <div class="auth__mark" aria-hidden="true">DG</div>
-      <div>
-        <h1 class="auth__title">{{ t('app.shortTitle') }}</h1>
-        <p class="auth__subtitle">{{ t('login.subtitle') }}</p>
+  <main class="auth__layout">
+    <section class="auth__story" aria-labelledby="auth-title">
+      <div class="auth__brand">
+        <div class="auth__mark" aria-hidden="true">DG</div>
+        <div>
+          <span class="auth__eyebrow">{{ t('app.title') }}</span>
+          <h1 id="auth-title">{{ t('login.commandTitle') }}</h1>
+        </div>
       </div>
-    </div>
 
-    <form (ngSubmit)="submit()" #f="ngForm" novalidate>
-      <label class="field">
-        <span class="field__label">{{ t('login.email') }}</span>
-        <input
-          class="field__input"
-          type="email"
-          name="email"
-          autocomplete="username"
-          required
-          [ngModel]="email()"
-          (ngModelChange)="email.set($event)"
-          [attr.aria-invalid]="!!error()"
-        />
-      </label>
+      <p>
+        {{ t('login.commandCopy') }}
+      </p>
 
-      <label class="field">
-        <span class="field__label">{{ t('login.password') }}</span>
-        <input
-          class="field__input"
-          type="password"
-          name="password"
-          autocomplete="current-password"
-          required
-          [ngModel]="password()"
-          (ngModelChange)="password.set($event)"
-          [attr.aria-invalid]="!!error()"
-        />
-      </label>
+      <div class="auth__signals" [attr.aria-label]="t('login.signalsLabel')">
+        <div>
+          <span>{{ t('login.signalHealthy') }}</span>
+          <strong>{{ t('login.signalApi') }}</strong>
+        </div>
+        <div>
+          <span>{{ t('login.signalVisible') }}</span>
+          <strong>{{ t('login.signalOwners') }}</strong>
+        </div>
+        <div>
+          <span>{{ t('login.signalReady') }}</span>
+          <strong>{{ t('login.signalEvidence') }}</strong>
+        </div>
+      </div>
+    </section>
 
-      @if (error()) {
-        <p class="auth__error" role="alert">{{ error() }}</p>
-      }
+    <section class="auth__panel" [attr.aria-label]="t('login.signIn')">
+      <div class="auth__panel-head">
+        <span class="auth__eyebrow">{{ t('app.shortTitle') }}</span>
+        <h2>{{ t('login.subtitle') }}</h2>
+      </div>
 
-      <button
-        type="submit"
-        class="ds-btn ds-btn--primary auth__submit"
-        [disabled]="loading() || !email() || !password()"
-      >
-        {{ loading() ? t('login.signingIn') : t('login.signIn') }}
-      </button>
-    </form>
+      <form (ngSubmit)="submit()" #f="ngForm" novalidate>
+        <label class="field">
+          <span class="field__label">{{ t('login.email') }}</span>
+          <input
+            class="field__input"
+            type="email"
+            name="email"
+            autocomplete="username"
+            required
+            [ngModel]="email()"
+            (ngModelChange)="email.set($event)"
+            [attr.aria-invalid]="!!error()"
+          />
+        </label>
 
-    <p class="auth__hint">{{ t('login.devHint') }}</p>
-  </div>
+        <label class="field">
+          <span class="field__label">{{ t('login.password') }}</span>
+          <input
+            class="field__input"
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            required
+            [ngModel]="password()"
+            (ngModelChange)="password.set($event)"
+            [attr.aria-invalid]="!!error()"
+          />
+        </label>
+
+        @if (error()) {
+          <p class="auth__error" role="alert">{{ error() }}</p>
+        }
+
+        <button
+          type="submit"
+          class="ds-btn ds-btn--primary auth__submit"
+          [disabled]="loading() || !email() || !password()"
+        >
+          {{ loading() ? t('login.signingIn') : t('login.signIn') }}
+        </button>
+      </form>
+
+      <p class="auth__hint">{{ t('login.devHint') }}</p>
+    </section>
+  </main>
 </div>

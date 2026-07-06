@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
@@ -9,6 +9,8 @@ import { ScopeService } from '../access/scope.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly users: UsersService,
     private readonly jwt: JwtService,
@@ -32,18 +34,27 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    await this.users.updateLastLogin(user.id);
+    try {
+      await this.users.updateLastLogin(user.id);
+    } catch (error) {
+      // Keep local demos usable if the development database cannot write the optional login timestamp.
+      this.logger.warn(`Could not update last login for ${user.email}: ${String(error)}`);
+    }
     const roles = user.userRoles.map((ur) => ur.role.code);
     const payload: JwtPayload = { sub: user.id, email: user.email, roles };
     const accessToken = this.jwt.sign(payload);
 
-    await this.audit.log({
-      actor: user.email,
-      action: 'auth.login.success',
-      entityType: 'user',
-      entityId: user.id,
-      metadata: { ip },
-    });
+    try {
+      await this.audit.log({
+        actor: user.email,
+        action: 'auth.login.success',
+        entityType: 'user',
+        entityId: user.id,
+        metadata: { ip },
+      });
+    } catch (error) {
+      this.logger.warn(`Could not write login audit event for ${user.email}: ${String(error)}`);
+    }
 
     return { accessToken, user: await this.toProfile(user) };
   }

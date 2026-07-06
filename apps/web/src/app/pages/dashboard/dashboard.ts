@@ -26,6 +26,20 @@ interface DashboardSummary {
   } | null;
   workflow: { myOpenTasks: number; myOverdueTasks: number } | null;
   myWork: { ownedAssets: number; ownedSpecs: number; evidenceToReview: number | null } | null;
+  training: {
+    assignments: number;
+    completed: number;
+    expired: number;
+    overdue: number;
+    completionRate: number;
+    certificationTracks: number;
+    activeCertifications: number;
+    ceHours: number;
+    communityArticles: number;
+    mentorships: number;
+    awarenessReadiness: number;
+  } | null;
+  dataQuality: { open: number; critical: number; overdue: number; closureRate: number } | null;
   reference: { people: number } | null;
 }
 
@@ -65,7 +79,7 @@ export class Dashboard implements OnInit {
   /** True when every persona section is empty (e.g. a minimal read-only role). */
   protected readonly hasNoSections = computed(() => {
     const s = this.summary();
-    return !!s && !s.governance && !s.ndi && !s.workflow && !s.myWork && !s.reference;
+    return !!s && !s.governance && !s.ndi && !s.workflow && !s.myWork && !s.training && !s.dataQuality && !s.reference;
   });
 
   protected readonly riskTotal = computed(() => {
@@ -75,6 +89,10 @@ export class Dashboard implements OnInit {
       (s.governance?.assets.unassigned ?? 0) +
       (s.governance?.pendingApprovals ?? 0) +
       (s.workflow?.myOverdueTasks ?? 0) +
+      (s.training?.overdue ?? 0) +
+      (s.training?.expired ?? 0) +
+      (s.dataQuality?.critical ?? 0) +
+      (s.dataQuality?.overdue ?? 0) +
       this.gapTotal(s.ndi)
     );
   });
@@ -116,6 +134,24 @@ export class Dashboard implements OnInit {
         value: s.governance?.assets.unassigned ?? 0,
         kind: 'warning',
         link: '/governance/exception-queue',
+      };
+    }
+    if ((s.dataQuality?.critical ?? 0) > 0 || (s.dataQuality?.overdue ?? 0) > 0) {
+      return {
+        label: this.t('cmd.action.dataQuality'),
+        detail: this.t('cmd.action.dataQualityDetail'),
+        value: (s.dataQuality?.critical ?? 0) + (s.dataQuality?.overdue ?? 0),
+        kind: 'danger',
+        link: '/governance/data-quality',
+      };
+    }
+    if ((s.training?.overdue ?? 0) > 0 || (s.training?.expired ?? 0) > 0) {
+      return {
+        label: this.t('cmd.action.training'),
+        detail: this.t('cmd.action.trainingDetail'),
+        value: (s.training?.overdue ?? 0) + (s.training?.expired ?? 0),
+        kind: 'warning',
+        link: '/governance/training',
       };
     }
     if (this.gapTotal(s.ndi) > 0) {
@@ -174,6 +210,24 @@ export class Dashboard implements OnInit {
         value: this.gapTotal(s.ndi),
         kind: this.gapTotal(s.ndi) ? 'warning' : 'success',
         link: '/governance/ndi/gaps',
+      });
+    }
+    if (s.dataQuality) {
+      items.push({
+        label: this.t('cmd.queue.dataQuality'),
+        detail: this.t('cmd.queue.dataQualityDetail'),
+        value: s.dataQuality.critical || s.dataQuality.open,
+        kind: s.dataQuality.critical ? 'danger' : s.dataQuality.open ? 'warning' : 'success',
+        link: '/governance/data-quality',
+      });
+    }
+    if (s.training) {
+      items.push({
+        label: this.t('cmd.queue.training'),
+        detail: this.t('cmd.queue.trainingDetail'),
+        value: s.training.overdue || s.training.expired || `${s.training.awarenessReadiness}%`,
+        kind: s.training.overdue || s.training.expired ? 'warning' : 'success',
+        link: '/governance/training',
       });
     }
     if (s.myWork?.evidenceToReview !== null && s.myWork?.evidenceToReview !== undefined) {

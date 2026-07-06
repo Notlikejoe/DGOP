@@ -20,6 +20,20 @@ interface MockData {
   ownedAssignmentTargetIds?: string[];
   ownedSpecs?: number;
   evidenceToReview?: number;
+  trainingAssignments?: number;
+  trainingCompleted?: number;
+  trainingExpired?: number;
+  trainingOverdue?: number;
+  certificationTracks?: number;
+  activeCertifications?: number;
+  ceHours?: number;
+  communityArticles?: number;
+  mentorships?: number;
+  dqTotal?: number;
+  dqClosed?: number;
+  dqOpen?: number;
+  dqCritical?: number;
+  dqOverdue?: number;
   people?: number;
   readiness?: any;
 }
@@ -53,6 +67,30 @@ function makeService(d: MockData): DashboardService {
     ndiEvidence: {
       count: async () => d.evidenceToReview ?? 0,
     },
+    trainingAssignment: {
+      count: async (args: any) => {
+        const whereText = JSON.stringify(args?.where ?? {});
+        if (args?.where?.status === 'completed') return d.trainingCompleted ?? 0;
+        if (whereText.includes('"status":"expired"')) return d.trainingExpired ?? 0;
+        if (args?.where?.dueDate) return d.trainingOverdue ?? 0;
+        return d.trainingAssignments ?? 0;
+      },
+    },
+    certificationTrack: {
+      count: async () => d.certificationTracks ?? 0,
+    },
+    certificationAttempt: {
+      count: async () => d.activeCertifications ?? 0,
+    },
+    continuingEducationActivity: {
+      aggregate: async () => ({ _sum: { hours: d.ceHours ?? 0 } }),
+    },
+    communityArticle: {
+      count: async () => d.communityArticles ?? 0,
+    },
+    mentorshipPair: {
+      count: async () => d.mentorships ?? 0,
+    },
   };
   const scope = { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) };
   const access = {
@@ -68,7 +106,22 @@ function makeService(d: MockData): DashboardService {
         gapTotals: { missing: 3, expired: 1, rejected: 0, unassigned: 2, stuck: 0 },
       },
   };
-  return new DashboardService(prisma as never, scope as never, access as never, scoring as never);
+  const dataQuality = {
+    summary: async (roleCodes: string[]) => {
+      assert.deepStrictEqual(roleCodes, user.roles);
+      const total = d.dqTotal ?? 0;
+      const closed = d.dqClosed ?? 0;
+      return {
+        total,
+        closed,
+        open: d.dqOpen ?? 0,
+        critical: d.dqCritical ?? 0,
+        overdue: d.dqOverdue ?? 0,
+        closureRate: total ? Math.round((closed / total) * 100) : 0,
+      };
+    },
+  };
+  return new DashboardService(prisma as never, scope as never, access as never, scoring as never, dataQuality as never);
 }
 
 const user: AuthUser = { id: 'u1', email: 'u@x.io', roles: ['dmo_admin'] };
@@ -150,6 +203,52 @@ test('myWork.evidenceToReview is null without evidence.review permission', async
   }).summary(user);
   assert.ok(s.myWork);
   assert.strictEqual(s.myWork!.evidenceToReview, null);
+});
+
+test('training section reports completion and expiry metrics', async () => {
+  const off = await makeService({ perms: ['dashboard.view'] }).summary(user);
+  assert.strictEqual(off.training, null);
+
+  const s = await makeService({
+    perms: ['training_assignments.view'],
+    trainingAssignments: 10,
+    trainingCompleted: 7,
+    trainingExpired: 1,
+    trainingOverdue: 2,
+    certificationTracks: 3,
+    activeCertifications: 2,
+    ceHours: 10,
+    communityArticles: 2,
+    mentorships: 1,
+  }).summary(user);
+  assert.ok(s.training);
+  assert.strictEqual(s.training!.completionRate, 70);
+  assert.strictEqual(s.training!.expired, 1);
+  assert.strictEqual(s.training!.overdue, 2);
+  assert.strictEqual(s.training!.certificationTracks, 3);
+  assert.strictEqual(s.training!.activeCertifications, 2);
+  assert.strictEqual(s.training!.ceHours, 10);
+  assert.strictEqual(s.training!.communityArticles, 2);
+  assert.strictEqual(s.training!.mentorships, 1);
+  assert.strictEqual(s.training!.awarenessReadiness, 71);
+});
+
+test('data quality section reports open and critical issue metrics', async () => {
+  const off = await makeService({ perms: ['dashboard.view'] }).summary(user);
+  assert.strictEqual(off.dataQuality, null);
+
+  const s = await makeService({
+    perms: ['data_quality_issues.view'],
+    dqTotal: 5,
+    dqClosed: 2,
+    dqOpen: 3,
+    dqCritical: 1,
+    dqOverdue: 1,
+  }).summary(user);
+  assert.ok(s.dataQuality);
+  assert.strictEqual(s.dataQuality!.open, 3);
+  assert.strictEqual(s.dataQuality!.critical, 1);
+  assert.strictEqual(s.dataQuality!.closureRate, 40);
 });
 
 test('reference section gated by people.view', async () => {

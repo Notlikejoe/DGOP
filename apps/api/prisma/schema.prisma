@@ -27,6 +27,7 @@ model Role {
   userRoles             UserRole[]
   permissions           RolePermission[]
   dataScopes            RoleDataScope[]
+  trainingRequirements  TrainingRequirement[]
 
   @@map("roles")
 }
@@ -88,6 +89,9 @@ model User {
   userRoles    UserRole[]
   person       Person?
   workflowTasks WorkflowTask[]
+  trainingAssignments TrainingAssignment[]
+  certificationAttempts CertificationAttempt[]
+  continuingEducationActivities ContinuingEducationActivity[]
 
   @@map("users")
 }
@@ -121,6 +125,14 @@ model Person {
   assignments  StewardshipAssignment[]
   rules        AssignmentRule[]
   ownedNdiSpecs NdiSpecification[]     @relation("NdiSpecOwner")
+  trainingAssignments TrainingAssignment[]
+  certificationAttempts CertificationAttempt[]
+  continuingEducationActivities ContinuingEducationActivity[]
+  communityArticles CommunityArticle[]
+  expertProfile ExpertProfile?
+  mentorshipsAsMentor MentorshipPair[] @relation("MentorPerson")
+  mentorshipsAsMentee MentorshipPair[] @relation("MenteePerson")
+  dataQualityIssues DataQualityIssue[]
 
   @@map("people")
 }
@@ -451,6 +463,7 @@ model DataAsset {
   outgoingRelations AssetRelationship[] @relation("AssetRelSource")
   incomingRelations AssetRelationship[] @relation("AssetRelTarget")
   workflowCases     WorkflowCase[]
+  dataQualityIssues DataQualityIssue[]
   isActive          Boolean   @default(true)
   deletedAt         DateTime?
   createdAt         DateTime  @default(now())
@@ -613,6 +626,7 @@ model WorkflowCase {
   assignment   StewardshipAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   tasks        WorkflowTask[]
   events       WorkflowEvent[]
+  dataQualityIssue DataQualityIssue?
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
 
@@ -677,4 +691,324 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+/// Lifecycle states for role-based governance training assignments.
+enum TrainingAssignmentStatus {
+  assigned
+  in_progress
+  completed
+  expired
+  waived
+}
+
+enum TrainingTier {
+  tier_1
+  tier_2
+  tier_3
+  tier_4
+}
+
+enum CertificationLevel {
+  cds
+  sds
+  mds
+}
+
+enum CertificationAttemptStatus {
+  in_progress
+  passed
+  failed
+  expired
+  revoked
+}
+
+enum MentorshipStatus {
+  planned
+  active
+  completed
+  cancelled
+}
+
+/// Governance training courses and awareness modules.
+model TrainingCourse {
+  id              String                 @id @default(uuid())
+  code            String                 @unique
+  titleEn         String
+  titleAr         String
+  description     String?
+  category        String                 @default("governance")
+  tier            TrainingTier           @default(tier_1)
+  deliveryMethod  String                 @default("self_paced")
+  prerequisiteCourseId String?
+  prerequisiteCourse TrainingCourse?      @relation("TrainingPrerequisite", fields: [prerequisiteCourseId], references: [id], onDelete: SetNull)
+  dependentCourses TrainingCourse[]       @relation("TrainingPrerequisite")
+  durationMinutes Int                    @default(30)
+  validityMonths  Int?
+  isActive        Boolean                @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  requirements    TrainingRequirement[]
+  assignments     TrainingAssignment[]
+
+  @@index([category])
+  @@index([tier])
+  @@index([prerequisiteCourseId])
+  @@index([isActive])
+  @@map("training_courses")
+}
+
+/// Mandatory or recommended training mapped to DGOP application roles.
+model TrainingRequirement {
+  id             String         @id @default(uuid())
+  courseId       String
+  roleId         String
+  mandatory      Boolean        @default(true)
+  dueDays        Int            @default(30)
+  validityMonths Int?
+  course         TrainingCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  role           Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([courseId, roleId])
+  @@index([roleId])
+  @@map("training_requirements")
+}
+
+/// A user's assigned/completed/expired training record.
+model TrainingAssignment {
+  id           String                   @id @default(uuid())
+  courseId     String
+  userId       String
+  personId     String?
+  status       TrainingAssignmentStatus @default(assigned)
+  dueDate      DateTime?
+  completedAt  DateTime?
+  expiresAt    DateTime?
+  score        Int?
+  evidenceNote String?
+  assignedBy   String?
+  source       String                   @default("manual")
+  course       TrainingCourse           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person       Person?                  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([userId, status])
+  @@index([courseId, status])
+  @@index([dueDate])
+  @@index([expiresAt])
+  @@map("training_assignments")
+}
+
+model CertificationTrack {
+  id              String                 @id @default(uuid())
+  code            String                 @unique
+  level           CertificationLevel
+  nameEn          String
+  nameAr          String
+  description     String?
+  requiredTier    TrainingTier           @default(tier_1)
+  requiredCeHours Int                    @default(0)
+  validityMonths  Int                    @default(24)
+  passScore       Int                    @default(80)
+  privileges      String?
+  isActive        Boolean                @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  attempts        CertificationAttempt[]
+
+  @@index([level])
+  @@index([requiredTier])
+  @@index([isActive])
+  @@map("certification_tracks")
+}
+
+model CertificationAttempt {
+  id               String                     @id @default(uuid())
+  trackId          String
+  userId           String
+  personId         String?
+  status           CertificationAttemptStatus @default(in_progress)
+  examScore        Int?
+  caseStudyScore   Int?
+  peerReviewScore  Int?
+  issuedAt         DateTime?
+  expiresAt        DateTime?
+  renewalDueAt     DateTime?
+  evidenceNote     String?
+  assessor         String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  track            CertificationTrack         @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person           Person?                    @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@index([trackId])
+  @@index([userId, status])
+  @@index([personId])
+  @@index([expiresAt])
+  @@map("certification_attempts")
+}
+
+model ContinuingEducationActivity {
+  id           String   @id @default(uuid())
+  userId       String
+  personId     String?
+  titleEn      String
+  titleAr      String?
+  activityType String   @default("course")
+  hours        Int
+  activityDate DateTime @default(now())
+  evidenceNote String?
+  approvedBy   String?
+  approvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person       Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([personId])
+  @@index([activityDate])
+  @@map("continuing_education_activities")
+}
+
+model CommunityArticle {
+  id                 String   @id @default(uuid())
+  titleEn            String
+  titleAr            String
+  summaryEn          String?
+  summaryAr          String?
+  content            String?
+  category           String   @default("best_practice")
+  status             String   @default("published")
+  authorPersonId     String?
+  contributionPoints Int      @default(0)
+  isFeatured         Boolean  @default(false)
+  deletedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  author             Person?  @relation(fields: [authorPersonId], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@index([status])
+  @@index([authorPersonId])
+  @@map("community_articles")
+}
+
+model ExpertProfile {
+  id                  String   @id @default(uuid())
+  personId            String   @unique
+  expertiseArea       String
+  bio                 String?
+  contributionPoints  Int      @default(0)
+  mentorshipCapacity  Int      @default(1)
+  isMentor            Boolean  @default(true)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  person              Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@map("expert_profiles")
+}
+
+model MentorshipPair {
+  id             String           @id @default(uuid())
+  mentorPersonId String
+  menteePersonId String
+  status         MentorshipStatus @default(planned)
+  focusArea      String?
+  startDate      DateTime?
+  targetEndDate  DateTime?
+  completedAt    DateTime?
+  progressNote   String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  mentor         Person           @relation("MentorPerson", fields: [mentorPersonId], references: [id], onDelete: Cascade)
+  mentee         Person           @relation("MenteePerson", fields: [menteePersonId], references: [id], onDelete: Cascade)
+
+  @@index([mentorPersonId])
+  @@index([menteePersonId])
+  @@index([status])
+  @@map("mentorship_pairs")
+}
+
+enum DataQualityIssueStatus {
+  open
+  triaged
+  in_progress
+  resolved
+  closed
+  cancelled
+}
+
+enum DataQualitySeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum DataQualityDimension {
+  completeness
+  accuracy
+  validity
+  consistency
+  timeliness
+  uniqueness
+}
+
+/// Operational data quality issue tracked through ownership, workflow, and audit.
+model DataQualityIssue {
+  id                  String                   @id @default(uuid())
+  code                String                   @unique
+  title               String
+  description         String?
+  severity            DataQualitySeverity      @default(medium)
+  dimension           DataQualityDimension     @default(completeness)
+  status              DataQualityIssueStatus   @default(open)
+  source              String                   @default("manual")
+  assetId             String?
+  responsiblePersonId String?
+  workflowCaseId      String?                  @unique
+  detectedAt          DateTime                 @default(now())
+  dueDate             DateTime?
+  resolutionSummary   String?
+  closedAt            DateTime?
+  createdBy           String
+  deletedAt           DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  asset               DataAsset?               @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  responsiblePerson   Person?                  @relation(fields: [responsiblePersonId], references: [id], onDelete: SetNull)
+  workflowCase        WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  evidence            DataQualityIssueEvidence[]
+
+  @@index([assetId])
+  @@index([responsiblePersonId])
+  @@index([status])
+  @@index([severity])
+  @@index([dueDate])
+  @@map("data_quality_issues")
+}
+
+/// Lightweight evidence/history trail for data quality issue actions.
+model DataQualityIssueEvidence {
+  id        String           @id @default(uuid())
+  issueId   String
+  action    String
+  note      String?
+  actor     String
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  issue     DataQualityIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@map("data_quality_issue_evidence")
 }

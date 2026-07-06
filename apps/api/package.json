@@ -11,7 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
-    "test": "ts-node test/scope.service.spec.ts && ts-node test/ownership.service.spec.ts && ts-node test/workflow.service.spec.ts && ts-node test/ndi.service.spec.ts && ts-node test/evidence.service.spec.ts && ts-node test/scoring.service.spec.ts && ts-node test/dashboard.service.spec.ts"
+    "test": "ts-node test/scope.service.spec.ts && ts-node test/ownership.service.spec.ts && ts-node test/workflow.service.spec.ts && ts-node test/ndi.service.spec.ts && ts-node test/evidence.service.spec.ts && ts-node test/scoring.service.spec.ts && ts-node test/training.service.spec.ts && ts-node test/data-quality.service.spec.ts && ts-node test/dashboard.service.spec.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

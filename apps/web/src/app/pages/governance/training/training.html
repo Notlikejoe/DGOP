@@ -1,0 +1,388 @@
+<section class="page">
+  <header class="page__header">
+    <div>
+      <h1>{{ t('training.title') }}</h1>
+      <p class="page__subtitle">{{ t('training.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
+      @if (canAssign) {
+        <button type="button" class="ds-btn ds-btn--ghost" [disabled]="syncing()" (click)="sync()">
+          {{ t('training.sync') }}
+        </button>
+      }
+      @if (canCreateCourse) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCourse()">
+          {{ t('training.newCourse') }}
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <div class="kpi-row">
+      <div class="kpi kpi--accent"><span class="kpi__label">{{ t('training.metric.readiness') }}</span><strong class="kpi__value">{{ s.awarenessReadiness }}%</strong></div>
+      <div class="kpi"><span class="kpi__label">{{ t('training.metric.courses') }}</span><strong class="kpi__value">{{ s.courses }}</strong></div>
+      <div class="kpi"><span class="kpi__label">{{ t('training.metric.assignments') }}</span><strong class="kpi__value">{{ s.assignments }}</strong></div>
+      <div class="kpi"><span class="kpi__label">{{ t('training.metric.completed') }}</span><strong class="kpi__value">{{ s.completionRate }}%</strong></div>
+      <div class="kpi"><span class="kpi__label">{{ t('training.metric.certifications') }}</span><strong class="kpi__value">{{ s.activeCertifications }}/{{ s.certificationTracks }}</strong></div>
+      <div class="kpi"><span class="kpi__label">{{ t('training.metric.ceHours') }}</span><strong class="kpi__value">{{ s.ceHours }}</strong></div>
+      <div class="kpi"><span class="kpi__label">{{ t('training.metric.overdue') }}</span><strong class="kpi__value">{{ s.overdue }}</strong></div>
+    </div>
+  }
+
+  <div class="awareness-layout">
+    <section class="ds-card awareness-path">
+      <div class="section-head">
+        <div>
+          <h2>{{ t('training.path.title') }}</h2>
+          <p class="muted">{{ t('training.path.subtitle') }}</p>
+        </div>
+        <span class="role-pill">{{ t('training.path.badge') }}</span>
+      </div>
+
+      <div class="tier-board">
+        @for (group of courseTiers(); track group.tier) {
+          <article class="tier-column">
+            <div class="tier-column__head">
+              <span class="tier-index">{{ $index + 1 }}</span>
+              <div>
+                <h3>{{ tierTitle(group.tier) }}</h3>
+                <p>{{ tierDetail(group.tier) }}</p>
+              </div>
+            </div>
+            <div class="tier-column__courses">
+              @if (group.courses.length === 0) {
+                <span class="muted">{{ t('training.noCourses') }}</span>
+              } @else {
+                @for (c of group.courses; track c.id) {
+                  <div class="tier-course">
+                    <strong>{{ name(c) }}</strong>
+                    <span>{{ c.durationMinutes }} {{ t('training.minutes') }} - {{ c.deliveryMethod }}</span>
+                  </div>
+                }
+              }
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="ds-card credential-card">
+      <div class="section-head">
+        <div>
+          <h2>{{ t('training.certifications.title') }}</h2>
+          <p class="muted">{{ t('training.certifications.subtitle') }}</p>
+        </div>
+      </div>
+
+      <div class="credential-list">
+        @for (track of certificationTracks(); track track.id) {
+          <article class="credential-row">
+            <span class="badge-code">{{ track.code }}</span>
+            <div>
+              <strong>{{ name(track) }}</strong>
+              <p>{{ track.requiredCeHours }} {{ t('training.metric.ceHours') }} - {{ track.passScore }}% {{ t('training.passScore') }}</p>
+            </div>
+          </article>
+        }
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="compact-list">
+        @for (attempt of certificationAttempts(); track attempt.id) {
+          <div class="compact-row">
+            <div>
+              <strong>{{ attempt.person ? name(attempt.person) : attempt.user.displayName }}</strong>
+              <p>{{ name(attempt.track) }} - {{ date(attempt.expiresAt) }}</p>
+            </div>
+            <app-status-chip [kind]="certificationKind(attempt.state)" [label]="t('training.certState.' + attempt.state)" />
+          </div>
+        } @empty {
+          <div class="empty"><p>{{ t('training.noCertifications') }}</p></div>
+        }
+      </div>
+    </section>
+  </div>
+
+  <div class="support-grid">
+    <section class="ds-card">
+      <div class="section-head">
+        <div>
+          <h2>{{ t('training.community.title') }}</h2>
+          <p class="muted">{{ t('training.community.subtitle') }}</p>
+        </div>
+      </div>
+      <div class="article-list">
+        @for (article of featuredArticles(); track article.id) {
+          <article class="article-card">
+            <span class="badge-code">{{ article.category }}</span>
+            <h3>{{ name(article) }}</h3>
+            <p>{{ i18n.lang() === 'ar' ? (article.summaryAr || article.summaryEn) : (article.summaryEn || article.summaryAr) }}</p>
+          </article>
+        } @empty {
+          <div class="empty"><p>{{ t('training.noArticles') }}</p></div>
+        }
+      </div>
+    </section>
+
+    <section class="ds-card">
+      <div class="section-head">
+        <div>
+          <h2>{{ t('training.experts.title') }}</h2>
+          <p class="muted">{{ t('training.experts.subtitle') }}</p>
+        </div>
+      </div>
+      <div class="compact-list">
+        @for (expert of expertProfiles().slice(0, 4); track expert.id) {
+          <div class="compact-row">
+            <div>
+              <strong>{{ name(expert.person) }}</strong>
+              <p>{{ expert.expertiseArea }}</p>
+            </div>
+            <span class="role-pill">{{ expert.contributionPoints }} pts</span>
+          </div>
+        } @empty {
+          <div class="empty"><p>{{ t('training.noExperts') }}</p></div>
+        }
+      </div>
+    </section>
+
+    <section class="ds-card">
+      <div class="section-head">
+        <div>
+          <h2>{{ t('training.mentorship.title') }}</h2>
+          <p class="muted">{{ t('training.mentorship.subtitle') }}</p>
+        </div>
+      </div>
+      <div class="compact-list">
+        @for (pair of mentorshipPairs(); track pair.id) {
+          <div class="compact-row compact-row--stack">
+            <div>
+              <strong>{{ name(pair.mentor) }} -> {{ name(pair.mentee) }}</strong>
+              <p>{{ pair.focusArea || pair.progressNote }}</p>
+            </div>
+            <app-status-chip [kind]="statusKind(pair.status)" [label]="t('training.mentorStatus.' + pair.status)" />
+          </div>
+        } @empty {
+          <div class="empty"><p>{{ t('training.noMentorships') }}</p></div>
+        }
+      </div>
+    </section>
+  </div>
+
+  @if (canManageCourses) {
+    <div class="training-grid">
+      <section class="ds-card">
+        <div class="section-head">
+          <div>
+            <h2>{{ t('training.catalog') }}</h2>
+            <p class="muted">{{ filteredCourses().length }} {{ t('assets.records') }}</p>
+          </div>
+          <input
+            type="search"
+            class="filter-search"
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+            [placeholder]="t('training.search')"
+            [attr.aria-label]="t('training.search')"
+          />
+        </div>
+
+        @if (filteredCourses().length === 0) {
+          <div class="empty"><p>{{ t('training.noCourses') }}</p></div>
+        } @else {
+          <div class="course-list">
+            @for (c of filteredCourses(); track c.id) {
+              <article class="course-card">
+                <div class="course-card__main">
+                  <span class="badge-code">{{ c.code }}</span>
+                  <h3>{{ name(c) }}</h3>
+                  <p>{{ c.description }}</p>
+                  <div class="meta-line">
+                    <span>{{ tierTitle(c.tier) }}</span>
+                    <span>{{ c.category }}</span>
+                    <span>{{ c.deliveryMethod }}</span>
+                    <span>{{ c.durationMinutes }} min</span>
+                    <span>{{ c.validityMonths || '-' }} mo</span>
+                  </div>
+                  @if (c.prerequisiteCourse) {
+                    <p class="prerequisite">{{ t('training.prerequisite') }}: {{ name(c.prerequisiteCourse) }}</p>
+                  }
+                </div>
+                <div class="course-card__roles">
+                  @if (c.requirements.length) {
+                    @for (r of c.requirements; track r.role.id) {
+                      <span class="role-pill">{{ name(r.role) }}</span>
+                    }
+                  } @else {
+                    <span class="muted">{{ t('training.noRequirements') }}</span>
+                  }
+                </div>
+                <div class="row-actions">
+                  @if (canManageRequirements) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRequirement(c.id)">{{ t('training.addRequirement') }}</button>
+                  }
+                  @if (canAssign) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openAssignment(c.id)">{{ t('training.assignUser') }}</button>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="ds-card">
+        <div class="section-head">
+          <div>
+            <h2>{{ t('training.requirements') }}</h2>
+            <p class="muted">{{ requirements().length }} {{ t('assets.records') }}</p>
+          </div>
+          @if (canManageRequirements) {
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRequirement()">{{ t('training.addRequirement') }}</button>
+          }
+        </div>
+        @if (requirements().length === 0) {
+          <div class="empty"><p>{{ t('training.noRequirements') }}</p></div>
+        } @else {
+          <div class="compact-list">
+            @for (r of requirements(); track r.id) {
+              <div class="compact-row">
+                <div>
+                  <strong>{{ name(r.course) }}</strong>
+                  <p>{{ name(r.role) }}</p>
+                </div>
+                <span class="role-pill">{{ r.dueDays }} {{ t('training.field.dueDays') }}</span>
+              </div>
+            }
+          </div>
+        }
+      </section>
+    </div>
+  }
+
+  <section class="ds-card">
+    <div class="section-head">
+      <div>
+        <h2>{{ t('training.assignments') }}</h2>
+        <p class="muted">{{ assignments().length }} {{ t('assets.records') }}</p>
+      </div>
+      <select class="inline-select" [ngModel]="status()" (ngModelChange)="setStatus($event)" [attr.aria-label]="t('training.col.status')">
+        <option value="">{{ t('training.allStatuses') }}</option>
+        <option value="assigned">{{ t('training.status.assigned') }}</option>
+        <option value="in_progress">{{ t('training.status.in_progress') }}</option>
+        <option value="completed">{{ t('training.status.completed') }}</option>
+        <option value="expired">{{ t('training.status.expired') }}</option>
+      </select>
+    </div>
+
+    @if (state() === 'loading') {
+      <p>{{ t('assets.loading') }}</p>
+    } @else if (state() === 'error') {
+      <p class="error">{{ t('training.error') }}</p>
+    } @else if (assignments().length === 0) {
+      <div class="empty"><p>{{ t('training.noAssignments') }}</p></div>
+    } @else {
+      <div class="table-wrap">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>{{ t('training.col.course') }}</th>
+              <th>{{ t('training.col.person') }}</th>
+              <th>{{ t('training.col.status') }}</th>
+              <th>{{ t('training.col.due') }}</th>
+              <th>{{ t('training.col.expires') }}</th>
+              <th class="actions-col">{{ t('crud.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of assignments(); track a.id) {
+              <tr>
+                <td><strong>{{ name(a.course) }}</strong><br /><code>{{ a.course.code }}</code></td>
+                <td>{{ a.person ? name(a.person) : a.user.displayName }}</td>
+                <td><app-status-chip [kind]="statusKind(a.status)" [label]="t('training.status.' + a.status)" /></td>
+                <td>{{ date(a.dueDate) }}</td>
+                <td>{{ date(a.expiresAt) }}</td>
+                <td class="actions-col">
+                  @if (canComplete && a.status !== 'completed') {
+                    <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openComplete(a)">
+                      {{ t('training.complete') }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  @if (courseOpen()) {
+    <app-modal [title]="t('training.newCourse')" (close)="closeModals()">
+      <div class="form">
+        <div class="grid-2">
+          <label class="field"><span class="field__label">{{ t('training.field.code') }}</span><input class="field__input" [ngModel]="courseDraft().code" (ngModelChange)="setCourse('code', $event)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.category') }}</span><input class="field__input" [ngModel]="courseDraft().category" (ngModelChange)="setCourse('category', $event)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.titleEn') }}</span><input class="field__input" [ngModel]="courseDraft().titleEn" (ngModelChange)="setCourse('titleEn', $event)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.titleAr') }}</span><input class="field__input" dir="rtl" [ngModel]="courseDraft().titleAr" (ngModelChange)="setCourse('titleAr', $event)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.tier') }}</span><select class="field__input" [ngModel]="courseDraft().tier" (ngModelChange)="setCourse('tier', $event)"><option value="tier_1">{{ t('training.tier.tier_1') }}</option><option value="tier_2">{{ t('training.tier.tier_2') }}</option><option value="tier_3">{{ t('training.tier.tier_3') }}</option><option value="tier_4">{{ t('training.tier.tier_4') }}</option></select></label>
+          <label class="field"><span class="field__label">{{ t('training.field.delivery') }}</span><input class="field__input" [ngModel]="courseDraft().deliveryMethod" (ngModelChange)="setCourse('deliveryMethod', $event)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.duration') }}</span><input type="number" class="field__input" [ngModel]="courseDraft().durationMinutes" (ngModelChange)="setCourse('durationMinutes', +$event)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.validity') }}</span><input type="number" class="field__input" [ngModel]="courseDraft().validityMonths" (ngModelChange)="setCourse('validityMonths', +$event || null)" /></label>
+          <label class="field"><span class="field__label">{{ t('training.field.prerequisite') }}</span><select class="field__input" [ngModel]="courseDraft().prerequisiteCourseId" (ngModelChange)="setCourse('prerequisiteCourseId', $event || null)"><option value="">-</option>@for (c of courses(); track c.id) { <option [value]="c.id">{{ name(c) }}</option> }</select></label>
+        </div>
+        <label class="field"><span class="field__label">{{ t('training.field.description') }}</span><textarea rows="3" class="field__input" [ngModel]="courseDraft().description" (ngModelChange)="setCourse('description', $event)"></textarea></label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveCourse()">{{ t('crud.save') }}</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (requirementOpen()) {
+    <app-modal [title]="t('training.addRequirement')" (close)="closeModals()">
+      <div class="form">
+        <label class="field"><span class="field__label">{{ t('training.field.course') }}</span><select class="field__input" [ngModel]="requirementCourseId()" (ngModelChange)="requirementCourseId.set($event)"><option value="">-</option>@for (c of courses(); track c.id) { <option [value]="c.id">{{ name(c) }}</option> }</select></label>
+        <label class="field"><span class="field__label">{{ t('training.field.role') }}</span><select class="field__input" [ngModel]="requirementRoleId()" (ngModelChange)="requirementRoleId.set($event)"><option value="">-</option>@for (r of roles(); track r.id) { <option [value]="r.id">{{ name(r) }}</option> }</select></label>
+        <label class="field"><span class="field__label">{{ t('training.field.dueDays') }}</span><input type="number" class="field__input" [ngModel]="requirementDueDays()" (ngModelChange)="requirementDueDays.set(+$event)" /></label>
+        <label class="field field--check"><input type="checkbox" [ngModel]="requirementMandatory()" (ngModelChange)="requirementMandatory.set($event)" /> {{ t('training.field.mandatory') }}</label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveRequirement()">{{ t('crud.save') }}</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (assignmentOpen()) {
+    <app-modal [title]="t('training.assignUser')" (close)="closeModals()">
+      <div class="form">
+        <label class="field"><span class="field__label">{{ t('training.field.course') }}</span><select class="field__input" [ngModel]="assignmentCourseId()" (ngModelChange)="assignmentCourseId.set($event)"><option value="">-</option>@for (c of courses(); track c.id) { <option [value]="c.id">{{ name(c) }}</option> }</select></label>
+        <label class="field"><span class="field__label">{{ t('training.field.user') }}</span><select class="field__input" [ngModel]="assignmentUserId()" (ngModelChange)="assignmentUserId.set($event)"><option value="">-</option>@for (u of users(); track u.id) { <option [value]="u.id">{{ u.displayName }} - {{ u.email }}</option> }</select></label>
+        <label class="field"><span class="field__label">{{ t('training.field.dueDate') }}</span><input type="date" class="field__input" [ngModel]="assignmentDueDate()" (ngModelChange)="assignmentDueDate.set($event)" /></label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveAssignment()">{{ t('crud.save') }}</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (completeTarget(); as target) {
+    <app-modal [title]="t('training.complete')" (close)="closeModals()">
+      <div class="form">
+        <p><strong>{{ name(target.course) }}</strong></p>
+        <label class="field"><span class="field__label">{{ t('training.field.score') }}</span><input type="number" class="field__input" [ngModel]="completeScore()" (ngModelChange)="completeScore.set(+$event)" /></label>
+        <label class="field"><span class="field__label">{{ t('training.field.evidence') }}</span><textarea rows="3" class="field__input" [ngModel]="completeNote()" (ngModelChange)="completeNote.set($event)"></textarea></label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="complete()">{{ t('training.complete') }}</button>
+      </div>
+    </app-modal>
+  }
+</section>

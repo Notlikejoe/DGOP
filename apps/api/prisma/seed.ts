@@ -15,6 +15,9 @@ const roles = [
   { code: 'data_owner', nameEn: 'Data Owner', nameAr: 'مالك البيانات' },
   { code: 'business_steward', nameEn: 'Business Steward', nameAr: 'أمين البيانات (الأعمال)' },
   { code: 'technical_steward', nameEn: 'Technical Steward', nameAr: 'أمين البيانات (التقني)' },
+  { code: 'operational_data_steward', nameEn: 'Operational Data Steward', nameAr: 'أمين البيانات التشغيلي' },
+  { code: 'project_data_steward', nameEn: 'Project Data Steward', nameAr: 'أمين بيانات المشروع' },
+  { code: 'enterprise_data_steward', nameEn: 'Enterprise Data Steward', nameAr: 'أمين بيانات المؤسسة' },
   { code: 'dq_steward', nameEn: 'Data Quality Steward', nameAr: 'أمين جودة البيانات' },
   { code: 'privacy_officer', nameEn: 'Privacy Officer', nameAr: 'مسؤول الخصوصية' },
   { code: 'security_reviewer', nameEn: 'Security Reviewer', nameAr: 'مراجع الأمن' },
@@ -45,6 +48,16 @@ const ADMIN_RESOURCES = [
   'workflow_cases',
   'workflow_tasks',
   'ndi_specifications',
+  'training_courses',
+  'training_requirements',
+  'training_assignments',
+  'certification_tracks',
+  'certification_attempts',
+  'ce_activities',
+  'community_articles',
+  'expert_profiles',
+  'mentorship_pairs',
+  'data_quality_issues',
 ];
 const CRUD_ACTIONS = ['view', 'create', 'edit', 'delete'];
 
@@ -64,6 +77,8 @@ const permissionCatalog: { resource: string; action: string }[] = [
   { resource: 'evidence', action: 'delete' },
   // NDI scoring & gap analysis (read-only readiness views).
   { resource: 'ndi_scoring', action: 'view' },
+  // Bulk CSV import of data quality issues.
+  { resource: 'data_quality_issues', action: 'import' },
   ...ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => ({ resource: r, action: a }))),
 ];
 
@@ -82,7 +97,150 @@ const rolePermissionMap: Record<string, string[]> = {
     'evidence.review',
     'evidence.delete',
     'ndi_scoring.view',
+    'data_quality_issues.import',
     'audit.view',
+  ],
+  business_steward: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'ndi_specifications.view',
+    'training_courses.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
+  ],
+  data_owner: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'training_courses.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
+  ],
+  technical_steward: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'training_courses.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
+  ],
+  operational_data_steward: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'training_courses.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
+  ],
+  project_data_steward: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'training_courses.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
+  ],
+  enterprise_data_steward: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'people.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'ndi_specifications.view',
+    'ndi_scoring.view',
+    'training_courses.view',
+    'training_requirements.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'community_articles.create',
+    'expert_profiles.view',
+    'expert_profiles.create',
+    'mentorship_pairs.view',
+    'mentorship_pairs.create',
+  ],
+  dq_steward: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'people.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_cases.create',
+    'workflow_cases.edit',
+    'workflow_tasks.view',
+    'workflow_tasks.create',
+    'workflow_tasks.edit',
+    'data_quality_issues.view',
+    'data_quality_issues.create',
+    'data_quality_issues.edit',
+    'data_quality_issues.import',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'certification_attempts.create',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
   ],
   auditor: [
     ...BASE_PERMS,
@@ -95,7 +253,33 @@ const rolePermissionMap: Record<string, string[]> = {
     'ndi_specifications.view',
     'evidence.view',
     'ndi_scoring.view',
+    'training_courses.view',
+    'training_requirements.view',
+    'training_assignments.view',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'ce_activities.view',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
+    'data_quality_issues.view',
     'audit.view',
+  ],
+  ndi_evidence_owner: [
+    ...BASE_PERMS,
+    'ndi_specifications.view',
+    'evidence.view',
+    'evidence.create',
+    'training_courses.view',
+    'training_assignments.view',
+    'training_assignments.edit',
+    'certification_tracks.view',
+    'certification_attempts.view',
+    'ce_activities.view',
+    'ce_activities.create',
+    'community_articles.view',
+    'expert_profiles.view',
+    'mentorship_pairs.view',
   ],
 };
 
@@ -111,6 +295,9 @@ const roleTypes = [
   { code: 'data_owner', nameEn: 'Data Owner', nameAr: 'مالك البيانات' },
   { code: 'business_steward', nameEn: 'Business Steward', nameAr: 'أمين البيانات (الأعمال)' },
   { code: 'technical_steward', nameEn: 'Technical Steward', nameAr: 'أمين البيانات (التقني)' },
+  { code: 'operational_data_steward', nameEn: 'Operational Data Steward', nameAr: 'أمين البيانات التشغيلي' },
+  { code: 'project_data_steward', nameEn: 'Project Data Steward', nameAr: 'أمين بيانات المشروع' },
+  { code: 'enterprise_data_steward', nameEn: 'Enterprise Data Steward', nameAr: 'أمين بيانات المؤسسة' },
   { code: 'dq_steward', nameEn: 'Data Quality Steward', nameAr: 'أمين جودة البيانات' },
   { code: 'data_custodian', nameEn: 'Data Custodian', nameAr: 'حافظ البيانات' },
 ];
@@ -398,6 +585,223 @@ const people = [
   { fullNameEn: 'Layla Nasser', fullNameAr: 'ليلى ناصر', email: 'layla.nasser@dgop.local', jobTitle: 'HR Data Owner', organization: 'Human Resources' },
 ];
 
+const sampleUserRoles = [
+  { email: 'sara.alamri@dgop.local', roleCodes: ['enterprise_data_steward', 'ndi_evidence_owner'] },
+  { email: 'khalid.hassan@dgop.local', roleCodes: ['data_owner'] },
+  { email: 'mona.youssef@dgop.local', roleCodes: ['business_steward', 'dq_steward'] },
+  { email: 'omar.farouk@dgop.local', roleCodes: ['technical_steward', 'operational_data_steward'] },
+  { email: 'layla.nasser@dgop.local', roleCodes: ['data_owner', 'project_data_steward'] },
+];
+
+const trainingCourses = [
+  {
+    code: 'TRN-DG-FOUND',
+    titleEn: 'Data Governance Foundations',
+    titleAr: 'أساسيات حوكمة البيانات',
+    description: 'Core DGOP responsibilities, ownership, evidence, and workflow practices.',
+    category: 'fundamentals',
+    tier: 'tier_1',
+    deliveryMethod: 'self_paced',
+    durationMinutes: 45,
+    validityMonths: 12,
+  },
+  {
+    code: 'TRN-STEW-CORE',
+    titleEn: 'Core Stewardship Skills',
+    titleAr: 'مهارات الأمانة الأساسية',
+    description: 'Day-to-day stewardship, ownership follow-up, escalation, and evidence hygiene.',
+    category: 'core_skills',
+    tier: 'tier_2',
+    deliveryMethod: 'workshop',
+    prerequisiteCode: 'TRN-DG-FOUND',
+    durationMinutes: 120,
+    validityMonths: 18,
+  },
+  {
+    code: 'TRN-NDI-EVID',
+    titleEn: 'NDI Evidence Readiness',
+    titleAr: 'جاهزية أدلة المؤشر الوطني',
+    description: 'How to prepare, submit, review, and refresh compliance evidence.',
+    category: 'compliance',
+    tier: 'tier_2',
+    deliveryMethod: 'guided_lab',
+    prerequisiteCode: 'TRN-DG-FOUND',
+    durationMinutes: 35,
+    validityMonths: 12,
+  },
+  {
+    code: 'TRN-DQ-OPS',
+    titleEn: 'Data Quality Issue Operations',
+    titleAr: 'تشغيل معالجة جودة البيانات',
+    description: 'Triage, assign, remediate, and close data quality issues through DGOP.',
+    category: 'data_quality',
+    tier: 'tier_2',
+    deliveryMethod: 'guided_lab',
+    prerequisiteCode: 'TRN-STEW-CORE',
+    durationMinutes: 30,
+    validityMonths: 6,
+  },
+  {
+    code: 'TRN-ADV-RCA',
+    titleEn: 'Advanced Root Cause and Remediation',
+    titleAr: 'تحليل الأسباب الجذرية والمعالجة المتقدمة',
+    description: 'Advanced data issue investigation, control design, recurrence prevention, and case closure.',
+    category: 'advanced',
+    tier: 'tier_3',
+    deliveryMethod: 'case_lab',
+    prerequisiteCode: 'TRN-DQ-OPS',
+    durationMinutes: 180,
+    validityMonths: 18,
+  },
+  {
+    code: 'TRN-EVID-AUDIT',
+    titleEn: 'Evidence Audit Lab',
+    titleAr: 'مختبر تدقيق الأدلة',
+    description: 'Audit-ready evidence reviews, finding response, renewal timing, and control traceability.',
+    category: 'advanced',
+    tier: 'tier_3',
+    deliveryMethod: 'case_lab',
+    prerequisiteCode: 'TRN-NDI-EVID',
+    durationMinutes: 150,
+    validityMonths: 18,
+  },
+  {
+    code: 'TRN-GOV-LEAD',
+    titleEn: 'Governance Leadership and Operating Model',
+    titleAr: 'قيادة الحوكمة ونموذج التشغيل',
+    description: 'Executive stewardship, governance councils, performance rituals, and value realization.',
+    category: 'leadership',
+    tier: 'tier_4',
+    deliveryMethod: 'cohort',
+    prerequisiteCode: 'TRN-ADV-RCA',
+    durationMinutes: 180,
+    validityMonths: 24,
+  },
+];
+
+const trainingRequirements = [
+  { courseCode: 'TRN-DG-FOUND', roleCode: 'dmo_admin', mandatory: true, dueDays: 14 },
+  { courseCode: 'TRN-DG-FOUND', roleCode: 'data_owner', mandatory: true, dueDays: 21 },
+  { courseCode: 'TRN-DG-FOUND', roleCode: 'business_steward', mandatory: true, dueDays: 21 },
+  { courseCode: 'TRN-DG-FOUND', roleCode: 'technical_steward', mandatory: true, dueDays: 21 },
+  { courseCode: 'TRN-STEW-CORE', roleCode: 'data_owner', mandatory: true, dueDays: 30 },
+  { courseCode: 'TRN-STEW-CORE', roleCode: 'business_steward', mandatory: true, dueDays: 30 },
+  { courseCode: 'TRN-STEW-CORE', roleCode: 'operational_data_steward', mandatory: true, dueDays: 30 },
+  { courseCode: 'TRN-STEW-CORE', roleCode: 'project_data_steward', mandatory: true, dueDays: 30 },
+  { courseCode: 'TRN-NDI-EVID', roleCode: 'ndi_evidence_owner', mandatory: true, dueDays: 14 },
+  { courseCode: 'TRN-EVID-AUDIT', roleCode: 'ndi_evidence_owner', mandatory: true, dueDays: 30 },
+  { courseCode: 'TRN-EVID-AUDIT', roleCode: 'auditor', mandatory: true, dueDays: 30 },
+  { courseCode: 'TRN-DQ-OPS', roleCode: 'dq_steward', mandatory: true, dueDays: 10 },
+  { courseCode: 'TRN-DQ-OPS', roleCode: 'technical_steward', mandatory: true, dueDays: 21 },
+  { courseCode: 'TRN-ADV-RCA', roleCode: 'dq_steward', mandatory: true, dueDays: 35 },
+  { courseCode: 'TRN-GOV-LEAD', roleCode: 'dmo_admin', mandatory: true, dueDays: 45 },
+  { courseCode: 'TRN-GOV-LEAD', roleCode: 'enterprise_data_steward', mandatory: true, dueDays: 45 },
+];
+
+const certificationTracks = [
+  {
+    code: 'CDS',
+    level: 'cds',
+    nameEn: 'Certified Data Steward',
+    nameAr: 'أمين بيانات معتمد',
+    description: 'Core certification for operational stewards who manage assignments, issues, and evidence.',
+    requiredTier: 'tier_2',
+    requiredCeHours: 8,
+    validityMonths: 24,
+    passScore: 75,
+    privileges: 'May own operational stewardship tasks and submit evidence packages.',
+  },
+  {
+    code: 'SDS',
+    level: 'sds',
+    nameEn: 'Senior Data Steward',
+    nameAr: 'أمين بيانات أول',
+    description: 'Advanced certification for stewards who lead remediation, reviews, and domain governance rituals.',
+    requiredTier: 'tier_3',
+    requiredCeHours: 16,
+    validityMonths: 24,
+    passScore: 80,
+    privileges: 'May lead case reviews, mentor stewards, and validate remediation controls.',
+  },
+  {
+    code: 'MDS',
+    level: 'mds',
+    nameEn: 'Master Data Steward',
+    nameAr: 'أمين بيانات خبير',
+    description: 'Leadership certification for enterprise stewards who operate the governance model.',
+    requiredTier: 'tier_4',
+    requiredCeHours: 24,
+    validityMonths: 36,
+    passScore: 85,
+    privileges: 'May chair stewardship reviews, approve capability playbooks, and coach certification candidates.',
+  },
+];
+
+const certificationAttempts = [
+  { trackCode: 'CDS', userEmail: 'mona.youssef@dgop.local', status: 'passed', examScore: 88, caseStudyScore: 84, peerReviewScore: 90, evidenceNote: 'Passed CDS readiness review.' },
+  { trackCode: 'CDS', userEmail: 'omar.farouk@dgop.local', status: 'in_progress', examScore: 70, caseStudyScore: null, peerReviewScore: null, evidenceNote: 'Case study pending.' },
+  { trackCode: 'SDS', userEmail: 'sara.alamri@dgop.local', status: 'passed', examScore: 91, caseStudyScore: 89, peerReviewScore: 94, evidenceNote: 'Senior steward pathway completed.' },
+];
+
+const continuingEducationActivities = [
+  { userEmail: 'mona.youssef@dgop.local', titleEn: 'Ownership gap review clinic', titleAr: 'عيادة مراجعة فجوات الملكية', activityType: 'clinic', hours: 4, evidenceNote: 'Attended steward clinic.' },
+  { userEmail: 'omar.farouk@dgop.local', titleEn: 'Data quality remediation workshop', titleAr: 'ورشة معالجة جودة البيانات', activityType: 'workshop', hours: 6, evidenceNote: 'Completed remediation workshop.' },
+  { userEmail: 'sara.alamri@dgop.local', titleEn: 'Governance council facilitation', titleAr: 'تيسير مجلس الحوكمة', activityType: 'leadership', hours: 8, evidenceNote: 'Led monthly governance council.' },
+];
+
+const communityArticles = [
+  {
+    titleEn: 'How to close an ownership gap',
+    titleAr: 'كيفية إغلاق فجوة الملكية',
+    summaryEn: 'A simple checklist for confirming owner, steward, evidence, and approval trail.',
+    summaryAr: 'قائمة مختصرة لتأكيد المالك والأمين والدليل ومسار الاعتماد.',
+    category: 'playbook',
+    authorEmail: 'sara.alamri@dgop.local',
+    contributionPoints: 40,
+    isFeatured: true,
+  },
+  {
+    titleEn: 'Evidence renewal timing',
+    titleAr: 'توقيت تجديد الأدلة',
+    summaryEn: 'How evidence owners keep NDI proof fresh before readiness reviews.',
+    summaryAr: 'كيف يحافظ مالكو الأدلة على حداثة أدلة المؤشر الوطني.',
+    category: 'evidence',
+    authorEmail: 'mona.youssef@dgop.local',
+    contributionPoints: 25,
+    isFeatured: false,
+  },
+];
+
+const expertProfiles = [
+  { personEmail: 'sara.alamri@dgop.local', expertiseArea: 'Governance operating model', bio: 'Leads stewardship councils, governance KPIs, and certification coaching.', contributionPoints: 120, mentorshipCapacity: 4, isMentor: true },
+  { personEmail: 'mona.youssef@dgop.local', expertiseArea: 'Clinical data stewardship', bio: 'Supports ownership decisions, issue triage, and NDI evidence readiness.', contributionPoints: 76, mentorshipCapacity: 2, isMentor: true },
+  { personEmail: 'omar.farouk@dgop.local', expertiseArea: 'Technical controls and data quality', bio: 'Helps stewards connect quality rules, systems, and remediation evidence.', contributionPoints: 64, mentorshipCapacity: 2, isMentor: true },
+];
+
+const mentorshipPairs = [
+  { mentorEmail: 'sara.alamri@dgop.local', menteeEmail: 'mona.youssef@dgop.local', status: 'active', focusArea: 'Senior steward certification readiness', progressNote: 'Monthly coaching started.' },
+  { mentorEmail: 'omar.farouk@dgop.local', menteeEmail: 'layla.nasser@dgop.local', status: 'planned', focusArea: 'Data quality evidence handoff', progressNote: 'Kickoff planned after foundation course.' },
+];
+
+const sampleDataQualityIssues = [
+  {
+    code: 'DQI-SEED-1',
+    assetCode: 'AST-EMR-PATIENTS',
+    title: 'Missing national ID values in patient records',
+    description: 'Sample completeness issue used to demonstrate DQ triage and workflow routing.',
+    severity: 'high',
+    dimension: 'completeness',
+  },
+  {
+    code: 'DQI-SEED-2',
+    assetCode: 'AST-FIN-REVENUE',
+    title: 'Revenue posting date mismatch',
+    description: 'Sample consistency issue between billing date and ledger posting date.',
+    severity: 'medium',
+    dimension: 'consistency',
+  },
+];
+
 // Sample assignment rules: "for assets in <scope>, <roleType> is <person>" (by codes/emails).
 const assignmentRules: {
   nameEn: string;
@@ -411,6 +815,8 @@ const assignmentRules: {
   { nameEn: 'Finance domain owner', nameAr: 'مالك مجال المالية', scopeType: 'domain', refCode: 'finance', roleTypeCode: 'data_owner', personEmail: 'khalid.hassan@dgop.local' },
   { nameEn: 'Patient Care domain owner', nameAr: 'مالك مجال رعاية المرضى', scopeType: 'domain', refCode: 'patient_care', roleTypeCode: 'data_owner', personEmail: 'sara.alamri@dgop.local' },
   { nameEn: 'Clinical steward', nameAr: 'أمين البيانات السريرية', scopeType: 'domain', refCode: 'clinical', roleTypeCode: 'business_steward', personEmail: 'mona.youssef@dgop.local' },
+  { nameEn: 'Clinical DQ steward', nameAr: 'أمين جودة البيانات السريرية', scopeType: 'domain', refCode: 'clinical', roleTypeCode: 'dq_steward', personEmail: 'mona.youssef@dgop.local', priority: 20 },
+  { nameEn: 'Finance DQ steward', nameAr: 'أمين جودة البيانات المالية', scopeType: 'domain', refCode: 'finance', roleTypeCode: 'dq_steward', personEmail: 'khalid.hassan@dgop.local', priority: 20 },
   { nameEn: 'HR domain owner', nameAr: 'مالك مجال الموارد البشرية', scopeType: 'domain', refCode: 'hr', roleTypeCode: 'data_owner', personEmail: 'layla.nasser@dgop.local' },
 ];
 
@@ -666,6 +1072,23 @@ async function main() {
   const personByEmail = new Map(
     (await prisma.person.findMany()).map((p) => [p.email ?? '', p.id]),
   );
+  const userByEmail = new Map(
+    (await prisma.user.findMany()).map((u) => [u.email, u.id]),
+  );
+  const systemRoleByCode = new Map((await prisma.role.findMany()).map((r) => [r.code, r.id]));
+  for (const entry of sampleUserRoles) {
+    const userId = userByEmail.get(entry.email);
+    if (!userId) continue;
+    for (const code of entry.roleCodes) {
+      const roleId = systemRoleByCode.get(code);
+      if (!roleId) continue;
+      await prisma.userRole.upsert({
+        where: { userId_roleId: { userId, roleId } },
+        update: {},
+        create: { userId, roleId },
+      });
+    }
+  }
   const roleTypeByCode = new Map(
     (await prisma.roleType.findMany()).map((rt) => [rt.code, rt.id]),
   );
@@ -800,6 +1223,312 @@ async function main() {
     }
   }
 
+  // Sprint 12: seed training catalog, role requirements, and required assignments.
+  for (const c of trainingCourses) {
+    const { prerequisiteCode, ...courseData } = c;
+    await prisma.trainingCourse.upsert({
+      where: { code: c.code },
+      update: courseData as any,
+      create: courseData as any,
+    });
+  }
+  const courseByCode = new Map(
+    (await prisma.trainingCourse.findMany()).map((c) => [c.code, c]),
+  );
+  for (const c of trainingCourses) {
+    if (!c.prerequisiteCode) continue;
+    const course = courseByCode.get(c.code);
+    const prerequisite = courseByCode.get(c.prerequisiteCode);
+    if (!course || !prerequisite) continue;
+    await prisma.trainingCourse.update({
+      where: { id: course.id },
+      data: { prerequisiteCourseId: prerequisite.id },
+    });
+  }
+  const roleByCode = new Map((await prisma.role.findMany()).map((r) => [r.code, r]));
+  for (const r of trainingRequirements) {
+    const course = courseByCode.get(r.courseCode);
+    const role = roleByCode.get(r.roleCode);
+    if (!course || !role) continue;
+    await prisma.trainingRequirement.upsert({
+      where: { courseId_roleId: { courseId: course.id, roleId: role.id } },
+      update: {
+        mandatory: r.mandatory,
+        dueDays: r.dueDays,
+        validityMonths: course.validityMonths,
+      },
+      create: {
+        courseId: course.id,
+        roleId: role.id,
+        mandatory: r.mandatory,
+        dueDays: r.dueDays,
+        validityMonths: course.validityMonths,
+      },
+    });
+  }
+  const activeRequirements = await prisma.trainingRequirement.findMany({
+    include: { course: true, role: true },
+  });
+  const now = new Date();
+  await prisma.trainingAssignment.updateMany({
+    where: { status: 'completed', expiresAt: { lt: now } },
+    data: { status: 'expired' },
+  });
+  for (const req of activeRequirements) {
+    const holders = await prisma.userRole.findMany({
+      where: { roleId: req.roleId },
+      include: { user: { include: { person: true } } },
+    });
+    for (const holder of holders) {
+      const existing = await prisma.trainingAssignment.findFirst({
+        where: {
+          courseId: req.courseId,
+          userId: holder.userId,
+          OR: [
+            { status: { in: ['assigned', 'in_progress'] } },
+            { status: 'completed', OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] },
+          ],
+        },
+      });
+      if (existing) continue;
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + req.dueDays);
+      await prisma.trainingAssignment.create({
+        data: {
+          courseId: req.courseId,
+          userId: holder.userId,
+          personId: holder.user.person?.id ?? null,
+          dueDate,
+          assignedBy: adminEmail,
+          source: 'role_requirement',
+        },
+      });
+    }
+  }
+
+  for (const track of certificationTracks) {
+    await prisma.certificationTrack.upsert({
+      where: { code: track.code },
+      update: track as any,
+      create: track as any,
+    });
+  }
+  const trackByCode = new Map(
+    (await prisma.certificationTrack.findMany()).map((track) => [track.code, track]),
+  );
+  for (const cert of certificationAttempts) {
+    const track = trackByCode.get(cert.trackCode);
+    const userId = userByEmail.get(cert.userEmail);
+    if (!track || !userId) continue;
+    const personId = personByEmail.get(cert.userEmail) ?? null;
+    const issuedAt = cert.status === 'passed' ? new Date() : null;
+    const expiresAt = issuedAt ? new Date(issuedAt) : null;
+    if (expiresAt) expiresAt.setMonth(expiresAt.getMonth() + track.validityMonths);
+    const renewalDueAt = expiresAt ? new Date(expiresAt) : null;
+    if (renewalDueAt) renewalDueAt.setDate(renewalDueAt.getDate() - 60);
+    const data = {
+      trackId: track.id,
+      userId,
+      personId,
+      status: cert.status as any,
+      examScore: cert.examScore,
+      caseStudyScore: cert.caseStudyScore,
+      peerReviewScore: cert.peerReviewScore,
+      issuedAt,
+      expiresAt,
+      renewalDueAt,
+      evidenceNote: cert.evidenceNote,
+      assessor: adminEmail,
+    };
+    const existing = await prisma.certificationAttempt.findFirst({
+      where: { trackId: track.id, userId },
+    });
+    if (existing) await prisma.certificationAttempt.update({ where: { id: existing.id }, data });
+    else await prisma.certificationAttempt.create({ data });
+  }
+
+  for (const activity of continuingEducationActivities) {
+    const userId = userByEmail.get(activity.userEmail);
+    if (!userId) continue;
+    const personId = personByEmail.get(activity.userEmail) ?? null;
+    const data = {
+      userId,
+      personId,
+      titleEn: activity.titleEn,
+      titleAr: activity.titleAr,
+      activityType: activity.activityType,
+      hours: activity.hours,
+      activityDate: new Date(),
+      evidenceNote: activity.evidenceNote,
+      approvedBy: adminEmail,
+      approvedAt: new Date(),
+    };
+    const existing = await prisma.continuingEducationActivity.findFirst({
+      where: { userId, titleEn: activity.titleEn },
+    });
+    if (existing) await prisma.continuingEducationActivity.update({ where: { id: existing.id }, data });
+    else await prisma.continuingEducationActivity.create({ data });
+  }
+
+  for (const article of communityArticles) {
+    const authorPersonId = personByEmail.get(article.authorEmail) ?? null;
+    const data = {
+      titleEn: article.titleEn,
+      titleAr: article.titleAr,
+      summaryEn: article.summaryEn,
+      summaryAr: article.summaryAr,
+      category: article.category,
+      authorPersonId,
+      contributionPoints: article.contributionPoints,
+      isFeatured: article.isFeatured,
+      status: 'published',
+    };
+    const existing = await prisma.communityArticle.findFirst({ where: { titleEn: article.titleEn } });
+    if (existing) await prisma.communityArticle.update({ where: { id: existing.id }, data });
+    else await prisma.communityArticle.create({ data });
+  }
+
+  for (const expert of expertProfiles) {
+    const personId = personByEmail.get(expert.personEmail);
+    if (!personId) continue;
+    await prisma.expertProfile.upsert({
+      where: { personId },
+      update: {
+        expertiseArea: expert.expertiseArea,
+        bio: expert.bio,
+        contributionPoints: expert.contributionPoints,
+        mentorshipCapacity: expert.mentorshipCapacity,
+        isMentor: expert.isMentor,
+        isActive: true,
+      },
+      create: {
+        personId,
+        expertiseArea: expert.expertiseArea,
+        bio: expert.bio,
+        contributionPoints: expert.contributionPoints,
+        mentorshipCapacity: expert.mentorshipCapacity,
+        isMentor: expert.isMentor,
+        isActive: true,
+      },
+    });
+  }
+
+  for (const mentorship of mentorshipPairs) {
+    const mentorPersonId = personByEmail.get(mentorship.mentorEmail);
+    const menteePersonId = personByEmail.get(mentorship.menteeEmail);
+    if (!mentorPersonId || !menteePersonId) continue;
+    const data = {
+      mentorPersonId,
+      menteePersonId,
+      status: mentorship.status as any,
+      focusArea: mentorship.focusArea,
+      startDate: new Date(),
+      targetEndDate: null,
+      progressNote: mentorship.progressNote,
+    };
+    const existing = await prisma.mentorshipPair.findFirst({
+      where: { mentorPersonId, menteePersonId, focusArea: mentorship.focusArea },
+    });
+    if (existing) await prisma.mentorshipPair.update({ where: { id: existing.id }, data });
+    else await prisma.mentorshipPair.create({ data });
+  }
+
+  // Sprint 13: seed data quality issues and link each to a workflow case.
+  const dqRoleTypeId = roleTypeByCode.get('dq_steward');
+  for (const sample of sampleDataQualityIssues) {
+    const asset = await prisma.dataAsset.findUnique({
+      where: { code: sample.assetCode },
+      include: { subjects: true },
+    });
+    if (!asset) continue;
+    const dqRuleScopes = [
+      ...(asset.domainId ? [{ scopeType: 'domain' as const, refId: asset.domainId }] : []),
+      ...(asset.capabilityId ? [{ scopeType: 'capability' as const, refId: asset.capabilityId }] : []),
+      ...asset.subjects.map((s) => ({ scopeType: 'subject' as const, refId: s.dataSubjectId })),
+    ];
+    const responsible = dqRoleTypeId && dqRuleScopes.length
+      ? await prisma.assignmentRule.findFirst({
+          where: {
+            roleTypeId: dqRoleTypeId,
+            deletedAt: null,
+            isActive: true,
+            OR: dqRuleScopes,
+          },
+          include: { person: true },
+          orderBy: { priority: 'asc' },
+        })
+      : null;
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    let issue = await prisma.dataQualityIssue.findUnique({ where: { code: sample.code } });
+    const issueData = {
+      title: sample.title,
+      description: sample.description,
+      severity: sample.severity as any,
+      dimension: sample.dimension as any,
+      source: 'seed',
+      assetId: asset.id,
+      responsiblePersonId: responsible?.personId ?? null,
+      dueDate,
+      createdBy: adminEmail,
+    };
+    if (issue) {
+      issue = await prisma.dataQualityIssue.update({
+        where: { id: issue.id },
+        data: issueData,
+      });
+    } else {
+      issue = await prisma.dataQualityIssue.create({
+        data: { code: sample.code, ...issueData },
+      });
+      await prisma.dataQualityIssueEvidence.create({
+        data: {
+          issueId: issue.id,
+          action: 'issue.created',
+          actor: adminEmail,
+          note: 'Seeded sample issue for Sprint 13 demonstration.',
+        },
+      });
+    }
+    if (!issue.workflowCaseId) {
+      const caseCode = `WFC-${sample.code}`;
+      let wfCase = await prisma.workflowCase.findUnique({ where: { code: caseCode } });
+      if (!wfCase) {
+        wfCase = await prisma.workflowCase.create({
+          data: {
+            code: caseCode,
+            title: `Resolve DQ issue: ${sample.title}`,
+            description: sample.description,
+            type: 'data_quality_issue',
+            status: 'submitted',
+            assetId: asset.id,
+            createdBy: adminEmail,
+          },
+        });
+        const task = await prisma.workflowTask.create({
+          data: {
+            caseId: wfCase.id,
+            title: 'Investigate and remediate data quality issue',
+            type: 'remediation',
+            status: 'pending',
+            assigneeUserId: responsible?.person.userId ?? null,
+            dueDate,
+          },
+        });
+        await prisma.workflowEvent.createMany({
+          data: [
+            { caseId: wfCase.id, actor: adminEmail, action: 'case.created', toStatus: 'submitted' },
+            { caseId: wfCase.id, taskId: task.id, actor: adminEmail, action: 'task.assigned', comment: responsible?.person.fullNameEn ?? 'Unassigned' },
+          ],
+        });
+      }
+      await prisma.dataQualityIssue.update({
+        where: { id: issue.id },
+        data: { workflowCaseId: wfCase.id, status: 'triaged' },
+      });
+    }
+  }
+
   console.log(
     `Seeded: ${roles.length} roles, ${permissionCatalog.length} permissions, ` +
       `${roleTypes.length} role types, ` +
@@ -807,7 +1536,10 @@ async function main() {
       `${ndiDomains.length} NDI domains, ${ndiSpecifications.length} NDI specifications, ${dataDomains.length} data domains, ` +
       `${dataSubjects.length} data subjects, ${businessCapabilities.length} capabilities, ` +
       `${sampleAssets.length} data assets, ${people.length} people, ` +
-      `${assignmentRules.length} assignment rules, ${directAssignments.length} direct assignments. ` +
+      `${assignmentRules.length} assignment rules, ${directAssignments.length} direct assignments, ` +
+      `${trainingCourses.length} training courses, ${certificationTracks.length} certification tracks, ` +
+      `${communityArticles.length} community articles, ${expertProfiles.length} experts, ` +
+      `${mentorshipPairs.length} mentorship pairs, ${sampleDataQualityIssues.length} DQ issues. ` +
       `Admin user: ${adminEmail}`,
   );
 }

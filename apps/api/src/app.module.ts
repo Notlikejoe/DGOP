@@ -16,6 +16,8 @@ import { NdiModule } from './ndi/ndi.module';
 import { EvidenceModule } from './evidence/evidence.module';
 import { ScoringModule } from './scoring/scoring.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { TrainingModule } from './training/training.module';
+import { DataQualityModule } from './data-quality/data-quality.module';
 import { AccessModule } from './access/access.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -45,6 +47,8 @@ import { PermissionsGuard } from './access/permissions.guard';
     EvidenceModule,
     ScoringModule,
     DashboardModule,
+    TrainingModule,
+    DataQualityModule,
     HealthModule,
   ],
   providers: [

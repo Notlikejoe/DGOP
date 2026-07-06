@@ -105,6 +105,18 @@ export const routes: Routes = [
           import('./pages/governance/ndi/ndi-registry').then((m) => m.NdiRegistryPage),
       },
       {
+        path: 'governance/training',
+        canActivate: [permissionGuard('training_assignments.view')],
+        loadComponent: () =>
+          import('./pages/governance/training/training').then((m) => m.TrainingPage),
+      },
+      {
+        path: 'governance/data-quality',
+        canActivate: [permissionGuard('data_quality_issues.view')],
+        loadComponent: () =>
+          import('./pages/governance/data-quality/data-quality').then((m) => m.DataQualityPage),
+      },
+      {
         path: 'admin',
         loadComponent: () =>
           import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),

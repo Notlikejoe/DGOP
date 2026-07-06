@@ -54,6 +54,16 @@
           <strong>{{ s.workflow?.myOpenTasks ?? 0 }}</strong>
           <span>{{ s.workflow?.myOverdueTasks ?? 0 }} {{ t('cmd.metric.overdue') }}</span>
         </a>
+        <a class="status-metric" routerLink="/governance/data-quality">
+          <span class="status-metric__label">{{ t('cmd.metric.dataQuality') }}</span>
+          <strong>{{ s.dataQuality?.open ?? 0 }}</strong>
+          <span>{{ s.dataQuality?.critical ?? 0 }} {{ t('cmd.metric.critical') }}</span>
+        </a>
+        <a class="status-metric" routerLink="/governance/training">
+          <span class="status-metric__label">{{ t('cmd.metric.training') }}</span>
+          <strong>{{ s.training?.awarenessReadiness ?? 0 }}%</strong>
+          <span>{{ s.training?.activeCertifications ?? 0 }}/{{ s.training?.certificationTracks ?? 0 }} {{ t('training.metric.certifications') }}</span>
+        </a>
       </section>
 
       <section class="dashboard-workbench">

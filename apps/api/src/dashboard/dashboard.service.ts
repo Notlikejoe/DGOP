@@ -4,6 +4,8 @@ import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { AccessService } from '../access/access.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { AuthUser } from '../auth/auth.types';
+import { awarenessReadinessScore } from '../training/training.logic';
+import { DataQualityService } from '../data-quality/data-quality.service';
 
 export interface DashboardStats {
   assets: { total: number; withOwner: number; unassigned: number; coveragePct: number };
@@ -35,6 +37,25 @@ export interface DashboardSummary {
     ownedSpecs: number;
     evidenceToReview: number | null;
   } | null;
+  training: {
+    assignments: number;
+    completed: number;
+    expired: number;
+    overdue: number;
+    completionRate: number;
+    certificationTracks: number;
+    activeCertifications: number;
+    ceHours: number;
+    communityArticles: number;
+    mentorships: number;
+    awarenessReadiness: number;
+  } | null;
+  dataQuality: {
+    open: number;
+    critical: number;
+    overdue: number;
+    closureRate: number;
+  } | null;
   reference: { people: number } | null;
 }
 
@@ -45,6 +66,7 @@ export class DashboardService {
     private readonly scope: ScopeService,
     private readonly access: AccessService,
     private readonly scoring: ScoringService,
+    private readonly dataQuality: DataQualityService,
   ) {}
 
   /** Asset visibility scope, mirroring the assets service so tiles match the registry. */
@@ -132,6 +154,8 @@ export class DashboardService {
       ndi: null,
       workflow: null,
       myWork: null,
+      training: null,
+      dataQuality: null,
       reference: null,
     };
 
@@ -228,6 +252,79 @@ export class DashboardService {
         ownedAssets: ownedAssignments.length,
         ownedSpecs,
         evidenceToReview,
+      };
+    }
+
+    // ----- Training and awareness (Sprint 12) -----
+    if (can('training_assignments.view')) {
+      const now = new Date();
+      const isAdmin = user.roles.some((r) => r === 'system_admin' || r === 'dmo_admin');
+      const trainingWhere = isAdmin ? {} : { userId: user.id };
+      const certificationWhere = isAdmin ? {} : { userId: user.id };
+      const mentorshipWhere = isAdmin ? undefined : { OR: [{ mentor: { userId: user.id } }, { mentee: { userId: user.id } }] };
+      const [assignments, completed, expired, overdue, certificationTracks, activeCertifications, ceAgg, communityArticles, mentorships] = await Promise.all([
+        this.prisma.trainingAssignment.count({ where: trainingWhere }),
+        this.prisma.trainingAssignment.count({
+          where: { ...trainingWhere, status: 'completed', OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] },
+        }),
+        this.prisma.trainingAssignment.count({
+          where: {
+            ...trainingWhere,
+            OR: [{ status: 'expired' }, { status: 'completed', expiresAt: { lt: now } }],
+          },
+        }),
+        this.prisma.trainingAssignment.count({
+          where: {
+            ...trainingWhere,
+            status: { in: ['assigned', 'in_progress'] },
+            dueDate: { lt: now },
+          },
+        }),
+        this.prisma.certificationTrack.count({ where: { deletedAt: null, isActive: true } }),
+        this.prisma.certificationAttempt.count({
+          where: {
+            ...certificationWhere,
+            status: 'passed',
+            OR: [{ expiresAt: null }, { expiresAt: { gte: now } }],
+          },
+        }),
+        this.prisma.continuingEducationActivity.aggregate({ where: certificationWhere, _sum: { hours: true } }),
+        this.prisma.communityArticle.count({ where: { deletedAt: null, status: 'published' } }),
+        this.prisma.mentorshipPair.count({ where: mentorshipWhere }),
+      ]);
+      const ceHours = ceAgg._sum.hours ?? 0;
+      summary.training = {
+        assignments,
+        completed,
+        expired,
+        overdue,
+        completionRate: assignments ? Math.round((completed / assignments) * 100) : 0,
+        certificationTracks,
+        activeCertifications,
+        ceHours,
+        communityArticles,
+        mentorships,
+        awarenessReadiness: awarenessReadinessScore({
+          assignments,
+          completed,
+          expired,
+          overdue,
+          certifications: certificationTracks,
+          certified: activeCertifications,
+          ceHours,
+          mentorships,
+        }),
+      };
+    }
+
+    // ----- Data quality operations (Sprint 13) -----
+    if (can('data_quality_issues.view')) {
+      const dq = await this.dataQuality.summary(user.roles);
+      summary.dataQuality = {
+        open: dq.open,
+        critical: dq.critical,
+        overdue: dq.overdue,
+        closureRate: dq.closureRate,
       };
     }
 

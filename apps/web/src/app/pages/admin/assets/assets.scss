@@ -113,6 +113,22 @@ code { font-family: var(--font-mono, monospace); font-size: var(--font-size-sm);
 .card-title { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); }
 .card--wide { grid-column: 1 / -1; }
 
+.catalog-card {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.catalog-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.catalog-card__head .card-title {
+  margin-bottom: var(--space-1);
+}
+
 .facts {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -200,3 +216,79 @@ code { font-family: var(--font-mono, monospace); font-size: var(--font-size-sm);
   background: var(--surface-2, rgba(31, 111, 235, 0.06));
 }
 .import-result h4 { margin: var(--space-2) 0; font-size: var(--font-size-sm); }
+
+.open-data-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.open-data-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.open-data-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.open-data-row > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.open-data-row strong {
+  overflow-wrap: anywhere;
+}
+
+.badge-code {
+  color: var(--primary);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+}
+
+.open-data-score {
+  display: grid;
+  place-items: center;
+  min-width: 54px;
+  min-height: 38px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: var(--radius-md);
+  font-weight: 900;
+}
+
+.open-data-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.open-data-empty {
+  display: grid;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3);
+  color: var(--on-surface-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+.open-data-empty p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .open-data-row {
+    grid-template-columns: 1fr;
+  }
+}

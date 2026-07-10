@@ -37,7 +37,7 @@ export class WorkflowController {
   @Post('cases')
   @RequirePermissions('workflow_cases.create')
   createCase(@Body() dto: CreateCaseDto, @CurrentUser() user: AuthUser) {
-    return this.service.createCase(dto, user.email);
+    return this.service.createCase(dto, user.roles, user.email);
   }
 
   @Get('cases/:id')
@@ -49,26 +49,26 @@ export class WorkflowController {
   @Patch('cases/:id')
   @RequirePermissions('workflow_cases.edit')
   updateCase(@Param('id') id: string, @Body() dto: UpdateCaseDto, @CurrentUser() user: AuthUser) {
-    return this.service.updateCase(id, dto, user.email);
+    return this.service.updateCase(id, dto, user.roles, user.email);
   }
 
   @Post('cases/:id/submit')
   @RequirePermissions('workflow_cases.edit')
   submitCase(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.submitCase(id, user.email);
+    return this.service.submitCase(id, user.roles, user.email);
   }
 
   @Post('cases/:id/tasks')
   @RequirePermissions('workflow_tasks.create')
   addTask(@Param('id') id: string, @Body() dto: AddTaskDto, @CurrentUser() user: AuthUser) {
-    return this.service.addTask(id, dto, user.email);
+    return this.service.addTask(id, dto, user.roles, user.email);
   }
 
   // ----- assignment approval entry point -----
   @Post('assignments/submit-for-approval')
   @RequirePermissions('assignments.edit')
   submitAssignment(@Body() dto: SubmitAssignmentDto, @CurrentUser() user: AuthUser) {
-    return this.service.submitAssignmentForApproval(dto, user.email);
+    return this.service.submitAssignmentForApproval(dto, user.roles, user.email);
   }
 
   // ----- tasks (declare specific routes before :id) -----
@@ -80,14 +80,14 @@ export class WorkflowController {
 
   @Get('tasks/:id')
   @RequirePermissions('workflow_tasks.view')
-  getTask(@Param('id') id: string) {
-    return this.service.getTask(id);
+  getTask(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.getTask(id, user.roles);
   }
 
   @Patch('tasks/:id')
   @RequirePermissions('workflow_tasks.edit')
   updateTask(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: AuthUser) {
-    return this.service.updateTask(id, dto, user.email);
+    return this.service.updateTask(id, dto, user.roles, user.email);
   }
 
   @Post('tasks/:id/decision')

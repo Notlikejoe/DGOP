@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ApprovalStatus, CaseStatus, TaskDecision, TaskStatus } from '@prisma/client';
+import {
+  ApprovalStatus,
+  AssignmentTargetType,
+  CaseStatus,
+  Prisma,
+  TaskDecision,
+  TaskStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
@@ -23,6 +30,29 @@ export type SlaStatus = 'none' | 'on_track' | 'at_risk' | 'overdue' | 'done';
 
 const AT_RISK_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // within 2 days of due date
 const ADMIN_ROLES = ['system_admin', 'dmo_admin'];
+const DATA_OWNER_CODE = 'data_owner';
+const FINAL_CASE_STATUSES: readonly CaseStatus[] = [
+  CaseStatus.closed,
+  CaseStatus.implemented,
+  CaseStatus.rejected,
+];
+const CASE_TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
+  [CaseStatus.draft]: [CaseStatus.submitted, CaseStatus.closed],
+  [CaseStatus.submitted]: [CaseStatus.under_review, CaseStatus.awaiting_information, CaseStatus.rejected, CaseStatus.closed],
+  [CaseStatus.under_review]: [
+    CaseStatus.awaiting_information,
+    CaseStatus.decision_made,
+    CaseStatus.approved,
+    CaseStatus.rejected,
+    CaseStatus.closed,
+  ],
+  [CaseStatus.awaiting_information]: [CaseStatus.under_review, CaseStatus.rejected, CaseStatus.closed],
+  [CaseStatus.decision_made]: [CaseStatus.approved, CaseStatus.rejected, CaseStatus.closed],
+  [CaseStatus.approved]: [CaseStatus.implemented, CaseStatus.closed],
+  [CaseStatus.rejected]: [CaseStatus.closed],
+  [CaseStatus.implemented]: [CaseStatus.closed],
+  [CaseStatus.closed]: [],
+};
 
 const taskInclude = {
   assignee: { select: { id: true, email: true, displayName: true } },
@@ -88,6 +118,65 @@ export class WorkflowService {
     return new Set(assets.map((a) => a.id));
   }
 
+  private async assertAssetVisible(roleCodes: string[], assetId: string): Promise<void> {
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    if (assetIds !== 'all' && !assetIds.has(assetId)) {
+      throw new NotFoundException('workflow case not found');
+    }
+  }
+
+  private async assertCaseVisible(roleCodes: string[], wfCase: { assetId: string | null }): Promise<void> {
+    if (!wfCase.assetId) return;
+    await this.assertAssetVisible(roleCodes, wfCase.assetId);
+  }
+
+  private assertCaseCanChange(status: CaseStatus): void {
+    if (FINAL_CASE_STATUSES.includes(status)) {
+      throw new BadRequestException('Closed, implemented, or rejected cases cannot be modified');
+    }
+  }
+
+  private assertCaseTransition(from: CaseStatus, to: CaseStatus): void {
+    if (from === to) return;
+    if (!CASE_TRANSITIONS[from].includes(to)) {
+      throw new BadRequestException(`Invalid workflow case transition from ${from} to ${to}`);
+    }
+  }
+
+  private async syncAssetOwner(
+    client: Prisma.TransactionClient,
+    assignment: { targetType: AssignmentTargetType; targetId: string },
+  ): Promise<void> {
+    if (assignment.targetType !== AssignmentTargetType.asset) return;
+    const asset = await client.dataAsset.findFirst({
+      where: { id: assignment.targetId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!asset) return;
+    const now = new Date();
+    const owner = await client.stewardshipAssignment.findFirst({
+      where: {
+        targetType: AssignmentTargetType.asset,
+        targetId: assignment.targetId,
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        deletedAt: null,
+        effectiveDate: { lte: now },
+        OR: [{ expiryDate: null }, { expiryDate: { gte: now } }],
+        roleType: { code: DATA_OWNER_CODE },
+      },
+      include: { person: true },
+      orderBy: { effectiveDate: 'desc' },
+    });
+    await client.dataAsset.update({
+      where: { id: assignment.targetId },
+      data: owner
+        ? { ownerStatus: 'assigned', ownerName: owner.person.fullNameEn }
+        : { ownerStatus: 'unassigned', ownerName: null },
+    });
+  }
+
   // ---------- cases ----------
   async listCases(
     roleCodes: string[],
@@ -147,12 +236,13 @@ export class WorkflowService {
     return `WFC-${Date.now()}`;
   }
 
-  async createCase(dto: CreateCaseDto, actor: string) {
+  async createCase(dto: CreateCaseDto, roleCodes: string[], actor: string) {
     if (dto.assetId) {
       const asset = await this.prisma.dataAsset.findFirst({
         where: { id: dto.assetId, deletedAt: null },
       });
       if (!asset) throw new BadRequestException('Linked data asset not found');
+      await this.assertAssetVisible(roleCodes, dto.assetId);
     }
     const code = await this.nextCaseCode();
     const created = await this.prisma.workflowCase.create({
@@ -178,9 +268,12 @@ export class WorkflowService {
     return created;
   }
 
-  async updateCase(id: string, dto: UpdateCaseDto, actor: string) {
+  async updateCase(id: string, dto: UpdateCaseDto, roleCodes: string[], actor: string) {
     const existing = await this.prisma.workflowCase.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('workflow case not found');
+    await this.assertCaseVisible(roleCodes, existing);
+    this.assertCaseCanChange(existing.status);
+    if (dto.status !== undefined) this.assertCaseTransition(existing.status, dto.status);
     const data: Record<string, unknown> = {};
     if (dto.title !== undefined) data['title'] = dto.title;
     if (dto.description !== undefined) data['description'] = dto.description;
@@ -205,12 +298,13 @@ export class WorkflowService {
     return updated;
   }
 
-  async submitCase(id: string, actor: string) {
+  async submitCase(id: string, roleCodes: string[], actor: string) {
     const existing = await this.prisma.workflowCase.findUnique({
       where: { id },
       include: { tasks: true },
     });
     if (!existing) throw new NotFoundException('workflow case not found');
+    await this.assertCaseVisible(roleCodes, existing);
     if (existing.status !== CaseStatus.draft) {
       throw new BadRequestException('Only a draft case can be submitted');
     }
@@ -230,9 +324,11 @@ export class WorkflowService {
   }
 
   // ---------- tasks ----------
-  async addTask(caseId: string, dto: AddTaskDto, actor: string) {
+  async addTask(caseId: string, dto: AddTaskDto, roleCodes: string[], actor: string) {
     const wfCase = await this.prisma.workflowCase.findUnique({ where: { id: caseId } });
     if (!wfCase) throw new NotFoundException('workflow case not found');
+    await this.assertCaseVisible(roleCodes, wfCase);
+    this.assertCaseCanChange(wfCase.status);
     if (dto.assigneeUserId) await this.assertUser(dto.assigneeUserId);
     const task = await this.prisma.workflowTask.create({
       data: {
@@ -252,11 +348,13 @@ export class WorkflowService {
     return this.withSla(task);
   }
 
-  async updateTask(id: string, dto: UpdateTaskDto, actor: string) {
-    const existing = await this.prisma.workflowTask.findUnique({ where: { id } });
+  async updateTask(id: string, dto: UpdateTaskDto, roleCodes: string[], actor: string) {
+    const existing = await this.prisma.workflowTask.findUnique({ where: { id }, include: { case: true } });
     if (!existing) throw new NotFoundException('workflow task not found');
-    if (existing.status === TaskStatus.completed) {
-      throw new BadRequestException('A completed task cannot be modified');
+    await this.assertCaseVisible(roleCodes, existing.case);
+    this.assertCaseCanChange(existing.case.status);
+    if (existing.status === TaskStatus.completed || existing.status === TaskStatus.cancelled) {
+      throw new BadRequestException('A completed or cancelled task cannot be modified');
     }
     if (dto.assigneeUserId) await this.assertUser(dto.assigneeUserId);
     const data: Record<string, unknown> = {};
@@ -295,15 +393,16 @@ export class WorkflowService {
     return rows.map((t) => this.withSla(t));
   }
 
-  async getTask(id: string) {
+  async getTask(id: string, roleCodes: string[]) {
     const task = await this.prisma.workflowTask.findUnique({
       where: { id },
       include: {
         ...taskInclude,
-        case: { select: { id: true, code: true, title: true, type: true, status: true } },
+        case: { select: { id: true, code: true, title: true, type: true, status: true, assetId: true } },
       },
     });
     if (!task) throw new NotFoundException('workflow task not found');
+    await this.assertCaseVisible(roleCodes, task.case);
     return this.withSla(task);
   }
 
@@ -317,6 +416,7 @@ export class WorkflowService {
       include: { case: true },
     });
     if (!task) throw new NotFoundException('workflow task not found');
+    await this.assertCaseVisible(user.roles, task.case);
     if (task.status === TaskStatus.completed) {
       throw new BadRequestException('This task has already been decided');
     }
@@ -334,46 +434,79 @@ export class WorkflowService {
       throw new ForbiddenException('You cannot decide an approval you submitted');
     }
 
-    const updated = await this.prisma.workflowTask.update({
-      where: { id },
-      data: {
-        status: TaskStatus.completed,
-        decision: dto.decision,
-        decisionComment: dto.comment ?? null,
-        completedAt: new Date(),
-      },
-      include: taskInclude,
-    });
-    await this.event(task.caseId, user.email, `decision.${dto.decision}`, {
-      taskId: id,
-      comment: dto.comment ?? undefined,
-    });
-
-    // Wire approval decisions back to the proposed assignment + case lifecycle.
-    if (isApprovalTask && task.case.assignmentId) {
-      const approved = dto.decision === TaskDecision.approved;
-      await this.assignments.setApprovalStatus(
-        task.case.assignmentId,
-        approved ? ApprovalStatus.approved : ApprovalStatus.rejected,
-        user.email,
-      );
-      const finalStatus = approved ? CaseStatus.implemented : CaseStatus.rejected;
-      await this.prisma.workflowCase.update({
-        where: { id: task.caseId },
-        data: { status: finalStatus },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const decided = await tx.workflowTask.update({
+        where: { id },
+        data: {
+          status: TaskStatus.completed,
+          decision: dto.decision,
+          decisionComment: dto.comment ?? null,
+          completedAt: new Date(),
+        },
+        include: taskInclude,
       });
-      await this.event(task.caseId, user.email, 'case.status', {
-        fromStatus: task.case.status,
-        toStatus: finalStatus,
-        comment: approved ? 'Assignment activated' : 'Proposed assignment rejected',
+      await tx.workflowEvent.create({
+        data: {
+          caseId: task.caseId,
+          taskId: id,
+          actor: user.email,
+          action: `decision.${dto.decision}`,
+          comment: dto.comment ?? null,
+        },
       });
-    }
 
-    await this.audit.log({
-      actor: user.email,
-      action: `workflow_task.${dto.decision}`,
-      entityType: 'workflow_task',
-      entityId: id,
+      // Wire approval decisions back to the proposed assignment + case lifecycle atomically.
+      if (isApprovalTask && task.case.assignmentId) {
+        const approved = dto.decision === TaskDecision.approved;
+        const assignment = await tx.stewardshipAssignment.findFirst({
+          where: { id: task.case.assignmentId, deletedAt: null },
+          include: { roleType: true, person: true },
+        });
+        if (!assignment) throw new BadRequestException('assignment not found for approval workflow');
+        await tx.stewardshipAssignment.update({
+          where: { id: assignment.id },
+          data: {
+            approvalStatus: approved ? ApprovalStatus.approved : ApprovalStatus.rejected,
+            reviewedBy: user.email,
+            reviewedAt: new Date(),
+            isActive: approved ? assignment.isActive : false,
+          },
+        });
+        await this.syncAssetOwner(tx, assignment);
+        const finalStatus = approved ? CaseStatus.implemented : CaseStatus.rejected;
+        await tx.workflowCase.update({
+          where: { id: task.caseId },
+          data: { status: finalStatus },
+        });
+        await tx.workflowEvent.create({
+          data: {
+            caseId: task.caseId,
+            actor: user.email,
+            action: 'case.status',
+            fromStatus: task.case.status,
+            toStatus: finalStatus,
+            comment: approved ? 'Assignment activated' : 'Proposed assignment rejected',
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            actor: user.email,
+            action: `assignment.${approved ? ApprovalStatus.approved : ApprovalStatus.rejected}`,
+            entityType: 'stewardship_assignment',
+            entityId: assignment.id,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actor: user.email,
+          action: `workflow_task.${dto.decision}`,
+          entityType: 'workflow_task',
+          entityId: id,
+        },
+      });
+      return decided;
     });
     return this.withSla(updated);
   }
@@ -383,8 +516,11 @@ export class WorkflowService {
    * Routes a stewardship assignment through approval: marks it pending (non-authoritative)
    * and opens a case with an approval task for the chosen approver.
    */
-  async submitAssignmentForApproval(dto: SubmitAssignmentDto, actor: string) {
+  async submitAssignmentForApproval(dto: SubmitAssignmentDto, roleCodes: string[], actor: string) {
     const assignment = await this.assignments.getAssignment(dto.assignmentId);
+    if (assignment.targetType === 'asset') {
+      await this.assertAssetVisible(roleCodes, assignment.targetId);
+    }
     if (assignment.approvalStatus === ApprovalStatus.pending) {
       throw new BadRequestException('This assignment is already awaiting approval');
     }

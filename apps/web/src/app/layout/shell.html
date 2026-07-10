@@ -1,5 +1,11 @@
 <div class="shell">
-  <aside class="shell__sidebar" [class.shell__sidebar--open]="mobileNavOpen()" [attr.aria-label]="t('nav.primary')">
+  <aside
+    class="shell__sidebar"
+    [class.shell__sidebar--open]="mobileNavOpen()"
+    [attr.aria-label]="t('nav.primary')"
+    [attr.aria-hidden]="sidebarHidden() ? 'true' : null"
+    [attr.inert]="sidebarHidden() ? '' : null"
+  >
     <div class="brand">
       <div class="brand__mark" aria-hidden="true">
         <app-icon name="shield" />

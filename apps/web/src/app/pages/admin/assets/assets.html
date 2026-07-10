@@ -78,6 +78,9 @@
                 <th>{{ t('assets.col.classification') }}</th>
                 <th>{{ t('assets.col.owner') }}</th>
                 <th>{{ t('assets.col.lifecycle') }}</th>
+                @if (canViewIntegrations) {
+                  <th>{{ t('assets.catalog.status') }}</th>
+                }
                 <th class="actions-col">{{ t('crud.actions') }}</th>
               </tr>
             </thead>
@@ -103,6 +106,14 @@
                   <td>
                     <app-status-chip [kind]="lifecycleKind(a.lifecycleStatus)" [label]="t('assets.lifecycle.' + a.lifecycleStatus)" />
                   </td>
+                  @if (canViewIntegrations) {
+                    <td>
+                      <app-status-chip
+                        [kind]="catalogKind(a.catalogSyncStatus)"
+                        [label]="t('assets.catalog.status.' + (a.catalogSyncStatus || 'not_synced'))"
+                      />
+                    </td>
+                  }
                   <td class="actions-col">
                     <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDetail(a.id)">{{ t('assets.view360') }}</button>
                     @if (canEdit) {
@@ -211,6 +222,69 @@
           </div>
         }
       </div>
+
+      @if (canViewIntegrations) {
+        <div class="ds-card catalog-card">
+          <div class="catalog-card__head">
+            <div>
+              <h2 class="card-title">{{ t('assets.catalog.title') }}</h2>
+              <p class="muted">{{ t('assets.catalog.subtitle') }}</p>
+            </div>
+            <app-status-chip
+              [kind]="catalogKind(a.catalogSyncStatus)"
+              [label]="t('assets.catalog.status.' + (a.catalogSyncStatus || 'not_synced'))"
+            />
+          </div>
+          <dl class="facts">
+            <div class="fact"><dt>{{ t('assets.catalog.externalId') }}</dt><dd>{{ a.externalCatalogId || '-' }}</dd></div>
+            <div class="fact"><dt>{{ t('assets.catalog.source') }}</dt><dd>{{ a.catalogSource || '-' }}</dd></div>
+            <div class="fact"><dt>{{ t('assets.catalog.trust') }}</dt><dd>{{ a.catalogTrustLevel ? t('integrations.trust.' + a.catalogTrustLevel) : '-' }}</dd></div>
+            <div class="fact"><dt>{{ t('assets.catalog.lastSynced') }}</dt><dd>{{ date(a.catalogLastSyncedAt) }}</dd></div>
+            <div class="fact"><dt>{{ t('assets.catalog.writeback') }}</dt><dd>{{ a.catalogWritebackStatus ? t('integrations.writeback.status.' + a.catalogWritebackStatus) : '-' }}</dd></div>
+          </dl>
+          <a class="ds-btn ds-btn--ghost btn-sm self-start" routerLink="/admin/integrations">{{ t('assets.catalog.openIntegrations') }}</a>
+        </div>
+      }
+
+      @if (canViewOpenData) {
+        <div class="ds-card open-data-card">
+          <div class="catalog-card__head">
+            <div>
+              <h2 class="card-title">{{ t('assets.openData.title') }}</h2>
+              <p class="muted">{{ t('assets.openData.subtitle') }}</p>
+            </div>
+            <a class="ds-btn ds-btn--ghost btn-sm" [routerLink]="['/governance/open-data']" [queryParams]="{ assetId: a.id }">{{ t('assets.openData.open') }}</a>
+          </div>
+
+          @if (a.openDataCandidates?.length) {
+            <div class="open-data-list">
+              @for (candidate of a.openDataCandidates; track candidate.id) {
+                <article class="open-data-row">
+                  <div>
+                    <span class="badge-code">{{ candidate.code }}</span>
+                    <strong>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</strong>
+                  </div>
+                  <app-status-chip [kind]="openDataKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+                  <span class="open-data-score">{{ candidate.eligibilityScore }}%</span>
+                </article>
+                <div class="open-data-signals">
+                  <app-status-chip [kind]="signalKind(candidate.classificationSignal)" [label]="t('openData.signal.classification') + ': ' + t('openData.signal.' + candidate.classificationSignal)" />
+                  <app-status-chip [kind]="signalKind(candidate.dataQualitySignal)" [label]="t('openData.signal.quality') + ': ' + t('openData.signal.' + candidate.dataQualitySignal)" />
+                  <app-status-chip [kind]="signalKind(candidate.personalDataSignal)" [label]="t('openData.signal.personal') + ': ' + t('openData.signal.' + candidate.personalDataSignal)" />
+                  <app-status-chip [kind]="signalKind(candidate.ownershipSignal)" [label]="t('openData.signal.ownership') + ': ' + t('openData.signal.' + candidate.ownershipSignal)" />
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="open-data-empty">
+              <p>{{ t('assets.openData.none') }}</p>
+              @if (canCreateOpenData) {
+                <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="registerOpenDataCandidate(a)">{{ t('assets.openData.register') }}</button>
+              }
+            </div>
+          }
+        </div>
+      }
 
       @if (canViewOwnership) {
         <div class="ds-card card--wide">

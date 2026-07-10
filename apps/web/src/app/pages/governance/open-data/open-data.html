@@ -1,0 +1,333 @@
+<section class="page open-data-page">
+  <header class="page__header od-hero">
+    <div>
+      <span class="eyebrow">{{ t('openData.eyebrow') }}</span>
+      <h1>{{ t('openData.title') }}</h1>
+      <p class="page__subtitle">{{ t('openData.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()">
+          <app-icon name="plus" />
+          {{ t('openData.new') }}
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <div class="od-strip" aria-label="Open Data candidate status">
+      <div class="strip-card strip-card--primary">
+        <span>{{ t('openData.metric.eligibility') }}</span>
+        <strong>{{ s.avgEligibility }}%</strong>
+        <small>{{ t('openData.metric.eligibilityHelp') }}</small>
+      </div>
+      <div class="strip-card"><span>{{ t('openData.metric.total') }}</span><strong>{{ s.total }}</strong><small>{{ t('openData.metric.totalHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('openData.metric.review') }}</span><strong>{{ s.underReview }}</strong><small>{{ t('openData.metric.reviewHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('openData.metric.published') }}</span><strong>{{ s.published }}</strong><small>{{ t('openData.metric.publishedHelp') }}</small></div>
+      <div class="strip-card" [class.strip-card--danger]="s.overdueReview > 0"><span>{{ t('openData.metric.overdue') }}</span><strong>{{ s.overdueReview }}</strong><small>{{ t('openData.metric.overdueHelp') }}</small></div>
+    </div>
+  }
+
+  <section class="ds-card od-filters" aria-label="Open Data filters">
+    <div class="field">
+      <label class="field__label">{{ t('openData.filter.search') }}</label>
+      <input class="field__input" [ngModel]="filters().search" (ngModelChange)="setFilter('search', $event)" [placeholder]="t('openData.filter.searchPlaceholder')" />
+    </div>
+    <div class="field">
+      <label class="field__label">{{ t('openData.field.status') }}</label>
+      <select class="field__input" [ngModel]="filters().status" (ngModelChange)="setFilter('status', $event)">
+        <option value="">{{ t('openData.filter.allStatuses') }}</option>
+        @for (status of statuses; track status) {
+          <option [value]="status">{{ t('openData.status.' + status) }}</option>
+        }
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label">{{ t('openData.field.asset') }}</label>
+      <select class="field__input" [ngModel]="filters().assetId" (ngModelChange)="setFilter('assetId', $event)">
+        <option value="">{{ t('openData.filter.allAssets') }}</option>
+        @for (asset of assets(); track asset.id) {
+          <option [value]="asset.id">{{ name(asset) }}</option>
+        }
+      </select>
+    </div>
+    <button type="button" class="ds-btn ds-btn--ghost self-end" (click)="clearFilters()">{{ t('users.filter.clear') }}</button>
+  </section>
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('assets.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card"><p class="error">{{ t('openData.error') }}</p></div>
+  } @else {
+    <div class="od-workspace">
+      <section class="ds-card od-queue">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('openData.queue.eyebrow') }}</span>
+            <h2>{{ t('openData.queue.title') }}</h2>
+            <p>{{ t('openData.queue.subtitle') }}</p>
+          </div>
+          <span class="queue-count">{{ total() }}</span>
+        </div>
+
+        @if (candidates().length === 0) {
+          <div class="empty">
+            <p>{{ t('openData.empty') }}</p>
+            @if (canCreate) {
+              <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openCreate()">{{ t('openData.new') }}</button>
+            }
+          </div>
+        } @else {
+          <div class="candidate-list">
+            @for (candidate of candidates(); track candidate.id) {
+              <button
+                type="button"
+                class="candidate-row"
+                [class.candidate-row--active]="selected()?.id === candidate.id"
+                (click)="select(candidate)"
+              >
+                <span class="candidate-row__score" [class.score-danger]="candidate.eligibilityScore < 60">{{ candidate.eligibilityScore }}%</span>
+                <span class="candidate-row__main">
+                  <strong>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</strong>
+                  <small>{{ candidate.asset.code }} - {{ name(candidate.asset.domain) }}</small>
+                </span>
+                <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+              </button>
+            }
+          </div>
+          <app-pager
+            [page]="page()"
+            [pageSize]="pageSize()"
+            [total]="total()"
+            [totalPages]="totalPages()"
+            (pageChange)="goToPage($event)"
+          />
+        }
+      </section>
+
+      <aside class="ds-card od-detail">
+        @if (selected(); as candidate) {
+          <div class="detail-head">
+            <div>
+              <span class="badge-code">{{ candidate.code }}</span>
+              <h2>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</h2>
+              <p>{{ name(candidate.asset) }}</p>
+            </div>
+            <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+          </div>
+
+          <div class="eligibility-card">
+            <div>
+              <span>{{ t('openData.metric.eligibility') }}</span>
+              <strong>{{ candidate.eligibilityScore }}%</strong>
+            </div>
+            <app-status-chip [kind]="eligibilityKind(candidate.eligibilityScore)" [label]="candidate.eligibilityScore >= 80 ? t('openData.signal.ready') : candidate.eligibilityScore >= 60 ? t('openData.signal.needs_review') : t('openData.signal.blocked')" />
+          </div>
+
+          <div class="signal-grid">
+            <div class="signal">
+              <span>{{ t('openData.signal.classification') }}</span>
+              <app-status-chip [kind]="signalKind(candidate.classificationSignal)" [label]="t('openData.signal.' + candidate.classificationSignal)" />
+            </div>
+            <div class="signal">
+              <span>{{ t('openData.signal.quality') }}</span>
+              <app-status-chip [kind]="signalKind(candidate.dataQualitySignal)" [label]="t('openData.signal.' + candidate.dataQualitySignal)" />
+            </div>
+            <div class="signal">
+              <span>{{ t('openData.signal.personal') }}</span>
+              <app-status-chip [kind]="signalKind(candidate.personalDataSignal)" [label]="t('openData.signal.' + candidate.personalDataSignal)" />
+            </div>
+            <div class="signal">
+              <span>{{ t('openData.signal.ownership') }}</span>
+              <app-status-chip [kind]="signalKind(candidate.ownershipSignal)" [label]="t('openData.signal.' + candidate.ownershipSignal)" />
+            </div>
+            <div class="signal">
+              <span>{{ t('openData.signal.value') }}</span>
+              <app-status-chip [kind]="signalKind(candidate.publicationValueSignal)" [label]="t('openData.signal.' + candidate.publicationValueSignal)" />
+            </div>
+          </div>
+
+          <dl class="facts">
+            <div><dt>{{ t('openData.field.frequency') }}</dt><dd>{{ t('openData.frequency.' + candidate.publicationFrequency) }}</dd></div>
+            <div><dt>{{ t('openData.field.format') }}</dt><dd>{{ t('openData.format.' + candidate.publicationFormat) }}</dd></div>
+            <div><dt>{{ t('openData.field.owner') }}</dt><dd>{{ name(candidate.ownerPerson) }}</dd></div>
+            <div><dt>{{ t('openData.field.steward') }}</dt><dd>{{ name(candidate.stewardPerson) }}</dd></div>
+            <div><dt>{{ t('openData.field.reviewer') }}</dt><dd>{{ name(candidate.odiaoReviewerPerson) }}</dd></div>
+            <div><dt>{{ t('openData.field.personal') }}</dt><dd>{{ t('openData.personal.' + candidate.personalDataAssessment) }}</dd></div>
+            <div><dt>{{ t('openData.field.classification') }}</dt><dd>{{ name(candidate.classification || candidate.asset.classification) }}</dd></div>
+            <div><dt>{{ t('openData.field.quality') }}</dt><dd>{{ candidate.dqScore?.score ?? '-' }}</dd></div>
+            <div><dt>{{ t('openData.field.nextReview') }}</dt><dd>{{ date(candidate.nextReviewAt) }}</dd></div>
+            <div><dt>{{ t('openData.field.portal') }}</dt><dd>@if (candidate.portalUrl) { <a [href]="candidate.portalUrl" target="_blank" rel="noreferrer">{{ candidate.portalUrl }}</a> } @else { - }</dd></div>
+          </dl>
+
+          @if (candidate.description || candidate.decisionNote) {
+            <div class="notes">
+              @if (candidate.description) { <p>{{ candidate.description }}</p> }
+              @if (candidate.decisionNote) { <p><strong>{{ t('openData.field.note') }}:</strong> {{ candidate.decisionNote }}</p> }
+            </div>
+          }
+
+          <div class="detail-actions">
+            <a class="ds-btn ds-btn--ghost btn-sm" [routerLink]="['/assets']" [queryParams]="{ assetId: candidate.assetId }">{{ t('openData.openAsset') }}</a>
+            @if (canEdit) {
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openEdit(candidate)">{{ t('crud.edit') }}</button>
+              @for (status of allowedNextStatuses(candidate); track status) {
+                <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="transition(candidate, status)">{{ t('openData.move.' + status) }}</button>
+              }
+            }
+            @if (canDelete) {
+              <button type="button" class="ds-btn danger btn-sm" (click)="remove(candidate)">{{ t('crud.delete') }}</button>
+            }
+          </div>
+        } @else {
+          <div class="empty"><p>{{ t('openData.noSelection') }}</p></div>
+        }
+      </aside>
+    </div>
+
+    <div class="od-lower-grid">
+      <section class="ds-card">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('openData.odiao.eyebrow') }}</span>
+            <h2>{{ t('openData.odiao.title') }}</h2>
+            <p>{{ t('openData.odiao.subtitle') }}</p>
+          </div>
+          <app-icon name="globe" />
+        </div>
+        <div class="mini-queue">
+          @for (candidate of reviewQueue(); track candidate.id) {
+            <button type="button" class="mini-row" (click)="select(candidate)">
+              <span>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</span>
+              <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+            </button>
+          } @empty {
+            <p class="muted">{{ t('openData.odiao.empty') }}</p>
+          }
+        </div>
+      </section>
+
+      <section class="ds-card">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('openData.published.eyebrow') }}</span>
+            <h2>{{ t('openData.published.title') }}</h2>
+            <p>{{ t('openData.published.subtitle') }}</p>
+          </div>
+        </div>
+        <div class="mini-queue">
+          @for (candidate of publishedCandidates(); track candidate.id) {
+            <button type="button" class="mini-row" (click)="select(candidate)">
+              <span>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</span>
+              <small>{{ date(candidate.nextReviewAt) }}</small>
+            </button>
+          } @empty {
+            <p class="muted">{{ t('openData.published.empty') }}</p>
+          }
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (modalOpen()) {
+    <app-modal [title]="editingId() ? t('openData.edit') : t('openData.new')" size="lg" (close)="closeModal()">
+      <form class="od-form" (ngSubmit)="save()">
+        <div class="field field--wide">
+          <label class="field__label">{{ t('openData.field.asset') }}</label>
+          <select class="field__input" [ngModel]="draft().assetId" name="assetId" (ngModelChange)="draft.update(d => ({ ...d, assetId: $event }))" [disabled]="!!editingId()">
+            <option value="">{{ t('openData.chooseAsset') }}</option>
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ name(asset) }} - {{ asset.code }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.titleEn') }}</label>
+          <input class="field__input" [ngModel]="draft().titleEn" name="titleEn" (ngModelChange)="draft.update(d => ({ ...d, titleEn: $event }))" />
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.titleAr') }}</label>
+          <input class="field__input" [ngModel]="draft().titleAr" name="titleAr" (ngModelChange)="draft.update(d => ({ ...d, titleAr: $event }))" />
+        </div>
+        <div class="field field--wide">
+          <label class="field__label">{{ t('assets.field.description') }}</label>
+          <textarea class="field__input" rows="3" [ngModel]="draft().description" name="description" (ngModelChange)="draft.update(d => ({ ...d, description: $event }))"></textarea>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.frequency') }}</label>
+          <select class="field__input" [ngModel]="draft().publicationFrequency" name="publicationFrequency" (ngModelChange)="draft.update(d => ({ ...d, publicationFrequency: $event }))">
+            @for (frequency of frequencies; track frequency) {
+              <option [value]="frequency">{{ t('openData.frequency.' + frequency) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.format') }}</label>
+          <select class="field__input" [ngModel]="draft().publicationFormat" name="publicationFormat" (ngModelChange)="draft.update(d => ({ ...d, publicationFormat: $event }))">
+            @for (format of formats; track format) {
+              <option [value]="format">{{ t('openData.format.' + format) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.personal') }}</label>
+          <select class="field__input" [ngModel]="draft().personalDataAssessment" name="personalDataAssessment" (ngModelChange)="draft.update(d => ({ ...d, personalDataAssessment: $event }))">
+            @for (assessment of personalAssessments; track assessment) {
+              <option [value]="assessment">{{ t('openData.personal.' + assessment) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.valueScore') }}</label>
+          <input class="field__input" type="number" min="0" max="100" [ngModel]="draft().publicationValueScore" name="publicationValueScore" (ngModelChange)="draft.update(d => ({ ...d, publicationValueScore: +$event }))" />
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.owner') }}</label>
+          <select class="field__input" [ngModel]="draft().ownerPersonId" name="ownerPersonId" (ngModelChange)="draft.update(d => ({ ...d, ownerPersonId: $event }))">
+            <option value="">{{ t('openData.none') }}</option>
+            @for (person of people(); track person.id) {
+              <option [value]="person.id">{{ name(person) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.steward') }}</label>
+          <select class="field__input" [ngModel]="draft().stewardPersonId" name="stewardPersonId" (ngModelChange)="draft.update(d => ({ ...d, stewardPersonId: $event }))">
+            <option value="">{{ t('openData.none') }}</option>
+            @for (person of people(); track person.id) {
+              <option [value]="person.id">{{ name(person) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.reviewer') }}</label>
+          <select class="field__input" [ngModel]="draft().odiaoReviewerPersonId" name="odiaoReviewerPersonId" (ngModelChange)="draft.update(d => ({ ...d, odiaoReviewerPersonId: $event }))">
+            <option value="">{{ t('openData.none') }}</option>
+            @for (person of people(); track person.id) {
+              <option [value]="person.id">{{ name(person) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label class="field__label">{{ t('openData.field.nextReview') }}</label>
+          <input class="field__input" type="date" [ngModel]="draft().nextReviewAt" name="nextReviewAt" (ngModelChange)="draft.update(d => ({ ...d, nextReviewAt: $event }))" />
+        </div>
+        <div class="field field--wide">
+          <label class="field__label">{{ t('openData.field.portal') }}</label>
+          <input class="field__input" [ngModel]="draft().portalUrl" name="portalUrl" (ngModelChange)="draft.update(d => ({ ...d, portalUrl: $event }))" placeholder="https://data.gov.sa/..." />
+        </div>
+        <div class="field field--wide">
+          <label class="field__label">{{ t('openData.field.note') }}</label>
+          <textarea class="field__input" rows="2" [ngModel]="draft().decisionNote" name="decisionNote" (ngModelChange)="draft.update(d => ({ ...d, decisionNote: $event }))"></textarea>
+        </div>
+      </form>
+
+      <ng-container footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModal()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="save()">{{ t('crud.save') }}</button>
+      </ng-container>
+    </app-modal>
+  }
+</section>

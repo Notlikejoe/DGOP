@@ -1,0 +1,424 @@
+.integrations-page {
+  --integration-gap: var(--space-5);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--command-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.integration-strip {
+  display: grid;
+  grid-template-columns: 1.15fr repeat(4, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.strip-card {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 104px;
+  padding: var(--space-4);
+  color: var(--command-on);
+  background: var(--command-surface);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.strip-card--hero {
+  border-inline-start: 4px solid var(--primary);
+}
+
+.strip-card span,
+.strip-card small {
+  color: var(--command-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.strip-card strong {
+  color: var(--command-on);
+  font-size: var(--font-size-2xl);
+  font-weight: 850;
+}
+
+.integration-workspace,
+.history-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.85fr) minmax(520px, 1.15fr);
+  gap: var(--integration-gap);
+  align-items: start;
+}
+
+.panel-head,
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.panel-head h2,
+.detail-head h2 {
+  margin-bottom: var(--space-2);
+}
+
+.panel-head p,
+.detail-head p {
+  margin: 0;
+  color: var(--command-muted);
+  overflow-wrap: anywhere;
+}
+
+.panel-head app-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  color: var(--command-accent);
+  background: var(--command-active);
+  border-radius: var(--radius-md);
+}
+
+.panel-head.compact {
+  margin-bottom: var(--space-3);
+}
+
+.connector-list,
+.batch-list,
+.error-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.connector-row,
+.batch-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--space-3);
+  color: var(--command-on);
+  text-align: start;
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.connector-row:hover,
+.connector-row:focus-visible,
+.connector-row--active,
+.batch-row:hover,
+.batch-row:focus-visible,
+.batch-row--active {
+  background: var(--command-active);
+  border-color: color-mix(in srgb, var(--command-accent) 42%, var(--command-border));
+  outline: none;
+}
+
+.connector-row__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--command-mark-on);
+  background: var(--command-mark-bg);
+  border-radius: var(--radius-md);
+}
+
+.connector-row__main,
+.batch-row__main {
+  min-width: 0;
+}
+
+.connector-row__main strong,
+.connector-row__main small,
+.batch-row__main strong,
+.batch-row__main small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.connector-row__main small,
+.batch-row__main small,
+.connector-row__error {
+  color: var(--command-muted);
+  font-size: var(--font-size-sm);
+}
+
+.connector-row__error {
+  grid-column: 2 / -1;
+}
+
+.sync-form,
+.writeback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: end;
+}
+
+.writeback-grid .field,
+.writeback-grid .ds-btn {
+  min-width: 0;
+  width: 100%;
+}
+
+.writeback-grid .ds-btn {
+  justify-content: center;
+  white-space: normal;
+}
+
+.csv-area {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.csv-upload {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 96px;
+  padding: var(--space-4);
+  color: var(--command-on);
+  background: var(--command-surface-2);
+  border: 1px dashed var(--command-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.csv-upload__label {
+  font-weight: 850;
+}
+
+.csv-upload__hint {
+  color: var(--command-muted);
+  font-size: var(--font-size-sm);
+}
+
+.csv-file,
+.sync-actions,
+.writeback-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.csv-file {
+  justify-content: space-between;
+  padding: var(--space-3);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+}
+
+.sync-actions {
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+.mock-callout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  color: var(--command-on);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+}
+
+.mock-callout app-icon {
+  width: 38px;
+  height: 38px;
+  color: var(--info);
+}
+
+.mock-callout p {
+  margin: var(--space-1) 0 0;
+  color: var(--command-muted);
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.mapping-row,
+.error-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  color: var(--command-on);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+}
+
+.mapping-row p,
+.error-row p {
+  margin: var(--space-1) 0 0;
+  color: var(--command-muted);
+  overflow-wrap: anywhere;
+}
+
+.sample-table {
+  margin-top: var(--space-4);
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sample-table .ds-table {
+  min-width: 720px;
+}
+
+.preview-issues {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 34%, var(--border));
+  border-radius: var(--radius-lg);
+}
+
+.batch-row {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.batch-row__counts {
+  display: grid;
+  justify-items: end;
+  color: var(--command-muted);
+  font-size: var(--font-size-sm);
+}
+
+.batch-row__counts strong {
+  color: var(--command-on);
+  font-size: var(--font-size-lg);
+}
+
+.detail-panel {
+  position: sticky;
+  top: var(--space-5);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.facts div {
+  padding: var(--space-3);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+}
+
+.facts dt {
+  color: var(--command-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: var(--space-1) 0 0;
+  color: var(--command-on);
+  font-weight: 850;
+}
+
+.error-list > strong {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.error-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.error-row > span {
+  color: var(--danger);
+  font-size: var(--font-size-sm);
+  font-weight: 850;
+}
+
+.writeback-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.writeback-result {
+  padding: var(--space-3);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 34%, var(--border));
+  border-radius: var(--radius-lg);
+}
+
+.writeback-result small {
+  color: var(--on-surface-muted);
+}
+
+.empty--small {
+  min-height: 96px;
+  padding: var(--space-4);
+}
+
+@media (max-width: 1280px) {
+  .integration-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .integration-workspace,
+  .history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .integration-strip,
+  .sync-form,
+  .writeback-grid,
+  .facts {
+    grid-template-columns: 1fr;
+  }
+
+  .connector-row,
+  .batch-row,
+  .mapping-row {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-row__counts {
+    justify-items: start;
+  }
+
+  .sync-actions {
+    justify-content: flex-start;
+  }
+}

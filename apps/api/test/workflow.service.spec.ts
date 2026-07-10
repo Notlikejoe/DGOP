@@ -10,30 +10,47 @@ const DAY = 24 * 60 * 60 * 1000;
 
 type Over = {
   task?: any;
+  case?: any;
   assignment?: any;
+  assignmentUpdate?: any;
   submitter?: any;
+  visibleAssets?: { id: string }[];
+  scope?: any;
   setCalls?: any[][];
 };
 
 function makeService(over: Over): WorkflowService {
-  const prisma = {
+  const prisma: any = {
+    $transaction: async (fn: (client: any) => unknown) => fn(prisma),
     workflowTask: {
       findUnique: async () => over.task ?? null,
       update: async ({ data }: any) => ({ ...over.task, ...data, assignee: null }),
       create: async ({ data }: any) => ({ id: 'task-new', ...data, assignee: null }),
     },
     workflowCase: {
-      update: async () => ({}),
+      update: async ({ data }: any) => ({ ...(over.case ?? { id: 'case-new' }), ...data, tasks: [], asset: null, assignment: null }),
       create: async ({ data }: any) => ({ id: 'case-new', ...data, tasks: [], asset: null, assignment: null }),
-      findUnique: async () => ({ id: 'case-new', tasks: [], asset: null, assignment: null }),
+      findUnique: async () => over.case ?? ({ id: 'case-new', status: 'draft', assetId: null, tasks: [], asset: null, assignment: null }),
     },
     workflowEvent: { create: async () => ({}) },
+    auditLog: { create: async () => ({}) },
     user: { findFirst: async () => over.submitter ?? null },
-    dataAsset: { findMany: async () => [] },
+    dataAsset: {
+      findMany: async () => over.visibleAssets ?? [],
+      findFirst: async () => ({ id: 'asset-1' }),
+      update: async () => ({}),
+    },
+    stewardshipAssignment: {
+      findFirst: async (args: any) => (args.where?.id ? over.assignment ?? null : null),
+      update: async (args: any) => {
+        over.assignmentUpdate = args.data;
+        return { ...(over.assignment ?? {}), ...args.data };
+      },
+    },
   };
   const audit = { log: async () => {} };
   const scope = {
-    resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    resolve: async () => over.scope ?? ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
   };
   const assignments = {
     getAssignment: async () => over.assignment,
@@ -56,6 +73,28 @@ const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name
 test('slaOf: completed task is done', () => {
   const svc = makeService({});
   assert.strictEqual(svc.slaOf({ status: 'completed' as never, dueDate: null, completedAt: new Date() }), 'done');
+});
+
+test('updateCase: rejects invalid status transitions', async () => {
+  const svc = makeService({
+    case: { id: 'c1', status: 'draft', assetId: null },
+  });
+  await assert.rejects(
+    () => svc.updateCase('c1', { status: 'approved' } as never, ['system_admin'], 'actor'),
+    /Invalid workflow case transition/,
+  );
+});
+
+test('updateCase: hides out-of-scope asset-linked cases', async () => {
+  const svc = makeService({
+    case: { id: 'c1', status: 'submitted', assetId: 'hidden-asset' },
+    visibleAssets: [{ id: 'visible-asset' }],
+    scope: { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+  });
+  await assert.rejects(
+    () => svc.updateCase('c1', { title: 'New title' } as never, ['dq_steward'], 'actor'),
+    /workflow case not found/,
+  );
 });
 
 test('slaOf: open task with no due date is none', () => {
@@ -120,7 +159,7 @@ test('submitAssignmentForApproval: approver must differ from submitter', async (
     submitter: { id: 'u-approver', email: 'sub@dgop.local' },
   });
   await assert.rejects(
-    () => svc.submitAssignmentForApproval({ assignmentId: 'as1', approverUserId: 'u-approver' } as never, 'sub@dgop.local'),
+    () => svc.submitAssignmentForApproval({ assignmentId: 'as1', approverUserId: 'u-approver' } as never, ['system_admin'], 'sub@dgop.local'),
     /different from the submitter/,
   );
 });
@@ -131,33 +170,32 @@ test('submitAssignmentForApproval: approver cannot be the assigned person', asyn
     submitter: { id: 'u-sub', email: 'sub@dgop.local' },
   });
   await assert.rejects(
-    () => svc.submitAssignmentForApproval({ assignmentId: 'as1', approverUserId: 'u-person' } as never, 'sub@dgop.local'),
+    () => svc.submitAssignmentForApproval({ assignmentId: 'as1', approverUserId: 'u-person' } as never, ['system_admin'], 'sub@dgop.local'),
     /cannot be the person being assigned/,
   );
 });
 
 // ---------- approval wiring ----------
 test('decideTask: approving an approval task activates the assignment', async () => {
-  const setCalls: any[][] = [];
-  const svc = makeService({
-    setCalls,
+  const over: Over = {
     task: { id: 't1', assigneeUserId: 'u-appr', status: 'pending', caseId: 'c1', case: { type: 'owner_assignment_approval', createdBy: 'sub@dgop.local', assignmentId: 'as1' } },
-  });
+    assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
+  };
+  const svc = makeService(over);
   await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never);
-  assert.strictEqual(setCalls.length, 1);
-  assert.strictEqual(setCalls[0][0], 'as1');
-  assert.strictEqual(setCalls[0][1], 'approved');
+  assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'approved');
+  assert.strictEqual(over.assignmentUpdate?.isActive, true);
 });
 
 test('decideTask: rejecting an approval task rejects the assignment', async () => {
-  const setCalls: any[][] = [];
-  const svc = makeService({
-    setCalls,
+  const over: Over = {
     task: { id: 't1', assigneeUserId: 'u-appr', status: 'pending', caseId: 'c1', case: { type: 'steward_assignment_approval', createdBy: 'sub@dgop.local', assignmentId: 'as1' } },
-  });
+    assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
+  };
+  const svc = makeService(over);
   await svc.decideTask('t1', { decision: 'rejected' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never);
-  assert.strictEqual(setCalls.length, 1);
-  assert.strictEqual(setCalls[0][1], 'rejected');
+  assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'rejected');
+  assert.strictEqual(over.assignmentUpdate?.isActive, false);
 });
 
 (async () => {

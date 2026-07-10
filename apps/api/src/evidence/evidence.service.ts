@@ -9,8 +9,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { AuthUser } from '../auth/auth.types';
 import { CreateEvidenceDto, EvidenceStatus, ReviewEvidenceDto } from './evidence.dto';
 import {
   EvidenceEffectiveStatus,
@@ -49,8 +51,17 @@ export interface UploadedFile {
 }
 
 const specSelect = {
-  select: { id: true, code: true, nameEn: true, nameAr: true },
+  select: {
+    id: true,
+    code: true,
+    nameEn: true,
+    nameAr: true,
+    ownerPersonId: true,
+    owner: { select: { id: true, email: true, userId: true, fullNameEn: true, fullNameAr: true } },
+  },
 };
+
+const BROAD_EVIDENCE_ROLES = new Set(['system_admin', 'dmo_admin', 'auditor']);
 
 @Injectable()
 export class EvidenceService {
@@ -68,6 +79,45 @@ export class EvidenceService {
   /** Adds a derived `effectiveStatus` using the shared helper (approved + past expiry -> expired). */
   private decorate<T extends { status: EvidenceStatus; expiryDate: Date | null }>(e: T) {
     return { ...e, effectiveStatus: effectiveEvidenceStatus(e) as EvidenceStatus };
+  }
+
+  private hasBroadEvidenceAccess(actor: Pick<AuthUser, 'roles'>): boolean {
+    return actor.roles.some((role) => BROAD_EVIDENCE_ROLES.has(role));
+  }
+
+  private async actorPersonId(actor: Pick<AuthUser, 'id' | 'email'>): Promise<string | null> {
+    const person = await this.prisma.person.findFirst({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [{ userId: actor.id }, { email: actor.email }],
+      },
+      select: { id: true },
+    });
+    return person?.id ?? null;
+  }
+
+  private async scopedEvidenceWhere(
+    actor: AuthUser,
+    baseWhere: Prisma.NdiEvidenceWhereInput,
+  ): Promise<Prisma.NdiEvidenceWhereInput> {
+    if (this.hasBroadEvidenceAccess(actor)) return { ...baseWhere, deletedAt: null };
+    const personId = await this.actorPersonId(actor);
+    const visible: Prisma.NdiEvidenceWhereInput[] = [
+      { submittedBy: actor.email },
+      { reviewedBy: actor.email },
+    ];
+    if (personId) visible.push({ spec: { ownerPersonId: personId } });
+    return { AND: [{ ...baseWhere, deletedAt: null }, { OR: visible }] };
+  }
+
+  private assertEvidenceOwnership(actor: AuthUser, evidence: { submittedBy: string }) {
+    if (this.hasBroadEvidenceAccess(actor) || evidence.submittedBy === actor.email) return;
+    throw new ForbiddenException('Only the submitter or evidence administrator can change this evidence');
+  }
+
+  private actorEmail(actor: AuthUser): string {
+    return actor.email;
   }
 
   /**
@@ -123,34 +173,46 @@ export class EvidenceService {
     return result;
   }
 
-  async listBySpec(specId: string) {
+  async listBySpec(specId: string, actor: AuthUser) {
     const rows = await this.prisma.ndiEvidence.findMany({
-      where: { specId, deletedAt: null },
+      where: await this.scopedEvidenceWhere(actor, { specId }),
       orderBy: { createdAt: 'desc' },
     });
     return rows.map((r) => this.decorate(r));
   }
 
-  async get(id: string) {
+  async get(id: string, actor: AuthUser) {
     const e = await this.prisma.ndiEvidence.findFirst({
-      where: { id, deletedAt: null },
+      where: await this.scopedEvidenceWhere(actor, { id }),
       include: { spec: specSelect },
     });
     if (!e) throw new NotFoundException('evidence not found');
     return this.decorate(e);
   }
 
-  private async requireSpec(specId: string) {
+  private async requireSpec(specId: string, actor: AuthUser) {
     const spec = await this.prisma.ndiSpecification.findFirst({
       where: { id: specId, deletedAt: null },
+      select: { id: true, ownerPersonId: true },
     });
     if (!spec) throw new BadRequestException('NDI specification not found');
-    return spec;
+    if (this.hasBroadEvidenceAccess(actor)) return spec;
+    const personId = await this.actorPersonId(actor);
+    if (spec.ownerPersonId && spec.ownerPersonId === personId) return spec;
+    throw new ForbiddenException('NDI specification is outside your evidence responsibility');
   }
 
-  async create(dto: CreateEvidenceDto, file: UploadedFile, actor: string) {
+  private async requireReviewAccess(id: string, actor: AuthUser) {
+    const evidence = await this.get(id, actor);
+    if (this.hasBroadEvidenceAccess(actor)) return evidence;
+    const personId = await this.actorPersonId(actor);
+    if (personId && evidence.spec?.ownerPersonId === personId) return evidence;
+    throw new ForbiddenException('Only an assigned evidence reviewer can review this evidence');
+  }
+
+  async create(dto: CreateEvidenceDto, file: UploadedFile, actor: AuthUser) {
     if (!file) throw new BadRequestException('A file is required');
-    await this.requireSpec(dto.specId);
+    await this.requireSpec(dto.specId, actor);
 
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const safeExt = (file.originalname.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? '').toLowerCase();
@@ -174,13 +236,13 @@ export class EvidenceService {
         mimeType: file.mimetype,
         sizeBytes: file.size,
         sha256,
-        submittedBy: actor,
+        submittedBy: this.actorEmail(actor),
         submittedAt: submitNow ? new Date() : null,
         expiryDate,
       },
     });
     await this.audit.log({
-      actor,
+      actor: this.actorEmail(actor),
       action: submitNow ? 'evidence.submit' : 'evidence.create',
       entityType: 'evidence',
       entityId: evidence.id,
@@ -189,17 +251,18 @@ export class EvidenceService {
     return this.decorate(evidence);
   }
 
-  async submit(id: string, actor: string) {
-    const e = await this.get(id);
+  async submit(id: string, actor: AuthUser) {
+    const e = await this.get(id, actor);
+    this.assertEvidenceOwnership(actor, e);
     if (e.status !== 'draft' && e.status !== 'rejected') {
       throw new BadRequestException('Only draft or rejected evidence can be submitted');
     }
     const updated = await this.prisma.ndiEvidence.update({
       where: { id },
-      data: { status: 'submitted', submittedBy: actor, submittedAt: new Date() },
+      data: { status: 'submitted', submittedBy: this.actorEmail(actor), submittedAt: new Date() },
     });
     await this.audit.log({
-      actor,
+      actor: this.actorEmail(actor),
       action: 'evidence.submit',
       entityType: 'evidence',
       entityId: id,
@@ -207,13 +270,13 @@ export class EvidenceService {
     return this.decorate(updated);
   }
 
-  async review(id: string, dto: ReviewEvidenceDto, actor: string) {
-    const e = await this.get(id);
+  async review(id: string, dto: ReviewEvidenceDto, actor: AuthUser) {
+    const e = await this.requireReviewAccess(id, actor);
     if (e.status !== 'submitted' && e.status !== 'under_review') {
       throw new BadRequestException('Only submitted evidence can be reviewed');
     }
     // Separation of duties: the submitter cannot review their own evidence.
-    if (e.submittedBy === actor) {
+    if (e.submittedBy === this.actorEmail(actor)) {
       throw new ForbiddenException('You cannot review evidence you submitted');
     }
     const status: EvidenceStatus = dto.decision === 'approve' ? 'approved' : 'rejected';
@@ -221,13 +284,13 @@ export class EvidenceService {
       where: { id },
       data: {
         status,
-        reviewedBy: actor,
+        reviewedBy: this.actorEmail(actor),
         reviewedAt: new Date(),
         reviewComment: dto.comment ?? null,
       },
     });
     await this.audit.log({
-      actor,
+      actor: this.actorEmail(actor),
       action: `evidence.${dto.decision}`,
       entityType: 'evidence',
       entityId: id,
@@ -236,17 +299,17 @@ export class EvidenceService {
     return this.decorate(updated);
   }
 
-  async revoke(id: string, actor: string) {
-    const e = await this.get(id);
+  async revoke(id: string, actor: AuthUser) {
+    const e = await this.requireReviewAccess(id, actor);
     if (e.status !== 'approved') {
       throw new BadRequestException('Only approved evidence can be revoked');
     }
     const updated = await this.prisma.ndiEvidence.update({
       where: { id },
-      data: { status: 'revoked', reviewedBy: actor, reviewedAt: new Date() },
+      data: { status: 'revoked', reviewedBy: this.actorEmail(actor), reviewedAt: new Date() },
     });
     await this.audit.log({
-      actor,
+      actor: this.actorEmail(actor),
       action: 'evidence.revoke',
       entityType: 'evidence',
       entityId: id,
@@ -254,8 +317,9 @@ export class EvidenceService {
     return this.decorate(updated);
   }
 
-  async remove(id: string, actor: string) {
-    const e = await this.get(id);
+  async remove(id: string, actor: AuthUser) {
+    const e = await this.get(id, actor);
+    this.assertEvidenceOwnership(actor, e);
     await this.prisma.ndiEvidence.update({ where: { id }, data: { deletedAt: new Date() } });
     // Best-effort file cleanup; never fail the request on a missing file.
     try {
@@ -264,7 +328,7 @@ export class EvidenceService {
       /* ignore */
     }
     await this.audit.log({
-      actor,
+      actor: this.actorEmail(actor),
       action: 'evidence.delete',
       entityType: 'evidence',
       entityId: id,
@@ -273,12 +337,12 @@ export class EvidenceService {
   }
 
   /** Resolves the absolute file path for download and records the access in the audit trail. */
-  async fileFor(id: string, actor: string) {
-    const e = await this.get(id);
+  async fileFor(id: string, actor: AuthUser) {
+    const e = await this.get(id, actor);
     const path = join(this.storageDir, e.fileName);
     if (!existsSync(path)) throw new NotFoundException('evidence file not found');
     await this.audit.log({
-      actor,
+      actor: this.actorEmail(actor),
       action: 'evidence.download',
       entityType: 'evidence',
       entityId: id,

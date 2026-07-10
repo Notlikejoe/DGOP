@@ -18,6 +18,9 @@ import { ScoringModule } from './scoring/scoring.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TrainingModule } from './training/training.module';
 import { DataQualityModule } from './data-quality/data-quality.module';
+import { SecurityGovernanceModule } from './security-governance/security-governance.module';
+import { IntegrationsModule } from './integrations/integrations.module';
+import { OpenDataModule } from './open-data/open-data.module';
 import { AccessModule } from './access/access.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -49,6 +52,9 @@ import { PermissionsGuard } from './access/permissions.guard';
     DashboardModule,
     TrainingModule,
     DataQualityModule,
+    SecurityGovernanceModule,
+    IntegrationsModule,
+    OpenDataModule,
     HealthModule,
   ],
   providers: [

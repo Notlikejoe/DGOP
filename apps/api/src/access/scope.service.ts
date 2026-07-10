@@ -16,12 +16,22 @@ interface ScopeRow {
   includeDescendants: boolean;
 }
 
+interface RoleWithScope {
+  code: string;
+  isSystem: boolean;
+  maxClassificationRank: number | null;
+  dataScopes: ScopeRow[];
+}
+
+const EMPTY_SCOPE: EffectiveScope = { orgUnits: [], domains: [], maxClassRank: null };
+
 /**
  * Resolves a user's effective data-visibility scope (union across their roles) and
  * builds Prisma where-fragments for dimension-bearing data (assets, arriving in Sprint 4).
  *
- * Semantics: a role with no scope rows for a dimension is unrestricted on that dimension,
- * so the union becomes 'all'. system_admin is always fully unrestricted.
+ * Semantics: system roles with no scope rows remain unrestricted for seeded demo/admin
+ * behavior. Custom roles with permissions but no scope rows are default-deny until an
+ * administrator explicitly grants org-unit/domain scope.
  */
 @Injectable()
 export class ScopeService {
@@ -31,19 +41,19 @@ export class ScopeService {
     if (roleCodes.includes('system_admin')) {
       return { orgUnits: 'all', domains: 'all', maxClassRank: null };
     }
-    const roles = await this.prisma.role.findMany({
+    const roles = (await this.prisma.role.findMany({
       where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
       include: { dataScopes: true },
-    });
-    if (roles.length === 0) return { orgUnits: 'all', domains: 'all', maxClassRank: null };
+    })) as RoleWithScope[];
+    if (roles.length === 0) return EMPTY_SCOPE;
 
     const orgUnits = await this.resolveDimension(
-      roles.map((r) => r.dataScopes as ScopeRow[]),
+      roles,
       'org_unit',
       'organizationUnit',
     );
     const domains = await this.resolveDimension(
-      roles.map((r) => r.dataScopes as ScopeRow[]),
+      roles,
       'data_domain',
       'dataDomain',
     );
@@ -62,16 +72,18 @@ export class ScopeService {
   }
 
   private async resolveDimension(
-    perRoleScopes: ScopeRow[][],
+    roles: RoleWithScope[],
     scopeType: 'org_unit' | 'data_domain',
     model: 'organizationUnit' | 'dataDomain',
   ): Promise<string[] | 'all'> {
     const base = new Set<string>();
     const expand = new Set<string>();
-    for (const scopes of perRoleScopes) {
-      const rows = scopes.filter((s) => s.scopeType === scopeType);
-      // A role with no rows for this dimension is unrestricted -> union is 'all'.
-      if (rows.length === 0) return 'all';
+    for (const role of roles) {
+      const rows = role.dataScopes.filter((s) => s.scopeType === scopeType);
+      if (rows.length === 0) {
+        if (role.isSystem || role.dataScopes.length > 0) return 'all';
+        continue;
+      }
       for (const row of rows) {
         base.add(row.refId);
         if (row.includeDescendants) expand.add(row.refId);

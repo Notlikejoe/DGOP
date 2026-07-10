@@ -1,0 +1,317 @@
+<section class="page integrations-page">
+  <header class="page__header">
+    <div>
+      <span class="eyebrow">{{ t('integrations.eyebrow') }}</span>
+      <h1>{{ t('integrations.title') }}</h1>
+      <p class="page__subtitle">{{ t('integrations.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <a class="ds-btn ds-btn--ghost" routerLink="/assets">{{ t('integrations.openAssets') }}</a>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <div class="integration-strip" aria-label="Integration health">
+      <article class="strip-card strip-card--hero">
+        <span>{{ t('integrations.metric.health') }}</span>
+        <strong>{{ s.healthyConnectors }}/{{ s.connectors }}</strong>
+        <small>{{ t('integrations.metric.healthHelp') }}</small>
+      </article>
+      <article class="strip-card">
+        <span>{{ t('integrations.metric.syncedAssets') }}</span>
+        <strong>{{ s.syncedAssets }}</strong>
+        <small>{{ t('integrations.metric.syncedHelp') }}</small>
+      </article>
+      <article class="strip-card">
+        <span>{{ t('integrations.metric.batches') }}</span>
+        <strong>{{ s.batches }}</strong>
+        <small>{{ s.failedBatches }} {{ t('integrations.metric.needReview') }}</small>
+      </article>
+      <article class="strip-card">
+        <span>{{ t('integrations.metric.errors') }}</span>
+        <strong>{{ s.openErrors }}</strong>
+        <small>{{ t('integrations.metric.errorsHelp') }}</small>
+      </article>
+      <article class="strip-card">
+        <span>{{ t('integrations.metric.writebacks') }}</span>
+        <strong>{{ s.simulatedWritebacks }}</strong>
+        <small>{{ t('integrations.metric.writebackHelp') }}</small>
+      </article>
+    </div>
+  }
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('assets.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card"><p class="error">{{ t('integrations.error') }}</p></div>
+  } @else {
+    <div class="integration-workspace">
+      <section class="ds-card connector-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('integrations.connectors.eyebrow') }}</span>
+            <h2>{{ t('integrations.connectors.title') }}</h2>
+            <p>{{ t('integrations.connectors.subtitle') }}</p>
+          </div>
+          <app-icon name="plug" />
+        </div>
+
+        <div class="connector-list">
+          @for (connector of connectors(); track connector.id) {
+            <button
+              type="button"
+              class="connector-row"
+              [class.connector-row--active]="selectedConnector()?.id === connector.id"
+              (click)="selectConnector(connector.id)"
+            >
+              <span class="connector-row__icon"><app-icon name="database" /></span>
+              <span class="connector-row__main">
+                <strong>{{ name(connector) }}</strong>
+                <small>{{ connector.code }} - {{ t('integrations.trust.' + connector.sourceTrust) }}</small>
+              </span>
+              <app-status-chip [kind]="connectorKind(connector.status)" [label]="t('integrations.connectorStatus.' + connector.status)" />
+              @if (connector.lastError) {
+                <span class="connector-row__error">{{ connector.lastError }}</span>
+              }
+            </button>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('integrations.connectors.empty') }}</p></div>
+          }
+        </div>
+      </section>
+
+      <section class="ds-card sync-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('integrations.sync.eyebrow') }}</span>
+            <h2>{{ t('integrations.sync.title') }}</h2>
+            <p>{{ t('integrations.sync.subtitle') }}</p>
+          </div>
+        </div>
+
+        <div class="sync-form">
+          <label class="field">
+            <span class="field__label">{{ t('integrations.field.connector') }}</span>
+            <select class="field__input" [ngModel]="selectedConnector()?.id ?? ''" (ngModelChange)="selectConnector($event)">
+              @for (connector of connectors(); track connector.id) {
+                <option [value]="connector.id">{{ name(connector) }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="field__label">{{ t('integrations.field.adapter') }}</span>
+            <select class="field__input" [ngModel]="adapterType()" (ngModelChange)="setAdapter($event)">
+              @for (adapter of adapters; track adapter.value) {
+                <option [value]="adapter.value">{{ t(adapter.labelKey) }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        @if (adapterType() === 'catalog_csv') {
+          <div class="csv-area">
+            <label class="csv-upload">
+              <span class="csv-upload__label">{{ t('integrations.file.choose') }}</span>
+              <span class="csv-upload__hint">{{ t('integrations.file.help') }}</span>
+              <input #catalogInput type="file" accept=".csv,text/csv" (change)="onFileChange($event)" />
+            </label>
+            @if (csvFileName()) {
+              <div class="csv-file">
+                <strong>{{ csvFileName() }}</strong>
+                <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="clearCsv(catalogInput)">
+                  {{ t('integrations.file.clear') }}
+                </button>
+              </div>
+            }
+            <label class="field">
+              <span class="field__label">{{ t('integrations.file.paste') }}</span>
+              <textarea class="field__input mono" rows="8" [ngModel]="csvText()" (ngModelChange)="setCsv($event)"></textarea>
+            </label>
+          </div>
+        } @else {
+          <div class="mock-callout">
+            <app-icon name="server" />
+            <div>
+              <strong>{{ t('integrations.mock.title') }}</strong>
+              <p>{{ t('integrations.mock.copy') }}</p>
+            </div>
+          </div>
+        }
+
+        <div class="sync-actions">
+          <button type="button" class="ds-btn ds-btn--ghost" [disabled]="!canPreviewOrRun() || previewing()" (click)="previewMapping()">
+            {{ previewing() ? t('integrations.preview.running') : t('integrations.preview.action') }}
+          </button>
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canRun || !canPreviewOrRun() || running()" (click)="runSync()">
+            {{ running() ? t('integrations.sync.running') : t('integrations.sync.action') }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    @if (preview(); as p) {
+      <section class="ds-card preview-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('integrations.preview.eyebrow') }}</span>
+            <h2>{{ t('integrations.preview.title') }}</h2>
+            <p>{{ p.totalRows }} {{ t('integrations.preview.rows') }}</p>
+          </div>
+        </div>
+
+        <div class="mapping-grid">
+          @for (field of p.fields; track field.target) {
+            <article class="mapping-row">
+              <div>
+                <strong>{{ t('integrations.map.' + field.target) }}</strong>
+                <p>{{ field.source || t('integrations.map.notMapped') }}</p>
+              </div>
+              <app-status-chip [kind]="mappingKind(field.status, field.required)" [label]="t('integrations.map.' + field.status)" />
+            </article>
+          }
+        </div>
+
+        <div class="sample-table">
+          <table class="ds-table">
+            <thead>
+              <tr>
+                <th>{{ t('integrations.map.externalId') }}</th>
+                <th>{{ t('integrations.map.code') }}</th>
+                <th>{{ t('integrations.map.nameEn') }}</th>
+                <th>{{ t('integrations.map.domainCode') }}</th>
+                <th>{{ t('integrations.map.classificationCode') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of p.sampleRows; track row['code']) {
+                <tr>
+                  <td>{{ row['externalId'] || '-' }}</td>
+                  <td><code>{{ row['code'] || '-' }}</code></td>
+                  <td>{{ row['nameEn'] || '-' }}</td>
+                  <td>{{ row['domainCode'] || '-' }}</td>
+                  <td>{{ row['classificationCode'] || '-' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (p.issues.length) {
+          <div class="preview-issues">
+            <strong>{{ t('integrations.preview.issues') }}</strong>
+            @for (issue of p.issues; track issue.row + issue.message) {
+              <span>{{ t('integrations.error.row') }} {{ issue.row }}: {{ issue.message }}</span>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    <div class="history-grid">
+      <section class="ds-card batch-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('integrations.history.eyebrow') }}</span>
+            <h2>{{ t('integrations.history.title') }}</h2>
+          </div>
+        </div>
+
+        <div class="batch-list">
+          @for (batch of batches(); track batch.id) {
+            <button
+              type="button"
+              class="batch-row"
+              [class.batch-row--active]="selectedBatch()?.id === batch.id"
+              (click)="selectBatch(batch.id)"
+            >
+              <span class="badge-code">{{ batch.code }}</span>
+              <span class="batch-row__main">
+                <strong>{{ name(batch.connector) }}</strong>
+                <small>{{ date(batch.completedAt || batch.startedAt) }}</small>
+              </span>
+              <span class="batch-row__counts">
+                <strong>{{ batch.createdRows + batch.updatedRows }}</strong>
+                <small>{{ t('integrations.history.changed') }}</small>
+              </span>
+              <app-status-chip [kind]="batchKind(batch.status)" [label]="t('integrations.batchStatus.' + batch.status)" />
+            </button>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('integrations.history.empty') }}</p></div>
+          }
+        </div>
+      </section>
+
+      <aside class="ds-card detail-panel">
+        @if (selectedBatch(); as batch) {
+          <div class="detail-head">
+            <div>
+              <span class="badge-code">{{ batch.code }}</span>
+              <h2>{{ t('integrations.detail.title') }}</h2>
+              <p>{{ name(batch.connector) }} - {{ date(batch.completedAt || batch.startedAt) }}</p>
+            </div>
+            <app-status-chip [kind]="batchKind(batch.status)" [label]="t('integrations.batchStatus.' + batch.status)" />
+          </div>
+          <dl class="facts">
+            <div><dt>{{ t('integrations.detail.total') }}</dt><dd>{{ batch.totalRows }}</dd></div>
+            <div><dt>{{ t('integrations.detail.created') }}</dt><dd>{{ batch.createdRows }}</dd></div>
+            <div><dt>{{ t('integrations.detail.updated') }}</dt><dd>{{ batch.updatedRows }}</dd></div>
+            <div><dt>{{ t('integrations.detail.unchanged') }}</dt><dd>{{ batch.unchangedRows }}</dd></div>
+            <div><dt>{{ t('integrations.detail.errors') }}</dt><dd>{{ batch.errorRows }}</dd></div>
+          </dl>
+
+          <div class="error-list">
+            <strong>{{ t('integrations.errors.title') }}</strong>
+            @for (error of selectedErrors(); track error.id) {
+              <article class="error-row">
+                <span>{{ t('integrations.error.row') }} {{ error.rowNumber }}</span>
+                <div>
+                  <strong>{{ error.field || error.externalId || '-' }}</strong>
+                  <p>{{ error.message }}</p>
+                </div>
+              </article>
+            } @empty {
+              <div class="empty empty--small"><p>{{ t('integrations.errors.empty') }}</p></div>
+            }
+          </div>
+        } @else {
+          <div class="empty"><p>{{ t('integrations.history.empty') }}</p></div>
+        }
+      </aside>
+    </div>
+
+    <section class="ds-card writeback-panel">
+      <div class="panel-head compact">
+        <div>
+          <span class="eyebrow">{{ t('integrations.writeback.eyebrow') }}</span>
+          <h2>{{ t('integrations.writeback.title') }}</h2>
+          <p>{{ t('integrations.writeback.subtitle') }}</p>
+        </div>
+        <app-icon name="fileCheck" />
+      </div>
+
+      <div class="writeback-grid">
+        <label class="field">
+          <span class="field__label">{{ t('integrations.writeback.asset') }}</span>
+          <select class="field__input" [ngModel]="selectedWritebackAssetId()" (ngModelChange)="selectedWritebackAssetId.set($event)">
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ name(asset) }} - {{ asset.code }}</option>
+            }
+          </select>
+        </label>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canWriteback || !selectedWritebackAssetId() || writingBack()" (click)="simulateWriteback()">
+          {{ writingBack() ? t('integrations.writeback.running') : t('integrations.writeback.action') }}
+        </button>
+      </div>
+
+      @if (writeback(); as log) {
+        <div class="writeback-result">
+          <app-status-chip kind="success" [label]="t('integrations.writeback.status.' + log.status)" />
+          <span>{{ name(log.asset) }} - {{ name(log.connector) }}</span>
+          <small>{{ date(log.createdAt) }}</small>
+        </div>
+      }
+    </section>
+  }
+</section>

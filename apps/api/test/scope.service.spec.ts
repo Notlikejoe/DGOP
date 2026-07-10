@@ -7,6 +7,7 @@ import { ScopeService } from '../src/access/scope.service';
 
 type Role = {
   code: string;
+  isSystem?: boolean;
   maxClassificationRank: number | null;
   dataScopes: {
     scopeType: 'org_unit' | 'data_domain';
@@ -30,7 +31,7 @@ const DOMAINS = [
 function makePrisma(roles: Role[]) {
   return {
     role: {
-      findMany: async () => roles,
+      findMany: async () => roles.map((role) => ({ ...role, isSystem: role.isSystem ?? false })),
     },
     organizationUnit: {
       findMany: async () => ORG_UNITS,
@@ -54,17 +55,25 @@ test('system_admin is fully unrestricted', async () => {
   assert.deepStrictEqual(r, { orgUnits: 'all', domains: 'all', maxClassRank: null });
 });
 
-test('no roles -> unrestricted (preserves current no-filter behavior)', async () => {
+test('no roles -> empty data scope', async () => {
   const svc = makeService([]);
   const r = await svc.resolve(['unknown_role']);
-  assert.deepStrictEqual(r, { orgUnits: 'all', domains: 'all', maxClassRank: null });
+  assert.deepStrictEqual(r, { orgUnits: [], domains: [], maxClassRank: null });
 });
 
-test('role with no scopes is unrestricted', async () => {
-  const svc = makeService([{ code: 'r1', maxClassificationRank: null, dataScopes: [] }]);
+test('system role with no scopes is unrestricted', async () => {
+  const svc = makeService([{ code: 'r1', isSystem: true, maxClassificationRank: null, dataScopes: [] }]);
   const r = await svc.resolve(['r1']);
   assert.strictEqual(r.orgUnits, 'all');
   assert.strictEqual(r.domains, 'all');
+  assert.strictEqual(r.maxClassRank, null);
+});
+
+test('custom role with no scopes is empty until explicit scope is granted', async () => {
+  const svc = makeService([{ code: 'r1', maxClassificationRank: null, dataScopes: [] }]);
+  const r = await svc.resolve(['r1']);
+  assert.deepStrictEqual(r.orgUnits, []);
+  assert.deepStrictEqual(r.domains, []);
   assert.strictEqual(r.maxClassRank, null);
 });
 
@@ -100,7 +109,7 @@ test('union: one unrestricted role makes the dimension unrestricted', async () =
       maxClassificationRank: null,
       dataScopes: [{ scopeType: 'org_unit', refId: 'ou2', includeDescendants: false }],
     },
-    { code: 'open', maxClassificationRank: null, dataScopes: [] },
+    { code: 'open', isSystem: true, maxClassificationRank: null, dataScopes: [] },
   ]);
   const r = await svc.resolve(['restricted', 'open']);
   assert.strictEqual(r.orgUnits, 'all');

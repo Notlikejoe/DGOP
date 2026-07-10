@@ -117,6 +117,26 @@ export const routes: Routes = [
           import('./pages/governance/data-quality/data-quality').then((m) => m.DataQualityPage),
       },
       {
+        path: 'governance/security',
+        canActivate: [permissionGuard('security_governance.view')],
+        loadComponent: () =>
+          import('./pages/governance/security-governance/security-governance').then(
+            (m) => m.SecurityGovernancePage,
+          ),
+      },
+      {
+        path: 'governance/open-data',
+        canActivate: [permissionGuard('open_data_candidates.view')],
+        loadComponent: () =>
+          import('./pages/governance/open-data/open-data').then((m) => m.OpenDataPage),
+      },
+      {
+        path: 'governance/open-data/:id',
+        canActivate: [permissionGuard('open_data_candidates.view')],
+        loadComponent: () =>
+          import('./pages/governance/open-data/open-data').then((m) => m.OpenDataPage),
+      },
+      {
         path: 'admin',
         loadComponent: () =>
           import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),
@@ -136,6 +156,12 @@ export const routes: Routes = [
         path: 'admin/audit',
         canActivate: [permissionGuard('audit.view')],
         loadComponent: () => import('./pages/admin/audit/audit-log').then((m) => m.AuditLogPage),
+      },
+      {
+        path: 'admin/integrations',
+        canActivate: [permissionGuard('integrations.view')],
+        loadComponent: () =>
+          import('./pages/admin/integrations/integrations').then((m) => m.IntegrationsPage),
       },
       {
         path: 'admin/users',

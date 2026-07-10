@@ -58,6 +58,16 @@ const ADMIN_RESOURCES = [
   'expert_profiles',
   'mentorship_pairs',
   'data_quality_issues',
+  'data_quality_rules',
+  'data_quality_profiles',
+  'security_governance',
+  'masking_policies',
+  'role_data_access_maps',
+  'access_reviews',
+  'dlp_incidents',
+  'classification_change_requests',
+  'integrations',
+  'open_data_candidates',
 ];
 const CRUD_ACTIONS = ['view', 'create', 'edit', 'delete'];
 
@@ -79,6 +89,9 @@ const permissionCatalog: { resource: string; action: string }[] = [
   { resource: 'ndi_scoring', action: 'view' },
   // Bulk CSV import of data quality issues.
   { resource: 'data_quality_issues', action: 'import' },
+  // Catalog and external tool integration operations.
+  { resource: 'integrations', action: 'run' },
+  { resource: 'integrations', action: 'writeback' },
   ...ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => ({ resource: r, action: a }))),
 ];
 
@@ -98,6 +111,8 @@ const rolePermissionMap: Record<string, string[]> = {
     'evidence.delete',
     'ndi_scoring.view',
     'data_quality_issues.import',
+    'integrations.run',
+    'integrations.writeback',
     'audit.view',
   ],
   business_steward: [
@@ -125,6 +140,12 @@ const rolePermissionMap: Record<string, string[]> = {
     'assignments.view',
     'workflow_cases.view',
     'workflow_tasks.view',
+    'security_governance.view',
+    'access_reviews.view',
+    'access_reviews.edit',
+    'open_data_candidates.view',
+    'open_data_candidates.create',
+    'open_data_candidates.edit',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -200,6 +221,9 @@ const rolePermissionMap: Record<string, string[]> = {
     'workflow_tasks.view',
     'ndi_specifications.view',
     'ndi_scoring.view',
+    'security_governance.view',
+    'access_reviews.view',
+    'open_data_candidates.view',
     'training_courses.view',
     'training_requirements.view',
     'training_assignments.view',
@@ -231,6 +255,11 @@ const rolePermissionMap: Record<string, string[]> = {
     'data_quality_issues.create',
     'data_quality_issues.edit',
     'data_quality_issues.import',
+    'data_quality_rules.view',
+    'data_quality_rules.create',
+    'data_quality_rules.edit',
+    'data_quality_profiles.view',
+    'data_quality_profiles.create',
     'training_assignments.view',
     'training_assignments.edit',
     'certification_tracks.view',
@@ -263,6 +292,85 @@ const rolePermissionMap: Record<string, string[]> = {
     'expert_profiles.view',
     'mentorship_pairs.view',
     'data_quality_issues.view',
+    'data_quality_rules.view',
+    'data_quality_profiles.view',
+    'security_governance.view',
+    'masking_policies.view',
+    'role_data_access_maps.view',
+    'access_reviews.view',
+    'dlp_incidents.view',
+    'classification_change_requests.view',
+    'integrations.view',
+    'open_data_candidates.view',
+    'audit.view',
+  ],
+  privacy_officer: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'people.view',
+    'roles.view',
+    'classifications.view',
+    'security_governance.view',
+    'security_governance.create',
+    'security_governance.edit',
+    'masking_policies.view',
+    'masking_policies.create',
+    'masking_policies.edit',
+    'role_data_access_maps.view',
+    'access_reviews.view',
+    'access_reviews.edit',
+    'dlp_incidents.view',
+    'dlp_incidents.create',
+    'dlp_incidents.edit',
+    'classification_change_requests.view',
+    'classification_change_requests.create',
+    'classification_change_requests.edit',
+    'integrations.view',
+    'integrations.run',
+    'integrations.writeback',
+    'open_data_candidates.view',
+    'audit.view',
+  ],
+  od_officer: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'people.view',
+    'classifications.view',
+    'assignments.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'data_quality_issues.view',
+    'data_quality_rules.view',
+    'data_quality_profiles.view',
+    'security_governance.view',
+    'open_data_candidates.view',
+    'open_data_candidates.create',
+    'open_data_candidates.edit',
+    'open_data_candidates.delete',
+    'audit.view',
+  ],
+  security_reviewer: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'people.view',
+    'users.view',
+    'roles.view',
+    'classifications.view',
+    'security_governance.view',
+    'security_governance.create',
+    'security_governance.edit',
+    'masking_policies.view',
+    'role_data_access_maps.view',
+    'role_data_access_maps.create',
+    'role_data_access_maps.edit',
+    'access_reviews.view',
+    'access_reviews.create',
+    'access_reviews.edit',
+    'dlp_incidents.view',
+    'dlp_incidents.create',
+    'dlp_incidents.edit',
+    'classification_change_requests.view',
+    'classification_change_requests.edit',
     'audit.view',
   ],
   ndi_evidence_owner: [
@@ -586,10 +694,10 @@ const people = [
 ];
 
 const sampleUserRoles = [
-  { email: 'sara.alamri@dgop.local', roleCodes: ['enterprise_data_steward', 'ndi_evidence_owner'] },
+  { email: 'sara.alamri@dgop.local', roleCodes: ['enterprise_data_steward', 'ndi_evidence_owner', 'privacy_officer', 'od_officer'] },
   { email: 'khalid.hassan@dgop.local', roleCodes: ['data_owner'] },
   { email: 'mona.youssef@dgop.local', roleCodes: ['business_steward', 'dq_steward'] },
-  { email: 'omar.farouk@dgop.local', roleCodes: ['technical_steward', 'operational_data_steward'] },
+  { email: 'omar.farouk@dgop.local', roleCodes: ['technical_steward', 'operational_data_steward', 'security_reviewer'] },
   { email: 'layla.nasser@dgop.local', roleCodes: ['data_owner', 'project_data_steward'] },
 ];
 
@@ -802,6 +910,228 @@ const sampleDataQualityIssues = [
   },
 ];
 
+const sampleDataQualityRules = [
+  {
+    code: 'DQR-PAT-NID-COMP',
+    nameEn: 'Patient national ID completeness',
+    nameAr: 'اكتمال رقم الهوية للمريض',
+    description: 'Patient records must carry a national ID unless formally exempted.',
+    dimension: 'completeness',
+    severity: 'high',
+    assetCode: 'AST-EMR-PATIENTS',
+    domainCode: 'clinical',
+    ownerEmail: 'mona.youssef@dgop.local',
+    thresholdExpression: 'missing_national_id_pct <= 2',
+    checkFrequency: 'daily',
+    impactSummary: 'Incomplete patient identity data increases matching, reporting, and privacy risk.',
+    status: 'deployed',
+    score: 88,
+  },
+  {
+    code: 'DQR-FIN-POSTING-CONS',
+    nameEn: 'Revenue posting date consistency',
+    nameAr: 'اتساق تاريخ ترحيل الإيرادات',
+    description: 'Billing date and ledger posting date should remain within the approved close window.',
+    dimension: 'consistency',
+    severity: 'medium',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    ownerEmail: 'khalid.hassan@dgop.local',
+    thresholdExpression: 'posting_date_variance_days <= 3',
+    checkFrequency: 'weekly',
+    impactSummary: 'Posting drift affects monthly close confidence and NDI evidence quality.',
+    status: 'approved',
+    score: 76,
+  },
+  {
+    code: 'DQR-SUP-TAX-VALID',
+    nameEn: 'Supplier tax number validity',
+    nameAr: 'صحة الرقم الضريبي للمورد',
+    description: 'Supplier tax identifiers should match the approved numeric format.',
+    dimension: 'validity',
+    severity: 'medium',
+    assetCode: 'AST-FIN-INVOICES',
+    domainCode: 'finance',
+    ownerEmail: 'khalid.hassan@dgop.local',
+    thresholdExpression: 'invalid_tax_number_pct = 0',
+    checkFrequency: 'weekly',
+    impactSummary: 'Invalid supplier identity data delays procurement and tax reporting.',
+    status: 'in_review',
+    score: 71,
+  },
+];
+
+const sampleDataQualityProfiles = [
+  {
+    source: 'seed_profile',
+    assetCode: 'AST-EMR-PATIENTS',
+    domainCode: 'clinical',
+    rowCount: 420000,
+    columns: [
+      { columnName: 'national_id', dataType: 'varchar', completenessPct: 84, uniquenessPct: 99, validityPct: 93, pattern: '##########', anomalyCount: 12, recommendation: 'Create completeness rule for missing national IDs.', dimension: 'completeness' },
+      { columnName: 'date_of_birth', dataType: 'date', completenessPct: 98, uniquenessPct: 41, validityPct: 96, pattern: 'yyyy-mm-dd', anomalyCount: 3, recommendation: 'Monitor impossible dates and future values.', dimension: 'validity' },
+      { columnName: 'mobile_number', dataType: 'varchar', completenessPct: 89, uniquenessPct: 72, validityPct: 88, pattern: '+966#########', anomalyCount: 8, recommendation: 'Suggest phone-format validity rule.', dimension: 'validity' },
+    ],
+  },
+  {
+    source: 'seed_profile',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    rowCount: 86000,
+    columns: [
+      { columnName: 'invoice_id', dataType: 'varchar', completenessPct: 100, uniquenessPct: 99, validityPct: 99, pattern: 'INV-*', anomalyCount: 1, recommendation: null, dimension: 'uniqueness' },
+      { columnName: 'posting_date', dataType: 'date', completenessPct: 96, uniquenessPct: 8, validityPct: 91, pattern: 'yyyy-mm-dd', anomalyCount: 7, recommendation: 'Suggest consistency rule against billing date.', dimension: 'consistency' },
+      { columnName: 'amount_sar', dataType: 'decimal', completenessPct: 99, uniquenessPct: 62, validityPct: 94, pattern: 'decimal(18,2)', anomalyCount: 4, recommendation: 'Flag negative values outside approved adjustment types.', dimension: 'accuracy' },
+    ],
+  },
+];
+
+const sampleOpenDataCandidates = [
+  {
+    code: 'ODC-FIN-INVOICES',
+    assetCode: 'AST-FIN-INVOICES',
+    titleEn: 'Supplier Invoice Spend Extract',
+    titleAr: 'مستخلص إنفاق فواتير الموردين',
+    description: 'Candidate open dataset for aggregated supplier spend transparency.',
+    status: 'under_review',
+    publicationFrequency: 'quarterly',
+    publicationFormat: 'csv',
+    ownerEmail: 'khalid.hassan@dgop.local',
+    stewardEmail: 'omar.farouk@dgop.local',
+    reviewerEmail: 'sara.alamri@dgop.local',
+    personalDataAssessment: 'aggregated',
+    publicationValueScore: 82,
+    decisionNote: 'Requires ODIAO confirmation that supplier identifiers are aggregated before portal publication.',
+  },
+  {
+    code: 'ODC-FIN-REVENUE',
+    assetCode: 'AST-FIN-REVENUE',
+    titleEn: 'Revenue Cycle Public Indicators',
+    titleAr: 'مؤشرات عامة لدورة الإيرادات',
+    description: 'Candidate indicators for public reporting; currently blocked by restricted classification and personal data review.',
+    status: 'assessment',
+    publicationFrequency: 'monthly',
+    publicationFormat: 'api',
+    ownerEmail: 'khalid.hassan@dgop.local',
+    stewardEmail: 'mona.youssef@dgop.local',
+    reviewerEmail: 'sara.alamri@dgop.local',
+    personalDataAssessment: 'sensitive_personal_data',
+    publicationValueScore: 76,
+    decisionNote: 'Needs classification downgrade or aggregation proof before approval.',
+  },
+];
+
+const sampleMaskingPolicies = [
+  {
+    code: 'MSK-PERSONAL-ID',
+    nameEn: 'Personal identifier masking',
+    nameAr: 'إخفاء معرفات الأشخاص',
+    technique: 'dynamic_masking',
+    domainCode: 'clinical',
+    classificationCode: 'restricted',
+    description: 'Shows only the last four characters of national ID and contact values.',
+    previewBefore: '1234567890',
+    previewAfter: '******7890',
+    fieldsJson: { fields: ['national_id', 'mobile_number'], rule: 'show_last_4' },
+  },
+  {
+    code: 'MSK-FINANCE-TOKEN',
+    nameEn: 'Finance sensitive value tokenization',
+    nameAr: 'ترميز القيم المالية الحساسة',
+    technique: 'tokenization',
+    domainCode: 'finance',
+    classificationCode: 'restricted',
+    description: 'Tokenizes supplier and revenue identifiers before broad reporting use.',
+    previewBefore: 'SUP-984401',
+    previewAfter: 'tok_fin_7f31',
+    fieldsJson: { fields: ['supplier_tax_id', 'invoice_id'], rule: 'tokenize' },
+  },
+];
+
+const sampleRoleDataAccessMaps = [
+  {
+    roleCode: 'data_owner',
+    domainCode: 'finance',
+    classificationCode: 'restricted',
+    maskingCode: 'MSK-FINANCE-TOKEN',
+    personalDataAllowed: true,
+    approvalRequired: true,
+    businessJustification: 'Finance owners certify restricted finance access for monthly close and audit evidence.',
+  },
+  {
+    roleCode: 'dq_steward',
+    domainCode: 'clinical',
+    classificationCode: 'restricted',
+    maskingCode: 'MSK-PERSONAL-ID',
+    personalDataAllowed: false,
+    approvalRequired: true,
+    businessJustification: 'DQ stewards can diagnose quality patterns with masked identifiers only.',
+  },
+  {
+    roleCode: 'security_reviewer',
+    domainCode: 'clinical',
+    classificationCode: 'secret',
+    maskingCode: 'MSK-PERSONAL-ID',
+    personalDataAllowed: true,
+    approvalRequired: true,
+    businessJustification: 'Security reviewers investigate protection incidents under formal approval.',
+  },
+];
+
+function accessScopeKey(domainId?: string | null, classificationId?: string | null): string {
+  return `domain:${domainId ?? 'all'}|class:${classificationId ?? 'all'}`;
+}
+
+const sampleAccessReview = {
+  code: 'ARV-SEED-1',
+  title: 'Quarterly restricted data access certification',
+  description: 'Owners confirm that users still need restricted clinical and finance access.',
+  ownerEmail: 'sara.alamri@dgop.local',
+  items: [
+    {
+      userEmail: 'mona.youssef@dgop.local',
+      roleCode: 'dq_steward',
+      assetCode: 'AST-EMR-PATIENTS',
+      domainCode: 'clinical',
+      classificationCode: 'restricted',
+      decision: 'pending',
+      justification: 'Needs owner confirmation for masked quality remediation access.',
+    },
+    {
+      userEmail: 'khalid.hassan@dgop.local',
+      roleCode: 'data_owner',
+      assetCode: 'AST-FIN-REVENUE',
+      domainCode: 'finance',
+      classificationCode: 'restricted',
+      decision: 'certified',
+      justification: 'Finance owner remains accountable for monthly close evidence.',
+    },
+  ],
+};
+
+const sampleDlpIncidents = [
+  {
+    code: 'DLP-SEED-1',
+    title: 'Restricted patient export needs review',
+    description: 'A reporting export touched restricted patient fields and requires containment confirmation.',
+    severity: 'high',
+    status: 'under_review',
+    assetCode: 'AST-EMR-PATIENTS',
+    classificationCode: 'restricted',
+    assignedEmail: 'omar.farouk@dgop.local',
+    detectionSource: 'DLP monitor',
+  },
+];
+
+const sampleClassificationRequests = [
+  {
+    assetCode: 'AST-FIN-INVOICES',
+    toClassificationCode: 'restricted',
+    reason: 'Supplier invoice data includes identifiers that require restricted handling and masking.',
+    requestedBy: 'sara.alamri@dgop.local',
+  },
+];
+
 // Sample assignment rules: "for assets in <scope>, <roleType> is <person>" (by codes/emails).
 const assignmentRules: {
   nameEn: string;
@@ -853,6 +1183,43 @@ async function seedHierarchy(
   }
 }
 
+function addHours(base: Date, hours: number): Date {
+  return new Date(base.getTime() + hours * 60 * 60 * 1000);
+}
+
+function seedPriority(severity: string): 'P1' | 'P2' | 'P3' | 'P4' {
+  if (severity === 'critical') return 'P1';
+  if (severity === 'high') return 'P2';
+  if (severity === 'medium') return 'P3';
+  return 'P4';
+}
+
+function seedSlaDates(base: Date, priority: 'P1' | 'P2' | 'P3' | 'P4') {
+  const hours = {
+    P1: { triage: 4, remediation: 24, validation: 48 },
+    P2: { triage: 8, remediation: 48, validation: 72 },
+    P3: { triage: 24, remediation: 120, validation: 168 },
+    P4: { triage: 72, remediation: 240, validation: 336 },
+  }[priority];
+  return {
+    triageDueAt: addHours(base, hours.triage),
+    remediationDueAt: addHours(base, hours.remediation),
+    validationDueAt: addHours(base, hours.validation),
+  };
+}
+
+function seedProfileScore(columns: { completenessPct: number; uniquenessPct: number; validityPct: number; anomalyCount: number; recommendation: string | null }[]) {
+  const score = Math.round(
+    columns.reduce((sum, column) => sum + column.completenessPct + column.uniquenessPct + column.validityPct, 0) /
+      Math.max(1, columns.length * 3),
+  );
+  return {
+    qualityScore: score,
+    anomalyCount: columns.reduce((sum, column) => sum + column.anomalyCount, 0),
+    recommendedRules: columns.filter((column) => !!column.recommendation).length,
+  };
+}
+
 async function main() {
   for (const r of roles) {
     await prisma.role.upsert({
@@ -863,6 +1230,12 @@ async function main() {
   }
   // Remove any roles that are no longer part of the canonical set.
   await prisma.role.deleteMany({ where: { code: { notIn: roles.map((r) => r.code) } } });
+  await prisma.role.updateMany({ where: { code: 'business_steward' }, data: { maxClassificationRank: 2 } });
+  await prisma.role.updateMany({ where: { code: 'technical_steward' }, data: { maxClassificationRank: 2 } });
+  await prisma.role.updateMany({ where: { code: 'data_owner' }, data: { maxClassificationRank: 3 } });
+  await prisma.role.updateMany({ where: { code: 'dq_steward' }, data: { maxClassificationRank: 3 } });
+  await prisma.role.updateMany({ where: { code: 'privacy_officer' }, data: { maxClassificationRank: 4 } });
+  await prisma.role.updateMany({ where: { code: 'security_reviewer' }, data: { maxClassificationRank: 4 } });
 
   // Seed the permission catalog.
   const permByKey = new Map<string, string>();
@@ -911,9 +1284,14 @@ async function main() {
     });
   }
 
-  // Seed the initial admin user (local dev only).
+  // Seed the initial admin user. Demo passwords are allowed only for local dev/test.
+  const seedEnvironment = process.env.NODE_ENV ?? 'development';
+  const strictSeed = !['development', 'test'].includes(seedEnvironment);
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@dgop.local';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? (strictSeed ? '' : 'Admin@12345');
+  if (!adminPassword) {
+    throw new Error('SEED_ADMIN_PASSWORD must be set outside development');
+  }
   const passwordHash = await bcrypt.hash(adminPassword, 10);
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
@@ -1024,6 +1402,64 @@ async function main() {
   const assetByCode = new Map(
     (await prisma.dataAsset.findMany()).map((a) => [a.code, a.id]),
   );
+
+  const catalogConnector = await prisma.integrationConnector.upsert({
+    where: { code: 'CATALOG-MVP' },
+    update: {
+      nameEn: 'Enterprise Catalog',
+      nameAr: 'Enterprise Catalog',
+      description: 'Sprint 15 catalog connector for CSV and mock REST synchronization.',
+      type: 'catalog' as any,
+      direction: 'bidirectional' as any,
+      status: 'warning' as any,
+      sourceTrust: 'authoritative' as any,
+      fieldMappingJson: {
+        required: ['code', 'nameEn', 'nameAr'],
+        optional: ['externalId', 'domainCode', 'orgUnitCode', 'systemCode', 'capabilityCode', 'classificationCode'],
+      },
+      isActive: true,
+      deletedAt: null,
+    },
+    create: {
+      code: 'CATALOG-MVP',
+      nameEn: 'Enterprise Catalog',
+      nameAr: 'Enterprise Catalog',
+      description: 'Sprint 15 catalog connector for CSV and mock REST synchronization.',
+      type: 'catalog' as any,
+      direction: 'bidirectional' as any,
+      status: 'warning' as any,
+      sourceTrust: 'authoritative' as any,
+      fieldMappingJson: {
+        required: ['code', 'nameEn', 'nameAr'],
+        optional: ['externalId', 'domainCode', 'orgUnitCode', 'systemCode', 'capabilityCode', 'classificationCode'],
+      },
+      createdBy: adminEmail,
+    },
+  });
+  await prisma.integrationJob.upsert({
+    where: { code: 'JOB-CATALOG-MVP' },
+    update: {
+      connectorId: catalogConnector.id,
+      nameEn: 'Catalog asset synchronization',
+      nameAr: 'Catalog asset synchronization',
+      jobType: 'catalog_sync' as any,
+      status: 'ready' as any,
+      syncMode: 'manual',
+      isActive: true,
+      deletedAt: null,
+    },
+    create: {
+      code: 'JOB-CATALOG-MVP',
+      connectorId: catalogConnector.id,
+      nameEn: 'Catalog asset synchronization',
+      nameAr: 'Catalog asset synchronization',
+      jobType: 'catalog_sync' as any,
+      status: 'ready' as any,
+      syncMode: 'manual',
+      createdBy: adminEmail,
+    },
+  });
+
   for (const rel of sampleRelationships) {
     const sourceId = assetByCode.get(rel.source);
     const targetId = assetByCode.get(rel.target);
@@ -1043,7 +1479,11 @@ async function main() {
 
   // Seed people; give each a login account (1:1) so they can act in workflows, and link them.
   const dmoRole = await prisma.role.findUnique({ where: { code: 'dmo_admin' } });
-  const personPasswordHash = await bcrypt.hash(process.env.SEED_PERSON_PASSWORD ?? 'Password@123', 10);
+  const personPassword = process.env.SEED_PERSON_PASSWORD ?? (strictSeed ? '' : 'Password@123');
+  if (!personPassword) {
+    throw new Error('SEED_PERSON_PASSWORD must be set outside development');
+  }
+  const personPasswordHash = await bcrypt.hash(personPassword, 10);
   for (const p of people) {
     const user = await prisma.user.upsert({
       where: { email: p.email },
@@ -1461,15 +1901,19 @@ async function main() {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 7);
     let issue = await prisma.dataQualityIssue.findUnique({ where: { code: sample.code } });
+    const detectedAt = issue?.detectedAt ?? new Date();
+    const priority = seedPriority(sample.severity);
     const issueData = {
       title: sample.title,
       description: sample.description,
       severity: sample.severity as any,
       dimension: sample.dimension as any,
+      priority: priority as any,
       source: 'seed',
       assetId: asset.id,
       responsiblePersonId: responsible?.personId ?? null,
       dueDate,
+      ...seedSlaDates(detectedAt, priority),
       createdBy: adminEmail,
     };
     if (issue) {
@@ -1529,6 +1973,456 @@ async function main() {
     }
   }
 
+  // Sprint 13 v4: rule lifecycle, scorecards, and profiling import summaries.
+  await prisma.dataQualityScore.deleteMany({ where: { source: { in: ['seed_rule', 'seed_profile'] } } });
+  for (const sample of sampleDataQualityRules) {
+    const assetId = assetByCode.get(sample.assetCode);
+    const domainId = domainByCode.get(sample.domainCode);
+    const ownerPersonId = personByEmail.get(sample.ownerEmail) ?? null;
+    if (!assetId || !domainId) continue;
+    const now = new Date();
+    const ruleData = {
+      nameEn: sample.nameEn,
+      nameAr: sample.nameAr,
+      description: sample.description,
+      dimension: sample.dimension as any,
+      status: sample.status as any,
+      assetId,
+      domainId,
+      ownerPersonId,
+      severity: sample.severity as any,
+      thresholdExpression: sample.thresholdExpression,
+      checkFrequency: sample.checkFrequency,
+      impactSummary: sample.impactSummary,
+      currentVersion: 1,
+      approvedBy: ['approved', 'deployed'].includes(sample.status) ? adminEmail : null,
+      approvedAt: ['approved', 'deployed'].includes(sample.status) ? now : null,
+      deployedAt: sample.status === 'deployed' ? now : null,
+      retiredAt: null,
+      createdBy: adminEmail,
+    };
+    const rule = await prisma.dataQualityRule.upsert({
+      where: { code: sample.code },
+      update: ruleData,
+      create: { code: sample.code, ...ruleData },
+    });
+    await prisma.dataQualityRuleVersion.upsert({
+      where: { ruleId_version: { ruleId: rule.id, version: 1 } },
+      update: {
+        status: sample.status as any,
+        definitionJson: {
+          threshold: sample.thresholdExpression,
+          frequency: sample.checkFrequency,
+          impact: sample.impactSummary,
+        },
+        changeSummary: 'Seeded v4 rule lifecycle definition.',
+        reviewedBy: ['approved', 'deployed'].includes(sample.status) ? adminEmail : null,
+        reviewedAt: ['approved', 'deployed'].includes(sample.status) ? now : null,
+      },
+      create: {
+        ruleId: rule.id,
+        version: 1,
+        status: sample.status as any,
+        definitionJson: {
+          threshold: sample.thresholdExpression,
+          frequency: sample.checkFrequency,
+          impact: sample.impactSummary,
+        },
+        changeSummary: 'Seeded v4 rule lifecycle definition.',
+        createdBy: adminEmail,
+        reviewedBy: ['approved', 'deployed'].includes(sample.status) ? adminEmail : null,
+        reviewedAt: ['approved', 'deployed'].includes(sample.status) ? now : null,
+      },
+    });
+    await prisma.dataQualityScore.create({
+      data: {
+        level: 'rule' as any,
+        refId: rule.id,
+        dimension: sample.dimension as any,
+        score: sample.score,
+        totalChecks: 1,
+        failedChecks: sample.score < 80 ? 1 : 0,
+        source: 'seed_rule',
+        assetId,
+        domainId,
+        ruleId: rule.id,
+        notes: 'Seeded rule score for Sprint 13 scorecard.',
+      },
+    });
+  }
+
+  await prisma.dataQualityProfile.deleteMany({ where: { source: 'seed_profile' } });
+  for (const profileSeed of sampleDataQualityProfiles) {
+    const assetId = assetByCode.get(profileSeed.assetCode);
+    const domainId = domainByCode.get(profileSeed.domainCode);
+    if (!assetId || !domainId) continue;
+    const score = seedProfileScore(profileSeed.columns);
+    const profile = await prisma.dataQualityProfile.create({
+      data: {
+        assetId,
+        domainId,
+        source: profileSeed.source,
+        importedBy: adminEmail,
+        rowCount: profileSeed.rowCount,
+        columnCount: profileSeed.columns.length,
+        qualityScore: score.qualityScore,
+        recommendedRules: score.recommendedRules,
+        anomalyCount: score.anomalyCount,
+        summaryJson: {
+          source: 'Seeded profiling import',
+          recommendation: 'Review suggested rules before deployment.',
+        },
+        columns: {
+          create: profileSeed.columns.map((column) => ({
+            columnName: column.columnName,
+            dataType: column.dataType,
+            completenessPct: column.completenessPct,
+            uniquenessPct: column.uniquenessPct,
+            validityPct: column.validityPct,
+            pattern: column.pattern,
+            anomalyCount: column.anomalyCount,
+            recommendation: column.recommendation,
+            dimension: column.dimension as any,
+          })),
+        },
+      },
+    });
+    await prisma.dataQualityScore.create({
+      data: {
+        level: 'asset' as any,
+        refId: assetId,
+        dimension: null,
+        score: score.qualityScore,
+        totalChecks: profileSeed.columns.length,
+        failedChecks: score.recommendedRules,
+        source: 'seed_profile',
+        assetId,
+        domainId,
+        notes: `Profiling score generated from ${profile.columnCount} columns.`,
+      },
+    });
+  }
+
+  // Sprint 17 v4: Open Data candidate registry with eligibility signals.
+  const openDataSignalForRank = (rank?: number | null) => {
+    if (rank == null) return 'needs_review';
+    if (rank <= 1) return 'ready';
+    if (rank === 2) return 'needs_review';
+    return 'blocked';
+  };
+  const openDataSignalForScore = (score?: number | null) => {
+    if (score == null) return 'needs_review';
+    if (score >= 85) return 'ready';
+    if (score >= 70) return 'needs_review';
+    return 'blocked';
+  };
+  const openDataSignalForPersonalData = (assessment: string) => {
+    if (['none', 'aggregated'].includes(assessment)) return 'ready';
+    if (assessment === 'unknown') return 'needs_review';
+    return 'blocked';
+  };
+  const openDataSignalForOwnership = (ownerPersonId?: string | null, stewardPersonId?: string | null) => {
+    if (ownerPersonId && stewardPersonId) return 'ready';
+    if (ownerPersonId || stewardPersonId) return 'needs_review';
+    return 'blocked';
+  };
+  const openDataSignalForValue = (score: number) => {
+    if (score >= 70) return 'ready';
+    if (score >= 40) return 'needs_review';
+    return 'blocked';
+  };
+  const openDataSignalPoints = (signal: string) => signal === 'ready' ? 100 : signal === 'needs_review' ? 60 : 0;
+  for (const candidateSeed of sampleOpenDataCandidates) {
+    const assetId = assetByCode.get(candidateSeed.assetCode);
+    if (!assetId) continue;
+    const asset = await prisma.dataAsset.findUnique({
+      where: { id: assetId },
+      include: { classification: true },
+    });
+    if (!asset) continue;
+    const dqScore = await prisma.dataQualityScore.findFirst({
+      where: { assetId },
+      orderBy: { measuredAt: 'desc' },
+      select: { id: true, score: true },
+    });
+    const ownerPersonId = personByEmail.get(candidateSeed.ownerEmail) ?? null;
+    const stewardPersonId = personByEmail.get(candidateSeed.stewardEmail) ?? null;
+    const odiaoReviewerPersonId = personByEmail.get(candidateSeed.reviewerEmail) ?? null;
+    const signals: any = {
+      classificationSignal: openDataSignalForRank(asset.classification?.rank),
+      dataQualitySignal: openDataSignalForScore(dqScore?.score),
+      personalDataSignal: openDataSignalForPersonalData(candidateSeed.personalDataAssessment),
+      ownershipSignal: openDataSignalForOwnership(ownerPersonId, stewardPersonId),
+      publicationValueSignal: openDataSignalForValue(candidateSeed.publicationValueScore),
+    };
+    const blockers = Object.entries(signals).filter(([, value]) => value === 'blocked').map(([key]) => key);
+    const reviewItems = Object.entries(signals).filter(([, value]) => value === 'needs_review').map(([key]) => key);
+    const signalValues = Object.values(signals) as string[];
+    const eligibilityScore = Math.round(signalValues.reduce((sum, signal) => sum + openDataSignalPoints(signal), 0) / signalValues.length);
+    const nextReviewAt = new Date();
+    nextReviewAt.setDate(nextReviewAt.getDate() + 60);
+    await prisma.openDataCandidate.upsert({
+      where: { code: candidateSeed.code },
+      update: {
+        assetId,
+        titleEn: candidateSeed.titleEn,
+        titleAr: candidateSeed.titleAr,
+        description: candidateSeed.description,
+        status: candidateSeed.status as any,
+        publicationFrequency: candidateSeed.publicationFrequency as any,
+        publicationFormat: candidateSeed.publicationFormat as any,
+        ownerPersonId,
+        stewardPersonId,
+        odiaoReviewerPersonId,
+        classificationId: asset.classificationId,
+        dqScoreId: dqScore?.id ?? null,
+        personalDataAssessment: candidateSeed.personalDataAssessment as any,
+        ...signals,
+        publicationValueScore: candidateSeed.publicationValueScore,
+        eligibilityScore,
+        eligibilityJson: {
+          overallSignal: blockers.length ? 'blocked' : reviewItems.length ? 'needs_review' : 'ready',
+          blockers,
+          reviewItems,
+          qualityScore: dqScore?.score ?? null,
+          classificationRank: asset.classification?.rank ?? null,
+        },
+        decisionNote: candidateSeed.decisionNote,
+        nextReviewAt,
+        deletedAt: null,
+        updatedBy: adminEmail,
+      },
+      create: {
+        code: candidateSeed.code,
+        assetId,
+        titleEn: candidateSeed.titleEn,
+        titleAr: candidateSeed.titleAr,
+        description: candidateSeed.description,
+        status: candidateSeed.status as any,
+        publicationFrequency: candidateSeed.publicationFrequency as any,
+        publicationFormat: candidateSeed.publicationFormat as any,
+        ownerPersonId,
+        stewardPersonId,
+        odiaoReviewerPersonId,
+        classificationId: asset.classificationId,
+        dqScoreId: dqScore?.id ?? null,
+        personalDataAssessment: candidateSeed.personalDataAssessment as any,
+        ...signals,
+        publicationValueScore: candidateSeed.publicationValueScore,
+        eligibilityScore,
+        eligibilityJson: {
+          overallSignal: blockers.length ? 'blocked' : reviewItems.length ? 'needs_review' : 'ready',
+          blockers,
+          reviewItems,
+          qualityScore: dqScore?.score ?? null,
+          classificationRank: asset.classification?.rank ?? null,
+        },
+        decisionNote: candidateSeed.decisionNote,
+        nextReviewAt,
+        createdBy: adminEmail,
+      },
+    });
+  }
+
+  // Sprint 14 v4: classification, masking, role-data access, access review, DLP, and ABAC evidence.
+  for (const policySeed of sampleMaskingPolicies) {
+    const domainId = domainByCode.get(policySeed.domainCode) ?? null;
+    const classificationId = classificationByCode.get(policySeed.classificationCode) ?? null;
+    await prisma.maskingPolicy.upsert({
+      where: { code: policySeed.code },
+      update: {
+        nameEn: policySeed.nameEn,
+        nameAr: policySeed.nameAr,
+        technique: policySeed.technique as any,
+        description: policySeed.description,
+        domainId,
+        classificationId,
+        appliesToPersonalData: true,
+        fieldsJson: policySeed.fieldsJson as any,
+        previewBefore: policySeed.previewBefore,
+        previewAfter: policySeed.previewAfter,
+        isActive: true,
+        deletedAt: null,
+      },
+      create: {
+        code: policySeed.code,
+        nameEn: policySeed.nameEn,
+        nameAr: policySeed.nameAr,
+        technique: policySeed.technique as any,
+        description: policySeed.description,
+        domainId,
+        classificationId,
+        appliesToPersonalData: true,
+        fieldsJson: policySeed.fieldsJson as any,
+        previewBefore: policySeed.previewBefore,
+        previewAfter: policySeed.previewAfter,
+        createdBy: adminEmail,
+      },
+    });
+  }
+  const maskingByCode = new Map((await prisma.maskingPolicy.findMany()).map((policy) => [policy.code, policy.id]));
+  for (const accessSeed of sampleRoleDataAccessMaps) {
+    const role = roleByCode.get(accessSeed.roleCode);
+    const domainId = domainByCode.get(accessSeed.domainCode) ?? null;
+    const classificationId = classificationByCode.get(accessSeed.classificationCode) ?? null;
+    const maskingPolicyId = accessSeed.maskingCode ? (maskingByCode.get(accessSeed.maskingCode) ?? null) : null;
+    if (!role) continue;
+    const nextReviewAt = new Date();
+    nextReviewAt.setDate(nextReviewAt.getDate() + 90);
+    const data = {
+      roleId: role.id,
+      domainId,
+      classificationId,
+      maskingPolicyId,
+      scopeKey: accessScopeKey(domainId, classificationId),
+      personalDataAllowed: accessSeed.personalDataAllowed,
+      approvalRequired: accessSeed.approvalRequired,
+      businessJustification: accessSeed.businessJustification,
+      reviewCadenceDays: 90,
+      nextReviewAt,
+      isActive: true,
+      createdBy: adminEmail,
+    };
+    const existing = await prisma.roleDataAccessMap.findFirst({
+      where: { roleId: role.id, scopeKey: data.scopeKey, isActive: true },
+    });
+    if (existing) await prisma.roleDataAccessMap.update({ where: { id: existing.id }, data });
+    else await prisma.roleDataAccessMap.create({ data });
+  }
+
+  const accessOwnerUserId = userByEmail.get(sampleAccessReview.ownerEmail) ?? null;
+  const accessDueDate = new Date();
+  accessDueDate.setDate(accessDueDate.getDate() + 14);
+  const accessReview = await prisma.accessReview.upsert({
+    where: { code: sampleAccessReview.code },
+    update: {
+      title: sampleAccessReview.title,
+      description: sampleAccessReview.description,
+      status: 'active' as any,
+      ownerUserId: accessOwnerUserId,
+      dueDate: accessDueDate,
+      completedAt: null,
+    },
+    create: {
+      code: sampleAccessReview.code,
+      title: sampleAccessReview.title,
+      description: sampleAccessReview.description,
+      status: 'active' as any,
+      ownerUserId: accessOwnerUserId,
+      dueDate: accessDueDate,
+      createdBy: adminEmail,
+    },
+  });
+  await prisma.accessReviewItem.deleteMany({ where: { reviewId: accessReview.id } });
+  for (const item of sampleAccessReview.items) {
+    const userId = userByEmail.get(item.userEmail);
+    const role = roleByCode.get(item.roleCode);
+    if (!userId || !role) continue;
+    await prisma.accessReviewItem.create({
+      data: {
+        reviewId: accessReview.id,
+        userId,
+        roleId: role.id,
+        assetId: assetByCode.get(item.assetCode) ?? null,
+        domainId: domainByCode.get(item.domainCode) ?? null,
+        classificationId: classificationByCode.get(item.classificationCode) ?? null,
+        decision: item.decision as any,
+        justification: item.justification,
+        reviewer: item.decision === 'pending' ? null : adminEmail,
+        reviewedAt: item.decision === 'pending' ? null : new Date(),
+      },
+    });
+  }
+
+  for (const incidentSeed of sampleDlpIncidents) {
+    const assetId = assetByCode.get(incidentSeed.assetCode) ?? null;
+    const classificationId = classificationByCode.get(incidentSeed.classificationCode) ?? null;
+    const assignedPersonId = personByEmail.get(incidentSeed.assignedEmail) ?? null;
+    await prisma.dlpIncident.upsert({
+      where: { code: incidentSeed.code },
+      update: {
+        title: incidentSeed.title,
+        description: incidentSeed.description,
+        severity: incidentSeed.severity as any,
+        status: incidentSeed.status as any,
+        assetId,
+        classificationId,
+        assignedPersonId,
+        detectionSource: incidentSeed.detectionSource,
+      },
+      create: {
+        code: incidentSeed.code,
+        title: incidentSeed.title,
+        description: incidentSeed.description,
+        severity: incidentSeed.severity as any,
+        status: incidentSeed.status as any,
+        assetId,
+        classificationId,
+        assignedPersonId,
+        detectionSource: incidentSeed.detectionSource,
+        createdBy: adminEmail,
+      },
+    });
+  }
+
+  for (const requestSeed of sampleClassificationRequests) {
+    const assetId = assetByCode.get(requestSeed.assetCode);
+    const toClassificationId = classificationByCode.get(requestSeed.toClassificationCode);
+    if (!assetId || !toClassificationId) continue;
+    const asset = await prisma.dataAsset.findUnique({ where: { id: assetId } });
+    const existing = await prisma.classificationChangeRequest.findFirst({
+      where: {
+        assetId,
+        toClassificationId,
+        status: { in: ['pending', 'approved'] as any },
+      },
+    });
+    const data = {
+      assetId,
+      fromClassificationId: asset?.classificationId ?? null,
+      toClassificationId,
+      reason: requestSeed.reason,
+      requestedBy: requestSeed.requestedBy,
+      status: 'pending' as any,
+    };
+    if (existing) await prisma.classificationChangeRequest.update({ where: { id: existing.id }, data });
+    else await prisma.classificationChangeRequest.create({ data });
+  }
+
+  await prisma.abacDecisionLog.deleteMany({ where: { reason: { contains: 'Seeded:' } } });
+  const patientAssetId = assetByCode.get('AST-EMR-PATIENTS');
+  const financeAssetId = assetByCode.get('AST-FIN-REVENUE');
+  const dqRole = roleByCode.get('dq_steward');
+  const securityRole = roleByCode.get('security_reviewer');
+  if (patientAssetId && dqRole) {
+    await prisma.abacDecisionLog.create({
+      data: {
+        roleId: dqRole.id,
+        assetId: patientAssetId,
+        domainId: domainByCode.get('clinical') ?? null,
+        classificationId: classificationByCode.get('restricted') ?? null,
+        maskingPolicyId: maskingByCode.get('MSK-PERSONAL-ID') ?? null,
+        requestedAction: 'read',
+        decision: 'masked' as any,
+        reason: 'Seeded: DQ steward receives masked patient identifiers for remediation work.',
+      },
+    });
+  }
+  if (financeAssetId && securityRole) {
+    await prisma.abacDecisionLog.create({
+      data: {
+        roleId: securityRole.id,
+        assetId: financeAssetId,
+        domainId: domainByCode.get('finance') ?? null,
+        classificationId: classificationByCode.get('restricted') ?? null,
+        maskingPolicyId: maskingByCode.get('MSK-FINANCE-TOKEN') ?? null,
+        requestedAction: 'export',
+        decision: 'review_required' as any,
+        reason: 'Seeded: export of restricted finance data requires owner approval.',
+      },
+    });
+  }
+
   console.log(
     `Seeded: ${roles.length} roles, ${permissionCatalog.length} permissions, ` +
       `${roleTypes.length} role types, ` +
@@ -1540,6 +2434,7 @@ async function main() {
       `${trainingCourses.length} training courses, ${certificationTracks.length} certification tracks, ` +
       `${communityArticles.length} community articles, ${expertProfiles.length} experts, ` +
       `${mentorshipPairs.length} mentorship pairs, ${sampleDataQualityIssues.length} DQ issues. ` +
+      `${sampleOpenDataCandidates.length} open data candidates. ` +
       `Admin user: ${adminEmail}`,
   );
 }

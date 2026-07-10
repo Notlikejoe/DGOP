@@ -1,0 +1,1031 @@
+### DGOP_v4.0_Volume1_Executive_Business_Design_ENHANCED.docx
+Heading 1: Table of Contents
+Heading 1: 1. Executive Summary
+Heading 2: 1.1 Vision
+Heading 2: 1.2 Strategic Objectives
+Heading 2: 1.3 Positioning of DGOP
+Heading 2: 1.4 Expected Benefits
+Heading 1: 2. Current-State Challenges
+Heading 2: 2.1 Fragmented Governance
+Heading 2: 2.2 Evidence-Driven Operations Gap
+Heading 2: 2.3 Lack of Accountability
+Heading 2: 2.4 NDI Pain Points
+Heading 2: 2.5 Manual Compliance Burden
+Heading 1: 3. Target Operating Model
+Heading 2: 3.1 Governance Operations Tower
+Heading 2: 3.2 Compliance Operations Tower
+Heading 2: 3.3 Data Operations Tower
+Heading 2: 3.4 Transparency Operations Tower
+Heading 2: 3.5 Value Operations Tower
+Heading 2: 3.6 Awareness Operations Tower
+Heading 1: 4. Governance Structure
+Heading 2: 4.1 Data Governance Steering Committee (DGSC)
+Heading 2: 4.2 Data Council
+Heading 2: 4.3 Working Groups
+Heading 2: 4.4 Data Management Office (DMO)
+Heading 2: 4.5 Open Data & Information Access Officer (ODIAO)
+Heading 2: 4.6 Data Protection Officer (DPO)
+Heading 2: 4.7 Information Security Function
+Heading 1: 5. Stewardship Roles Enhancement (NEW — Gap Closure)
+Heading 2: 5.1 Operational Data Steward (ODS)
+Heading 3: ODS Responsibilities
+Heading 3: ODS Assignment Model
+Heading 3: ODS Key Performance Indicators
+Heading 2: 5.2 Project Data Steward (PDS)
+Heading 3: PDS Responsibilities
+Heading 3: PDS Assignment Model
+Heading 3: PDS Lifecycle Workflow
+Heading 2: 5.3 Enterprise Data Steward (EDS)
+Heading 3: EDS Responsibilities
+Heading 3: EDS Assignment Model
+Heading 3: EDS Key Performance Indicators
+Heading 2: 5.4 Updated Stewardship Registry Model
+Heading 1: 6. Charter Management Framework (NEW — Gap Closure)
+Heading 2: 6.1 Charter Purpose & Authority
+Heading 2: 6.2 8 Mandatory Charter Elements
+Heading 2: 6.3 Charter Lifecycle Workflow
+Heading 3: State Model
+Heading 3: Workflow Stages
+Heading 3: Charter Version Control
+Heading 1: 7. Policy Lifecycle Management (NEW — Gap Closure)
+Heading 2: 7.1 5-Level Policy Hierarchy
+Heading 3: Policy Hierarchy Rules
+Heading 2: 7.2 Policy Lifecycle Stages
+Heading 3: Stage 1: Policy Creation
+Heading 3: Stage 2: Policy Review
+Heading 3: Stage 3: Policy Approval
+Heading 3: Stage 4: Policy Deployment
+Heading 3: Stage 5: Policy Monitoring
+Heading 3: Stage 6: Policy Retirement
+Heading 2: 7.3 Policy-to-Compliance Linkage
+Heading 1: 8. Decision Rights & Timeframes (NEW — Gap Closure)
+Heading 2: 8.1 Decision Rights Matrix
+Heading 2: 8.2 Default Escalation Timeframes
+Heading 3: Escalation Notification Chain
+Heading 2: 8.3 DGOP Workflow Integration
+Heading 1: 9. DGPO Sizing Guidance (NEW — Gap Closure)
+Heading 2: 9.1 Entity Sizing Model
+Heading 3: Sizing Calculator Formula
+Heading 2: 9.2 Role Breakdown by Size
+Heading 3: Small Entity (2-3 FTEs)
+Heading 3: Medium Entity (4-6 FTEs)
+Heading 3: Large Entity (8-12 FTEs)
+Heading 1: 10. Data Domain Councils (NEW — Gap Closure)
+Heading 2: 10.1 Council Mandate & Composition
+Heading 3: Domain Council Mandate
+Heading 2: 10.2 Lead Steward Role
+Heading 3: Lead Steward Responsibilities
+Heading 2: 10.3 Operating Procedures & Metrics
+Heading 3: Meeting Cadence
+Heading 3: Domain Council Effectiveness Metrics
+Heading 3: DGOP Domain Council Workspace
+Heading 1: 11. RACI Matrices
+Heading 2: 11.1 Governance Activity RACI
+Heading 2: 11.2 NDI Domain RACI
+Heading 2: 11.3 Operational Process RACI
+Heading 2: 11.4 New Roles RACI Supplement
+Heading 1: 12. 4-Tier Training Curriculum (NEW — Gap Closure)
+Heading 2: 12.1 Tier 1: Fundamentals (8 hours)
+Heading 2: 12.2 Tier 2: Core Skills (16 hours)
+Heading 2: 12.3 Tier 3: Advanced (24 hours)
+Heading 2: 12.4 Tier 4: Leadership (16 hours)
+Heading 2: 12.5 Delivery Methods & Tracking
+Heading 3: Training KPIs
+Heading 1: 13. 3-Level Certification Program (NEW — Gap Closure)
+Heading 2: 13.1 CDS – Certified Data Steward
+Heading 3: CDS Requirements
+Heading 3: CDS Exam Domains
+Heading 3: CDS Privileges
+Heading 2: 13.2 SDS – Senior Data Steward
+Heading 3: SDS Requirements
+Heading 3: SDS Exam Domains
+Heading 3: SDS Privileges
+Heading 2: 13.3 MDS – Master Data Steward
+Heading 3: MDS Requirements
+Heading 3: MDS Certification Activities
+Heading 3: MDS Privileges
+Heading 2: 13.4 Continuing Education & Renewal
+Heading 3: CE Activity Credit Values
+Heading 1: 14. Community of Practice Platform (NEW — Gap Closure)
+Heading 2: 14.1 Forums & Discussion Boards
+Heading 3: Forum Features
+Heading 2: 14.2 Knowledge Base & Best Practice Library
+Heading 3: Knowledge Base Article Template
+Heading 2: 14.3 Mentorship Program
+Heading 3: Program Structure
+Heading 3: Mentor Requirements
+Heading 3: Mentee Eligibility
+Heading 3: Mentorship Tracking
+Heading 2: 14.4 Expert Directory & Contribution Incentives
+Heading 3: Expert Directory
+Heading 3: Contribution Incentives
+Heading 1: 15. Expanded Maturity Model (NEW — Gap Closure)
+Heading 2: 15.1 4-Dimension Assessment Framework
+Heading 3: Dimension Weights
+Heading 2: 15.2 Maturity Level Definitions per Dimension
+Heading 3: Dimension 1: Organizational Awareness
+Heading 3: Dimension 2: Roles & Structures
+Heading 3: Dimension 3: Standards & Processes
+Heading 3: Dimension 4: Value Creation
+Heading 2: 15.3 Heat Map Visualization
+Heading 2: 15.4 6-Month Assessment Cycle
+Heading 1: 16. Business Results Metrics (NEW — Gap Closure)
+Heading 2: 16.1 Business Impact Metric Framework
+Heading 3: Business Impact Dashboard
+Heading 2: 16.2 Data User Surveys (9 Dimensions)
+Heading 3: Annual Comprehensive Survey
+Heading 3: Quarterly Pulse Survey
+Heading 3: Survey Administration in DGOP
+Heading 2: 16.3 ROI Attribution Model
+Heading 1: 17. Continuous Improvement Process (NEW — Gap Closure)
+Heading 2: 17.1 7-Step Structured Assessment Process
+Heading 3: Step 1: Assessment Planning
+Heading 3: Step 2: Evidence Collection
+Heading 3: Step 3: Scoring & Analysis
+Heading 3: Step 4: Gap Prioritization
+Heading 3: Step 5: Improvement Planning
+Heading 3: Step 6: Improvement Execution
+Heading 3: Step 7: Results Evaluation
+Heading 2: 17.2 Gap Heat Maps
+Heading 2: 17.3 Improvement Planning & Tracking
+Heading 3: Improvement Action Template
+Heading 3: Improvement Tracking Dashboard
+Heading 1: End of Volume 1 (Enhanced)
+
+### DGOP_v4.0_Volume2_Functional_Design_ENHANCED.docx
+Heading 1: Table of Contents
+Heading 1: 1. DGOP Administration Module
+Heading 2: 1.1 Domain Management
+Heading 2: 1.2 Subject Management
+Heading 2: 1.3 Capability Management
+Heading 2: 1.4 System Management
+Heading 2: 1.5 Organization Unit Management
+Heading 2: 1.6 Role & RACI Management
+Heading 2: 1.7 Assignment Rule Engine
+Heading 2: 1.8 Workflow Template Management
+Heading 2: 1.9 SLA Template Management
+Heading 1: 2. Ownership & Stewardship Registry
+Heading 2: 2.1 Assignment & Approval
+Heading 2: 2.2 Delegation & Backup
+Heading 2: 2.3 Approval History
+Heading 2: 2.4 Steward Workload Management
+Heading 2: 2.5 Effective Date Management
+Heading 1: 3. Data Asset Governance Hub
+Heading 2: 3.1 Asset 360 View
+Heading 2: 3.2 Catalog Integration
+Heading 2: 3.3 Lineage Integration
+Heading 2: 3.4 DQ Integration
+Heading 2: 3.5 DLP Integration
+Heading 2: 3.6 PDP Integration
+Heading 2: 3.7 NDI Integration
+Heading 2: 3.8 Risk Integration
+Heading 2: 3.9 Training Integration
+Heading 1: 4. Universal Case Management Layer
+Heading 2: 4.1 Case Types
+Heading 2: 4.2 Case Lifecycle
+Heading 2: 4.3 Task Management
+Heading 2: 4.4 SLA & Escalation
+Heading 2: 4.5 Decision Recording
+Heading 1: 5. Workflow Engine
+Heading 2: 5.1 BPMN Process Models
+Heading 2: 5.2 Assignment Workflow
+Heading 2: 5.3 DQ Remediation Workflow
+Heading 2: 5.4 PDP Review Workflow
+Heading 2: 5.5 Data Sharing Workflow
+Heading 2: 5.6 Open Data Workflow
+Heading 2: 5.7 FOI Workflow
+Heading 2: 5.8 Evidence Review Workflow
+Heading 2: 5.9 Appeals Workflow
+Heading 2: 5.10 Access Certification Workflow
+Heading 1: 6. DQ Dimensional Framework [NEW v3.1]
+Heading 2: 6.1 Six Quality Dimensions
+Heading 3: Dimension Weights
+Heading 2: 6.2 Dimension Scoring Model
+Heading 3: Score Calculation
+Heading 3: Threshold Levels
+Heading 3: Per-Dimension Threshold Configuration
+Heading 2: 6.3 Hierarchical Scorecards
+Heading 3: Scorecard Hierarchy
+Heading 3: Aggregation Formulas
+Heading 3: Scorecard Views
+Heading 2: 6.4 DQ Rule Type Library
+Heading 3: Rule-Dimension Mapping Configuration
+Heading 2: 6.5 Exception Management
+Heading 1: 7. Data Profiling Integration [NEW v3.1]
+Heading 2: 7.1 Column Statistics & Analysis
+Heading 3: Statistical Measures
+Heading 3: Data Type Inference
+Heading 2: 7.2 Pattern Analysis & Discovery
+Heading 3: Pattern Profiling
+Heading 3: Pattern Examples
+Heading 2: 7.3 Relationship Discovery
+Heading 3: Relationship Types
+Heading 3: Relationship Profile Output
+Heading 2: 7.4 Cross-Column & Cross-Table Analysis
+Heading 3: Cross-Column Analysis
+Heading 3: Cross-Table Analysis
+Heading 3: Cross-Table Profile Report
+Heading 2: 7.5 Distribution Analysis & Anomaly Detection
+Heading 3: Distribution Types
+Heading 3: Anomaly Detection Methods
+Heading 3: Profiling-Driven DQ Rule Recommendation
+Heading 1: 8. Severity-Based SLA Framework [NEW v3.1]
+Heading 2: 8.1 Four Severity Tiers
+Heading 3: Severity Assignment Rules
+Heading 2: 8.2 Per-Stage SLA Timers
+Heading 3: Critical (P1) SLA
+Heading 3: High (P2) SLA
+Heading 3: Medium (P3) SLA
+Heading 3: Low (P4) SLA
+Heading 3: SLA Calculation Rules
+Heading 2: 8.3 Breach Management & Reporting
+Heading 3: Breach Recording
+Heading 3: Breach Categories
+Heading 3: Breach Metrics
+Heading 3: Breach Escalation Matrix
+Heading 1: 9. 4-Level Governance Escalation [NEW v3.1]
+Heading 2: 9.1 Escalation Hierarchy
+Heading 3: Level 1: Domain Council
+Heading 3: Level 2: Data Stewardship Council (DSC)
+Heading 3: Level 3: Data Governance Board (DG Board)
+Heading 3: Level 4: Executive Steering Committee (ESC)
+Heading 2: 9.2 Time-Boxed Escalation Protocol
+Heading 3: Escalation Timeframes
+Heading 3: Escalation Process Flow
+Heading 2: 9.3 Escalation Triggers & Automation
+Heading 3: Automatic Triggers
+Heading 3: Manual Escalation
+Heading 3: Escalation Case
+Heading 2: 9.4 Escalation Dashboard & Analytics
+Heading 3: Dashboard Widgets
+Heading 3: Key Performance Indicators
+Heading 1: 10. RCA Technique Integration [NEW v3.1]
+Heading 2: 10.1 5 Whys Analysis
+Heading 3: Methodology
+Heading 3: DGOP Implementation
+Heading 3: 5 Whys Template
+Heading 2: 10.2 Fishbone (Ishikawa) Diagram
+Heading 3: Methodology
+Heading 3: Standard Categories for Data Quality
+Heading 3: DGOP Implementation
+Heading 2: 10.3 Process Mapping
+Heading 3: Methodology
+Heading 3: DGOP Implementation
+Heading 3: Process Map Template
+Heading 2: 10.4 Data Lineage Analysis
+Heading 3: Methodology
+Heading 3: DGOP Integration
+Heading 3: Lineage RCA Report
+Heading 2: 10.5 RCA Selection Guidance
+Heading 3: Selection Decision Tree
+Heading 3: Combined RCA Approach
+Heading 2: 10.6 RCA Evidence Capture
+Heading 3: RCA Case Content
+Heading 3: Root Cause Classification Taxonomy
+Heading 1: 11. Rule Lifecycle Management [NEW v3.1]
+Heading 2: 11.1 Rule Definition
+Heading 3: Rule Definition Form
+Heading 3: Rule Logic Types
+Heading 2: 11.2 Rule Review & Approval
+Heading 3: Review Stages
+Heading 3: Approval Workflow (BPMN)
+Heading 3: Review Checklist
+Heading 2: 11.3 Rule Deployment
+Heading 3: Deployment Modes
+Heading 3: Deployment Workflow
+Heading 3: Deployment Window Configuration
+Heading 2: 11.4 Rule Monitoring & Retirement
+Heading 3: Monitoring Metrics
+Heading 3: Rule Status Transitions
+Heading 3: Retirement Workflow
+Heading 2: 11.5 Rule Versioning & Impact Analysis
+Heading 3: Versioning Model
+Heading 3: Impact Analysis
+Heading 3: Impact Analysis Report
+Heading 1: 12. MDM Matching & Survivorship Engine [NEW v3.1]
+Heading 2: 12.1 Matching Algorithms
+Heading 3: Deterministic Matching
+Heading 3: Probabilistic Matching
+Heading 3: Match Score Calculation
+Heading 2: 12.2 5-Step Match Resolution
+Heading 3: Step 1: Candidate Identification
+Heading 3: Step 2: Scoring & Classification
+Heading 3: Step 3: Auto-Resolution
+Heading 3: Step 4: Manual Review
+Heading 3: Step 5: Merge & Survivorship Application
+Heading 3: Match Resolution Dashboard
+Heading 2: 12.3 Survivorship Rules
+Heading 3: Standard Survivorship Rules
+Heading 3: Source Trust Ranking
+Heading 3: Field-Level Survivorship Configuration
+Heading 2: 12.4 Master Data Domain Templates
+Heading 3: Domain 1: Customer
+Heading 3: Domain 2: Product
+Heading 3: Domain 3: Supplier
+Heading 3: Domain 4: Location
+Heading 3: Domain 5: Asset
+Heading 3: Domain 6: Employee
+Heading 3: Domain 7: Chart of Accounts
+Heading 2: 12.5 MDM Implementation Styles
+Heading 3: Style Configuration per Domain
+Heading 2: 12.6 Golden Record Management
+Heading 3: Golden Record Lifecycle
+Heading 3: Golden Record Attributes
+Heading 3: Golden Record APIs
+Heading 1: 13. Business Glossary Governance [NEW v3.1]
+Heading 2: 13.1 Term Definition & BDE Model
+Heading 3: BDE Definition Attributes
+Heading 3: BDE Classification Levels
+Heading 2: 13.2 Approval Workflow
+Heading 3: Approval Workflow by Criticality
+Heading 3: Approval RACI
+Heading 2: 13.3 Version Control & Change Management
+Heading 3: Versioning Model
+Heading 3: Change Types & Approval Requirements
+Heading 3: Change Impact Analysis
+Heading 3: Subscriber Notification
+Heading 2: 13.4 Periodic Review & Recertification
+Heading 3: Review Cycle
+Heading 3: Review Workflow
+Heading 3: Review Overdue Handling
+Heading 3: Glossary Health Metrics
+Heading 1: 14. Business Lineage [NEW v3.1]
+Heading 2: 14.1 Business Lineage Model
+Heading 3: Business Lineage Concepts
+Heading 3: Business Lineage vs. Technical Lineage
+Heading 2: 14.2 Business Process Mapping
+Heading 3: Process Definition
+Heading 3: Process Step Definition
+Heading 3: Business Process Library (Pre-Configured Templates)
+Heading 2: 14.3 Business-to-Technical Lineage Bridge
+Heading 3: Bridge Mapping
+Heading 3: Bridge Maintenance
+Heading 3: Drill-Down Path
+Heading 2: 14.4 Business Lineage Visualization
+Heading 3: Visualization Types
+Heading 3: Interactive Features
+Heading 3: Business Lineage Impact Analysis
+Heading 1: 15. Data Masking Service [NEW v3.1]
+Heading 2: 15.1 Six Masking Techniques
+Heading 3: 1. Static Masking
+Heading 3: 2. Dynamic Masking
+Heading 3: 3. Tokenization
+Heading 3: 4. Anonymization
+Heading 3: 5. Pseudonymization
+Heading 3: 6. Redaction
+Heading 2: 15.2 Classification-Driven Technique Selection
+Heading 3: Technique Selection Matrix
+Heading 2: 15.3 Environment-Based Masking Policies
+Heading 3: Policy Configuration
+Heading 2: 15.4 Masking Audit & Compliance
+Heading 3: Audit Records
+Heading 3: Compliance Reports
+Heading 1: 16. Recurring Compliance Calendar [NEW v3.1]
+Heading 2: 16.1 Recurring Task Templates
+Heading 3: Task Template Definition
+Heading 3: Standard Recurring Task Templates
+Heading 2: 16.2 Automatic Assignment Engine
+Heading 3: Assignment Logic
+Heading 3: Availability Check
+Heading 2: 16.3 Compliance Task Types
+Heading 3: Type 1: Quarterly Processing Activities Review (PDPL Art. 25)
+Heading 3: Type 2: Quarterly Cross-Border Transfer Monitoring (PDPL Art. 29)
+Heading 3: Type 3: Annual DPIA Review
+Heading 3: Type 4: Monthly DQ Scorecard Review
+Heading 2: 16.4 Calendar Dashboard & Overdue Tracking
+Heading 3: Calendar Views
+Heading 3: Status Colors
+Heading 3: Overdue Tracking & Escalation
+Heading 3: Compliance Calendar KPIs
+Heading 1: 17. Role-Data Mapping Designer [NEW v3.1]
+Heading 2: 17.1 RBAC Role-to-Domain Mapping
+Heading 3: Mapping Model
+Heading 3: Standard Access Levels
+Heading 3: Pre-Configured Role Mappings (Templates)
+Heading 2: 17.2 Visual Mapping Designer
+Heading 3: Designer Interface
+Heading 3: Designer Operations
+Heading 3: Mapping Visualization
+Heading 2: 17.3 Mapping Validation & Simulation
+Heading 3: Validation Rules
+Heading 3: Simulation Mode
+Heading 3: Simulation Report
+Heading 2: 17.4 Access Policy Generation
+Heading 3: Policy Generation
+Heading 3: Policy Types Generated
+Heading 3: Policy Lifecycle Integration
+Heading 3: Access Certification Integration
+Heading 1: End of Volume 2
+
+### DGOP_v4.0_Volume4_Technical_Design_ENHANCED.docx
+Heading 1: DGOP v3.0
+Heading 2: Enterprise Governance Operations Platform
+Heading 3: Volume 4: Technical Design (Enhanced)
+Heading 2: Table of Contents
+Heading 2: Content Summary
+Heading 2: Enhancement Summary (v3.0-Enhanced)
+Heading 1: 1. Solution Architecture Overview
+Heading 2: 1.1 Design Principles
+Heading 2: 1.2 High-Level Architecture Layers
+Heading 2: 1.3 Architecture Diagram (Textual Representation)
+Heading 2: 1.4 Data Flow Patterns
+Heading 2: 1.5 Deployment Topology
+Heading 1: 2. Domain-Driven Design & Bounded Contexts
+Heading 2: 2.1 Domain Decomposition Strategy
+Heading 2: 2.2 Bounded Contexts Mapping
+Heading 2: 2.3 Context Map & Integration Patterns
+Heading 2: 2.4 Anti-Corruption Layer (ACL)
+Heading 2: 2.5 Shared Kernel
+Heading 1: 3. Service Decomposition
+Heading 2: 3.1 Service Catalog
+Heading 3: 3.1.1 Profiling Engine Architecture Detail
+Heading 3: 3.1.2 Matching Engine Architecture Detail
+Heading 3: 3.1.3 ABAC Policy Engine Architecture Detail
+Heading 3: 3.1.4 Data Masking Service Architecture Detail
+Heading 2: 3.2 Service Interaction Patterns
+Heading 2: 3.3 Service Mesh Configuration (Istio)
+Heading 1: 4. Technology Stack & Platform Selection
+Heading 2: 4.1 Recommended Technology Stack
+Heading 2: 4.2 KSA Cloud Platform Recommendations
+Heading 2: 4.3 Development Standards
+Heading 1: 5. Integration Architecture
+Heading 2: 5.1 Integration Design Principles
+Heading 2: 5.2 Integration Topology
+Heading 2: 5.3 Connector Specifications
+Heading 3: 5.3.1 Data Catalog Connector
+Heading 3: 5.3.2 Data Quality (DQ) Tool Connector
+Heading 3: 5.3.3 DLP Tool Connector
+Heading 3: 5.3.4 ITSM Connector (ServiceNow / Jira)
+Heading 3: 5.3.5 Open Data Portal Connector
+Heading 3: 5.3.6 FOI Channel Connector
+Heading 3: 5.3.7 IAM / SSO Connector
+Heading 3: 5.3.8 SIEM Connector
+Heading 3: 5.3.9 LMS Connector
+Heading 3: 5.3.10 Data Profiling Tool Connector (NEW)
+Heading 2: 5.4 Integration Methods Matrix
+Heading 2: 5.5 Canonical Data Model (CDM)
+Heading 1: 6. API Specifications
+Heading 2: 6.1 API Design Standards
+Heading 2: 6.2 Core API Endpoints by Service
+Heading 3: 6.2.1 dgop-admin-service
+Heading 3: 6.2.2 dgop-asset-service
+Heading 3: 6.2.3 dgop-ownership-service
+Heading 3: 6.2.4 dgop-workflow-service
+Heading 3: 6.2.5 dgop-ndi-service
+Heading 3: 6.2.6 dgop-training-service (Enhanced with 4-Tier Training)
+Heading 4: 4-Tier Training Curriculum Structure
+Heading 3: 6.2.7 dgop-kpi-service
+Heading 3: 6.2.8 dgop-opendata-service
+Heading 3: 6.2.9 dgop-foi-service
+Heading 3: 6.2.10 dgop-notification-service
+Heading 3: 6.2.11 dgop-integration-service
+Heading 3: 6.2.12 dgop-reporting-service
+Heading 3: 6.2.13 dgop-profiling-service (NEW)
+Heading 4: OpenAPI 3.1 Example: Profiling Job Submission
+Heading 3: 6.2.14 dgop-matching-service (NEW)
+Heading 4: Match Rule Configuration Schema
+Heading 3: 6.2.15 dgop-abac-service (NEW)
+Heading 4: ABAC Policy Example (Rego)
+Heading 4: ABAC Policy Decision Request/Response
+Heading 3: 6.2.16 dgop-masking-service (NEW)
+Heading 4: Masking Techniques Registry
+Heading 4: Masking Rule Configuration
+Heading 3: 6.2.17 dgop-sdlc-service (NEW)
+Heading 4: SDLC Phase-Gate Structure
+Heading 4: CI/CD Webhook Payload Example
+Heading 3: 6.2.18 dgop-community-service (NEW)
+Heading 3: 6.2.19 dgop-certification-service (NEW)
+Heading 4: Certification Track Configuration
+Heading 1: 7. Event Architecture
+Heading 2: 7.1 Event-Driven Architecture Principles
+Heading 2: 7.2 Kafka Topic Topology
+Heading 2: 7.3 Event Schema Example (CloudEvents 1.0 + Avro)
+Heading 3: Asset Created Event
+Heading 3: Profiling Job Completed Event (NEW)
+Heading 3: Match Cluster Updated Event (NEW)
+Heading 3: ABAC Policy Decision Event (NEW)
+Heading 3: SDLC Phase-Gate Decision Event (NEW)
+Heading 3: Certification Progress Event (NEW)
+Heading 2: 7.4 Event Processing Patterns
+Heading 2: 7.5 Kafka Configuration
+Heading 1: 8. Database Design
+Heading 2: 8.1 Data Residency & Sovereignty
+Heading 2: 8.2 Database Cluster Design
+Heading 2: 8.3 Schema Design Principles
+Heading 2: 8.4 Core Physical Schema (Selected Tables)
+Heading 3: 8.4.1 Dimensional Foundation Tables
+Heading 3: 8.4.2 Asset & Ownership Tables
+Heading 3: 8.4.3 Workflow Tables
+Heading 3: 8.4.4 NDI & Evidence Tables
+Heading 3: 8.4.5 Open Data & FOI Tables
+Heading 3: 8.4.6 Profiling Engine Tables (NEW)
+Heading 3: 8.4.7 Matching Engine Tables (NEW)
+Heading 3: 8.4.8 ABAC Policy Engine Tables (NEW)
+Heading 3: 8.4.9 Data Masking Tables (NEW)
+Heading 3: 8.4.10 SDLC Integration Tables (NEW)
+Heading 3: 8.4.11 Community of Practice Tables (NEW)
+Heading 3: 8.4.12 Certification Engine Tables (NEW)
+Heading 3: 8.4.13 4-Tier Training Tables (NEW)
+Heading 2: 8.5 Partitioning Strategy
+Heading 2: 8.6 Indexing Strategy
+Heading 2: 8.7 Multi-Tenancy Design
+Heading 1: 9. Deployment Architecture
+Heading 2: 9.1 Kubernetes Deployment Model
+Heading 2: 9.2 Environment Topology
+Heading 2: 9.3 Environment Strategy
+Heading 2: 9.4 GitOps Deployment Pipeline
+Heading 2: 9.5 Deployment Strategies Detail
+Heading 2: 9.6 Infrastructure as Code (IaC)
+Heading 1: 10. Performance & Scalability
+Heading 2: 10.1 Performance Targets
+Heading 2: 10.2 Scalability Strategies
+Heading 2: 10.3 Load Testing Plan (K6)
+Heading 3: Standard Load Test Profile
+Heading 3: ABAC Policy Decision Load Test Profile (NEW)
+Heading 1: 11. Disaster Recovery & Business Continuity
+Heading 2: 11.1 DR Strategy
+Heading 2: 11.2 Backup Schedule
+Heading 2: 11.3 DR Runbook (High-Level)
+Heading 1: 12. GitOps Deployment Pipeline
+Heading 2: 12.1 Pipeline Architecture
+Heading 2: 12.2 CI/CD Stages
+Heading 2: 12.3 Helm Chart Structure
+Heading 2: 12.4 ArgoCD Application Configuration
+Heading 2: 12.5 Secret Management in GitOps
+Heading 1: 13. Appendices
+Heading 2: Appendix A: API Error Codes (RFC 7807 Problem Details)
+Heading 2: Appendix B: Environment Configuration Reference
+Heading 2: Appendix C: NDI Domain to Service Mapping Matrix (Enhanced)
+Heading 2: Appendix D: Technology Version Lock
+Heading 2: Appendix E: Further Information Required
+Heading 2: Appendix F: Glossary of Technical Terms
+
+### DGOP_v4.0_Volume5_Security_Compliance_ENHANCED.docx
+Heading 1: Document Control
+Heading 1: Table of Contents
+Heading 1: 1. Introduction to Volume 5
+Heading 2: 1.1 Purpose
+Heading 2: 1.2 Scope
+Heading 2: 1.3 Regulatory Alignment Summary
+Heading 1: 2. Regulatory & Compliance Framework Overview
+Heading 2: 2.1 SDAIA NDI Compliance Pillar
+Heading 2: 2.2 DGA NORA Security Domain Alignment
+Heading 2: 2.3 Risk-Based Compliance Approach
+Heading 1: 3. NCA ECC-1:2024 Control-by-Control Mapping
+Heading 2: 3.1 Control Family: Identity & Access Management (ECC-1)
+Heading 2: 3.2 Control Family: Network Security (ECC-2)
+Heading 2: 3.3 Control Family: Data Protection (ECC-3)
+Heading 2: 3.4 Control Family: Logging & Monitoring (ECC-4)
+Heading 2: 3.5 Control Family: Application Security (ECC-5)
+Heading 2: 3.6 Control Family: Cloud Security (ECC-6)
+Heading 1: 4. PDPL 2023 Requirement-by-Requirement Mapping
+Heading 2: 4.1 PDPL Chapter 2: General Provisions & Principles
+Heading 3: 4.1.1 Six Lawful Bases: Explicit Technical Mapping (ENHANCED)
+Heading 2: 4.2 PDPL Chapter 3: Data Subject Rights (Articles 10-18)
+Heading 2: 4.3 PDPL Chapter 4: Legal Basis & Consent (Articles 19-24)
+Heading 2: 4.4 PDPL Chapter 5: Data Protection Impact Assessment (DPIA) & RoPA
+Heading 2: 4.5 PDPL Chapter 6: Data Breach Notification (Articles 29-31)
+Heading 2: 4.6 PDPL Chapter 7: Cross-Border Data Transfer (Articles 32-35)
+Heading 2: 4.7 PDPL Chapter 8: Controller & Processor Obligations (Articles 36-44)
+Heading 1: 5. Zero Trust Architecture
+Heading 2: 5.1 Identity & Access Management (IAM)
+Heading 3: 5.1.1 Identity Provider Architecture
+Heading 3: 5.1.2 Authentication Flow (Human User)
+Heading 3: 5.1.3 Token Structure & Claims
+Heading 3: 5.1.4 Role-Based Access Control (RBAC)
+Heading 3: 5.1.5 Multi-Factor Authentication (MFA)
+Heading 3: 5.1.6 Role-Data Mapping Designer (NEW)
+Heading 4: Purpose
+Heading 4: Attribute Model
+Heading 4: Workflow: Mapping Definition, Approval, and Technical Enforcement
+Heading 4: RACI: Role-Data Mapping Lifecycle
+Heading 4: API Specification (Role-Data Mapping Designer)
+Heading 2: 5.2 Open Policy Agent (OPA) & Attribute-Based Access Control (ABAC)
+Heading 3: 5.2.1 ABAC Attribute Definitions
+Heading 3: 5.2.2 Policy Grammar
+Heading 3: 5.2.3 ABAC Policy Examples for Confidential Data Protection
+Heading 3: 5.2.4 OPA Deployment Architecture
+Heading 3: 5.2.5 Performance & Caching
+Heading 2: 5.3 HashiCorp Vault
+Heading 3: 5.3.1 Vault Architecture
+Heading 3: 5.3.2 Secret Types & Use Cases
+Heading 3: 5.3.3 Encryption-as-a-Service
+Heading 3: 5.3.4 Audit & Compliance
+Heading 2: 5.4 Mutual TLS (mTLS)
+Heading 3: 5.4.1 Istio Service Mesh mTLS
+Heading 3: 5.4.2 Traffic Policies
+Heading 3: 5.4.3 East-West vs. North-South Traffic
+Heading 3: 5.4.4 mTLS Evidence for NDI
+Heading 2: 5.5 Privacy by Design (PbD) SDLC Integration (NEW)
+Heading 3: 5.5.1 The 7 Foundational Principles of Privacy by Design
+Heading 3: 5.5.2 PbD Gates Across 5 SDLC Phases
+Heading 3: 5.5.3 PbD Workflow BPMN
+Heading 3: 5.5.4 PbD Evidence & NDI Integration
+Heading 1: 6. Data Classification & Protection Matrix
+Heading 2: 6.1 Classification Levels & Security Controls
+Heading 3: Classification-to-Control Mapping Summary
+Heading 2: 6.2 Classification-Driven Workflow Enforcement
+Heading 2: 6.3 Personal Data & Sensitive Personal Data Handling
+Heading 2: 6.4 Data Masking Service (NEW)
+Heading 3: 6.4.1 Masking Techniques Overview
+Heading 3: 6.4.2 Technique Selection Matrix
+Heading 3: 6.4.3 Masking Service Architecture
+Heading 3: 6.4.4 Masking API Specification
+Heading 3: 6.4.5 Masking Policy Configuration
+Heading 3: 6.4.6 ECC-3.1 Mapping (Updated)
+Heading 1: 7. Audit & Logging Architecture
+Heading 2: 7.1 Audit Pipeline Architecture
+Heading 2: 7.2 Evidence Chain of Custody
+Heading 2: 7.3 Audit Log Schema
+Heading 2: 7.4 SIEM Integration & Real-Time Monitoring
+Heading 1: 8. Security Operations & Incident Response
+Heading 2: 8.1 Security Operations Center (SOC) Integration
+Heading 2: 8.2 Incident Response Lifecycle
+Heading 2: 8.3 Vulnerability Management
+Heading 2: 8.4 Security Monitoring & Alerting
+Heading 1: 9. Compliance Automation & Evidence Management
+Heading 2: 9.1 Automated Compliance Checking
+Heading 2: 9.2 Evidence Collection & NDI Integration
+Heading 2: 9.3 Gap Analysis & Remediation Queue
+Heading 2: 9.4 Compliance Automation Architecture
+Heading 2: 9.5 Recurring Compliance Calendar (NEW)
+Heading 3: 9.5.1 Recurring Compliance Activities
+Heading 3: 9.5.2 Automated Scheduling & Tracking
+Heading 3: 9.5.3 Quarterly Processing Review Detail
+Heading 3: 9.5.4 Quarterly Cross-Border Monitoring Detail
+Heading 2: 9.6 Privacy Steward Recurring Responsibilities (NEW)
+Heading 3: 9.6.1 Recurring Responsibility Matrix
+Heading 3: 9.6.2 Privacy Steward Score Formula
+Heading 3: 9.6.3 Privacy Steward Dashboard
+Heading 1: 10. Appendices
+Heading 2: Appendix A: Consolidated NCA ECC-1:2024 to DGOP Service Mapping
+Heading 2: Appendix B: PDPL 2023 Requirement-to-Module Mapping
+Heading 2: Appendix C: Security Controls Checklist (ENHANCED)
+Heading 3: A. Identity & Access
+Heading 3: B. Network & Communication
+Heading 3: C. Data Protection
+Heading 3: D. Audit & Logging
+Heading 3: E. Application & Cloud Security
+Heading 3: F. Privacy by Design & Compliance (NEW)
+Heading 3: G. Recurring Compliance & Stewardship (NEW)
+Heading 3: H. ABAC & Masking Specific (NEW)
+Heading 2: Appendix D: Abbreviations & Definitions (ENHANCED)
+Heading 2: Appendix E: Further Information Required
+Heading 2: Appendix F: ECC-to-DSP Activity Crosswalk (NEW)
+Heading 3: Unified Compliance Score
+
+### DGOP_v4.0_Volume6_Procurement_Delivery_ENHANCED.docx
+Heading 1: Document Control
+Heading 1: Table of Contents
+Heading 1: 1. Non-Functional Requirements
+Heading 2: 1.1 Availability
+Heading 2: 1.2 Performance
+Heading 2: 1.3 Scalability
+Heading 2: 1.4 Capacity
+Heading 1: 2. Environment Strategy
+Heading 2: 2.1 Development (DEV)
+Heading 2: 2.2 System Testing (TEST)
+Heading 2: 2.3 User Acceptance Testing (UAT)
+Heading 2: 2.4 Pre-Production (PRE-PROD)
+Heading 2: 2.5 Production (PROD)
+Heading 2: 2.6 Disaster Recovery (DR)
+Heading 1: 3. Acceptance Criteria
+Heading 2: 3.1 DGOP Administration
+Heading 2: 3.2 Ownership & Stewardship Registry
+Heading 2: 3.3 Data Asset Governance Hub
+Heading 2: 3.4 Workflow & Approval Engine
+Heading 2: 3.5 NDI Compliance Hub
+Heading 2: 3.6 Awareness & Training Module
+Heading 2: 3.7 Open Data Management Center
+Heading 2: 3.8 FOI Management Center
+Heading 2: 3.9 ODIAO Operating Cockpit
+Heading 2: 3.10 Reporting & Analytics
+Heading 2: 3.11 Security & Access Control
+Heading 2: 3.12 DQ Dimensional Framework
+Heading 2: 3.13 Data Profiling Module
+Heading 2: 3.14 MDM Matching Engine
+Heading 2: 3.15 Data Masking Service
+Heading 2: 3.16 ABAC & Classification Service
+Heading 2: 3.17 Privacy by Design SDLC Integration
+Heading 2: 3.18 Recurring Compliance Calendar
+Heading 2: 3.19 Community of Practice Platform
+Heading 2: 3.20 Charter & Policy Management
+Heading 1: 4. UAT Scenarios
+Heading 2: 4.1 DG (Data Governance)
+Heading 2: 4.2 MCM (Master Data Management)
+Heading 2: 4.3 DQ (Data Quality)
+Heading 2: 4.4 DSI (Data Sharing & Integration)
+Heading 2: 4.5 PDP (Privacy & Data Protection)
+Heading 2: 4.6 OD (Open Data)
+Heading 2: 4.7 FOI (Freedom of Information)
+Heading 2: 4.8 Training & Certification
+Heading 2: 4.9 Community of Practice
+Heading 2: 4.10 Data Profiling Integration
+Heading 2: 4.11 MDM Matching & Survivorship
+Heading 2: 4.12 Privacy by Design SDLC
+Heading 1: 5. Support Model
+Heading 2: 5.1 L1 – Service Desk
+Heading 2: 5.2 L2 – Technical Support
+Heading 2: 5.3 L3 – Engineering & Development
+Heading 2: 5.4 New Capability Support Procedures
+Heading 1: 6. Implementation Roadmap (Business-Focused 4-Phase Methodology)
+Heading 2: 6.1 Phase 1: Foundation (Months 1–3)
+Heading 2: 6.2 Phase 2: Pilot (Months 4–6)
+Heading 2: 6.3 Phase 3: Expansion (Months 7–12)
+Heading 2: 6.4 Phase 4: Optimization (Year 2+)
+Heading 1: 7. Deliverables Catalogue
+Heading 2: 7.1 Business Design Report (BDR)
+Heading 2: 7.2 Functional Specification Document (FSD)
+Heading 2: 7.3 Technical Design Document (TDD)
+Heading 2: 7.4 BPMN Package
+Heading 2: 7.5 Entity Relationship Diagram (ERD) Package
+Heading 2: 7.6 API Catalogue
+Heading 2: 7.7 RACI Catalogue
+Heading 2: 7.8 Test Catalogue
+Heading 2: 7.9 Additional Deliverables
+Heading 2: 7.10 New Capability Deliverables (DSP-Aligned)
+Heading 2: Deliverable Acceptance Matrix
+Heading 1: 8. Tool Selection Framework (NEW)
+Heading 2: 8.1 7 Weighted Evaluation Criteria
+Heading 2: 8.2 6-Step Selection Process
+Heading 2: 8.3 Tool Selection RACI
+Heading 1: 9. Implementation Best Practices & Common Pitfalls to Avoid (NEW)
+Heading 2: 9.1 Top 10 Implementation Best Practices
+Heading 2: 9.2 Top 10 Common Pitfalls to Avoid
+Heading 1: 10. Implementation Scenarios (NEW)
+Heading 2: 10.1 Greenfield Implementation (18–24 Months)
+Heading 2: 10.2 Brownfield Implementation (12–18 Months)
+Heading 2: 10.3 Transformation / M&A Implementation (6–12 Months)
+Heading 1: Document Approval
+
+### DGOP_v40_Volume3_NDI_Domain_Models_ENHANCED.docx
+Heading 1: 1. Introduction to NDI Domain Operationalization
+Heading 2: 1.1 Purpose
+Heading 2: 1.2 Operational Model Structure
+Heading 2: 1.3 Stewardship Role Taxonomy (NEW – v3.1)
+Heading 3: 1.3.1 Operational Data Steward (ODS)
+Heading 3: 1.3.2 Project Data Steward (PDS)
+Heading 3: 1.3.3 Enterprise Data Steward (EDS)
+Heading 2: 1.4 Maturity Progression
+Heading 1: 2. Domain 1: DG – Data Governance
+Heading 2: 2.1 Domain Overview
+Heading 2: 2.2 NDI Specification Mapping
+Heading 2: 2.3 Operational Lifecycle: Governance Tower
+Heading 3: Phase 1: Identify
+Heading 3: Phase 2: Register
+Heading 3: Phase 3: Assign
+Heading 3: Phase 4: Approve
+Heading 3: Phase 5: Operate
+Heading 3: Phase 6: Review
+Heading 3: Phase 7: Optimize
+Heading 2: 2.4 NEW v3.1: Charter Management Lifecycle
+Heading 2: 2.5 NEW v3.1: Policy Lifecycle Management
+Heading 2: 2.6 NEW v3.1: DGPO Sizing Guidance
+Heading 2: 2.7 NEW v3.1: Domain Council Structure
+Heading 2: 2.8 NEW v3.1: 4-Tier Training Curriculum
+Heading 2: 2.9 NEW v3.1: 3-Level Certification Program (CDS/SDS/MDS)
+Heading 2: 2.10 NEW v3.1: Community of Practice Governance
+Heading 2: 2.11 DGOP Module Mapping
+Heading 2: 2.12 Workflow: Owner Assignment Approval (BPMN 2.0)
+Heading 2: 2.13 NEW v3.1: Charter Approval Workflow (BPMN 2.0)
+Heading 2: 2.14 Evidence Requirements
+Heading 2: 2.15 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 2.16 KPIs & Metrics
+Heading 2: 2.17 RACI Matrix
+Heading 1: 3. Domain 2: MCM – Master Data Management
+Heading 2: 3.1 Domain Overview
+Heading 2: 3.2 NDI Specification Mapping
+Heading 2: 3.3 Operational Lifecycle: Master Data Governance
+Heading 3: Phase 1: Entity Identification
+Heading 3: Phase 2: Authoritative Source Declaration
+Heading 3: Phase 3: Golden Record Design
+Heading 3: Phase 4: Stewardship Assignment
+Heading 3: Phase 5: DQ Profiling
+Heading 3: Phase 6: Matching & Merging
+Heading 3: Phase 7: Publication
+Heading 3: Phase 8: Consumption Monitoring
+Heading 3: Phase 9: Retirement
+Heading 2: 3.4 NEW v3.1: MDM Implementation Styles
+Heading 2: 3.5 DGOP Module Mapping
+Heading 2: 3.6 Workflow: Golden Record Merge Approval
+Heading 2: 3.7 NEW v3.1: Match Resolution Workflow (BPMN 2.0)
+Heading 2: 3.8 Evidence Requirements
+Heading 2: 3.9 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 3.10 KPIs & Metrics
+Heading 2: 3.11 RACI Matrix
+Heading 1: 4. Domain 3: DQ – Data Quality
+Heading 2: 4.1 Domain Overview
+Heading 2: 4.2 NDI Specification Mapping
+Heading 2: 4.3 6-Dimension DQ Framework (NEW – v3.1)
+Heading 3: Dimension Definitions and Measurement
+Heading 3: Dimension Weighting by Domain Context
+Heading 2: 4.4 NEW v3.1: Data Profiling Capabilities
+Heading 3: Profiling Types
+Heading 3: Profiling Outputs
+Heading 2: 4.5 NEW v3.1: Severity-Based SLA Framework
+Heading 3: 4-Tier Severity Classification
+Heading 3: Per-Stage SLA Matrix by Severity
+Heading 2: 4.6 NEW v3.1: 4-Level Governance Escalation
+Heading 2: 4.7 NEW v3.1: RCA Technique Integration
+Heading 3: Technique Selection Guide
+Heading 3: RCA Workflow Integration
+Heading 2: 4.8 NEW v3.1: DQ Rule Lifecycle
+Heading 2: 4.9 NEW v3.1: Hierarchical DQ Scorecards
+Heading 3: Scorecard Hierarchy
+Heading 3: Scorecard Components
+Heading 2: 4.10 Operational Lifecycle: DQ Tower
+Heading 3: Phase 1: Rule Definition
+Heading 3: Phase 2: Profiling
+Heading 3: Phase 3: Detection
+Heading 3: Phase 4: Root Cause Analysis
+Heading 3: Phase 5: Correction
+Heading 3: Phase 6: Validation
+Heading 3: Phase 7: Monitoring
+Heading 3: Phase 8: Evidence
+Heading 2: 4.11 DGOP Module Mapping
+Heading 2: 4.12 Workflow: DQ Issue Remediation (Enhanced v3.1)
+Heading 2: 4.13 Evidence Requirements
+Heading 2: 4.14 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 4.15 KPIs & Metrics
+Heading 2: 4.16 RACI Matrix
+Heading 1: 5. Domain 4: DSI – Data Sharing & Integration
+Heading 2: 5.1 Domain Overview
+Heading 2: 5.2 NDI Specification Mapping
+Heading 2: 5.3 Operational Lifecycle: Sharing Tower
+Heading 3: Phase 1: Opportunity Identification
+Heading 3: Phase 2: Sharing Request
+Heading 3: Phase 3: Multi-Dimensional Review
+Heading 3: Phase 4: Agreement Execution
+Heading 3: Phase 5: Technical Enablement
+Heading 3: Phase 6: Usage Monitoring
+Heading 3: Phase 7: Renewal / Retirement
+Heading 2: 5.4 DGOP Module Mapping
+Heading 2: 5.5 Workflow: Data Sharing Request Approval
+Heading 2: 5.6 Evidence Requirements
+Heading 2: 5.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 5.8 KPIs & Metrics
+Heading 2: 5.9 RACI Matrix
+Heading 2: 5.10 Cross-Domain Integration (NEW v3.1)
+Heading 1: 6. Domain 5: PDP – Privacy & Data Protection
+Heading 2: 6.1 Domain Overview
+Heading 2: 6.2 NDI Specification Mapping
+Heading 2: 6.3 Operational Lifecycle: Privacy Tower
+Heading 3: Phase 1: Data Subject Identification
+Heading 3: Phase 2: Legal Basis Mapping
+Heading 3: Phase 3: Consent Capture
+Heading 3: Phase 4: RoPA Recording
+Heading 3: Phase 5: DPIA Trigger
+Heading 3: Phase 6: Processing Monitoring
+Heading 3: Phase 7: DSR Fulfillment
+Heading 3: Phase 8: Breach Detection
+Heading 3: Phase 9: Retention Enforcement
+Heading 2: 6.4 NEW v3.1: Privacy by Design SDLC Integration
+Heading 3: 7 Privacy by Design Principles
+Heading 3: 5 SDLC Phase Gates
+Heading 2: 6.5 NEW v3.1: Data Masking Service
+Heading 3: 6 Masking Techniques
+Heading 3: Masking Selection Matrix
+Heading 2: 6.6 DGOP Module Mapping
+Heading 2: 6.7 Workflow: DPIA High-Risk Processing
+Heading 2: 6.8 NEW v3.1: Privacy by Design SDLC Gate (BPMN 2.0)
+Heading 2: 6.9 Evidence Requirements
+Heading 2: 6.10 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 6.11 KPIs & Metrics
+Heading 2: 6.12 RACI Matrix
+Heading 1: 7. Domain 6: DAM – Data Architecture Management
+Heading 2: 7.1 Domain Overview
+Heading 2: 7.2 NDI Specification Mapping
+Heading 2: 7.3 Operational Lifecycle: Architecture Tower
+Heading 3: Phase 1: Strategy Definition
+Heading 3: Phase 2: Conceptual Modeling
+Heading 3: Phase 3: Logical Design
+Heading 3: Phase 4: Physical Design
+Heading 3: Phase 5: Architecture Review
+Heading 3: Phase 6: Implementation Gating
+Heading 3: Phase 7: Lineage Tracking
+Heading 3: Phase 8: Model Evolution
+Heading 2: 7.4 DGOP Module Mapping
+Heading 2: 7.5 Workflow: Architecture Review Board Gate
+Heading 2: 7.6 Evidence Requirements
+Heading 2: 7.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 7.8 KPIs & Metrics
+Heading 2: 7.9 RACI Matrix
+Heading 1: 8. Domain 7: DCM – Data Content Management
+Heading 2: 8.1 Domain Overview
+Heading 2: 8.2 NDI Specification Mapping
+Heading 2: 8.3 Operational Lifecycle: Content Tower
+Heading 3: Phase 1: Creation
+Heading 3: Phase 2: Classification
+Heading 3: Phase 3: Active Retention
+Heading 3: Phase 4: Archival
+Heading 3: Phase 5: Disposal
+Heading 3: Legal Hold Exception
+Heading 2: 8.4 DGOP Module Mapping
+Heading 2: 8.5 Workflow: Secure Disposal with Legal Hold Check
+Heading 2: 8.6 Evidence Requirements
+Heading 2: 8.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 8.8 KPIs & Metrics
+Heading 2: 8.9 RACI Matrix
+Heading 1: 9. Domain 8: RMD – Reference Master Data
+Heading 2: 9.1 Domain Overview
+Heading 2: 9.2 NDI Specification Mapping
+Heading 2: 9.3 Operational Lifecycle: Reference Data Tower
+Heading 3: Phase 1: Standard Identification
+Heading 3: Phase 2: Reference Set Creation
+Heading 3: Phase 3: Value Governance
+Heading 3: Phase 4: Approval
+Heading 3: Phase 5: Distribution
+Heading 3: Phase 6: Consumption Monitoring
+Heading 3: Phase 7: Versioning
+Heading 3: Phase 8: Retirement
+Heading 2: 9.4 DGOP Module Mapping
+Heading 2: 9.5 Workflow: Reference Value Change Request
+Heading 2: 9.6 Evidence Requirements
+Heading 2: 9.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 9.8 KPIs & Metrics
+Heading 2: 9.9 RACI Matrix
+Heading 1: 10. Domain 9: BIA – Business Intelligence & Analytics
+Heading 2: 10.1 Domain Overview
+Heading 2: 10.2 NDI Specification Mapping
+Heading 2: 10.3 Operational Lifecycle: Analytics Tower
+Heading 3: Phase 1: Use Case Identification
+Heading 3: Phase 2: Data Source Certification
+Heading 3: Phase 3: Design
+Heading 3: Phase 4: Privacy & Security Review
+Heading 3: Phase 5: Certification
+Heading 3: Phase 6: Publication
+Heading 3: Phase 7: Usage Monitoring
+Heading 3: Phase 8: Evolution
+Heading 3: Phase 9: Retirement
+Heading 2: 10.4 DGOP Module Mapping
+Heading 2: 10.5 Workflow: BI Report Certification
+Heading 2: 10.6 Evidence Requirements
+Heading 2: 10.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 10.8 KPIs & Metrics
+Heading 2: 10.9 RACI Matrix
+Heading 1: 11. Domain 10: DVR – Data Value Realization
+Heading 2: 11.1 Domain Overview
+Heading 2: 11.2 NDI Specification Mapping
+Heading 2: 11.3 Operational Lifecycle: Value Tower
+Heading 3: Phase 1: Valuation Methodology
+Heading 3: Phase 2: Baseline Assessment
+Heading 3: Phase 3: Value Metric Definition
+Heading 3: Phase 4: Tracking
+Heading 3: Phase 5: Attribution
+Heading 3: Phase 6: Reporting
+Heading 3: Phase 7: Optimization
+Heading 2: 11.4 DGOP Module Mapping
+Heading 2: 11.5 Workflow: Asset Value Optimization Decision
+Heading 2: 11.6 Evidence Requirements
+Heading 2: 11.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 11.8 KPIs & Metrics
+Heading 2: 11.9 RACI Matrix
+Heading 1: 12. Domain 11: OD – Open Data
+Heading 2: 12.1 Domain Overview
+Heading 2: 12.2 NDI Specification Mapping
+Heading 2: 12.3 Operational Lifecycle: Open Data Tower
+Heading 3: Phase 1: Candidate Identification
+Heading 3: Phase 2: Eligibility Assessment
+Heading 3: Phase 3: Approval Chain
+Heading 3: Phase 4: Publication
+Heading 3: Phase 5: Usage Monitoring
+Heading 3: Phase 6: Periodic Review
+Heading 3: Phase 7: Update / Retirement
+Heading 2: 12.4 DGOP Module Mapping
+Heading 2: 12.5 Workflow: Open Data Publication Approval
+Heading 2: 12.6 Evidence Requirements
+Heading 2: 12.7 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 12.8 KPIs & Metrics
+Heading 2: 12.9 RACI Matrix
+Heading 1: 13. Domain 12: FOI – Freedom of Information
+Heading 2: 13.1 Domain Overview
+Heading 2: 13.2 NDI Specification Mapping
+Heading 2: 13.3 Operational Lifecycle: Transparency Tower
+Heading 3: Phase 1: Request Intake
+Heading 3: Phase 2: Registration
+Heading 3: Phase 3: Eligibility Classification
+Heading 3: Phase 4: Review
+Heading 3: Phase 5: Decision
+Heading 3: Phase 6: Disclosure / Redaction / Rejection
+Heading 3: Phase 7: Appeals
+Heading 3: Phase 8: Closure
+Heading 3: Phase 9: Evidence Archiving
+Heading 2: 13.4 DGOP Module Mapping
+Heading 2: 13.5 Workflow: FOI Request Decision
+Heading 2: 13.6 KSA Business Days SLA Calculation
+Heading 2: 13.7 Evidence Requirements
+Heading 2: 13.8 NEW v3.1: Evidence Quality Dimensional Tracking
+Heading 2: 13.9 KPIs & Metrics
+Heading 2: 13.10 RACI Matrix
+Heading 1: 14. Appendices
+Heading 2: Appendix A: Universal NDI Evidence State Machine
+Heading 2: Appendix B: Cross-Domain Integration Matrix
+Heading 3: B.1 Original Integration Points (Preserved from v3.0)
+Heading 3: B.2 NEW v3.1: Enhanced Integration Points
+Heading 3: B.3 v3.1 Stewardship Role Integration Summary
+Heading 2: Appendix C: NDI Compliance Scoring Algorithm (Unified)
+Heading 2: Appendix D: DGOP Table Mapping Summary
+Heading 2: Appendix E: NEW v3.1 – Severity-Based DQ SLA Quick Reference
+Heading 2: Appendix F: NEW v3.1 – 4-Level Governance Escalation Quick Reference
+Heading 2: Appendix G: NEW v3.1 – 6 DQ Dimensions by Domain Coverage Matrix
+Heading 2: Appendix H: NEW v3.1 – DGOP Enhancement Implementation Roadmap

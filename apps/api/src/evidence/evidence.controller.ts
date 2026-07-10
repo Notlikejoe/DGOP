@@ -36,14 +36,14 @@ export class EvidenceController {
 
   @Get('ndi/specifications/:specId/evidence')
   @RequirePermissions('evidence.view')
-  listBySpec(@Param('specId') specId: string) {
-    return this.service.listBySpec(specId);
+  listBySpec(@Param('specId') specId: string, @CurrentUser() user: AuthUser) {
+    return this.service.listBySpec(specId, user);
   }
 
   @Get('evidence/:id')
   @RequirePermissions('evidence.view')
-  get(@Param('id') id: string) {
-    return this.service.get(id);
+  get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.get(id, user);
   }
 
   @Post('evidence')
@@ -62,13 +62,13 @@ export class EvidenceController {
     @Body() dto: CreateEvidenceDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.create(dto, file, user.email);
+    return this.service.create(dto, file, user);
   }
 
   @Post('evidence/:id/submit')
   @RequirePermissions('evidence.create')
   submit(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.submit(id, user.email);
+    return this.service.submit(id, user);
   }
 
   @Post('evidence/:id/review')
@@ -78,19 +78,19 @@ export class EvidenceController {
     @Body() dto: ReviewEvidenceDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.review(id, dto, user.email);
+    return this.service.review(id, dto, user);
   }
 
   @Post('evidence/:id/revoke')
   @RequirePermissions('evidence.review')
   revoke(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.revoke(id, user.email);
+    return this.service.revoke(id, user);
   }
 
   @Delete('evidence/:id')
   @RequirePermissions('evidence.delete')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.remove(id, user.email);
+    return this.service.remove(id, user);
   }
 
   @Get('evidence/:id/file')
@@ -100,7 +100,7 @@ export class EvidenceController {
     @CurrentUser() user: AuthUser,
     @Res() res: Response,
   ): Promise<void> {
-    const { path, originalName, mimeType } = await this.service.fileFor(id, user.email);
+    const { path, originalName, mimeType } = await this.service.fileFor(id, user);
     res.setHeader('Content-Type', mimeType);
     res.download(path, originalName);
   }

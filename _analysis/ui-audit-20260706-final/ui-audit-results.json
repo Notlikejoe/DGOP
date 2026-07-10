@@ -1,0 +1,851 @@
+{
+  "results": [
+    {
+      "label": "dashboard",
+      "route": "/dashboard",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\dashboard.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/dashboard",
+      "path": "/dashboard",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nCommand Center\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\nDGOP COMMAND CENTER\nGovernance health: Critical attention\n\nOwnership, stewardship, NDI evidence, and workflow risk in one view for leadership decisions and daily steward action.\n\nAssign missing owners\nOpen asset map\nCritical attention\n20\nITEMS NEED ATTENTION\n\nUnowned assets create accountability risk.\n\nGoverned assets\n5\n2 owned\nOwnership coverage\n40%\n3 missing owners\nNDI readiness\n0%\n0/10 controls proven\nMy workflow\n0\n0 overdue\nData quality\n2\n0 critical\nTraining\n50%\n2/3 Certifications\nEXECUTIVE VIEW\nGovern",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 0,
+      "lowContrast": []
+    },
+    {
+      "label": "governance-hub",
+      "route": "/governance",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\governance-hub.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/governance",
+      "path": "/governance",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n-\nData Assets\nOwnership Registry\nAssignment Rules\nException Queue\nWorkflow Inbox\nData Quality Issues\nNDI Compliance\nNDI Readiness\nGap Analysis\nTraining & Awareness\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nGovernance\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\n\nGOVERNANCE WORKSPACE\n\nTurn governance risk into clear owner action\n\nA calmer entry point for ownership, exceptions, workflow approvals, and NDI evidence without opening every table at once.\n\nAvailable tools\n10\nWork areas\n3\nGOVERNANCE HEALTH\n91%\nStable, 3 controls need review\nOPEN ALERTS\n7\n2 high priority ownership gaps\nPRIVACY RISK\n1\nCustomer export ",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 0,
+      "lowContrast": []
+    },
+    {
+      "label": "admin-hub",
+      "route": "/admin",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\admin-hub.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin",
+      "path": "/admin",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n-\nPeople Directory\nData Domains\nData Subjects\nBusiness Capabilities\nOrganization Units\nSystems & Platforms\nClassifications\nRole Types\nRACI Templates\nStatus Values\nDGOP\n/\nAdministration\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\n\nADMINISTRATION WORKSPACE\n\nSet up the operating model once, then govern with confidence\n\nA guided entry point for people, roles, organization structure, systems, and reference data so setup does not feel like a raw database.\n\nAvailable tools\n13\nWork areas\n3\nACCESS COVERAGE\n98%\nRoles mapped to active users\nPENDING ACCESS\n3\n3 requests need approval\nR",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 0,
+      "lowContrast": []
+    },
+    {
+      "label": "users",
+      "route": "/admin/users",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\users.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin/users",
+      "path": "/admin/users",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n-\nPeople Directory\nData Domains\nData Subjects\nBusiness Capabilities\nOrganization Units\nSystems & Platforms\nClassifications\nRole Types\nRACI Templates\nStatus Values\nDGOP\n/\nUsers & Roles\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\n\nACCESS MANAGEMENT\n\nUsers & Roles\n\nAccounts that can access the platform and their assigned roles.\n\nRefresh\nNew user\nTOTAL USERS\n6\nPeople with platform accounts\nACTIVE USERS\n6\nCan sign in today\nINACTIVE USERS\n0\nTemporarily blocked from access\nWITHOUT ROLES\n0\nNeed role assignment before useful access\nFIND USER\nSTATUS\nAll statuses\nActive\nInactive\nROLE",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "sara.alamri",
+        "khalid.hassan",
+        "mona.youssef",
+        "omar.farouk",
+        "layla.nasser"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 18,
+      "visibleInputs": 3,
+      "lowContrast": [
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "SA",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(246, 248, 249)",
+          "size": "14px",
+          "ratio": 1.07
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "SA",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "KH",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "MY",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "OF",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "LN",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "detail-panel__avatar",
+          "text": "SA",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "16px",
+          "ratio": 1
+        }
+      ]
+    },
+    {
+      "label": "roles",
+      "route": "/admin/roles",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\roles.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin/roles",
+      "path": "/admin/roles",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n-\nPeople Directory\nData Domains\nData Subjects\nBusiness Capabilities\nOrganization Units\nSystems & Platforms\nClassifications\nRole Types\nRACI Templates\nStatus Values\nDGOP\n/\nRoles & Privileges\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\n\nACCESS MANAGEMENT\n\nRoles & Privileges\n\nDefine roles, the screens and actions they allow, and the data they can see.\n\nRefresh\nNew role\nTOTAL ROLES\n16\nOperating roles available in DGOP\nSYSTEM ROLES\n16\nProtected platform roles\nCUSTOM ROLES\n0\nDesigned for business responsibilities\nASSIGNED USERS\n15\nPermission grants: 428\nFIND ROLE\nROLE TYPE\nAll ty",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 27,
+      "visibleInputs": 3,
+      "lowContrast": [
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "System",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        }
+      ]
+    },
+    {
+      "label": "data-domains",
+      "route": "/admin/data-domains",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\data-domains.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin/data-domains",
+      "path": "/admin/data-domains",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n-\nPeople Directory\nData Domains\nData Subjects\nBusiness Capabilities\nOrganization Units\nSystems & Platforms\nClassifications\nRole Types\nRACI Templates\nStatus Values\nDGOP\n/\nData Domains\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\nOPERATING TREE\nData Domains\n\nHierarchical taxonomy of business data areas.\n\nAdd root domain\nTOTAL NODES\n6\nTOP LEVEL\n2\nDEEPEST LEVEL\n2\nNEEDS REVIEW\n0\nVisual tree map\n\nReview the structure as business branches, not as a technical table.\n\n6 records\nSearch\nCorporate\ncorporate\n2 branches\nActive\nFinance\nfinance\nActive\nHuman Resources\nhr\nActive\nPatient Care",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 19,
+      "visibleInputs": 1,
+      "lowContrast": []
+    },
+    {
+      "label": "capabilities",
+      "route": "/admin/capabilities",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\capabilities.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin/capabilities",
+      "path": "/admin/capabilities",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n-\nPeople Directory\nData Domains\nData Subjects\nBusiness Capabilities\nOrganization Units\nSystems & Platforms\nClassifications\nRole Types\nRACI Templates\nStatus Values\nDGOP\n/\nBusiness Capabilities\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\nOPERATING TREE\nBusiness Capabilities\n\nHierarchical map of what the organization does.\n\nAdd root capability\nTOTAL NODES\n6\nTOP LEVEL\n2\nDEEPEST LEVEL\n2\nNEEDS REVIEW\n0\nVisual tree map\n\nReview the structure as business branches, not as a technical table.\n\n6 records\nSearch\nClinical Operations\nclinical_ops\n2 branches\nActive\nInpatient Care\ninpatient",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 19,
+      "visibleInputs": 1,
+      "lowContrast": []
+    },
+    {
+      "label": "training",
+      "route": "/governance/training",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\training.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/governance/training",
+      "path": "/governance/training",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n-\nData Assets\nOwnership Registry\nAssignment Rules\nException Queue\nWorkflow Inbox\nData Quality Issues\nNDI Compliance\nNDI Readiness\nGap Analysis\nTraining & Awareness\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nTraining & Awareness\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\nTraining & Awareness\n\nKeep role-based governance learning visible, current, and auditable.\n\nRetry\nSync role assignments\nNew course\nAwareness readiness50%\nActive courses7\nAssignments19\nCompletion rate11%\nCertifications2/3\nCE hours18\nOverdue0\nFour-tier learning path\n\nFundamentals build into core skills, advanced practice, then stewardship lead",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 40,
+      "visibleInputs": 2,
+      "lowContrast": [
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "In progress",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "In progress",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        }
+      ]
+    },
+    {
+      "label": "data-quality",
+      "route": "/governance/data-quality",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\data-quality.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/governance/data-quality",
+      "path": "/governance/data-quality",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n-\nData Assets\nOwnership Registry\nAssignment Rules\nException Queue\nWorkflow Inbox\nData Quality Issues\nNDI Compliance\nNDI Readiness\nGap Analysis\nTraining & Awareness\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nData Quality Issues\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\nData Quality Operations\n\nRegister quality issues, assign responsible stewards, and track remediation evidence.\n\nRetry\nImport CSV\nNew issue\nOpen issues2\nCritical0\nOverdue0\nClosure rate0%\nAll statuses\nOpen\nTriaged\nIn progress\nResolved\nClosed\nCancelled\nAll severities\nLow\nMedium\nHigh\nCritical\nAll dimensions\nCompleteness\nAccuracy\nValidity\nConsiste",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "issue.created"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 11,
+      "visibleInputs": 4,
+      "lowContrast": [
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--info",
+          "text": "Triaged",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "Triaged",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "Medium",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "Medium",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--info",
+          "text": "Triaged",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "Triaged",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--info",
+          "text": "Triaged",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "Triaged",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        }
+      ]
+    },
+    {
+      "label": "about",
+      "route": "/about",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\about.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/about",
+      "path": "/about",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nAbout DGOP\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\n\nPLATFORM BRIEF\n\nDGOP v3.0 - Enterprise Governance Operations Platform\n\nThe operating system for enterprise data governance: a single operational layer that turns governance frameworks into daily workflows, ownership, evidence, and decisions.\n\nSDAIA NDI\nDGA NORA\nNCA ECC-1:2024\nPDPL 2023\nDG\nGovernance is not a document. It is an operation.\n\nDGOP does not replace data tools. It governs them by orchestrating responsibility, workflow, evidence, and auditability across the enterprise.\n\nWhat we do\n\nDGOP turns govern",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "v3.0"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 0,
+      "lowContrast": []
+    },
+    {
+      "label": "design-system",
+      "route": "/design-system",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\design-system.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/design-system",
+      "path": "/design-system",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nDesign System\nالعربية\nDark\nSA\nSystem Administrator\nSystem Administrator\n\nGOVERNANCE AND ADMINISTRATION SYSTEM\n\nGovernance & Administration Console\n\nOnly the governance and administration tools are surfaced here, arranged for executive decisions and steward action.\n\nGovernance\nAdministration\nGOVERNANCE HEALTH\n91%\nStable, 3 controls need review\nOPEN ALERTS\n7\n2 high priority ownership gaps\nPRIVACY RISK\n1\nCustomer export needs review\nAUDIT READY\n84%\nEvidence exports pending\nSystem design trees\n\nGovernance and administration are displayed as user-readable operating maps, not technic",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 1,
+      "lowContrast": [
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--warning",
+          "text": "At risk",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "At risk",
+          "color": "rgb(161, 98, 7)",
+          "bg": "rgb(247, 239, 215)",
+          "size": "14px",
+          "ratio": 4.29
+        },
+        {
+          "tag": "SPAN",
+          "cls": "ds-chip ds-chip--info",
+          "text": "Under review",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "Under review",
+          "color": "rgb(37, 99, 235)",
+          "bg": "rgb(227, 235, 255)",
+          "size": "14px",
+          "ratio": 4.33
+        }
+      ]
+    },
+    {
+      "label": "mobile-dashboard",
+      "route": "/dashboard",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\mobile-dashboard.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/dashboard",
+      "path": "/dashboard",
+      "bodySnippet": "DGOP\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nCommand Center\nالعربية\nDark\nSA\nDGOP COMMAND CENTER\nGovernance health: Critical attention\n\nOwnership, stewardship, NDI evidence, and workflow risk in one view for leadership decisions and daily steward action.\n\nAssign missing owners\nOpen asset map\nCritical attention\n20\nITEMS NEED ATTENTION\n\nUnowned assets create accountability risk.\n\nGoverned assets\n5\n2 owned\nOwnership coverage\n40%\n3 missing owners\nNDI readiness\n0%\n0/10 controls proven\nMy workflow\n0\n0 overdue\nData quality\n2\n0 critical\nTraining\n50%\n2/3 Certifications\nEXECUTIVE VIEW\nGovernance posture\nCritical attention\nOwnership coverage\n40%\n\n2 of 5 assets have nam",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false,
+      "overflowing": [
+        {
+          "tag": "ASIDE",
+          "cls": "shell__sidebar",
+          "text": "DGOPData Governance Operations PlatformOverviewCommand CenterFoundationAbout DGO",
+          "left": -340,
+          "right": -16
+        },
+        {
+          "tag": "DIV",
+          "cls": "brand",
+          "text": "DGOPData Governance Operations Platform",
+          "left": -324,
+          "right": -33
+        },
+        {
+          "tag": "DIV",
+          "cls": "brand__mark",
+          "text": "",
+          "left": -316,
+          "right": -272
+        },
+        {
+          "tag": "APP-ICON",
+          "cls": "",
+          "text": "",
+          "left": -304,
+          "right": -284
+        },
+        {
+          "tag": "svg",
+          "cls": "[object SVGAnimatedString]",
+          "text": "",
+          "left": -304,
+          "right": -284
+        },
+        {
+          "tag": "path",
+          "cls": "[object SVGAnimatedString]",
+          "text": "",
+          "left": -301,
+          "right": -288
+        },
+        {
+          "tag": "DIV",
+          "cls": "brand__text",
+          "text": "DGOPData Governance Operations Platform",
+          "left": -260,
+          "right": -89
+        },
+        {
+          "tag": "SPAN",
+          "cls": "brand__name",
+          "text": "DGOP",
+          "left": -260,
+          "right": -89
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "sidebar-close",
+          "text": "",
+          "left": -77,
+          "right": -41
+        },
+        {
+          "tag": "APP-ICON",
+          "cls": "",
+          "text": "",
+          "left": -67,
+          "right": -51
+        }
+      ],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 7,
+      "visibleInputs": 0,
+      "lowContrast": []
+    },
+    {
+      "label": "mobile-admin-users",
+      "route": "/admin/users",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\mobile-admin-users.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin/users",
+      "path": "/admin/users",
+      "bodySnippet": "DGOP\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n-\nPeople Directory\nData Domains\nData Subjects\nBusiness Capabilities\nOrganization Units\nSystems & Platforms\nClassifications\nRole Types\nRACI Templates\nStatus Values\nDGOP\n/\nUsers & Roles\nالعربية\nDark\nSA\n\nACCESS MANAGEMENT\n\nUsers & Roles\n\nAccounts that can access the platform and their assigned roles.\n\nRefresh\nNew user\nTOTAL USERS\n6\nPeople with platform accounts\nACTIVE USERS\n6\nCan sign in today\nINACTIVE USERS\n0\nTemporarily blocked from access\nWITHOUT ROLES\n0\nNeed role assignment before useful access\nFIND USER\nSTATUS\nAll statuses\nActive\nInactive\nROLE\nAll roles\nAuditor\nBusiness Steward\nDMO Admin\nData Owner\nData Quality Steward\n",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false,
+      "overflowing": [
+        {
+          "tag": "ASIDE",
+          "cls": "shell__sidebar",
+          "text": "DGOPData Governance Operations PlatformOverviewCommand CenterFoundationAbout DGO",
+          "left": -340,
+          "right": -16
+        },
+        {
+          "tag": "DIV",
+          "cls": "brand",
+          "text": "DGOPData Governance Operations Platform",
+          "left": -324,
+          "right": -33
+        },
+        {
+          "tag": "DIV",
+          "cls": "brand__mark",
+          "text": "",
+          "left": -316,
+          "right": -272
+        },
+        {
+          "tag": "APP-ICON",
+          "cls": "",
+          "text": "",
+          "left": -304,
+          "right": -284
+        },
+        {
+          "tag": "svg",
+          "cls": "[object SVGAnimatedString]",
+          "text": "",
+          "left": -304,
+          "right": -284
+        },
+        {
+          "tag": "path",
+          "cls": "[object SVGAnimatedString]",
+          "text": "",
+          "left": -301,
+          "right": -288
+        },
+        {
+          "tag": "DIV",
+          "cls": "brand__text",
+          "text": "DGOPData Governance Operations Platform",
+          "left": -260,
+          "right": -89
+        },
+        {
+          "tag": "SPAN",
+          "cls": "brand__name",
+          "text": "DGOP",
+          "left": -260,
+          "right": -89
+        },
+        {
+          "tag": "BUTTON",
+          "cls": "sidebar-close",
+          "text": "",
+          "left": -77,
+          "right": -41
+        },
+        {
+          "tag": "APP-ICON",
+          "cls": "",
+          "text": "",
+          "left": -67,
+          "right": -51
+        }
+      ],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "sara.alamri",
+        "khalid.hassan",
+        "mona.youssef",
+        "omar.farouk",
+        "layla.nasser"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 20,
+      "visibleInputs": 3,
+      "lowContrast": [
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "SA",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(246, 248, 249)",
+          "size": "14px",
+          "ratio": 1.07
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "SA",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "KH",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "MY",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "OF",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "user-row__avatar",
+          "text": "LN",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "14px",
+          "ratio": 1
+        },
+        {
+          "tag": "SPAN",
+          "cls": "detail-panel__avatar",
+          "text": "SA",
+          "color": "rgb(255, 255, 255)",
+          "bg": "rgb(255, 255, 255)",
+          "size": "16px",
+          "ratio": 1
+        }
+      ]
+    },
+    {
+      "label": "rtl-admin-hub",
+      "route": "/admin",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\rtl-admin-hub.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/admin",
+      "path": "/admin",
+      "bodySnippet": "منصة DGOP\nمنصة عمليات حوكمة البيانات\nنظرة عامة\nمركز القيادة\nالأساس\nعن DGOP\nنظام التصميم\nالحوكمة\nالملكية والاستثناءات وسير العمل وأدلة المؤشر الوطني.\n10 أدوات\n+\nإدارة الوصول\nالأدوار والصلاحيات\nالمستخدمون والأدوار\nسجل التدقيق\nالإدارة\nالأشخاص والوصول والهيكل والإعدادات المرجعية.\n10 أدوات\n-\nدليل الأشخاص\nمجالات البيانات\nموضوعات البيانات\nالقدرات المؤسسية\nالوحدات التنظيمية\nالأنظمة والمنصات\nتصنيفات البيانات\nأنواع الأدوار\nقوالب RACI\nقيم الحالة\nمنصة DGOP\n/\nالإدارة\nEnglish\nداكن\nSA\nSystem Administrator\nمدير النظام\n\nمساحة عمل الإدارة\n\nأعد نموذج التشغيل مرة واحدة ثم احكم بثقة\n\nمدخل موجه للأشخاص والأدوار والهيكل التنظيمي والأنظمة والبيانات المرجعية حتى لا يبدو الإعداد كقاعدة بيانات خام.\n\nالأدوات المتاحة\n13\nمجالات العمل\n3\nتغطية الوصول\n98%\nالأدوار مرتبطة بالمستخدمين النشطين\nوصول معلق\n3\n3 طلبات تحتاج اعتمادا\nمجموعات مرجعية\n13\nأدوات الإدارة المهيأة\nأثر التدقيق\n100%\nكل الإجراءات قابلة للتتبع\nأشجار تصميم الن",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "rtl",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 0,
+      "lowContrast": []
+    },
+    {
+      "label": "dark-dashboard",
+      "route": "/dashboard",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706-final\\dark-dashboard.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "href": "http://localhost:4205/dashboard",
+      "path": "/dashboard",
+      "bodySnippet": "DGOP\nData Governance Operations Platform\nOVERVIEW\nCommand Center\nFOUNDATION\nAbout DGOP\nDesign System\nGovernance\nOwnership, exceptions, workflow, and NDI evidence.\n10 tools\n+\nACCESS MANAGEMENT\nRoles & Privileges\nUsers & Roles\nAudit Log\nAdministration\nPeople, access, structure, and reference setup.\n10 tools\n+\nDGOP\n/\nCommand Center\nالعربية\nLight\nSA\nSystem Administrator\nSystem Administrator\nDGOP COMMAND CENTER\nGovernance health: Critical attention\n\nOwnership, stewardship, NDI evidence, and workflow risk in one view for leadership decisions and daily steward action.\n\nAssign missing owners\nOpen asset map\nCritical attention\n20\nITEMS NEED ATTENTION\n\nUnowned assets create accountability risk.\n\nGoverned assets\n5\n2 owned\nOwnership coverage\n40%\n3 missing owners\nNDI readiness\n0%\n0/10 controls proven\nMy workflow\n0\n0 overdue\nData quality\n2\n0 critical\nTraining\n50%\n2/3 Certifications\nEXECUTIVE VIEW\nGover",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 5,
+      "visibleInputs": 0,
+      "lowContrast": [
+        {
+          "tag": "A",
+          "cls": "nav__item nav__item--active",
+          "text": "Command Center",
+          "color": "rgb(231, 239, 240)",
+          "bg": "rgba(45, 212, 191, 0.12)",
+          "size": "14px",
+          "ratio": 1.6
+        },
+        {
+          "tag": "SPAN",
+          "cls": "",
+          "text": "Command Center",
+          "color": "rgb(231, 239, 240)",
+          "bg": "rgba(45, 212, 191, 0.12)",
+          "size": "14px",
+          "ratio": 1.6
+        }
+      ]
+    }
+  ],
+  "consoleMessages": [],
+  "failedRequests": [
+    {
+      "url": "http://localhost:4205/api/dashboard/summary",
+      "failure": "net::ERR_ABORTED"
+    }
+  ]
+}

@@ -32,8 +32,11 @@ export class Shell {
   private readonly url = signal(this.router.url);
   protected readonly menuOpen = signal(false);
   protected readonly mobileNavOpen = signal(false);
+  protected readonly compactNav = signal(false);
   protected readonly openTasks = signal(0);
   protected readonly expandedSections = signal<Record<string, boolean>>({});
+  private readonly compactQuery =
+    typeof window === 'undefined' ? null : window.matchMedia('(max-width: 980px)');
 
   protected readonly sections = computed<NavSection[]>(() =>
     NAV_SECTIONS.map((section) => ({
@@ -56,7 +59,16 @@ export class Shell {
     return this.i18n.lang() === 'ar' ? roles[0].nameAr : roles[0].nameEn;
   });
 
+  protected readonly sidebarHidden = computed(() => this.compactNav() && !this.mobileNavOpen());
+
   constructor() {
+    if (this.compactQuery) {
+      this.compactNav.set(this.compactQuery.matches);
+      this.compactQuery.addEventListener('change', (event) => {
+        this.compactNav.set(event.matches);
+        if (!event.matches) this.mobileNavOpen.set(false);
+      });
+    }
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),

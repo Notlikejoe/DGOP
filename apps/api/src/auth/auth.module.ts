@@ -13,12 +13,20 @@ import { AccessModule } from '../access/access.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') ?? 'dev-insecure-secret',
-        signOptions: {
-          expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '8h') as unknown as number,
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const environment = config.get<string>('NODE_ENV') ?? 'development';
+        const strictConfig = !['development', 'test'].includes(environment);
+        const secret = config.get<string>('JWT_SECRET');
+        if (strictConfig && (!secret || secret.length < 32)) {
+          throw new Error('JWT_SECRET must be set to at least 32 characters outside development');
+        }
+        return {
+          secret: secret ?? 'dev-insecure-secret',
+          signOptions: {
+            expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '8h') as unknown as number,
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

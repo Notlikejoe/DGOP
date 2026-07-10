@@ -1,6 +1,7 @@
 <section class="page">
   <header class="page__header">
     <div>
+      <span class="eyebrow">{{ t('dq.eyebrow') }}</span>
       <h1>{{ t('dq.title') }}</h1>
       <p class="page__subtitle">{{ t('dq.subtitle') }}</p>
     </div>
@@ -16,122 +17,241 @@
   </header>
 
   @if (summary(); as s) {
-    <div class="kpi-row">
-      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.open') }}</span><strong class="kpi__value">{{ s.open }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.critical') }}</span><strong class="kpi__value">{{ s.critical }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.overdue') }}</span><strong class="kpi__value">{{ s.overdue }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.closed') }}</span><strong class="kpi__value">{{ s.closureRate }}%</strong></div>
+    <div class="kpi-row dq-kpis">
+      <div class="kpi kpi--hero"><span class="kpi__label">{{ t('dq.metric.score') }}</span><strong class="kpi__value">{{ s.qualityScore ?? 0 }}%</strong><small>{{ t('dq.metric.scoreHelp') }}</small></div>
+      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.open') }}</span><strong class="kpi__value">{{ s.open }}</strong><small>{{ s.critical }} {{ t('dq.metric.criticalLower') }}</small></div>
+      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.sla') }}</span><strong class="kpi__value">{{ s.breachedSla ?? 0 }}</strong><small>{{ t('dq.metric.slaHelp') }}</small></div>
+      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.rules') }}</span><strong class="kpi__value">{{ s.deployedRules ?? 0 }}/{{ s.rules ?? 0 }}</strong><small>{{ t('dq.metric.rulesHelp') }}</small></div>
+      <div class="kpi"><span class="kpi__label">{{ t('dq.metric.profiles') }}</span><strong class="kpi__value">{{ s.profiles ?? 0 }}</strong><small>{{ t('dq.metric.profilesHelp') }}</small></div>
     </div>
   }
-
-  <div class="filters">
-    <input
-      type="search"
-      class="filter-search"
-      [ngModel]="search()"
-      (ngModelChange)="setFilter('search', $event)"
-      [placeholder]="t('dq.search')"
-      [attr.aria-label]="t('dq.search')"
-    />
-    <select class="inline-select" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('dq.col.status')">
-      <option value="">{{ t('dq.allStatuses') }}</option>
-      @for (s of statuses; track s) { <option [value]="s">{{ t('dq.status.' + s) }}</option> }
-    </select>
-    <select class="inline-select" [ngModel]="severity()" (ngModelChange)="setFilter('severity', $event)" [attr.aria-label]="t('dq.field.severity')">
-      <option value="">{{ t('dq.allSeverities') }}</option>
-      @for (s of severities; track s) { <option [value]="s">{{ t('dq.severity.' + s) }}</option> }
-    </select>
-    <select class="inline-select" [ngModel]="dimension()" (ngModelChange)="setFilter('dimension', $event)" [attr.aria-label]="t('dq.field.dimension')">
-      <option value="">{{ t('dq.allDimensions') }}</option>
-      @for (d of dimensions; track d) { <option [value]="d">{{ t('dq.dimension.' + d) }}</option> }
-    </select>
-    <span class="toolbar__count">{{ issues().length }} {{ t('assets.records') }}</span>
-  </div>
 
   @if (state() === 'loading') {
     <div class="ds-card"><p>{{ t('assets.loading') }}</p></div>
   } @else if (state() === 'error') {
     <div class="ds-card"><p class="error">{{ t('dq.error') }}</p></div>
-  } @else if (issues().length === 0) {
-    <div class="ds-card"><div class="empty"><p>{{ t('dq.noIssues') }}</p></div></div>
   } @else {
-    <div class="dq-workspace">
-      <section class="ds-card issue-list">
-        @for (issue of issues(); track issue.id) {
-          <button
-            type="button"
-            class="issue-row"
-            [class.issue-row--active]="selected()?.id === issue.id"
-            (click)="selectedId.set(issue.id)"
-          >
-            <span class="issue-row__code">{{ issue.code }}</span>
-            <span class="issue-row__main">
-              <strong>{{ issue.title }}</strong>
-              <small>{{ name(issue.asset) }} · {{ t('dq.dimension.' + issue.dimension) }}</small>
-            </span>
-            <span class="issue-row__badges">
-              <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
-              <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
-            </span>
-          </button>
-        }
+    @if (scorecard(); as sc) {
+      <section class="ds-card scorecard-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('dq.scorecard.eyebrow') }}</span>
+            <h2>{{ t('dq.scorecard.title') }}</h2>
+            <p>{{ t('dq.scorecard.subtitle') }}</p>
+          </div>
+          <app-status-chip [kind]="scoreKind(sc.overallScore)" [label]="sc.overallScore + '%'" />
+        </div>
+        <div class="dimension-grid">
+          @for (row of sc.dimensions; track row.dimension) {
+            <article class="dimension-card">
+              <div class="dimension-card__head">
+                <strong>{{ t('dq.dimension.' + row.dimension) }}</strong>
+                <span>{{ row.score }}%</span>
+              </div>
+              <div class="score-track"><span [style.width.%]="row.score"></span></div>
+              <p>{{ row.openIssues }} {{ t('dq.scorecard.openIssues') }} - {{ row.rules }} {{ t('dq.scorecard.rules') }}</p>
+            </article>
+          }
+        </div>
+      </section>
+    }
+
+    <div class="ops-grid">
+      <section class="ds-card rule-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('dq.rules.eyebrow') }}</span>
+            <h2>{{ t('dq.rules.title') }}</h2>
+            <p>{{ t('dq.rules.subtitle') }}</p>
+          </div>
+        </div>
+        <div class="rule-list">
+          @for (rule of activeRules(); track rule.id) {
+            <article class="rule-row">
+              <div class="rule-row__main">
+                <span class="badge-code">{{ rule.code }}</span>
+                <div>
+                  <strong>{{ name(rule) }}</strong>
+                  <p>{{ rule.thresholdExpression || rule.impactSummary }}</p>
+                </div>
+              </div>
+              <div class="rule-row__meta">
+                <app-status-chip [kind]="statusKind(rule.status)" [label]="t('dq.rule.status.' + rule.status)" />
+                <app-status-chip [kind]="severityKind(rule.severity)" [label]="t('dq.severity.' + rule.severity)" />
+              </div>
+              @if (canEditRules && transitionActions(rule).length) {
+                <div class="rule-row__actions">
+                  @for (action of transitionActions(rule); track action) {
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="saving()" (click)="transitionRule(rule, action)">{{ t('dq.rule.action.' + action) }}</button>
+                  }
+                </div>
+              }
+            </article>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('dq.rules.empty') }}</p></div>
+          }
+        </div>
       </section>
 
-      @if (selected(); as issue) {
-        <aside class="ds-card detail-panel">
-          <div class="detail-head">
-            <div>
-              <span class="badge-code">{{ issue.code }}</span>
-              <h2>{{ issue.title }}</h2>
-            </div>
-            @if (canEdit && issue.status !== 'closed') {
-              <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openClose(issue)">{{ t('dq.close') }}</button>
-            }
+      <section class="ds-card profile-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('dq.profiles.eyebrow') }}</span>
+            <h2>{{ t('dq.profiles.title') }}</h2>
+            <p>{{ t('dq.profiles.subtitle') }}</p>
           </div>
-
-          <div class="status-line">
-            <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
-            <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
-          </div>
-
-          @if (issue.description) {
-            <p class="description">{{ issue.description }}</p>
-          }
-
-          <dl class="facts">
-            <div><dt>{{ t('dq.field.asset') }}</dt><dd>{{ name(issue.asset) }}</dd></div>
-            <div><dt>{{ t('dq.field.dimension') }}</dt><dd>{{ t('dq.dimension.' + issue.dimension) }}</dd></div>
-            <div><dt>{{ t('dq.col.owner') }}</dt><dd>{{ name(issue.responsiblePerson) }}</dd></div>
-            <div><dt>{{ t('dq.col.due') }}</dt><dd>{{ date(issue.dueDate) }}</dd></div>
-            <div>
-              <dt>{{ t('dq.workflow') }}</dt>
-              <dd>
-                @if (issue.workflowCase) {
-                  <a [routerLink]="['/governance/workflow/cases', issue.workflowCase.id]">{{ issue.workflowCase.code }}</a>
-                } @else { - }
-              </dd>
-            </div>
-          </dl>
-
-          <section class="evidence">
-            <h3>{{ t('dq.evidence') }}</h3>
-            @if (issue.evidence.length === 0) {
-              <p class="muted">-</p>
-            } @else {
-              <div class="timeline">
-                @for (e of issue.evidence; track e.id) {
-                  <div class="timeline__item">
-                    <strong>{{ e.action }}</strong>
-                    <span>{{ date(e.createdAt) }} · {{ e.actor }}</span>
-                    @if (e.note) { <p>{{ e.note }}</p> }
-                  </div>
+        </div>
+        <div class="profile-list">
+          @for (profile of topProfiles(); track profile.id) {
+            <article class="profile-card">
+              <div class="profile-card__head">
+                <div>
+                  <strong>{{ name(profile.asset) || name(profile.domain) }}</strong>
+                  <p>{{ profile.columnCount }} {{ t('dq.profiles.columns') }} - {{ profile.anomalyCount }} {{ t('dq.profiles.anomalies') }}</p>
+                </div>
+                <app-status-chip [kind]="scoreKind(profile.qualityScore)" [label]="profile.qualityScore + '%'" />
+              </div>
+              <div class="suggestion-list">
+                @for (column of profile.columns.slice(0, 3); track column.id) {
+                  <span>{{ column.columnName }}: {{ column.recommendation || t('dq.profiles.noRecommendation') }}</span>
                 }
               </div>
-            }
-          </section>
-        </aside>
-      }
+            </article>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('dq.profiles.empty') }}</p></div>
+          }
+        </div>
+      </section>
     </div>
+
+    <div class="filters">
+      <input
+        type="search"
+        class="filter-search"
+        [ngModel]="search()"
+        (ngModelChange)="setFilter('search', $event)"
+        [placeholder]="t('dq.search')"
+        [attr.aria-label]="t('dq.search')"
+      />
+      <select class="inline-select" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('dq.col.status')">
+        <option value="">{{ t('dq.allStatuses') }}</option>
+        @for (s of statuses(); track s) { <option [value]="s">{{ t('dq.status.' + s) }}</option> }
+      </select>
+      <select class="inline-select" [ngModel]="severity()" (ngModelChange)="setFilter('severity', $event)" [attr.aria-label]="t('dq.field.severity')">
+        <option value="">{{ t('dq.allSeverities') }}</option>
+        @for (s of severities(); track s) { <option [value]="s">{{ t('dq.severity.' + s) }}</option> }
+      </select>
+      <select class="inline-select" [ngModel]="dimension()" (ngModelChange)="setFilter('dimension', $event)" [attr.aria-label]="t('dq.field.dimension')">
+        <option value="">{{ t('dq.allDimensions') }}</option>
+        @for (d of dimensions(); track d) { <option [value]="d">{{ t('dq.dimension.' + d) }}</option> }
+      </select>
+      <span class="toolbar__count">{{ issues().length }} {{ t('assets.records') }}</span>
+    </div>
+
+    @if (issues().length === 0) {
+      <div class="ds-card"><div class="empty"><p>{{ t('dq.noIssues') }}</p></div></div>
+    } @else {
+      <div class="dq-workspace">
+        <section class="ds-card issue-list">
+          @for (issue of issues(); track issue.id) {
+            <button
+              type="button"
+              class="issue-row"
+              [class.issue-row--active]="selected()?.id === issue.id"
+              (click)="selectedId.set(issue.id)"
+            >
+              <span class="issue-row__code">{{ issue.code }}</span>
+              <span class="issue-row__main">
+                <strong>{{ issue.title }}</strong>
+                <small>{{ name(issue.asset) }} - {{ t('dq.dimension.' + issue.dimension) }}</small>
+              </span>
+              <span class="issue-row__badges">
+                <app-status-chip [kind]="priorityKind(issue.priority)" [label]="issue.priority || 'P3'" />
+                <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
+                <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
+              </span>
+            </button>
+          }
+        </section>
+
+        @if (selected(); as issue) {
+          <aside class="ds-card detail-panel">
+            <div class="detail-head">
+              <div>
+                <span class="badge-code">{{ issue.code }}</span>
+                <h2>{{ issue.title }}</h2>
+              </div>
+              <div class="detail-actions">
+                @if (canEdit) {
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRca(issue)">{{ t('dq.rca.open') }}</button>
+                }
+                @if (canEdit && issue.status !== 'closed') {
+                  <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openClose(issue)">{{ t('dq.close') }}</button>
+                }
+              </div>
+            </div>
+
+            <div class="status-line">
+              <app-status-chip [kind]="priorityKind(issue.priority)" [label]="issue.priority || 'P3'" />
+              <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
+              <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
+            </div>
+
+            @if (issue.description) {
+              <p class="description">{{ issue.description }}</p>
+            }
+
+            <dl class="facts">
+              <div><dt>{{ t('dq.field.asset') }}</dt><dd>{{ name(issue.asset) }}</dd></div>
+              <div><dt>{{ t('dq.field.dimension') }}</dt><dd>{{ t('dq.dimension.' + issue.dimension) }}</dd></div>
+              <div><dt>{{ t('dq.col.owner') }}</dt><dd>{{ name(issue.responsiblePerson) }}</dd></div>
+              <div><dt>{{ t('dq.col.due') }}</dt><dd>{{ date(issue.dueDate) }}</dd></div>
+              <div><dt>{{ t('dq.sla.remediation') }}</dt><dd>{{ date(issue.remediationDueAt) }}</dd></div>
+              <div>
+                <dt>{{ t('dq.workflow') }}</dt>
+                <dd>
+                  @if (issue.workflowCase) {
+                    <a [routerLink]="['/governance/workflow/cases', issue.workflowCase.id]">{{ issue.workflowCase.code }}</a>
+                  } @else { - }
+                </dd>
+              </div>
+            </dl>
+
+            @if ((issue.slaBreaches?.length ?? 0) > 0) {
+              <section class="alert-box">
+                <strong>{{ t('dq.sla.breached') }}</strong>
+                <p>{{ issue.slaBreaches?.[0]?.stage }} - {{ date(issue.slaBreaches?.[0]?.dueAt) }}</p>
+              </section>
+            }
+
+            @if ((issue.rcaRecords?.length ?? 0) > 0) {
+              <section class="rca-summary">
+                <h3>{{ t('dq.rca.latest') }}</h3>
+                <p><strong>{{ t('dq.rca.rootCause') }}:</strong> {{ issue.rcaRecords?.[0]?.rootCause || '-' }}</p>
+                <p><strong>{{ t('dq.rca.plan') }}:</strong> {{ issue.rcaRecords?.[0]?.remediationPlan || '-' }}</p>
+              </section>
+            }
+
+            <section class="evidence">
+              <h3>{{ t('dq.evidence') }}</h3>
+              @if (issue.evidence.length === 0) {
+                <p class="muted">-</p>
+              } @else {
+                <div class="timeline">
+                  @for (e of issue.evidence; track e.id) {
+                    <div class="timeline__item">
+                      <strong>{{ evidenceLabel(e.action) }}</strong>
+                      <span>{{ date(e.createdAt) }} - {{ e.actor }}</span>
+                      @if (e.note) { <p>{{ e.note }}</p> }
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+          </aside>
+        }
+      </div>
+    }
   }
 
   @if (createOpen()) {
@@ -142,8 +262,9 @@
         <div class="grid-2">
           <label class="field"><span class="field__label">{{ t('dq.field.asset') }}</span><select class="field__input" [ngModel]="draft().assetId" (ngModelChange)="setDraft('assetId', $event)"><option value="">-</option>@for (a of assets(); track a.id) { <option [value]="a.id">{{ name(a) }}</option> }</select></label>
           <label class="field"><span class="field__label">{{ t('dq.field.dueDate') }}</span><input type="date" class="field__input" [ngModel]="draft().dueDate" (ngModelChange)="setDraft('dueDate', $event)" /></label>
-          <label class="field"><span class="field__label">{{ t('dq.field.severity') }}</span><select class="field__input" [ngModel]="draft().severity" (ngModelChange)="setDraft('severity', $event)">@for (s of severities; track s) { <option [value]="s">{{ t('dq.severity.' + s) }}</option> }</select></label>
-          <label class="field"><span class="field__label">{{ t('dq.field.dimension') }}</span><select class="field__input" [ngModel]="draft().dimension" (ngModelChange)="setDraft('dimension', $event)">@for (d of dimensions; track d) { <option [value]="d">{{ t('dq.dimension.' + d) }}</option> }</select></label>
+          <label class="field"><span class="field__label">{{ t('dq.field.severity') }}</span><select class="field__input" [ngModel]="draft().severity" (ngModelChange)="setDraft('severity', $event)">@for (s of severities(); track s) { <option [value]="s">{{ t('dq.severity.' + s) }}</option> }</select></label>
+          <label class="field"><span class="field__label">{{ t('dq.field.priority') }}</span><select class="field__input" [ngModel]="draft().priority" (ngModelChange)="setDraft('priority', $event)">@for (p of priorities(); track p) { <option [value]="p">{{ p }}</option> }</select></label>
+          <label class="field"><span class="field__label">{{ t('dq.field.dimension') }}</span><select class="field__input" [ngModel]="draft().dimension" (ngModelChange)="setDraft('dimension', $event)">@for (d of dimensions(); track d) { <option [value]="d">{{ t('dq.dimension.' + d) }}</option> }</select></label>
         </div>
       </div>
       <div footer>
@@ -157,14 +278,34 @@
     <app-modal [title]="t('dq.import')" (close)="closeModals()">
       <div class="form">
         <p class="hint">{{ t('dq.importHelp') }}</p>
-        <textarea rows="8" class="field__input mono" [ngModel]="importCsv()" (ngModelChange)="importCsv.set($event)"></textarea>
-        <button type="button" class="ds-btn ds-btn--ghost btn-sm self-start" (click)="insertSample()">{{ t('dq.importSample') }}</button>
+        <label class="csv-upload">
+          <span class="csv-upload__label">{{ t('dq.importFile.choose') }}</span>
+          <span class="csv-upload__hint">{{ importHelp() }}</span>
+          <input #csvInput type="file" [attr.accept]="importAccept()" [disabled]="!importConfig()" (change)="onImportFileChange($event)" />
+        </label>
+        @if (importFile(); as file) {
+          <div class="csv-file">
+            <div>
+              <strong>{{ importFileName() }}</strong>
+              <span>{{ importFileSize() }}</span>
+            </div>
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="clearImportFile(csvInput)">{{ t('dq.importFile.clear') }}</button>
+          </div>
+        }
+        @if (importFileError()) {
+          <p class="error">{{ importFileError() }}</p>
+        }
+        <label class="field">
+          <span class="field__label">{{ t('dq.importPaste') }}</span>
+          <textarea rows="8" class="field__input mono" [disabled]="!!importFile()" [ngModel]="importCsv()" (ngModelChange)="setImportCsv($event)"></textarea>
+        </label>
+        <button type="button" class="ds-btn ds-btn--ghost btn-sm self-start" [disabled]="!importConfig()" (click)="insertSample(csvInput)">{{ t('dq.importSample') }}</button>
         @if (importResult(); as r) {
           <div class="import-result">
             <p>{{ r.created }} / {{ r.processed }} {{ t('assets.records') }}</p>
             @if (r.errors.length) {
               <ul>
-                @for (e of r.errors; track e.row) { <li>Row {{ e.row }}: {{ e.message }}</li> }
+                @for (e of r.errors; track e.row) { <li>{{ t('dq.importError.row') }} {{ e.row }}: {{ importErrorText(e) }}</li> }
               </ul>
             }
           </div>
@@ -172,7 +313,23 @@
       </div>
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
-        <button type="button" class="ds-btn ds-btn--primary" [disabled]="importing() || !importCsv().trim()" (click)="runImport()">{{ t('dq.importRun') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="importing() || !importReady()" (click)="runImport()">{{ t('dq.importRun') }}</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (rcaTarget(); as target) {
+    <app-modal [title]="t('dq.rca.open')" (close)="closeModals()">
+      <div class="form">
+        <p><strong>{{ target.code }}</strong> - {{ target.title }}</p>
+        <label class="field"><span class="field__label">{{ t('dq.rca.summary') }}</span><textarea rows="3" class="field__input" [ngModel]="rcaDraft().summary" (ngModelChange)="setRca('summary', $event)"></textarea></label>
+        <label class="field"><span class="field__label">{{ t('dq.rca.rootCause') }}</span><textarea rows="3" class="field__input" [ngModel]="rcaDraft().rootCause" (ngModelChange)="setRca('rootCause', $event)"></textarea></label>
+        <label class="field"><span class="field__label">{{ t('dq.rca.plan') }}</span><textarea rows="3" class="field__input" [ngModel]="rcaDraft().remediationPlan" (ngModelChange)="setRca('remediationPlan', $event)"></textarea></label>
+        <label class="field"><span class="field__label">{{ t('dq.rca.validation') }}</span><textarea rows="3" class="field__input" [ngModel]="rcaDraft().validationResult" (ngModelChange)="setRca('validationResult', $event)"></textarea></label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveRca()">{{ t('crud.save') }}</button>
       </div>
     </app-modal>
   }
@@ -180,7 +337,7 @@
   @if (closeTarget(); as target) {
     <app-modal [title]="t('dq.close')" (close)="closeModals()">
       <div class="form">
-        <p><strong>{{ target.code }}</strong> · {{ target.title }}</p>
+        <p><strong>{{ target.code }}</strong> - {{ target.title }}</p>
         <label class="field"><span class="field__label">{{ t('dq.field.resolution') }}</span><textarea rows="4" class="field__input" [ngModel]="resolutionSummary()" (ngModelChange)="resolutionSummary.set($event)"></textarea></label>
       </div>
       <div footer>

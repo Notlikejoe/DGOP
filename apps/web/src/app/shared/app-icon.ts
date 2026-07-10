@@ -53,6 +53,8 @@ const ICON_PATHS = {
   tags: ['M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8', 'M7.5 7.5h.01', 'M16 5l5 5'],
   idCard: ['M4 4h16v16H4z', 'M8 9h.01', 'M11 9h5', 'M8 13h8', 'M8 17h5'],
   clipboardList: ['M9 4h6', 'M9 2h6v4H9z', 'M5 4h2', 'M17 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2', 'M8 12h8', 'M8 16h8'],
+  plug: ['M9 2v6', 'M15 2v6', 'M7 8h10v5a5 5 0 0 1-10 0z', 'M12 18v4', 'M8 22h8'],
+  globe: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18', 'M3.6 9h16.8', 'M3.6 15h16.8', 'M12 3a14 14 0 0 1 0 18', 'M12 3a14 14 0 0 0 0 18'],
 } as const;
 
 export type AppIconName = keyof typeof ICON_PATHS;

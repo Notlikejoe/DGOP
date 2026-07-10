@@ -6,7 +6,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
@@ -36,6 +36,21 @@ interface AssetRel {
   targetAsset?: Ref;
   sourceAsset?: Ref;
 }
+interface OpenDataCandidateMini {
+  id: string;
+  code: string;
+  titleEn: string;
+  titleAr: string;
+  status: string;
+  eligibilityScore: number;
+  classificationSignal: string;
+  dataQualitySignal: string;
+  personalDataSignal: string;
+  ownershipSignal: string;
+  publicationValueSignal: string;
+  nextReviewAt?: string | null;
+  publishedAt?: string | null;
+}
 interface Asset {
   id: string;
   code: string;
@@ -58,6 +73,13 @@ interface Asset {
   subjects: SubjectLink[];
   outgoingRelations?: AssetRel[];
   incomingRelations?: AssetRel[];
+  openDataCandidates?: OpenDataCandidateMini[];
+  externalCatalogId?: string | null;
+  catalogSource?: string | null;
+  catalogSyncStatus?: string | null;
+  catalogTrustLevel?: string | null;
+  catalogLastSyncedAt?: string | null;
+  catalogWritebackStatus?: string | null;
   isActive: boolean;
 }
 
@@ -126,6 +148,7 @@ AST-SAMPLE-1,Sample Claims Dataset,مجموعة مطالبات,Sample import row
 })
 export class AssetsPage implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
@@ -191,8 +214,10 @@ export class AssetsPage implements OnInit {
 
   protected readonly lifecycles = ['draft', 'active', 'deprecated', 'retired'];
   protected readonly relTypes = ['derived_from', 'feeds', 'replicates', 'related_to'];
+  private requestedAssetId: string | null = null;
 
   ngOnInit(): void {
+    this.requestedAssetId = this.route.snapshot.queryParamMap.get('assetId');
     this.loadLookups();
     this.load();
   }
@@ -213,6 +238,15 @@ export class AssetsPage implements OnInit {
   protected get canViewOwnership(): boolean {
     return this.auth.hasPermission('assignments.view');
   }
+  protected get canViewIntegrations(): boolean {
+    return this.auth.hasPermission('integrations.view');
+  }
+  protected get canViewOpenData(): boolean {
+    return this.auth.hasPermission('open_data_candidates.view');
+  }
+  protected get canCreateOpenData(): boolean {
+    return this.auth.hasPermission('open_data_candidates.create');
+  }
   protected get canApplyOwnership(): boolean {
     return this.auth.hasPermission('assignments.create');
   }
@@ -229,6 +263,11 @@ export class AssetsPage implements OnInit {
       next: (a) => {
         this.assets.set(a);
         this.state.set('ok');
+        if (this.requestedAssetId) {
+          const id = this.requestedAssetId;
+          this.requestedAssetId = null;
+          this.openDetail(id);
+        }
       },
       error: () => this.state.set('error'),
     });
@@ -285,6 +324,30 @@ export class AssetsPage implements OnInit {
 
   protected ownerKind(status: string): StatusKind {
     return status === 'assigned' ? 'success' : 'muted';
+  }
+
+  protected catalogKind(status?: string | null): StatusKind {
+    if (status === 'synced' || status === 'writeback_simulated') return 'success';
+    if (status === 'stale') return 'warning';
+    if (status === 'error') return 'danger';
+    return 'muted';
+  }
+
+  protected openDataKind(status: string): StatusKind {
+    if (status === 'published' || status === 'approved') return 'success';
+    if (status === 'under_review' || status === 'assessment') return 'warning';
+    if (status === 'rejected') return 'danger';
+    return 'muted';
+  }
+
+  protected signalKind(signal: string): StatusKind {
+    if (signal === 'ready') return 'success';
+    if (signal === 'blocked') return 'danger';
+    return 'warning';
+  }
+
+  protected date(value?: string | null): string {
+    return value ? new Date(value).toLocaleString() : '-';
   }
 
   protected subjectNames(a: Asset): string {
@@ -570,6 +633,18 @@ export class AssetsPage implements OnInit {
           this.relSaving.set(false);
         },
       });
+  }
+
+  protected registerOpenDataCandidate(asset: Asset): void {
+    if (!this.canCreateOpenData) return;
+    this.http.post<any>(`/api/open-data-candidates/from-asset/${asset.id}`, {}).subscribe({
+      next: () => {
+        this.toast.success(this.t('assets.openData.registered'));
+        this.openDetail(asset.id);
+        this.view.set('detail');
+      },
+      error: (err) => this.toast.error(err?.error?.message || this.t('openData.error')),
+    });
   }
 
   protected async removeRelationship(rel: AssetRel): Promise<void> {

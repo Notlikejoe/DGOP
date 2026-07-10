@@ -27,16 +27,50 @@ async function bootstrap(): Promise<void> {
   // Required so rate limiting and client IPs work behind the tunnel/proxy.
   instance.set('trust proxy', 1);
 
-  // Security headers. CSP is disabled in Sprint 0 (external fonts + inline styles);
-  // a strict CSP is introduced in the security-hardening sprint.
-  app.use(helmet({ contentSecurityPolicy: false }));
-
   const origins = (process.env.CORS_ORIGINS ?? '')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
   if (process.env.PUBLIC_ORIGIN) origins.push(process.env.PUBLIC_ORIGIN);
-  app.enableCors({ origin: origins.length ? origins : true, credentials: true });
+  const environment = process.env.NODE_ENV ?? 'development';
+  const strictConfig = !['development', 'test'].includes(environment);
+  const allowedOrigins = [...new Set(origins)];
+  if (strictConfig && allowedOrigins.length === 0) {
+    throw new Error('CORS_ORIGINS or PUBLIC_ORIGIN must be set outside development');
+  }
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: strictConfig
+        ? {
+            useDefaults: true,
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              imgSrc: ["'self'", 'data:'],
+              fontSrc: ["'self'", 'data:'],
+              connectSrc: ["'self'", ...allowedOrigins],
+              baseUri: ["'self'"],
+              formAction: ["'self'"],
+              frameAncestors: ["'none'"],
+            },
+          }
+        : false,
+    }),
+  );
+  app.enableCors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true });
+
+  app.use(
+    '/api/auth/login',
+    rateLimit({
+      windowMs: 15 * 60_000,
+      max: 20,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: true,
+    }),
+  );
 
   app.use(
     '/api',

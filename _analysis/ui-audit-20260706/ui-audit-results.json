@@ -1,0 +1,341 @@
+{
+  "results": [
+    {
+      "label": "dashboard",
+      "route": "/dashboard",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\dashboard.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "governance-hub",
+      "route": "/governance",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\governance-hub.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "admin-hub",
+      "route": "/admin",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\admin-hub.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "users",
+      "route": "/admin/users",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\users.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "roles",
+      "route": "/admin/roles",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\roles.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "data-domains",
+      "route": "/admin/data-domains",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\data-domains.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "capabilities",
+      "route": "/admin/capabilities",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\capabilities.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "training",
+      "route": "/governance/training",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\training.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "data-quality",
+      "route": "/governance/data-quality",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\data-quality.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "about",
+      "route": "/about",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\about.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "design-system",
+      "route": "/design-system",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\design-system.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "mobile-dashboard",
+      "route": "/dashboard",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\mobile-dashboard.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "mobile-admin-users",
+      "route": "/admin/users",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\mobile-admin-users.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "العربية\nDark\nDG\nDATA GOVERNANCE OPERATIONS PLATFORM\nGovernance command center\n\nA clear place to see ownership gaps, NDI readiness, workflow decisions, and audit evidence before they become delivery risk.\n\nHEALTHY\nAPI\nVISIBLE\nOwners\nREADY\nEvidence\nDGOP\nSign in to continue\nEmail\nPassword\nSign in\n\nDev login: admin@dgop.local",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "ltr",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "rtl-admin-hub",
+      "route": "/admin",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\rtl-admin-hub.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "English\nداكن\nDG\nمنصة عمليات حوكمة البيانات\nمركز قيادة الحوكمة\n\nمكان واضح لمتابعة فجوات الملكية وجاهزية المؤشر الوطني وقرارات سير العمل وأدلة التدقيق قبل أن تتحول إلى مخاطر تنفيذية.\n\nسليم\nالخدمة\nواضح\nالمالكون\nجاهز\nالأدلة\nمنصة DGOP\nسجّل الدخول للمتابعة\nالبريد الإلكتروني\nكلمة المرور\nتسجيل الدخول\n\nدخول تجريبي: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "rtl",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    },
+    {
+      "label": "dark-dashboard",
+      "route": "/dashboard",
+      "shot": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\_analysis\\ui-audit-20260706\\dark-dashboard.png",
+      "title": "DGOP - Data Governance Operations Platform",
+      "url": "/login",
+      "bodySnippet": "English\nفاتح\nDG\nمنصة عمليات حوكمة البيانات\nمركز قيادة الحوكمة\n\nمكان واضح لمتابعة فجوات الملكية وجاهزية المؤشر الوطني وقرارات سير العمل وأدلة التدقيق قبل أن تتحول إلى مخاطر تنفيذية.\n\nسليم\nالخدمة\nواضح\nالمالكون\nجاهز\nالأدلة\nمنصة DGOP\nسجّل الدخول للمتابعة\nالبريد الإلكتروني\nكلمة المرور\nتسجيل الدخول\n\nدخول تجريبي: admin@dgop.local",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "overflow": false,
+      "overflowing": [],
+      "noNameButtons": 0,
+      "inputsNoName": 0,
+      "keyLike": [
+        "dgop.local"
+      ],
+      "htmlDir": "rtl",
+      "activeNav": [],
+      "visibleButtons": 3,
+      "visibleInputs": 2,
+      "lowContrast": []
+    }
+  ],
+  "consoleMessages": [],
+  "failedRequests": [
+    {
+      "url": "http://localhost:4205/api/auth/login",
+      "failure": "net::ERR_ABORTED"
+    }
+  ]
+}

@@ -44,6 +44,26 @@ const detailInclude = {
   ...listInclude,
   outgoingRelations: { include: { targetAsset: refSelect } },
   incomingRelations: { include: { sourceAsset: refSelect } },
+  openDataCandidates: {
+    where: { deletedAt: null },
+    select: {
+      id: true,
+      code: true,
+      titleEn: true,
+      titleAr: true,
+      status: true,
+      eligibilityScore: true,
+      classificationSignal: true,
+      dataQualitySignal: true,
+      personalDataSignal: true,
+      ownershipSignal: true,
+      publicationValueSignal: true,
+      nextReviewAt: true,
+      publishedAt: true,
+    },
+    orderBy: { updatedAt: 'desc' as const },
+    take: 5,
+  },
 };
 
 @Injectable()

@@ -27,6 +27,9 @@ model Role {
   userRoles             UserRole[]
   permissions           RolePermission[]
   dataScopes            RoleDataScope[]
+  dataAccessMappings    RoleDataAccessMap[]
+  accessReviewItems     AccessReviewItem[]
+  abacDecisions         AbacDecisionLog[]
   trainingRequirements  TrainingRequirement[]
 
   @@map("roles")
@@ -92,6 +95,9 @@ model User {
   trainingAssignments TrainingAssignment[]
   certificationAttempts CertificationAttempt[]
   continuingEducationActivities ContinuingEducationActivity[]
+  ownedAccessReviews AccessReview[] @relation("AccessReviewOwner")
+  accessReviewItems AccessReviewItem[]
+  abacDecisions AbacDecisionLog[]
 
   @@map("users")
 }
@@ -133,6 +139,11 @@ model Person {
   mentorshipsAsMentor MentorshipPair[] @relation("MentorPerson")
   mentorshipsAsMentee MentorshipPair[] @relation("MenteePerson")
   dataQualityIssues DataQualityIssue[]
+  dataQualityRules DataQualityRule[]
+  dlpIncidents DlpIncident[]
+  openDataOwnerCandidates OpenDataCandidate[] @relation("OpenDataOwner")
+  openDataStewardCandidates OpenDataCandidate[] @relation("OpenDataSteward")
+  openDataReviewerCandidates OpenDataCandidate[] @relation("OpenDataReviewer")
 
   @@map("people")
 }
@@ -151,6 +162,14 @@ model Classification {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   assets      DataAsset[]
+  maskingPolicies MaskingPolicy[]
+  dataAccessMappings RoleDataAccessMap[]
+  accessReviewItems AccessReviewItem[]
+  abacDecisions AbacDecisionLog[]
+  dlpIncidents DlpIncident[]
+  classificationRequestsFrom ClassificationChangeRequest[] @relation("ClassificationChangeFrom")
+  classificationRequestsTo ClassificationChangeRequest[] @relation("ClassificationChangeTo")
+  openDataCandidates OpenDataCandidate[]
 
   @@map("classifications")
 }
@@ -284,6 +303,33 @@ model NdiDomain {
   @@map("ndi_domains")
 }
 
+/// Business data domains (hierarchical taxonomy of data areas).
+model DataDomain {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  nameEn      String
+  nameAr      String
+  description String?
+  parentId    String?
+  parent      DataDomain?  @relation("DomainTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    DataDomain[] @relation("DomainTree")
+  assets      DataAsset[]
+  dqRules     DataQualityRule[]
+  dqScores    DataQualityScore[]
+  dqProfiles  DataQualityProfile[]
+  maskingPolicies MaskingPolicy[]
+  dataAccessMappings RoleDataAccessMap[]
+  accessReviewItems AccessReviewItem[]
+  abacDecisions AbacDecisionLog[]
+  isActive    Boolean      @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([parentId])
+  @@map("data_domains")
+}
+
 /// Type of an NDI specification entry.
 enum NdiSpecType {
   policy
@@ -381,26 +427,6 @@ model NdiEvidence {
   @@map("ndi_evidence")
 }
 
-/// Business data domains (hierarchical taxonomy of data areas).
-model DataDomain {
-  id          String       @id @default(uuid())
-  code        String       @unique
-  nameEn      String
-  nameAr      String
-  description String?
-  parentId    String?
-  parent      DataDomain?  @relation("DomainTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    DataDomain[] @relation("DomainTree")
-  assets      DataAsset[]
-  isActive    Boolean      @default(true)
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  @@index([parentId])
-  @@map("data_domains")
-}
-
 /// Data subjects (categories of individuals/entities the data is about).
 model DataSubject {
   id          String    @id @default(uuid())
@@ -464,6 +490,22 @@ model DataAsset {
   incomingRelations AssetRelationship[] @relation("AssetRelTarget")
   workflowCases     WorkflowCase[]
   dataQualityIssues DataQualityIssue[]
+  dqRules           DataQualityRule[]
+  dqScores          DataQualityScore[]
+  dqProfiles        DataQualityProfile[]
+  accessReviewItems AccessReviewItem[]
+  abacDecisions     AbacDecisionLog[]
+  dlpIncidents      DlpIncident[]
+  classificationRequests ClassificationChangeRequest[]
+  openDataCandidates OpenDataCandidate[]
+  externalCatalogId String?
+  catalogSource     String?
+  catalogSyncStatus DataAssetCatalogSyncStatus @default(not_synced)
+  catalogTrustLevel IntegrationSourceTrust     @default(observed)
+  catalogLastSyncedAt DateTime?
+  catalogWritebackStatus IntegrationWritebackStatus?
+  externalReferences IntegrationExternalReference[]
+  integrationWritebacks IntegrationWritebackLog[]
   isActive          Boolean   @default(true)
   deletedAt         DateTime?
   createdAt         DateTime  @default(now())
@@ -476,6 +518,9 @@ model DataAsset {
   @@index([classificationId])
   @@index([lifecycleStatus])
   @@index([ownerStatus])
+  @@index([externalCatalogId])
+  @@index([catalogSource])
+  @@index([catalogSyncStatus])
   @@map("data_assets")
 }
 
@@ -627,6 +672,8 @@ model WorkflowCase {
   tasks        WorkflowTask[]
   events       WorkflowEvent[]
   dataQualityIssue DataQualityIssue?
+  dlpIncident DlpIncident?
+  classificationChangeRequest ClassificationChangeRequest?
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
 
@@ -964,6 +1011,51 @@ enum DataQualityDimension {
   uniqueness
 }
 
+enum DataQualityPriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+enum DataQualityRuleStatus {
+  draft
+  in_review
+  approved
+  deployed
+  retired
+}
+
+enum DataQualityRcaTemplate {
+  five_whys
+  fishbone
+  process_map
+  lineage_analysis
+}
+
+enum DataQualityScoreLevel {
+  enterprise
+  domain
+  asset
+  data_element
+  rule
+  issue
+}
+
+enum DataQualitySlaStage {
+  triage
+  remediation
+  validation
+  closure
+}
+
+enum DataQualitySlaStatus {
+  active
+  breached
+  completed
+  waived
+}
+
 /// Operational data quality issue tracked through ownership, workflow, and audit.
 model DataQualityIssue {
   id                  String                   @id @default(uuid())
@@ -972,6 +1064,7 @@ model DataQualityIssue {
   description         String?
   severity            DataQualitySeverity      @default(medium)
   dimension           DataQualityDimension     @default(completeness)
+  priority            DataQualityPriority      @default(P3)
   status              DataQualityIssueStatus   @default(open)
   source              String                   @default("manual")
   assetId             String?
@@ -979,6 +1072,10 @@ model DataQualityIssue {
   workflowCaseId      String?                  @unique
   detectedAt          DateTime                 @default(now())
   dueDate             DateTime?
+  triageDueAt         DateTime?
+  remediationDueAt    DateTime?
+  validationDueAt     DateTime?
+  escalatedAt         DateTime?
   resolutionSummary   String?
   closedAt            DateTime?
   createdBy           String
@@ -989,12 +1086,18 @@ model DataQualityIssue {
   responsiblePerson   Person?                  @relation(fields: [responsiblePersonId], references: [id], onDelete: SetNull)
   workflowCase        WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
   evidence            DataQualityIssueEvidence[]
+  rcaRecords          DataQualityRcaRecord[]
+  slaBreaches         DataQualitySlaBreach[]
+  scores              DataQualityScore[]
 
   @@index([assetId])
   @@index([responsiblePersonId])
   @@index([status])
   @@index([severity])
+  @@index([priority])
   @@index([dueDate])
+  @@index([triageDueAt])
+  @@index([remediationDueAt])
   @@map("data_quality_issues")
 }
 
@@ -1011,4 +1114,763 @@ model DataQualityIssueEvidence {
 
   @@index([issueId])
   @@map("data_quality_issue_evidence")
+}
+
+model DataQualityRule {
+  id                  String                @id @default(uuid())
+  code                String                @unique
+  nameEn              String
+  nameAr              String
+  description         String?
+  dimension           DataQualityDimension  @default(completeness)
+  status              DataQualityRuleStatus @default(draft)
+  assetId             String?
+  domainId            String?
+  ownerPersonId       String?
+  severity            DataQualitySeverity   @default(medium)
+  thresholdExpression String?
+  checkFrequency      String                @default("weekly")
+  impactSummary       String?
+  currentVersion      Int                   @default(1)
+  approvedBy          String?
+  approvedAt          DateTime?
+  deployedAt          DateTime?
+  retiredAt           DateTime?
+  deletedAt           DateTime?
+  createdBy           String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  asset               DataAsset?            @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain              DataDomain?           @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  ownerPerson         Person?               @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  versions            DataQualityRuleVersion[]
+  scores              DataQualityScore[]
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([ownerPersonId])
+  @@index([status])
+  @@index([dimension])
+  @@map("data_quality_rules")
+}
+
+model DataQualityRuleVersion {
+  id             String                @id @default(uuid())
+  ruleId         String
+  version        Int
+  status         DataQualityRuleStatus @default(draft)
+  definitionJson Json?
+  changeSummary  String?
+  createdBy      String
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  rule           DataQualityRule       @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, version])
+  @@index([status])
+  @@map("data_quality_rule_versions")
+}
+
+model DataQualityScore {
+  id            String                @id @default(uuid())
+  level         DataQualityScoreLevel
+  refId         String?
+  dimension     DataQualityDimension?
+  score         Int
+  totalChecks   Int                   @default(0)
+  failedChecks  Int                   @default(0)
+  measuredAt    DateTime              @default(now())
+  source        String                @default("manual")
+  assetId       String?
+  domainId      String?
+  ruleId        String?
+  issueId       String?
+  notes         String?
+  asset         DataAsset?            @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain        DataDomain?           @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  rule          DataQualityRule?      @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  issue         DataQualityIssue?     @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  openDataCandidates OpenDataCandidate[]
+  createdAt     DateTime              @default(now())
+
+  @@index([level, refId])
+  @@index([assetId])
+  @@index([domainId])
+  @@index([ruleId])
+  @@index([issueId])
+  @@index([dimension])
+  @@index([measuredAt])
+  @@map("data_quality_scores")
+}
+
+enum OpenDataCandidateStatus {
+  draft
+  assessment
+  under_review
+  approved
+  published
+  rejected
+  retired
+}
+
+enum OpenDataPublicationFrequency {
+  one_time
+  daily
+  weekly
+  monthly
+  quarterly
+  semiannual
+  annual
+  on_demand
+}
+
+enum OpenDataPublicationFormat {
+  csv
+  json
+  xlsx
+  api
+  geojson
+  pdf
+  other
+}
+
+enum OpenDataSignalStatus {
+  ready
+  needs_review
+  blocked
+}
+
+enum OpenDataPersonalDataAssessment {
+  none
+  aggregated
+  personal_data
+  sensitive_personal_data
+  unknown
+}
+
+model OpenDataCandidate {
+  id                     String                         @id @default(uuid())
+  code                   String                         @unique
+  assetId                String
+  titleEn                String
+  titleAr                String
+  description            String?
+  publicationFrequency   OpenDataPublicationFrequency   @default(quarterly)
+  publicationFormat      OpenDataPublicationFormat      @default(csv)
+  portalUrl              String?
+  status                 OpenDataCandidateStatus        @default(draft)
+  ownerPersonId          String?
+  stewardPersonId        String?
+  odiaoReviewerPersonId  String?
+  classificationId       String?
+  dqScoreId              String?
+  personalDataAssessment OpenDataPersonalDataAssessment @default(unknown)
+  classificationSignal   OpenDataSignalStatus           @default(needs_review)
+  dataQualitySignal      OpenDataSignalStatus           @default(needs_review)
+  personalDataSignal     OpenDataSignalStatus           @default(needs_review)
+  ownershipSignal        OpenDataSignalStatus           @default(needs_review)
+  publicationValueSignal OpenDataSignalStatus           @default(needs_review)
+  publicationValueScore  Int                            @default(50)
+  eligibilityScore       Int                            @default(0)
+  eligibilityJson        Json?
+  decisionNote           String?
+  publishedAt            DateTime?
+  nextReviewAt           DateTime?
+  createdBy              String
+  updatedBy              String?
+  deletedAt              DateTime?
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
+  asset                  DataAsset                      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  classification         Classification?                @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  dqScore                DataQualityScore?              @relation(fields: [dqScoreId], references: [id], onDelete: SetNull)
+  ownerPerson            Person?                        @relation("OpenDataOwner", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  stewardPerson          Person?                        @relation("OpenDataSteward", fields: [stewardPersonId], references: [id], onDelete: SetNull)
+  odiaoReviewerPerson    Person?                        @relation("OpenDataReviewer", fields: [odiaoReviewerPersonId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([status])
+  @@index([ownerPersonId])
+  @@index([stewardPersonId])
+  @@index([odiaoReviewerPersonId])
+  @@index([classificationId])
+  @@index([dqScoreId])
+  @@index([nextReviewAt])
+  @@index([eligibilityScore])
+  @@map("open_data_candidates")
+}
+
+model DataQualityProfile {
+  id               String        @id @default(uuid())
+  assetId          String?
+  domainId         String?
+  source           String        @default("profiling_import")
+  importedBy       String
+  rowCount         Int           @default(0)
+  columnCount      Int           @default(0)
+  qualityScore     Int           @default(0)
+  recommendedRules Int           @default(0)
+  anomalyCount     Int           @default(0)
+  summaryJson      Json?
+  asset            DataAsset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain           DataDomain?   @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  columns          DataQualityProfileColumn[]
+  createdAt        DateTime      @default(now())
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([createdAt])
+  @@map("data_quality_profiles")
+}
+
+model DataQualityProfileColumn {
+  id              String             @id @default(uuid())
+  profileId       String
+  columnName      String
+  dataType        String?
+  completenessPct Int                @default(0)
+  uniquenessPct   Int                @default(0)
+  validityPct     Int                @default(0)
+  pattern         String?
+  anomalyCount    Int                @default(0)
+  recommendation  String?
+  dimension       DataQualityDimension?
+  profile         DataQualityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([dimension])
+  @@map("data_quality_profile_columns")
+}
+
+model DataQualityRcaRecord {
+  id              String                  @id @default(uuid())
+  issueId         String
+  template        DataQualityRcaTemplate  @default(five_whys)
+  summary         String?
+  why1            String?
+  why2            String?
+  why3            String?
+  why4            String?
+  why5            String?
+  fishboneJson    Json?
+  processMap      String?
+  lineageNotes    String?
+  rootCause       String?
+  remediationPlan String?
+  validationResult String?
+  createdBy       String
+  updatedBy       String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  issue           DataQualityIssue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([template])
+  @@map("data_quality_rca_records")
+}
+
+model DataQualitySlaBreach {
+  id        String               @id @default(uuid())
+  issueId   String
+  stage     DataQualitySlaStage
+  status    DataQualitySlaStatus @default(active)
+  dueAt     DateTime
+  breachedAt DateTime?
+  escalatedTo String?
+  note      String?
+  createdAt DateTime             @default(now())
+  issue     DataQualityIssue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([stage])
+  @@index([status])
+  @@index([dueAt])
+  @@map("data_quality_sla_breaches")
+}
+
+enum MaskingTechnique {
+  static_masking
+  dynamic_masking
+  tokenization
+  anonymization
+  pseudonymization
+  redaction
+}
+
+enum AccessReviewStatus {
+  draft
+  active
+  completed
+  cancelled
+}
+
+enum AccessReviewDecision {
+  pending
+  certified
+  revoke
+  exception
+  escalated
+}
+
+enum AccessDecision {
+  allow
+  deny
+  masked
+  review_required
+}
+
+enum ClassificationRequestStatus {
+  pending
+  approved
+  rejected
+  implemented
+}
+
+enum SecuritySeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum DlpIncidentStatus {
+  new
+  triaged
+  under_review
+  contained
+  closed
+  false_positive
+}
+
+model MaskingPolicy {
+  id              String            @id @default(uuid())
+  code            String            @unique
+  nameEn          String
+  nameAr          String
+  technique       MaskingTechnique
+  description     String?
+  domainId        String?
+  classificationId String?
+  appliesToPersonalData Boolean     @default(true)
+  fieldsJson      Json?
+  previewBefore   String?
+  previewAfter    String?
+  isActive        Boolean           @default(true)
+  deletedAt       DateTime?
+  createdBy       String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  domain          DataDomain?       @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  classification  Classification?   @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  accessMappings  RoleDataAccessMap[]
+  decisions       AbacDecisionLog[]
+
+  @@index([domainId])
+  @@index([classificationId])
+  @@index([technique])
+  @@index([isActive])
+  @@map("masking_policies")
+}
+
+model RoleDataAccessMap {
+  id                  String           @id @default(uuid())
+  roleId              String
+  domainId            String?
+  classificationId    String?
+  maskingPolicyId     String?
+  personalDataAllowed Boolean          @default(false)
+  approvalRequired    Boolean          @default(true)
+  businessJustification String?
+  reviewCadenceDays   Int              @default(90)
+  lastReviewedAt      DateTime?
+  nextReviewAt        DateTime?
+  scopeKey            String           @default("domain:all|class:all")
+  isActive            Boolean          @default(true)
+  createdBy           String
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  role                Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  domain              DataDomain?      @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  classification      Classification?  @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  maskingPolicy       MaskingPolicy?   @relation(fields: [maskingPolicyId], references: [id], onDelete: SetNull)
+
+  @@index([roleId])
+  @@index([domainId])
+  @@index([classificationId])
+  @@index([maskingPolicyId])
+  @@index([scopeKey])
+  @@index([isActive])
+  @@index([roleId, scopeKey, isActive])
+  @@map("role_data_access_maps")
+}
+
+model AccessReview {
+  id            String             @id @default(uuid())
+  code          String             @unique
+  title         String
+  description   String?
+  status        AccessReviewStatus @default(draft)
+  ownerUserId   String?
+  dueDate       DateTime?
+  completedAt   DateTime?
+  createdBy     String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  ownerUser      User?              @relation("AccessReviewOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  items          AccessReviewItem[]
+
+  @@index([status])
+  @@index([ownerUserId])
+  @@index([dueDate])
+  @@map("access_reviews")
+}
+
+model AccessReviewItem {
+  id              String               @id @default(uuid())
+  reviewId        String
+  userId          String
+  roleId          String
+  assetId         String?
+  domainId        String?
+  classificationId String?
+  decision        AccessReviewDecision @default(pending)
+  reviewer        String?
+  justification   String?
+  reviewedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  review          AccessReview         @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            Role                 @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  asset           DataAsset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain          DataDomain?          @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  classification  Classification?      @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+
+  @@index([reviewId])
+  @@index([userId])
+  @@index([roleId])
+  @@index([decision])
+  @@index([domainId])
+  @@map("access_review_items")
+}
+
+model AbacDecisionLog {
+  id              String          @id @default(uuid())
+  actorUserId     String?
+  roleId          String?
+  assetId         String?
+  domainId        String?
+  classificationId String?
+  maskingPolicyId String?
+  requestedAction String
+  decision        AccessDecision
+  reason          String
+  createdAt       DateTime        @default(now())
+  actorUser       User?           @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  role            Role?           @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  asset           DataAsset?      @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain          DataDomain?     @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  classification  Classification? @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  maskingPolicy   MaskingPolicy?  @relation(fields: [maskingPolicyId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([roleId])
+  @@index([assetId])
+  @@index([decision])
+  @@index([createdAt])
+  @@map("abac_decision_logs")
+}
+
+model DlpIncident {
+  id                  String            @id @default(uuid())
+  code                String            @unique
+  title               String
+  description         String?
+  severity            SecuritySeverity  @default(medium)
+  status              DlpIncidentStatus @default(new)
+  assetId             String?
+  classificationId    String?
+  detectionSource     String            @default("manual")
+  detectedAt          DateTime          @default(now())
+  assignedPersonId    String?
+  workflowCaseId      String?           @unique
+  containmentSummary  String?
+  closedAt            DateTime?
+  createdBy           String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  asset               DataAsset?        @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  classification      Classification?   @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  assignedPerson      Person?           @relation(fields: [assignedPersonId], references: [id], onDelete: SetNull)
+  workflowCase        WorkflowCase?     @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([classificationId])
+  @@index([assignedPersonId])
+  @@index([severity])
+  @@index([status])
+  @@index([detectedAt])
+  @@map("dlp_incidents")
+}
+
+model ClassificationChangeRequest {
+  id                    String                      @id @default(uuid())
+  assetId               String
+  fromClassificationId  String?
+  toClassificationId    String
+  reason                String
+  status                ClassificationRequestStatus @default(pending)
+  requestedBy           String
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  workflowCaseId        String?                     @unique
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  asset                 DataAsset                   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  fromClassification    Classification?             @relation("ClassificationChangeFrom", fields: [fromClassificationId], references: [id], onDelete: SetNull)
+  toClassification      Classification              @relation("ClassificationChangeTo", fields: [toClassificationId], references: [id], onDelete: Cascade)
+  workflowCase          WorkflowCase?               @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([status])
+  @@index([toClassificationId])
+  @@map("classification_change_requests")
+}
+
+enum IntegrationConnectorType {
+  catalog
+  lineage
+  data_quality
+  dlp
+  pdp
+  ndi
+  risk
+  profiling
+  training
+}
+
+enum IntegrationDirection {
+  inbound
+  outbound
+  bidirectional
+}
+
+enum IntegrationConnectorStatus {
+  healthy
+  warning
+  failed
+  disabled
+}
+
+enum IntegrationSourceTrust {
+  authoritative
+  trusted
+  observed
+  simulated
+}
+
+enum IntegrationAdapterType {
+  catalog_csv
+  mock_rest
+}
+
+enum IntegrationJobType {
+  catalog_sync
+  catalog_writeback
+  signal_ingest
+}
+
+enum IntegrationJobStatus {
+  ready
+  running
+  completed
+  completed_with_errors
+  failed
+  disabled
+}
+
+enum IntegrationBatchStatus {
+  running
+  completed
+  completed_with_errors
+  failed
+}
+
+enum IntegrationImportErrorSeverity {
+  warning
+  error
+}
+
+enum IntegrationEntityType {
+  data_asset
+  owner
+  steward
+  governance_status
+}
+
+enum IntegrationWritebackStatus {
+  simulated
+  sent
+  failed
+}
+
+enum DataAssetCatalogSyncStatus {
+  not_synced
+  synced
+  stale
+  error
+  writeback_simulated
+}
+
+model IntegrationConnector {
+  id               String                     @id @default(uuid())
+  code             String                     @unique
+  nameEn           String
+  nameAr           String
+  description      String?
+  type             IntegrationConnectorType   @default(catalog)
+  direction        IntegrationDirection       @default(bidirectional)
+  status           IntegrationConnectorStatus @default(warning)
+  sourceTrust      IntegrationSourceTrust     @default(authoritative)
+  configJson       Json?
+  fieldMappingJson Json?
+  lastRunAt        DateTime?
+  lastSuccessAt    DateTime?
+  lastError        String?
+  createdBy        String?
+  isActive         Boolean                    @default(true)
+  deletedAt        DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  jobs             IntegrationJob[]
+  importBatches    IntegrationImportBatch[]
+  externalReferences IntegrationExternalReference[]
+  writebackLogs    IntegrationWritebackLog[]
+
+  @@index([type])
+  @@index([status])
+  @@index([isActive])
+  @@map("integration_connectors")
+}
+
+model IntegrationJob {
+  id            String               @id @default(uuid())
+  code          String               @unique
+  connectorId   String
+  nameEn        String
+  nameAr        String
+  jobType       IntegrationJobType   @default(catalog_sync)
+  status        IntegrationJobStatus @default(ready)
+  syncMode      String               @default("manual")
+  scheduleCron  String?
+  lastRunAt     DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?
+  createdBy     String?
+  isActive      Boolean              @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  connector     IntegrationConnector @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  importBatches IntegrationImportBatch[]
+
+  @@index([connectorId])
+  @@index([jobType])
+  @@index([status])
+  @@index([isActive])
+  @@map("integration_jobs")
+}
+
+model IntegrationImportBatch {
+  id                 String                 @id @default(uuid())
+  code               String                 @unique
+  connectorId        String
+  jobId              String?
+  sourceName         String?
+  adapterType        IntegrationAdapterType @default(catalog_csv)
+  status             IntegrationBatchStatus @default(running)
+  startedAt          DateTime               @default(now())
+  completedAt        DateTime?
+  triggeredBy        String
+  totalRows          Int                    @default(0)
+  createdRows        Int                    @default(0)
+  updatedRows        Int                    @default(0)
+  unchangedRows      Int                    @default(0)
+  errorRows          Int                    @default(0)
+  warningRows        Int                    @default(0)
+  reconciliationJson Json?
+  mappingPreviewJson Json?
+  connector          IntegrationConnector   @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  job                IntegrationJob?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  errors             IntegrationImportError[]
+  writebackLogs      IntegrationWritebackLog[]
+
+  @@index([connectorId])
+  @@index([jobId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("integration_import_batches")
+}
+
+model IntegrationImportError {
+  id         String                         @id @default(uuid())
+  batchId    String
+  rowNumber  Int
+  externalId String?
+  field      String?
+  message    String
+  severity   IntegrationImportErrorSeverity @default(error)
+  rawRowJson  Json?
+  createdAt  DateTime                       @default(now())
+  batch      IntegrationImportBatch         @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([severity])
+  @@map("integration_import_errors")
+}
+
+model IntegrationExternalReference {
+  id          String                 @id @default(uuid())
+  connectorId String
+  externalId  String
+  entityType  IntegrationEntityType  @default(data_asset)
+  entityId    String?
+  assetId     String?
+  sourceTrust IntegrationSourceTrust @default(authoritative)
+  syncStatus  DataAssetCatalogSyncStatus @default(synced)
+  lastSeenAt  DateTime               @default(now())
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  connector   IntegrationConnector   @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  asset       DataAsset?             @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@unique([connectorId, externalId, entityType])
+  @@index([assetId])
+  @@index([entityType])
+  @@index([syncStatus])
+  @@map("integration_external_references")
+}
+
+model IntegrationWritebackLog {
+  id          String                     @id @default(uuid())
+  connectorId String
+  assetId     String
+  batchId     String?
+  status      IntegrationWritebackStatus @default(simulated)
+  simulated   Boolean                    @default(true)
+  payloadJson Json
+  resultJson  Json?
+  message     String?
+  actor       String
+  createdAt   DateTime                   @default(now())
+  connector   IntegrationConnector       @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  asset       DataAsset                  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  batch       IntegrationImportBatch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([connectorId])
+  @@index([assetId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("integration_writeback_logs")
 }

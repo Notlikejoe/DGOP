@@ -1,0 +1,207 @@
+<section class="page security-page">
+  <header class="page__header">
+    <div>
+      <span class="eyebrow">{{ t('sec.eyebrow') }}</span>
+      <h1>{{ t('sec.title') }}</h1>
+      <p class="page__subtitle">{{ t('sec.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <a class="ds-btn ds-btn--ghost" routerLink="/admin/roles">{{ t('sec.openRoles') }}</a>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <div class="security-strip" aria-label="Security governance status">
+      <div class="strip-card strip-card--risk">
+        <span>{{ t('sec.metric.risk') }}</span>
+        <strong>{{ t('sec.risk.' + s.riskLevel) }}</strong>
+        <small>{{ securityQueue().length }} {{ t('sec.queue.items') }}</small>
+      </div>
+      <div class="strip-card"><span>{{ t('sec.metric.mappings') }}</span><strong>{{ s.mappings }}</strong><small>{{ t('sec.metric.mappingsHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('sec.metric.masking') }}</span><strong>{{ s.maskingPolicies }}</strong><small>{{ t('sec.metric.maskingHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('sec.metric.reviews') }}</span><strong>{{ s.pendingAccessReviews }}</strong><small>{{ t('sec.metric.reviewsHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('sec.metric.dlp') }}</span><strong>{{ s.openDlpIncidents }}</strong><small>{{ t('sec.metric.dlpHelp') }}</small></div>
+    </div>
+  }
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('assets.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card"><p class="error">{{ t('sec.error') }}</p></div>
+  } @else {
+    <div class="risk-workspace">
+      <section class="ds-card queue-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('sec.queue.eyebrow') }}</span>
+            <h2>{{ t('sec.queue.title') }}</h2>
+            <p>{{ t('sec.queue.subtitle') }}</p>
+          </div>
+          <span class="queue-count">{{ securityQueue().length }}</span>
+        </div>
+
+        @if (securityQueue().length === 0) {
+          <div class="empty empty--small"><p>{{ t('sec.queue.empty') }}</p></div>
+        } @else {
+          <div class="queue-list">
+            @for (item of securityQueue(); track item.id) {
+              <button
+                type="button"
+                class="queue-row"
+                [class.queue-row--active]="selectedQueueItem()?.id === item.id"
+                (click)="selectQueueItem(item.id)"
+              >
+                <span class="queue-row__type">{{ t('sec.queue.type.' + item.type) }}</span>
+                <span class="queue-row__main">
+                  <strong>{{ item.title }}</strong>
+                  <small>{{ item.subtitle }}</small>
+                </span>
+                <app-status-chip [kind]="queueKind(item)" [label]="item.risk ? t('sec.severity.' + item.risk) : t('sec.decision.' + item.status)" />
+              </button>
+            }
+          </div>
+        }
+      </section>
+
+      <aside class="ds-card detail-panel">
+        @if (selectedQueueItem(); as item) {
+          <div class="detail-head">
+            <div>
+              <span class="badge-code">{{ t('sec.queue.type.' + item.type) }}</span>
+              <h2>{{ item.title }}</h2>
+              <p>{{ item.subtitle }}</p>
+            </div>
+            <app-status-chip [kind]="queueKind(item)" [label]="item.risk ? t('sec.severity.' + item.risk) : t('sec.decision.' + item.status)" />
+          </div>
+
+          @if (item.description) {
+            <p class="description">{{ item.description }}</p>
+          }
+
+          <dl class="facts">
+            <div><dt>{{ t('sec.field.type') }}</dt><dd>{{ t('sec.queue.type.' + item.type) }}</dd></div>
+            <div><dt>{{ t('sec.field.status') }}</dt><dd>{{ queueStatusLabel(item) }}</dd></div>
+            <div><dt>{{ t('sec.field.asset') }}</dt><dd>{{ item.asset || '-' }}</dd></div>
+            <div><dt>{{ t('sec.field.due') }}</dt><dd>{{ date(item.dueDate || item.createdAt) }}</dd></div>
+            <div>
+              <dt>{{ t('sec.field.workflow') }}</dt>
+              <dd>
+                @if (item.workflowCase) {
+                  <a [routerLink]="['/governance/workflow/cases', item.workflowCase.id]">{{ item.workflowCase.code }}</a>
+                } @else { - }
+              </dd>
+            </div>
+          </dl>
+
+          <div class="detail-actions">
+            <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/admin/roles">{{ t('sec.openRoles') }}</a>
+            <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="load()">{{ t('crud.retry') }}</button>
+          </div>
+        } @else {
+          <div class="empty"><p>{{ t('sec.queue.empty') }}</p></div>
+        }
+      </aside>
+    </div>
+
+    <div class="insight-grid">
+      <section class="ds-card access-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('sec.access.eyebrow') }}</span>
+            <h2>{{ t('sec.access.title') }}</h2>
+            <p>{{ t('sec.access.subtitle') }}</p>
+          </div>
+          <app-icon name="keyRound" />
+        </div>
+
+        @if (accessMap().length === 0) {
+          <div class="empty empty--small"><p>{{ t('sec.access.empty') }}</p></div>
+        } @else {
+          <div class="access-list">
+            @for (row of accessMap(); track row.id) {
+              <article class="access-row">
+                <div class="access-row__main">
+                  <span class="badge-code">{{ row.role.code }}</span>
+                  <div>
+                    <strong>{{ name(row.role) }}</strong>
+                    <p>{{ row.businessJustification || t('sec.access.noReason') }}</p>
+                  </div>
+                </div>
+                <div class="access-row__scope">
+                  <span>{{ t('sec.field.domain') }}</span>
+                  <strong>{{ name(row.domain) }}</strong>
+                </div>
+                <div class="access-row__scope">
+                  <span>{{ t('sec.field.classification') }}</span>
+                  <strong>{{ name(row.classification) }}</strong>
+                </div>
+                <div class="access-row__badges">
+                  <app-status-chip [kind]="row.approvalRequired ? 'warning' : 'success'" [label]="row.approvalRequired ? t('sec.approval.required') : t('sec.approval.notRequired')" />
+                  <app-status-chip [kind]="row.personalDataAllowed ? 'success' : 'warning'" [label]="row.personalDataAllowed ? t('sec.personal.allowed') : t('sec.personal.masked')" />
+                  @if (row.maskingPolicy) {
+                    <span class="mask-pill">{{ name(row.maskingPolicy) }}</span>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="ds-card">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('sec.masking.eyebrow') }}</span>
+            <h2>{{ t('sec.masking.title') }}</h2>
+          </div>
+        </div>
+        <div class="masking-grid">
+          @for (policy of maskingPolicies(); track policy.id) {
+            <article class="masking-card">
+              <div>
+                <span class="badge-code">{{ policy.code }}</span>
+                <h3>{{ name(policy) }}</h3>
+                <p>{{ policy.description }}</p>
+              </div>
+              <div class="mask-preview" [attr.aria-label]="t('sec.masking.previewLabel')">
+                @if (policy.previewBefore || policy.previewAfter) {
+                  <span>{{ policy.previewBefore || '-' }}</span>
+                  <strong>{{ policy.previewAfter || '-' }}</strong>
+                } @else {
+                  <span class="muted">{{ t('sec.masking.noPreview') }}</span>
+                }
+              </div>
+              <app-status-chip kind="info" [label]="t('sec.masking.' + policy.technique)" />
+            </article>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('sec.masking.empty') }}</p></div>
+          }
+        </div>
+      </section>
+    </div>
+
+    <section class="ds-card decision-panel">
+      <div class="panel-head compact">
+        <div>
+          <span class="eyebrow">{{ t('sec.decisions.eyebrow') }}</span>
+          <h2>{{ t('sec.decisions.title') }}</h2>
+          <p>{{ t('sec.decisions.subtitle') }}</p>
+        </div>
+      </div>
+      <div class="decision-table">
+        @for (decision of decisions(); track decision.id) {
+          <article class="decision-row">
+            <span class="badge-code">{{ decision.requestedAction }}</span>
+            <strong>{{ name(decision.role) }}</strong>
+            <span>{{ name(decision.asset) }}</span>
+            <app-status-chip [kind]="decisionKind(decision.decision)" [label]="t('sec.decision.' + decision.decision)" />
+            <p>{{ decision.reason }}</p>
+          </article>
+        } @empty {
+          <div class="empty empty--small"><p>{{ t('sec.decisions.empty') }}</p></div>
+        }
+      </div>
+    </section>
+  }
+</section>

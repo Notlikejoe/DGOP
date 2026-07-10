@@ -16,14 +16,23 @@ type Over = {
   evidenceRow?: any;
   rows?: any[];
   spec?: any;
+  person?: any;
+  onFindMany?: (args: any) => void;
+  onFindFirst?: (args: any) => void;
   onUpdate?: (args: any) => void;
 };
 
 function makeService(over: Over): EvidenceService {
   const prisma = {
     ndiEvidence: {
-      findMany: async () => over.rows ?? [],
-      findFirst: async () => over.evidenceRow ?? null,
+      findMany: async (args: any) => {
+        over.onFindMany?.(args);
+        return over.rows ?? [];
+      },
+      findFirst: async (args: any) => {
+        over.onFindFirst?.(args);
+        return over.evidenceRow ?? null;
+      },
       create: async (a: any) => ({ id: 'e_new', ...a.data }),
       update: async (a: any) => {
         over.onUpdate?.(a);
@@ -32,6 +41,9 @@ function makeService(over: Over): EvidenceService {
     },
     ndiSpecification: {
       findFirst: async () => over.spec ?? { id: 'spec1', code: 'DG.1.1' },
+    },
+    person: {
+      findFirst: async () => over.person ?? null,
     },
   };
   const audit = { log: async () => {} };
@@ -58,12 +70,15 @@ const base = {
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
+const adminUser = { id: 'u-admin', email: 'admin@dgop.local', roles: ['system_admin'] };
+const aliceUser = { id: 'u-alice', email: 'alice@dgop.local', roles: ['ndi_evidence_owner'] };
+const bobReviewer = { id: 'u-bob', email: 'bob@dgop.local', roles: ['dmo_admin'] };
 
 test('effectiveStatus: approved past expiry reads as expired', async () => {
   const svc = makeService({
     rows: [{ ...base, status: 'approved', expiryDate: new Date('2020-01-01') }],
   });
-  const list = await svc.listBySpec('spec1');
+  const list = await svc.listBySpec('spec1', adminUser);
   assert.strictEqual((list[0] as any).effectiveStatus, 'expired');
 });
 
@@ -71,7 +86,7 @@ test('effectiveStatus: approved with future expiry stays approved', async () => 
   const svc = makeService({
     rows: [{ ...base, status: 'approved', expiryDate: new Date('2999-01-01') }],
   });
-  const list = await svc.listBySpec('spec1');
+  const list = await svc.listBySpec('spec1', adminUser);
   assert.strictEqual((list[0] as any).effectiveStatus, 'approved');
 });
 
@@ -81,19 +96,19 @@ test('submit: draft -> submitted', async () => {
     evidenceRow: { ...base, status: 'draft' },
     onUpdate: (a) => (captured = a.data),
   });
-  await svc.submit('e1', 'alice@dgop.local');
+  await svc.submit('e1', adminUser);
   assert.strictEqual(captured.status, 'submitted');
 });
 
 test('submit: approved cannot be submitted', async () => {
   const svc = makeService({ evidenceRow: { ...base, status: 'approved' } });
-  await assert.rejects(() => svc.submit('e1', 'alice@dgop.local'), /draft or rejected/i);
+  await assert.rejects(() => svc.submit('e1', adminUser), /draft or rejected/i);
 });
 
 test('review: submitter cannot review own evidence (SoD)', async () => {
-  const svc = makeService({ evidenceRow: { ...base, status: 'submitted', submittedBy: 'alice@dgop.local' } });
+  const svc = makeService({ evidenceRow: { ...base, status: 'submitted', submittedBy: 'admin@dgop.local' } });
   await assert.rejects(
-    () => svc.review('e1', { decision: 'approve' }, 'alice@dgop.local'),
+    () => svc.review('e1', { decision: 'approve' }, adminUser),
     /cannot review evidence you submitted/i,
   );
 });
@@ -104,7 +119,7 @@ test('review: approve sets approved status', async () => {
     evidenceRow: { ...base, status: 'submitted', submittedBy: 'alice@dgop.local' },
     onUpdate: (a) => (captured = a.data),
   });
-  await svc.review('e1', { decision: 'approve', comment: 'ok' }, 'bob@dgop.local');
+  await svc.review('e1', { decision: 'approve', comment: 'ok' }, bobReviewer);
   assert.strictEqual(captured.status, 'approved');
   assert.strictEqual(captured.reviewedBy, 'bob@dgop.local');
   assert.strictEqual(captured.reviewComment, 'ok');
@@ -116,21 +131,21 @@ test('review: reject sets rejected status', async () => {
     evidenceRow: { ...base, status: 'submitted', submittedBy: 'alice@dgop.local' },
     onUpdate: (a) => (captured = a.data),
   });
-  await svc.review('e1', { decision: 'reject' }, 'bob@dgop.local');
+  await svc.review('e1', { decision: 'reject' }, bobReviewer);
   assert.strictEqual(captured.status, 'rejected');
 });
 
 test('review: draft cannot be reviewed', async () => {
   const svc = makeService({ evidenceRow: { ...base, status: 'draft' } });
   await assert.rejects(
-    () => svc.review('e1', { decision: 'approve' }, 'bob@dgop.local'),
+    () => svc.review('e1', { decision: 'approve' }, bobReviewer),
     /only submitted evidence/i,
   );
 });
 
 test('revoke: only approved evidence can be revoked', async () => {
   const svc = makeService({ evidenceRow: { ...base, status: 'submitted' } });
-  await assert.rejects(() => svc.revoke('e1', 'bob@dgop.local'), /only approved/i);
+  await assert.rejects(() => svc.revoke('e1', bobReviewer), /only approved/i);
 });
 
 test('create: computes a sha256 and stores draft by default', async () => {
@@ -141,7 +156,7 @@ test('create: computes a sha256 and stores draft by default', async () => {
     size: 5,
     buffer: Buffer.from('hello'),
   };
-  const res: any = await svc.create({ specId: 'spec1', title: 'Doc' }, file as never, 'alice@dgop.local');
+  const res: any = await svc.create({ specId: 'spec1', title: 'Doc' }, file as never, adminUser);
   assert.strictEqual(res.status, 'draft');
   // sha256('hello') is a known value
   assert.strictEqual(res.sha256, '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
@@ -153,9 +168,37 @@ test('create: submit=true uploads as submitted', async () => {
   const res: any = await svc.create(
     { specId: 'spec1', title: 'Doc', submit: 'true' },
     file as never,
-    'alice@dgop.local',
+    adminUser,
   );
   assert.strictEqual(res.status, 'submitted');
+});
+
+test('listBySpec: scoped users only query owned or submitted evidence', async () => {
+  let captured: any = null;
+  const svc = makeService({
+    rows: [],
+    person: { id: 'p-alice' },
+    onFindMany: (a) => (captured = a.where),
+  });
+  await svc.listBySpec('spec1', aliceUser);
+  assert.deepStrictEqual(captured.AND[0], { specId: 'spec1', deletedAt: null });
+  assert.deepStrictEqual(captured.AND[1].OR, [
+    { submittedBy: 'alice@dgop.local' },
+    { reviewedBy: 'alice@dgop.local' },
+    { spec: { ownerPersonId: 'p-alice' } },
+  ]);
+});
+
+test('create: scoped user cannot upload against someone else owned spec', async () => {
+  const svc = makeService({
+    spec: { id: 'spec1', code: 'DG.1.1', ownerPersonId: 'p-other' },
+    person: { id: 'p-alice' },
+  });
+  const file = { originalname: 'a.pdf', mimetype: 'application/pdf', size: 3, buffer: Buffer.from('abc') };
+  await assert.rejects(
+    () => svc.create({ specId: 'spec1', title: 'Doc' }, file as never, aliceUser),
+    /outside your evidence responsibility/i,
+  );
 });
 
 (async () => {

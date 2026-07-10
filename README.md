@@ -8,7 +8,7 @@ Monorepo for the DGOP application.
 
 ## Prerequisites
 
-- Node.js 20+ (tested on Node 24)
+- Node.js 22.22.3+, 24.15.0+, or 26+ for Angular 22 (tested on Node 24)
 - PostgreSQL running locally (this machine: PostgreSQL 18 at `/Library/PostgreSQL/18`)
 - All configuration comes from the root **`.env`** (see `.env.example`)
 
@@ -99,5 +99,7 @@ Per-sprint user stories and test cases live under `QA/Sprint-XX/`.
 - [`QA/Sprint-09/`](QA/Sprint-09/README.md) - NDI evidence repository: file upload with SHA-256, submit/review lifecycle with separation of duties, expiry tracking, audited downloads, NDI specification owner, configurable storage, evidence unit tests.
 - [`QA/Sprint-10/`](QA/Sprint-10/README.md) - NDI scoring & gap analysis: readiness by domain and overall, maturity bands, weighted spec scoring, gap queue (missing/expired/rejected/unassigned/stuck), shared evidence effective-status helper, domain short codes, scoring unit tests.
 - [`QA/Sprint-11/`](QA/Sprint-11/README.md) - dashboards MVP: adaptive role-aware dashboard (My work / Governance / NDI readiness / Reference), permission-gated `/dashboard/summary`, scoring-engine reuse, ownership & stewardship coverage, shared KPI/progress/mini-chart components, dashboard unit tests.
+- [`QA/Sprint-16/`](QA/Sprint-16/README.md) - Release 2 hardening & UAT: evidence access hardening, JWT role refresh, safe config defaults, upload dependency patching, and Release 2 UAT scenarios.
+- [`QA/Sprint-17/`](QA/Sprint-17/README.md) - Open Data candidate registry: asset-linked candidates, ODIAO reviewer accountability, publication metadata, eligibility signals, lifecycle controls, and Asset 360 readiness surfacing.
 
-Default local admin: `admin@dgop.local` / `Admin@12345`.
+Default local admin for local demo data only: `admin@dgop.local` / `Admin@12345`.

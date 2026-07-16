@@ -32,6 +32,10 @@ interface IntegrationSummary {
   failedBatches: number;
   openErrors: number;
   simulatedWritebacks: number;
+  failedEvents: number;
+  deadLetterEvents: number;
+  retryReadyEvents: number;
+  reconciliationReports: number;
   lastRunAt?: string | null;
   lastRunStatus?: string | null;
 }
@@ -53,6 +57,8 @@ interface IntegrationConnector {
     importBatches: number;
     externalReferences: number;
     writebackLogs: number;
+    events: number;
+    reconciliationReports: number;
   };
 }
 
@@ -109,6 +115,41 @@ interface WritebackLog {
   asset: Ref;
 }
 
+interface IntegrationEvent {
+  id: string;
+  code: string;
+  eventType: string;
+  sourceName?: string | null;
+  entityType?: string | null;
+  entityId?: string | null;
+  status: string;
+  severity: string;
+  attempts: number;
+  maxAttempts: number;
+  nextRetryAt?: string | null;
+  lastError?: string | null;
+  receivedAt: string;
+  processedAt?: string | null;
+  connector?: Pick<IntegrationConnector, 'id' | 'code' | 'nameEn' | 'nameAr' | 'status' | 'type'> | null;
+}
+
+interface IntegrationReconciliationReport {
+  id: string;
+  code: string;
+  status: string;
+  totalRecords: number;
+  matchedRecords: number;
+  createdRecords: number;
+  updatedRecords: number;
+  failedRecords: number;
+  orphanedRecords: number;
+  missingRecords: number;
+  createdAt: string;
+  connector?: Pick<IntegrationConnector, 'id' | 'code' | 'nameEn' | 'nameAr' | 'status' | 'type'> | null;
+  batch?: { id: string; code: string; status: string; totalRows: number; errorRows: number } | null;
+  event?: { id: string; code: string; status: string; eventType: string; entityType?: string | null; entityId?: string | null } | null;
+}
+
 const ADAPTERS = [
   { value: 'catalog_csv', labelKey: 'integrations.adapter.csv' },
   { value: 'mock_rest', labelKey: 'integrations.adapter.mock' },
@@ -131,6 +172,8 @@ export class IntegrationsPage implements OnInit {
   protected readonly summary = signal<IntegrationSummary | null>(null);
   protected readonly connectors = signal<IntegrationConnector[]>([]);
   protected readonly batches = signal<IntegrationBatch[]>([]);
+  protected readonly events = signal<IntegrationEvent[]>([]);
+  protected readonly reports = signal<IntegrationReconciliationReport[]>([]);
   protected readonly assets = signal<AssetRef[]>([]);
   protected readonly selectedConnectorId = signal('');
   protected readonly selectedBatchId = signal('');
@@ -144,6 +187,7 @@ export class IntegrationsPage implements OnInit {
   protected readonly selectedWritebackAssetId = signal('');
   protected readonly writeback = signal<WritebackLog | null>(null);
   protected readonly writingBack = signal(false);
+  protected readonly retryingEventId = signal('');
 
   protected readonly adapters = ADAPTERS;
 
@@ -179,12 +223,16 @@ export class IntegrationsPage implements OnInit {
       summary: this.http.get<IntegrationSummary>('/api/integrations/summary'),
       connectors: this.http.get<IntegrationConnector[]>('/api/integrations/connectors'),
       batches: this.http.get<IntegrationBatch[]>('/api/integrations/batches'),
+      events: this.http.get<IntegrationEvent[]>('/api/integrations/events?status=failed,retry_scheduled,dead_letter&limit=12'),
+      reports: this.http.get<IntegrationReconciliationReport[]>('/api/integrations/reconciliation?limit=8'),
       assets: this.http.get<AssetRef[]>('/api/assets'),
     }).subscribe({
       next: (result) => {
         this.summary.set(result.summary);
         this.connectors.set(result.connectors);
         this.batches.set(result.batches);
+        this.events.set(result.events);
+        this.reports.set(result.reports);
         this.assets.set(result.assets);
         this.ensureSelection();
         this.state.set('ok');
@@ -278,6 +326,22 @@ export class IntegrationsPage implements OnInit {
       });
   }
 
+  protected retryEvent(event: IntegrationEvent): void {
+    if (!this.canRun || this.retryingEventId()) return;
+    this.retryingEventId.set(event.id);
+    this.http.post<IntegrationEvent>(`/api/integrations/events/${event.id}/retry`, { reason: 'Manual retry from integration monitor' }).subscribe({
+      next: () => {
+        this.toast.success(this.t('integrations.events.retryDone'));
+        this.retryingEventId.set('');
+        this.load();
+      },
+      error: () => {
+        this.toast.error(this.t('integrations.error'));
+        this.retryingEventId.set('');
+      },
+    });
+  }
+
   protected onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
@@ -352,6 +416,19 @@ export class IntegrationsPage implements OnInit {
     if (status === 'completed_with_errors') return 'warning';
     if (status === 'failed') return 'danger';
     return 'info';
+  }
+
+  protected eventKind(status: string): StatusKind {
+    if (status === 'succeeded') return 'success';
+    if (status === 'dead_letter' || status === 'failed') return 'danger';
+    if (status === 'retry_scheduled') return 'warning';
+    return 'info';
+  }
+
+  protected reportKind(status: string): StatusKind {
+    if (status === 'healthy') return 'success';
+    if (status === 'failed') return 'danger';
+    return 'warning';
   }
 
   protected mappingKind(status: string, required: boolean): StatusKind {

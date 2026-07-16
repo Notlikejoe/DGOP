@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { IS_PUBLIC_KEY } from './decorators';
 import { AuthUser, JwtPayload } from './auth.types';
+import { AUTH_COOKIE_NAME, readCookie } from './auth-cookie';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -59,8 +60,10 @@ export class JwtAuthGuard implements CanActivate {
 
   private extractToken(request: Request): string | undefined {
     const header = request.headers.authorization;
-    if (!header) return undefined;
-    const [type, token] = header.split(' ');
-    return type === 'Bearer' ? token : undefined;
+    if (header) {
+      const [type, token] = header.split(' ');
+      if (type === 'Bearer' && token) return token;
+    }
+    return readCookie(request, AUTH_COOKIE_NAME);
   }
 }

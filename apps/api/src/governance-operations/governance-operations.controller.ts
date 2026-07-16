@@ -1,0 +1,63 @@
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { CurrentUser, RequirePermissions } from '../auth/decorators';
+import { AuthUser } from '../auth/auth.types';
+import {
+  CreateComplianceCalendarTemplateDto,
+  CreateKsaHolidayDto,
+  UpdateComplianceCalendarTemplateDto,
+  UpdateEscalationDto,
+} from './governance-operations.dto';
+import { GovernanceOperationsService } from './governance-operations.service';
+
+@Controller('governance-operations')
+export class GovernanceOperationsController {
+  constructor(private readonly service: GovernanceOperationsService) {}
+
+  @Get('workspace')
+  @RequirePermissions('governance_operations.view')
+  workspace(@CurrentUser() user: AuthUser) {
+    return this.service.workspace(user);
+  }
+
+  @Post('recalculate-sla')
+  @RequirePermissions('governance_operations.run')
+  recalculateSla(@CurrentUser() user: AuthUser) {
+    return this.service.recalculateSla(user);
+  }
+
+  @Post('calendar/generate')
+  @RequirePermissions('governance_operations.run')
+  generateCalendar(@CurrentUser() user: AuthUser) {
+    return this.service.generateCalendarOccurrences(user);
+  }
+
+  @Post('calendar/templates')
+  @RequirePermissions('governance_operations.create')
+  createTemplate(@Body() dto: CreateComplianceCalendarTemplateDto, @CurrentUser() user: AuthUser) {
+    return this.service.createTemplate(dto, user.email);
+  }
+
+  @Patch('calendar/templates/:id')
+  @RequirePermissions('governance_operations.edit')
+  updateTemplate(@Param('id') id: string, @Body() dto: UpdateComplianceCalendarTemplateDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateTemplate(id, dto, user.email);
+  }
+
+  @Post('holidays')
+  @RequirePermissions('governance_operations.create')
+  createHoliday(@Body() dto: CreateKsaHolidayDto, @CurrentUser() user: AuthUser) {
+    return this.service.createHoliday(dto, user.email);
+  }
+
+  @Patch('notifications/:id/read')
+  @RequirePermissions('governance_operations.view')
+  readNotification(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.readNotification(id, user);
+  }
+
+  @Patch('escalations/:id')
+  @RequirePermissions('governance_operations.edit')
+  updateEscalation(@Param('id') id: string, @Body() dto: UpdateEscalationDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateEscalation(id, dto, user);
+  }
+}

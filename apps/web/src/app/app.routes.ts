@@ -93,6 +93,36 @@ export const routes: Routes = [
           import('./pages/governance/ndi/ndi-gaps').then((m) => m.NdiGapsPage),
       },
       {
+        path: 'governance/ndi/audit-packs',
+        canActivate: [permissionGuard('ndi_audit_packs.view')],
+        loadComponent: () =>
+          import('./pages/governance/audit-packs/audit-packs').then((m) => m.AuditPacksPage),
+      },
+      {
+        path: 'governance/extended-domains',
+        canActivate: [permissionGuard('extended_domains.view')],
+        loadComponent: () =>
+          import('./pages/governance/extended-domains/extended-domains').then(
+            (m) => m.ExtendedDomainsPage,
+          ),
+      },
+      {
+        path: 'governance/business-value',
+        canActivate: [permissionGuard('business_value.view')],
+        loadComponent: () =>
+          import('./pages/governance/business-value/business-value').then(
+            (m) => m.BusinessValuePage,
+          ),
+      },
+      {
+        path: 'governance/operations',
+        canActivate: [permissionGuard('governance_operations.view')],
+        loadComponent: () =>
+          import('./pages/governance/governance-operations/governance-operations').then(
+            (m) => m.GovernanceOperationsPage,
+          ),
+      },
+      {
         path: 'governance/ndi/specifications',
         canActivate: [permissionGuard('ndi_specifications.view')],
         loadComponent: () =>
@@ -135,6 +165,42 @@ export const routes: Routes = [
         canActivate: [permissionGuard('open_data_candidates.view')],
         loadComponent: () =>
           import('./pages/governance/open-data/open-data').then((m) => m.OpenDataPage),
+      },
+      {
+        path: 'governance/foi',
+        canActivate: [permissionGuard('foi_requests.view')],
+        loadComponent: () => import('./pages/governance/foi/foi').then((m) => m.FoiPage),
+      },
+      {
+        path: 'governance/foi/:id',
+        canActivate: [permissionGuard('foi_requests.view')],
+        loadComponent: () => import('./pages/governance/foi/foi').then((m) => m.FoiPage),
+      },
+      {
+        path: 'governance/privacy',
+        canActivate: [permissionGuard('privacy_operations.view')],
+        loadComponent: () =>
+          import('./pages/governance/privacy/privacy').then((m) => m.PrivacyOperationsPage),
+      },
+      {
+        path: 'governance/data-sharing',
+        canActivate: [permissionGuard('data_sharing_requests.view')],
+        loadComponent: () =>
+          import('./pages/governance/data-sharing/data-sharing').then((m) => m.DataSharingPage),
+      },
+      {
+        path: 'governance/transparency',
+        canActivate: [permissionGuard('dashboard.view')],
+        loadComponent: () =>
+          import('./pages/governance/transparency-cockpit/transparency-cockpit').then(
+            (m) => m.TransparencyCockpitPage,
+          ),
+      },
+      {
+        path: 'governance/reports',
+        canActivate: [permissionGuard('dashboard.view')],
+        loadComponent: () =>
+          import('./pages/governance/reports/reports').then((m) => m.ReportsPage),
       },
       {
         path: 'admin',

@@ -25,6 +25,70 @@ interface AssetRef extends Ref {
 
 interface DqScoreRef { id: string; score: number; measuredAt: string; source: string; }
 
+interface OpenDataAssessment {
+  id: string;
+  status: string;
+  publicClassification: boolean;
+  restrictedInformation: boolean;
+  aggregationApplied: boolean;
+  anonymizationApplied: boolean;
+  dqAcceptable: boolean;
+  metadataComplete: boolean;
+  privacyReviewComplete: boolean;
+  legalReviewComplete: boolean;
+  readinessScore: number;
+  riskScore: number;
+  resultSignal: string;
+  blockersJson?: string[] | null;
+  reviewItemsJson?: string[] | null;
+  note?: string | null;
+  assessedBy: string;
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+interface OpenDataApproval {
+  id: string;
+  step: string;
+  decision: string;
+  decidedBy?: string | null;
+  decidedAt?: string | null;
+  note?: string | null;
+  workflowCaseId?: string | null;
+  workflowTaskId?: string | null;
+  workflowCase?: { id: string; code: string; status: string } | null;
+}
+
+interface OpenDataPublication {
+  id: string;
+  portalRecordId?: string | null;
+  portalUrl?: string | null;
+  format: string;
+  syncStatus: string;
+  publishedAt: string;
+  nextReviewAt?: string | null;
+  publishedBy: string;
+  note?: string | null;
+}
+
+interface OpenDataReview {
+  id: string;
+  reviewDate: string;
+  decision: string;
+  reviewer: string;
+  note?: string | null;
+  nextReviewAt?: string | null;
+}
+
+interface OpenDataUsageMetric {
+  id: string;
+  metricDate: string;
+  downloads: number;
+  apiCalls: number;
+  uniqueUsers: number;
+  source: string;
+}
+
 interface OpenDataCandidate {
   id: string;
   code: string;
@@ -57,6 +121,11 @@ interface OpenDataCandidate {
   ownerPerson?: PersonRef | null;
   stewardPerson?: PersonRef | null;
   odiaoReviewerPerson?: PersonRef | null;
+  assessments?: OpenDataAssessment[];
+  approvals?: OpenDataApproval[];
+  publications?: OpenDataPublication[];
+  reviews?: OpenDataReview[];
+  usageMetrics?: OpenDataUsageMetric[];
 }
 
 interface OpenDataSummary {
@@ -67,6 +136,10 @@ interface OpenDataSummary {
   published: number;
   rejected: number;
   overdueReview: number;
+  pendingApprovals: number;
+  downloads: number;
+  apiCalls: number;
+  uniqueUsers: number;
   avgEligibility: number;
 }
 
@@ -95,10 +168,44 @@ interface CandidateDraft {
   nextReviewAt: string;
 }
 
+interface AssessmentDraft {
+  publicClassification: boolean;
+  restrictedInformation: boolean;
+  aggregationApplied: boolean;
+  anonymizationApplied: boolean;
+  dqAcceptable: boolean;
+  metadataComplete: boolean;
+  privacyReviewComplete: boolean;
+  legalReviewComplete: boolean;
+  note: string;
+}
+
+interface PublicationDraft {
+  portalUrl: string;
+  portalRecordId: string;
+  note: string;
+  nextReviewAt: string;
+}
+
+interface ReviewDraft {
+  decision: string;
+  note: string;
+  nextReviewAt: string;
+}
+
+interface UsageDraft {
+  metricDate: string;
+  downloads: number;
+  apiCalls: number;
+  uniqueUsers: number;
+  source: string;
+}
+
 const STATUSES = ['draft', 'assessment', 'under_review', 'approved', 'published', 'rejected', 'retired'];
 const FREQUENCIES = ['one_time', 'daily', 'weekly', 'monthly', 'quarterly', 'semiannual', 'annual', 'on_demand'];
 const FORMATS = ['csv', 'json', 'xlsx', 'api', 'geojson', 'pdf', 'other'];
 const PERSONAL_ASSESSMENTS = ['none', 'aggregated', 'personal_data', 'sensitive_personal_data', 'unknown'];
+const REVIEW_DECISIONS = ['continue_publication', 'update_required', 'retire', 'reassess'];
 
 @Component({
   selector: 'app-open-data',
@@ -131,11 +238,17 @@ export class OpenDataPage implements OnInit {
   protected readonly editingId = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly draft = signal<CandidateDraft>(this.emptyDraft());
+  protected readonly lifecycleSaving = signal(false);
+  protected readonly assessmentDraft = signal<AssessmentDraft>(this.emptyAssessmentDraft());
+  protected readonly publicationDraft = signal<PublicationDraft>(this.emptyPublicationDraft());
+  protected readonly reviewDraft = signal<ReviewDraft>(this.emptyReviewDraft());
+  protected readonly usageDraft = signal<UsageDraft>(this.emptyUsageDraft());
 
   protected readonly statuses = STATUSES;
   protected readonly frequencies = FREQUENCIES;
   protected readonly formats = FORMATS;
   protected readonly personalAssessments = PERSONAL_ASSESSMENTS;
+  protected readonly reviewDecisions = REVIEW_DECISIONS;
 
   protected readonly selected = computed(() =>
     this.candidates().find((candidate) => candidate.id === this.selectedId()) ?? this.candidates()[0] ?? null,
@@ -149,6 +262,10 @@ export class OpenDataPage implements OnInit {
 
   protected readonly publishedCandidates = computed(() =>
     this.candidates().filter((candidate) => candidate.status === 'published'),
+  );
+
+  protected readonly pendingApprovalCount = computed(() =>
+    this.selected()?.approvals?.filter((approval) => approval.decision === 'pending').length ?? 0,
   );
 
   ngOnInit(): void {
@@ -207,6 +324,32 @@ export class OpenDataPage implements OnInit {
     return 'danger';
   }
 
+  protected approvalKind(decision: string): StatusKind {
+    if (decision === 'approved') return 'success';
+    if (decision === 'rejected') return 'danger';
+    if (decision === 'needs_changes') return 'warning';
+    return 'muted';
+  }
+
+  protected latestAssessment(candidate: OpenDataCandidate): OpenDataAssessment | null {
+    return candidate.assessments?.[0] ?? null;
+  }
+
+  protected latestPublication(candidate: OpenDataCandidate): OpenDataPublication | null {
+    return candidate.publications?.[0] ?? null;
+  }
+
+  protected usageTotals(candidate: OpenDataCandidate): { downloads: number; apiCalls: number; uniqueUsers: number } {
+    return (candidate.usageMetrics ?? []).reduce(
+      (sum, row) => ({
+        downloads: sum.downloads + row.downloads,
+        apiCalls: sum.apiCalls + row.apiCalls,
+        uniqueUsers: sum.uniqueUsers + row.uniqueUsers,
+      }),
+      { downloads: 0, apiCalls: 0, uniqueUsers: 0 },
+    );
+  }
+
   protected setFilter(key: 'search' | 'status' | 'assetId', value: string): void {
     this.filters.update((f) => ({ ...f, [key]: value }));
     this.page.set(1);
@@ -248,6 +391,8 @@ export class OpenDataPage implements OnInit {
         if (!selectedId || !candidates.data.some((candidate) => candidate.id === selectedId)) {
           this.selectedId.set(candidates.data[0]?.id ?? null);
         }
+        const selected = candidates.data.find((candidate) => candidate.id === this.selectedId()) ?? candidates.data[0] ?? null;
+        if (selected) this.syncLifecycleDrafts(selected);
         this.state.set('ok');
       },
       error: () => this.state.set('error'),
@@ -272,6 +417,7 @@ export class OpenDataPage implements OnInit {
 
   protected select(candidate: OpenDataCandidate): void {
     this.selectedId.set(candidate.id);
+    this.syncLifecycleDrafts(candidate);
     void this.router.navigate(['/governance/open-data', candidate.id], { replaceUrl: true });
   }
 
@@ -371,6 +517,116 @@ export class OpenDataPage implements OnInit {
     });
   }
 
+  protected saveAssessment(candidate: OpenDataCandidate, complete: boolean): void {
+    if (this.lifecycleSaving()) return;
+    this.lifecycleSaving.set(true);
+    this.http.post<OpenDataCandidate>(`/api/open-data-candidates/${candidate.id}/assessment`, {
+      ...this.assessmentDraft(),
+      complete,
+      note: this.assessmentDraft().note.trim() || null,
+    }).subscribe({
+      next: (updated) => {
+        this.toast.success(complete ? this.t('openData.assessment.completed') : this.t('openData.assessment.saved'));
+        this.selectedId.set(updated.id);
+        this.lifecycleSaving.set(false);
+        this.load();
+      },
+      error: (err) => {
+        this.lifecycleSaving.set(false);
+        this.toast.error(err?.error?.message || this.t('openData.error'));
+      },
+    });
+  }
+
+  protected decideApproval(candidate: OpenDataCandidate, approval: OpenDataApproval, decision: string): void {
+    if (this.lifecycleSaving()) return;
+    this.lifecycleSaving.set(true);
+    this.http.patch<OpenDataCandidate>(`/api/open-data-candidates/${candidate.id}/approvals/${approval.id}`, {
+      decision,
+      note: approval.note ?? null,
+    }).subscribe({
+      next: (updated) => {
+        this.toast.success(this.t('openData.approval.updated'));
+        this.selectedId.set(updated.id);
+        this.lifecycleSaving.set(false);
+        this.load();
+      },
+      error: (err) => {
+        this.lifecycleSaving.set(false);
+        this.toast.error(err?.error?.message || this.t('openData.error'));
+      },
+    });
+  }
+
+  protected publishCandidate(candidate: OpenDataCandidate): void {
+    if (this.lifecycleSaving()) return;
+    this.lifecycleSaving.set(true);
+    const d = this.publicationDraft();
+    this.http.post<OpenDataCandidate>(`/api/open-data-candidates/${candidate.id}/publish`, {
+      portalUrl: d.portalUrl.trim() || null,
+      portalRecordId: d.portalRecordId.trim() || null,
+      note: d.note.trim() || null,
+      nextReviewAt: d.nextReviewAt || null,
+    }).subscribe({
+      next: (updated) => {
+        this.toast.success(this.t('openData.publication.published'));
+        this.selectedId.set(updated.id);
+        this.lifecycleSaving.set(false);
+        this.load();
+      },
+      error: (err) => {
+        this.lifecycleSaving.set(false);
+        this.toast.error(err?.error?.message || this.t('openData.error'));
+      },
+    });
+  }
+
+  protected createReview(candidate: OpenDataCandidate): void {
+    if (this.lifecycleSaving()) return;
+    const d = this.reviewDraft();
+    this.lifecycleSaving.set(true);
+    this.http.post<OpenDataCandidate>(`/api/open-data-candidates/${candidate.id}/reviews`, {
+      decision: d.decision,
+      note: d.note.trim() || null,
+      nextReviewAt: d.nextReviewAt || null,
+    }).subscribe({
+      next: (updated) => {
+        this.toast.success(this.t('openData.review.recorded'));
+        this.selectedId.set(updated.id);
+        this.lifecycleSaving.set(false);
+        this.load();
+      },
+      error: (err) => {
+        this.lifecycleSaving.set(false);
+        this.toast.error(err?.error?.message || this.t('openData.error'));
+      },
+    });
+  }
+
+  protected recordUsage(candidate: OpenDataCandidate): void {
+    if (this.lifecycleSaving()) return;
+    const d = this.usageDraft();
+    this.lifecycleSaving.set(true);
+    this.http.post<OpenDataCandidate>(`/api/open-data-candidates/${candidate.id}/usage`, {
+      metricDate: d.metricDate || null,
+      downloads: Number(d.downloads) || 0,
+      apiCalls: Number(d.apiCalls) || 0,
+      uniqueUsers: Number(d.uniqueUsers) || 0,
+      source: d.source.trim() || 'manual',
+    }).subscribe({
+      next: (updated) => {
+        this.toast.success(this.t('openData.usage.recorded'));
+        this.selectedId.set(updated.id);
+        this.lifecycleSaving.set(false);
+        this.load();
+      },
+      error: (err) => {
+        this.lifecycleSaving.set(false);
+        this.toast.error(err?.error?.message || this.t('openData.error'));
+      },
+    });
+  }
+
   protected async remove(candidate: OpenDataCandidate): Promise<void> {
     const ok = await this.confirm.ask('openData.delete.message');
     if (!ok) return;
@@ -388,8 +644,8 @@ export class OpenDataPage implements OnInit {
     const map: Record<string, string[]> = {
       draft: ['assessment', 'under_review', 'rejected'],
       assessment: ['under_review', 'rejected'],
-      under_review: ['approved', 'rejected', 'assessment'],
-      approved: ['published', 'under_review', 'retired'],
+      under_review: ['rejected', 'assessment'],
+      approved: ['under_review', 'retired'],
       published: ['under_review', 'retired'],
       rejected: ['draft', 'assessment'],
       retired: [],
@@ -414,5 +670,69 @@ export class OpenDataPage implements OnInit {
       decisionNote: '',
       nextReviewAt: '',
     };
+  }
+
+  private emptyAssessmentDraft(): AssessmentDraft {
+    return {
+      publicClassification: false,
+      restrictedInformation: false,
+      aggregationApplied: false,
+      anonymizationApplied: false,
+      dqAcceptable: false,
+      metadataComplete: false,
+      privacyReviewComplete: false,
+      legalReviewComplete: false,
+      note: '',
+    };
+  }
+
+  private emptyPublicationDraft(): PublicationDraft {
+    return { portalUrl: '', portalRecordId: '', note: '', nextReviewAt: '' };
+  }
+
+  private emptyReviewDraft(): ReviewDraft {
+    return { decision: 'continue_publication', note: '', nextReviewAt: '' };
+  }
+
+  private emptyUsageDraft(): UsageDraft {
+    const today = new Date().toISOString().slice(0, 10);
+    return { metricDate: today, downloads: 0, apiCalls: 0, uniqueUsers: 0, source: 'portal_mock' };
+  }
+
+  private syncLifecycleDrafts(candidate: OpenDataCandidate): void {
+    const assessment = this.latestAssessment(candidate);
+    this.assessmentDraft.set(assessment ? {
+      publicClassification: assessment.publicClassification,
+      restrictedInformation: assessment.restrictedInformation,
+      aggregationApplied: assessment.aggregationApplied,
+      anonymizationApplied: assessment.anonymizationApplied,
+      dqAcceptable: assessment.dqAcceptable,
+      metadataComplete: assessment.metadataComplete,
+      privacyReviewComplete: assessment.privacyReviewComplete,
+      legalReviewComplete: assessment.legalReviewComplete,
+      note: assessment.note ?? '',
+    } : {
+      publicClassification: (candidate.classification ?? candidate.asset.classification)?.rank === 1,
+      restrictedInformation: ((candidate.classification ?? candidate.asset.classification)?.rank ?? 1) >= 3,
+      aggregationApplied: ['none', 'aggregated'].includes(candidate.personalDataAssessment),
+      anonymizationApplied: ['none', 'aggregated'].includes(candidate.personalDataAssessment),
+      dqAcceptable: candidate.dataQualitySignal === 'ready',
+      metadataComplete: !!candidate.titleEn && !!candidate.titleAr && !!candidate.description,
+      privacyReviewComplete: candidate.personalDataSignal === 'ready',
+      legalReviewComplete: candidate.classificationSignal === 'ready',
+      note: candidate.decisionNote ?? '',
+    });
+    this.publicationDraft.set({
+      portalUrl: candidate.portalUrl ?? this.latestPublication(candidate)?.portalUrl ?? '',
+      portalRecordId: this.latestPublication(candidate)?.portalRecordId ?? '',
+      note: this.latestPublication(candidate)?.note ?? '',
+      nextReviewAt: candidate.nextReviewAt ? candidate.nextReviewAt.slice(0, 10) : '',
+    });
+    this.reviewDraft.set({
+      decision: 'continue_publication',
+      note: candidate.reviews?.[0]?.note ?? '',
+      nextReviewAt: candidate.nextReviewAt ? candidate.nextReviewAt.slice(0, 10) : '',
+    });
+    this.usageDraft.set(this.emptyUsageDraft());
   }
 }

@@ -178,6 +178,53 @@ test('update rejects closing through the generic issue patch endpoint', async ()
   );
 });
 
+test('close delegates linked workflow closure to the workflow engine', async () => {
+  let progressInput: any;
+  let progressClient: any;
+  const tx = {
+    dataQualityIssue: {
+      update: async ({ data }: any) => ({ id: 'dq-1', ...data }),
+    },
+    dataQualityIssueEvidence: { create: async () => ({}) },
+    dataQualitySlaBreach: { updateMany: async () => ({ count: 0 }) },
+    auditLog: { create: async () => ({}) },
+  };
+  const service = new DataQualityService(
+    {
+      dataQualityIssue: {
+        findFirst: async () => ({
+          id: 'dq-1',
+          status: 'in_progress',
+          assetId: null,
+          workflowCaseId: 'case-1',
+          workflowCase: { id: 'case-1', status: 'submitted' },
+          detectedAt: new Date(),
+          evidence: [],
+        }),
+      },
+      $transaction: async (callback: any) => callback(tx),
+    } as never,
+    {} as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+    {
+      recordDomainCaseProgress: async (input: any, client: any) => {
+        progressInput = input;
+        progressClient = client;
+      },
+    } as never,
+  );
+
+  await service.close('dq-1', ['system_admin'], { resolutionSummary: 'Issue fixed.' } as never, 'actor@dgop.local');
+
+  assert.strictEqual(progressInput.caseId, 'case-1');
+  assert.strictEqual(progressInput.targetStatus, 'closed');
+  assert.strictEqual(progressInput.completeOpenTasks, true);
+  assert.strictEqual(progressInput.eventAction, 'data_quality_issue.closed');
+  assert.strictEqual(progressClient, tx);
+});
+
 test('transitionRule prevents creators from approving their own rule', async () => {
   const service = new DataQualityService(
     {

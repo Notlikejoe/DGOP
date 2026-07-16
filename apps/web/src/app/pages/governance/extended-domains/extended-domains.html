@@ -1,0 +1,132 @@
+<section class="page extended-page">
+  <header class="page__header hero">
+    <div>
+      <span class="eyebrow">{{ t('extended.eyebrow') }}</span>
+      <h1>{{ t('extended.title') }}</h1>
+      <p class="page__subtitle">{{ t('extended.subtitle') }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--ghost" (click)="loadWorkspace()">
+      <app-icon name="refresh" />
+      {{ t('roles.refresh') }}
+    </button>
+  </header>
+
+  @if (state() === 'loading') {
+    <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
+  } @else if (state() === 'error') {
+    <section class="ds-card"><p class="error">{{ t('extended.error') }}</p></section>
+  } @else if (workspace(); as w) {
+    <section class="kpi-grid">
+      <div class="metric"><span>MCM</span><strong>{{ w.summary.mdmCandidates }}</strong><small>{{ w.summary.highConfidenceMatches }} {{ t('extended.highConfidence') }}</small></div>
+      <div class="metric"><span>RMD</span><strong>{{ w.summary.referenceVersions }}</strong><small>{{ w.summary.referencePending }} {{ t('extended.pending') }}</small></div>
+      <div class="metric"><span>Metadata</span><strong>{{ w.summary.certifications }}</strong><small>{{ w.summary.certifiedAssets }} {{ t('extended.certified') }}</small></div>
+      <div class="metric"><span>DAM</span><strong>{{ w.summary.architectureReviews }}</strong><small>{{ w.summary.architecturePending }} {{ t('extended.pending') }}</small></div>
+    </section>
+
+    <div class="lane-grid">
+      <section class="ds-card lane">
+        <div class="panel-head">
+          <div><span class="eyebrow">MCM</span><h2>{{ t('extended.mdm') }}</h2></div>
+          <app-status-chip kind="info" [label]="w.mdmMatches.length + ''" />
+        </div>
+        <div class="form-grid">
+          <select [(ngModel)]="matchForm.sourceAssetId"><option value="">{{ t('extended.sourceAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
+          <select [(ngModel)]="matchForm.candidateAssetId"><option value="">{{ t('extended.candidateAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
+          <input type="number" min="0" max="100" [(ngModel)]="matchForm.matchScore" />
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createMatch()" [disabled]="saving()">{{ t('extended.addMatch') }}</button>
+        </div>
+        <div class="rows">
+          @for (row of w.mdmMatches; track row.id) {
+            <article class="row-card">
+              <div>
+                <strong>{{ row.code }} · {{ row.matchScore }}%</strong>
+                <span>{{ row.sourceAsset?.code }} → {{ row.candidateAsset?.code }}</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <div class="actions">
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="resolveMatch(row, 'merged')">{{ t('extended.merge') }}</button>
+                <button class="ds-btn ds-btn--ghost btn-sm danger" type="button" (click)="resolveMatch(row, 'rejected')">{{ t('extended.reject') }}</button>
+              </div>
+            </article>
+          } @empty { <p class="empty">{{ t('extended.empty') }}</p> }
+        </div>
+      </section>
+
+      <section class="ds-card lane">
+        <div class="panel-head">
+          <div><span class="eyebrow">RMD</span><h2>{{ t('extended.reference') }}</h2></div>
+          <app-status-chip kind="info" [label]="w.referenceVersions.length + ''" />
+        </div>
+        <div class="form-grid">
+          <input [placeholder]="t('extended.code')" [(ngModel)]="referenceForm.code" />
+          <input [placeholder]="t('extended.name')" [(ngModel)]="referenceForm.name" />
+          <input [placeholder]="t('extended.version')" [(ngModel)]="referenceForm.version" />
+          <select [(ngModel)]="referenceForm.domainId"><option value="">{{ t('extended.domain') }}</option>@for (domain of domains(); track domain.id) { <option [value]="domain.id">{{ domain.code }} - {{ domain.nameEn }}</option> }</select>
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createReference()" [disabled]="saving()">{{ t('extended.addVersion') }}</button>
+        </div>
+        <div class="rows">
+          @for (row of w.referenceVersions; track row.id) {
+            <article class="row-card">
+              <div><strong>{{ row.code }} · {{ row.version }}</strong><span>{{ row.name }}</span></div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <div class="actions">
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideReference(row, 'approve')">{{ t('extended.approve') }}</button>
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideReference(row, 'activate')">{{ t('extended.activate') }}</button>
+              </div>
+            </article>
+          } @empty { <p class="empty">{{ t('extended.empty') }}</p> }
+        </div>
+      </section>
+
+      <section class="ds-card lane">
+        <div class="panel-head">
+          <div><span class="eyebrow">Metadata</span><h2>{{ t('extended.certification') }}</h2></div>
+          <app-status-chip kind="info" [label]="w.certifications.length + ''" />
+        </div>
+        <div class="form-grid">
+          <select [(ngModel)]="certForm.assetId"><option value="">{{ t('extended.asset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
+          <input type="number" min="0" max="100" [(ngModel)]="certForm.qualityScore" />
+          <input type="number" min="0" max="100" [(ngModel)]="certForm.completenessScore" />
+          <label><input type="checkbox" [(ngModel)]="certForm.ownerConfirmed" /> {{ t('extended.ownerConfirmed') }}</label>
+          <label><input type="checkbox" [(ngModel)]="certForm.glossaryAligned" /> {{ t('extended.glossaryAligned') }}</label>
+          <label><input type="checkbox" [(ngModel)]="certForm.lineageReviewed" /> {{ t('extended.lineageReviewed') }}</label>
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createCertification()" [disabled]="saving()">{{ t('extended.startCertification') }}</button>
+        </div>
+        <div class="rows">
+          @for (row of w.certifications; track row.id) {
+            <article class="row-card">
+              <div><strong>{{ row.code }}</strong><span>{{ row.asset?.code }} · Q{{ row.qualityScore }} / C{{ row.completenessScore }}</span></div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="certify(row)">{{ t('extended.certify') }}</button>
+            </article>
+          } @empty { <p class="empty">{{ t('extended.empty') }}</p> }
+        </div>
+      </section>
+
+      <section class="ds-card lane">
+        <div class="panel-head">
+          <div><span class="eyebrow">DAM</span><h2>{{ t('extended.architecture') }}</h2></div>
+          <app-status-chip kind="info" [label]="w.architectureReviews.length + ''" />
+        </div>
+        <div class="form-grid">
+          <select [(ngModel)]="archForm.assetId"><option value="">{{ t('extended.asset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
+          <input [placeholder]="t('extended.reviewTitle')" [(ngModel)]="archForm.title" />
+          <select [(ngModel)]="archForm.riskLevel"><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="critical">critical</option></select>
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createArchitectureReview()" [disabled]="saving()">{{ t('extended.addReview') }}</button>
+        </div>
+        <div class="rows">
+          @for (row of w.architectureReviews; track row.id) {
+            <article class="row-card">
+              <div><strong>{{ row.code }} · {{ row.title }}</strong><span>{{ row.asset?.code }} · {{ row.riskLevel }}</span></div>
+              <app-status-chip [kind]="statusKind(row.decision)" [label]="row.decision" />
+              <div class="actions">
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideArchitecture(row, 'approved')">{{ t('extended.approve') }}</button>
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideArchitecture(row, 'needs_changes')">{{ t('extended.needsChanges') }}</button>
+              </div>
+            </article>
+          } @empty { <p class="empty">{{ t('extended.empty') }}</p> }
+        </div>
+      </section>
+    </div>
+  }
+</section>

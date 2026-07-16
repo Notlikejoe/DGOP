@@ -1,0 +1,311 @@
+<section class="page privacy-page">
+  <header class="page__header privacy-hero">
+    <div>
+      <span class="eyebrow">{{ t('privacy.eyebrow') }}</span>
+      <h1>{{ t('privacy.title') }}</h1>
+      <p class="page__subtitle">{{ t('privacy.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate(activeTab())"><app-icon name="plus" />{{ t('privacy.new') }}</button>
+      }
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <section class="privacy-kpis" [attr.aria-label]="t('privacy.metrics')">
+      <article class="kpi kpi--hero"><span>{{ t('privacy.metric.dpias') }}</span><strong>{{ s.dpias }}</strong><small>{{ s.dpiaUnderReview }} {{ t('privacy.metric.inReview') }}</small></article>
+      <article class="kpi"><span>{{ t('privacy.metric.highRisk') }}</span><strong>{{ s.highRiskDpias }}</strong><small>{{ t('privacy.metric.highRiskHelp') }}</small></article>
+      <article class="kpi"><span>{{ t('privacy.metric.dsrOpen') }}</span><strong>{{ s.dsrOpen }}</strong><small>{{ s.dsrOverdue }} {{ t('privacy.metric.overdue') }}</small></article>
+      <article class="kpi"><span>{{ t('privacy.metric.breaches') }}</span><strong>{{ s.breachesOpen }}</strong><small>{{ s.breachNotificationRisk }} {{ t('privacy.metric.notifyRisk') }}</small></article>
+      <article class="kpi"><span>{{ t('privacy.metric.ropa') }}</span><strong>{{ s.ropaDue }}</strong><small>{{ s.retentionDue }} {{ t('privacy.metric.retentionDue') }}</small></article>
+    </section>
+  }
+
+  <section class="ds-card privacy-filters">
+    <div>
+      <span class="eyebrow">{{ t('privacy.workbench') }}</span>
+      <div class="tab-strip" role="tablist" [attr.aria-label]="t('privacy.tabs')">
+        @for (tab of tabs(); track tab) {
+          <button type="button" class="tab-button" [class.tab-button--active]="activeTab() === tab" (click)="setTab(tab)">
+            {{ t('privacy.tab.' + tab) }}
+          </button>
+        }
+      </div>
+    </div>
+    <input type="search" [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" [placeholder]="t('privacy.search')" [attr.aria-label]="t('privacy.search')" />
+    <select [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('privacy.field.status')">
+      <option value="">{{ t('privacy.allStatuses') }}</option>
+      @for (option of statusOptions(); track option) {
+        <option [value]="option">{{ statusLabel('privacy.status', option) }}</option>
+      }
+    </select>
+  </section>
+
+  @if (state() === 'loading') {
+    <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
+  } @else if (state() === 'error') {
+    <section class="ds-card"><p class="error">{{ t('privacy.error.load') }}</p></section>
+  } @else {
+    <div class="privacy-workspace">
+      <section class="ds-card queue-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('privacy.queue.eyebrow') }}</span>
+            <h2>{{ t('privacy.queue.' + activeTab()) }}</h2>
+            <p>{{ total() }} {{ t('assets.records') }}</p>
+          </div>
+        </div>
+
+        <div class="queue-list">
+          @if (activeTab() === 'dpia') {
+            @for (dpia of dpias(); track dpia.id) {
+              <button type="button" class="queue-row" [class.queue-row--active]="selectedDpia()?.id === dpia.id" (click)="select(dpia.id)">
+                <span class="risk-tile risk-tile--{{ dpia.riskLevel }}">{{ dpia.residualRiskScore }}</span>
+                <span class="queue-row__main">
+                  <strong>{{ dpia.title }}</strong>
+                  <small>{{ dpia.code }} · {{ name(dpia.asset) }}</small>
+                  <small>{{ t('privacy.due') }} {{ dpia.dueAt | date: 'mediumDate' }}</small>
+                </span>
+                <span class="queue-row__chips">
+                  <app-status-chip [kind]="riskKind(dpia.riskLevel)" [label]="statusLabel('privacy.risk', dpia.riskLevel)" />
+                  <app-status-chip [kind]="statusKind(dpia.status)" [label]="statusLabel('privacy.status', dpia.status)" />
+                </span>
+              </button>
+            } @empty {
+              <div class="empty">{{ t('privacy.empty') }}</div>
+            }
+          }
+
+          @if (activeTab() === 'dsr') {
+            @for (dsr of dsrs(); track dsr.id) {
+              <button type="button" class="queue-row" [class.queue-row--active]="selectedDsr()?.id === dsr.id" (click)="select(dsr.id)">
+                <span class="risk-tile risk-tile--{{ dsr.slaStatus || 'on_track' }}">{{ daysUntil(dsr.dueAt) ?? '-' }}d</span>
+                <span class="queue-row__main">
+                  <strong>{{ dsr.requesterName }}</strong>
+                  <small>{{ dsr.requestNumber }} · {{ statusLabel('privacy.requestType', dsr.requestType) }}</small>
+                  <small>{{ dsr.description }}</small>
+                </span>
+                <span class="queue-row__chips">
+                  <app-status-chip [kind]="statusKind(dsr.slaStatus)" [label]="statusLabel('privacy.sla', dsr.slaStatus)" />
+                  <app-status-chip [kind]="statusKind(dsr.status)" [label]="statusLabel('privacy.status', dsr.status)" />
+                </span>
+              </button>
+            } @empty {
+              <div class="empty">{{ t('privacy.empty') }}</div>
+            }
+          }
+
+          @if (activeTab() === 'breach') {
+            @for (breach of breaches(); track breach.id) {
+              <button type="button" class="queue-row" [class.queue-row--active]="selectedBreach()?.id === breach.id" (click)="select(breach.id)">
+                <span class="risk-tile risk-tile--{{ breach.severity }}">{{ statusLabel('privacy.severityShort', breach.severity) }}</span>
+                <span class="queue-row__main">
+                  <strong>{{ breach.title }}</strong>
+                  <small>{{ breach.code }} · {{ name(breach.asset) }}</small>
+                  <small>{{ t('privacy.notifyBy') }} {{ breach.notificationDueAt | date: 'short' }}</small>
+                </span>
+                <span class="queue-row__chips">
+                  <app-status-chip [kind]="riskKind(breach.notificationStatus)" [label]="statusLabel('privacy.notification', breach.notificationStatus)" />
+                  <app-status-chip [kind]="statusKind(breach.status)" [label]="statusLabel('privacy.status', breach.status)" />
+                </span>
+              </button>
+            } @empty {
+              <div class="empty">{{ t('privacy.empty') }}</div>
+            }
+          }
+        </div>
+        <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" [pageSize]="pageSize()" (pageChange)="goToPage($event)" />
+      </section>
+
+      <section class="ds-card detail-panel">
+        <div class="detail-head">
+          <div>
+            <span class="eyebrow">{{ t('privacy.detail.eyebrow') }}</span>
+            <h2>{{ selectedTitle() }}</h2>
+            <p>{{ t('privacy.detail.help') }}</p>
+          </div>
+        </div>
+
+        @if (activeTab() === 'dpia' && selectedDpia(); as dpia) {
+          <div class="signal-strip">
+            <div><span>{{ t('privacy.field.asset') }}</span><strong>{{ name(dpia.asset) }}</strong></div>
+            <div><span>{{ t('privacy.field.legalBasis') }}</span><strong>{{ name(dpia.legalBasis) }}</strong></div>
+            <div><span>{{ t('privacy.field.workflow') }}</span><strong>{{ dpia.workflowCase?.code || t('privacy.noWorkflow') }}</strong></div>
+            <div><span>{{ t('privacy.field.crossBorder') }}</span><strong>{{ dpia.crossBorderTransfer ? t('common.yes') : t('common.no') }}</strong></div>
+          </div>
+          <div class="gate-map">
+            @for (gate of dpia.gates; track gate.id) {
+              <article class="gate-node gate-node--{{ gate.status }}">
+                <strong>{{ statusLabel('privacy.gate', gate.phase) }}</strong>
+                <app-status-chip [kind]="statusKind(gate.status)" [label]="statusLabel('privacy.gateStatus', gate.status)" />
+                <small>{{ name(gate.reviewerPerson) }} · {{ gate.dueAt | date: 'mediumDate' }}</small>
+              </article>
+            }
+          </div>
+          @if (canEdit) {
+            <div class="action-box">
+              <h3>{{ t('privacy.gateAction') }}</h3>
+              <div class="form-grid">
+                <select [ngModel]="gateDraft().phase" (ngModelChange)="patchGate('phase', $event)">
+                  @for (phase of gatePhases(); track phase) { <option [value]="phase">{{ statusLabel('privacy.gate', phase) }}</option> }
+                </select>
+                <select [ngModel]="gateDraft().status" (ngModelChange)="patchGate('status', $event)">
+                  @for (status of gateStatuses(); track status) { <option [value]="status">{{ statusLabel('privacy.gateStatus', status) }}</option> }
+                </select>
+                <select [ngModel]="gateDraft().reviewerPersonId" (ngModelChange)="patchGate('reviewerPersonId', $event)">
+                  <option value="">{{ t('privacy.unassigned') }}</option>
+                  @for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }
+                </select>
+                <input type="text" [ngModel]="gateDraft().note" (ngModelChange)="patchGate('note', $event)" [placeholder]="t('privacy.field.note')" />
+              </div>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveGate(dpia)">{{ t('privacy.saveGate') }}</button>
+            </div>
+          }
+        }
+
+        @if (activeTab() === 'dsr' && selectedDsr(); as dsr) {
+          <div class="signal-strip">
+            <div><span>{{ t('privacy.field.requester') }}</span><strong>{{ dsr.requesterName }}</strong><small>{{ dsr.requesterEmail || t('privacy.noEmail') }}</small></div>
+            <div><span>{{ t('privacy.field.identity') }}</span><strong>{{ dsr.identityValidated ? t('common.yes') : t('common.no') }}</strong></div>
+            <div><span>{{ t('privacy.field.asset') }}</span><strong>{{ name(dsr.asset) }}</strong></div>
+            <div><span>{{ t('privacy.field.assignee') }}</span><strong>{{ name(dsr.assignedPerson) }}</strong></div>
+          </div>
+          <p class="detail-copy">{{ dsr.description }}</p>
+          @if (canEdit) {
+            <div class="action-box">
+              <h3>{{ t('privacy.dsrAction') }}</h3>
+              <div class="form-grid">
+                <select [ngModel]="dsrDraftUpdate().status" (ngModelChange)="patchDsrUpdate('status', $event)">
+                  @for (status of dsrStatuses(); track status) { <option [value]="status">{{ statusLabel('privacy.status', status) }}</option> }
+                </select>
+                <select [ngModel]="dsrDraftUpdate().assignedPersonId" (ngModelChange)="patchDsrUpdate('assignedPersonId', $event)">
+                  <option value="">{{ t('privacy.unassigned') }}</option>
+                  @for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }
+                </select>
+                <label class="check"><input type="checkbox" [ngModel]="dsrDraftUpdate().identityValidated" (ngModelChange)="patchDsrUpdate('identityValidated', $event)" />{{ t('privacy.field.identity') }}</label>
+                <textarea rows="2" [ngModel]="dsrDraftUpdate().decisionSummary" (ngModelChange)="patchDsrUpdate('decisionSummary', $event)" [placeholder]="t('privacy.field.decision')"></textarea>
+              </div>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="updateDsr(dsr)">{{ t('privacy.saveDecision') }}</button>
+            </div>
+          }
+        }
+
+        @if (activeTab() === 'breach' && selectedBreach(); as breach) {
+          <div class="signal-strip">
+            <div><span>{{ t('privacy.field.severity') }}</span><strong>{{ statusLabel('privacy.risk', breach.severity) }}</strong></div>
+            <div><span>{{ t('privacy.field.detected') }}</span><strong>{{ breach.detectedAt | date: 'short' }}</strong></div>
+            <div><span>{{ t('privacy.field.notificationDue') }}</span><strong>{{ breach.notificationDueAt | date: 'short' }}</strong></div>
+            <div><span>{{ t('privacy.field.workflow') }}</span><strong>{{ breach.workflowCase?.code || t('privacy.noWorkflow') }}</strong></div>
+          </div>
+          <p class="detail-copy">{{ breach.description || t('privacy.noDescription') }}</p>
+          @if (canEdit) {
+            <div class="action-box">
+              <h3>{{ t('privacy.breachAction') }}</h3>
+              <div class="form-grid">
+                <select [ngModel]="breachDraftUpdate().status" (ngModelChange)="patchBreachUpdate('status', $event)">
+                  @for (status of breachStatuses(); track status) { <option [value]="status">{{ statusLabel('privacy.status', status) }}</option> }
+                </select>
+                <select [ngModel]="breachDraftUpdate().severity" (ngModelChange)="patchBreachUpdate('severity', $event)">
+                  @for (severity of breachSeverities(); track severity) { <option [value]="severity">{{ statusLabel('privacy.risk', severity) }}</option> }
+                </select>
+                <input type="datetime-local" [ngModel]="breachDraftUpdate().containedAt" (ngModelChange)="patchBreachUpdate('containedAt', $event)" />
+                <input type="datetime-local" [ngModel]="breachDraftUpdate().notifiedAt" (ngModelChange)="patchBreachUpdate('notifiedAt', $event)" />
+                <label class="check"><input type="checkbox" [ngModel]="breachDraftUpdate().regulatorNotified" (ngModelChange)="patchBreachUpdate('regulatorNotified', $event)" />{{ t('privacy.field.regulator') }}</label>
+                <label class="check"><input type="checkbox" [ngModel]="breachDraftUpdate().subjectNotified" (ngModelChange)="patchBreachUpdate('subjectNotified', $event)" />{{ t('privacy.field.subjects') }}</label>
+              </div>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="updateBreach(breach)">{{ t('privacy.saveBreach') }}</button>
+            </div>
+          }
+        }
+      </section>
+    </div>
+
+    <section class="lower-grid">
+      <article class="ds-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('privacy.ropa.eyebrow') }}</span>
+            <h2>{{ t('privacy.ropa.title') }}</h2>
+            <p>{{ t('privacy.ropa.help') }}</p>
+          </div>
+        </div>
+        <div class="mini-list">
+          @for (record of urgentRopa(); track record.id) {
+            <article>
+              <strong>{{ record.processName }}</strong>
+              <span>{{ name(record.asset || record.domain) }} · {{ name(record.legalBasis) }}</span>
+              <app-status-chip [kind]="statusKind(record.status)" [label]="statusLabel('privacy.status', record.status)" />
+            </article>
+          } @empty {
+            <p class="muted">{{ t('privacy.ropa.empty') }}</p>
+          }
+        </div>
+      </article>
+      <article class="ds-card evidence-panel">
+        <span class="eyebrow">{{ t('privacy.model.eyebrow') }}</span>
+        <h2>{{ t('privacy.model.title') }}</h2>
+        <div class="flow-line">
+          <span>{{ t('privacy.model.intake') }}</span>
+          <span>{{ t('privacy.model.assess') }}</span>
+          <span>{{ t('privacy.model.decide') }}</span>
+          <span>{{ t('privacy.model.evidence') }}</span>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (createMode(); as mode) {
+    <app-modal [title]="t('privacy.create.' + mode)" size="lg" (close)="closeModal()">
+      @if (mode === 'dpia') {
+        <div class="modal-grid">
+          <label class="wide">{{ t('privacy.field.title') }}<input type="text" [ngModel]="dpiaDraft().title" (ngModelChange)="patchDpia('title', $event)" /></label>
+          <label class="wide">{{ t('privacy.field.description') }}<textarea rows="3" [ngModel]="dpiaDraft().description" (ngModelChange)="patchDpia('description', $event)"></textarea></label>
+          <label>{{ t('privacy.field.asset') }}<select [ngModel]="dpiaDraft().assetId" (ngModelChange)="patchDpia('assetId', $event)"><option value="">{{ t('privacy.noAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ name(asset) }}</option> }</select></label>
+          <label>{{ t('privacy.field.legalBasis') }}<select [ngModel]="dpiaDraft().legalBasisId" (ngModelChange)="patchDpia('legalBasisId', $event)"><option value="">{{ t('privacy.noLegalBasis') }}</option>@for (basis of legalBases(); track basis.id) { <option [value]="basis.id">{{ name(basis) }}</option> }</select></label>
+          <label>{{ t('privacy.field.reviewer') }}<select [ngModel]="dpiaDraft().reviewerPersonId" (ngModelChange)="patchDpia('reviewerPersonId', $event)"><option value="">{{ t('privacy.unassigned') }}</option>@for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }</select></label>
+          <label>{{ t('privacy.field.due') }}<input type="date" [ngModel]="dpiaDraft().dueAt" (ngModelChange)="patchDpia('dueAt', $event)" /></label>
+          <label class="check wide"><input type="checkbox" [ngModel]="dpiaDraft().crossBorderTransfer" (ngModelChange)="patchDpia('crossBorderTransfer', $event)" />{{ t('privacy.field.crossBorder') }}</label>
+        </div>
+      }
+
+      @if (mode === 'dsr') {
+        <div class="modal-grid">
+          <label>{{ t('privacy.field.requester') }}<input type="text" [ngModel]="dsrDraft().requesterName" (ngModelChange)="patchDsr('requesterName', $event)" /></label>
+          <label>{{ t('privacy.field.email') }}<input type="email" [ngModel]="dsrDraft().requesterEmail" (ngModelChange)="patchDsr('requesterEmail', $event)" /></label>
+          <label>{{ t('privacy.field.requestType') }}<select [ngModel]="dsrDraft().requestType" (ngModelChange)="patchDsr('requestType', $event)">@for (type of requestTypes(); track type) { <option [value]="type">{{ statusLabel('privacy.requestType', type) }}</option> }</select></label>
+          <label>{{ t('privacy.field.asset') }}<select [ngModel]="dsrDraft().assetId" (ngModelChange)="patchDsr('assetId', $event)"><option value="">{{ t('privacy.noAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ name(asset) }}</option> }</select></label>
+          <label>{{ t('privacy.field.assignee') }}<select [ngModel]="dsrDraft().assignedPersonId" (ngModelChange)="patchDsr('assignedPersonId', $event)"><option value="">{{ t('privacy.unassigned') }}</option>@for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }</select></label>
+          <label>{{ t('privacy.field.due') }}<input type="date" [ngModel]="dsrDraft().dueAt" (ngModelChange)="patchDsr('dueAt', $event)" /></label>
+          <label class="wide">{{ t('privacy.field.description') }}<textarea rows="4" [ngModel]="dsrDraft().description" (ngModelChange)="patchDsr('description', $event)"></textarea></label>
+          <label class="check wide"><input type="checkbox" [ngModel]="dsrDraft().identityValidated" (ngModelChange)="patchDsr('identityValidated', $event)" />{{ t('privacy.field.identity') }}</label>
+        </div>
+      }
+
+      @if (mode === 'breach') {
+        <div class="modal-grid">
+          <label class="wide">{{ t('privacy.field.title') }}<input type="text" [ngModel]="breachDraft().title" (ngModelChange)="patchBreach('title', $event)" /></label>
+          <label class="wide">{{ t('privacy.field.description') }}<textarea rows="3" [ngModel]="breachDraft().description" (ngModelChange)="patchBreach('description', $event)"></textarea></label>
+          <label>{{ t('privacy.field.asset') }}<select [ngModel]="breachDraft().assetId" (ngModelChange)="patchBreach('assetId', $event)"><option value="">{{ t('privacy.noAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ name(asset) }}</option> }</select></label>
+          <label>{{ t('privacy.field.severity') }}<select [ngModel]="breachDraft().severity" (ngModelChange)="patchBreach('severity', $event)">@for (severity of breachSeverities(); track severity) { <option [value]="severity">{{ statusLabel('privacy.risk', severity) }}</option> }</select></label>
+          <label>{{ t('privacy.field.detected') }}<input type="datetime-local" [ngModel]="breachDraft().detectedAt" (ngModelChange)="patchBreach('detectedAt', $event)" /></label>
+          <label>{{ t('privacy.field.assignee') }}<select [ngModel]="breachDraft().assignedPersonId" (ngModelChange)="patchBreach('assignedPersonId', $event)"><option value="">{{ t('privacy.unassigned') }}</option>@for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }</select></label>
+        </div>
+      }
+
+      <ng-container footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModal()">{{ t('crud.cancel') }}</button>
+        @if (mode === 'dpia') {
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createDpia()">{{ t('crud.save') }}</button>
+        }
+        @if (mode === 'dsr') {
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createDsr()">{{ t('crud.save') }}</button>
+        }
+        @if (mode === 'breach') {
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createBreach()">{{ t('crud.save') }}</button>
+        }
+      </ng-container>
+    </app-modal>
+  }
+</section>

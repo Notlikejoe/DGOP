@@ -14,6 +14,11 @@ import { AuthUser } from '../auth/auth.types';
 import {
   CreateOpenDataCandidateFromAssetDto,
   CreateOpenDataCandidateDto,
+  CreateOpenDataReviewDto,
+  CreateOpenDataUsageMetricDto,
+  PublishOpenDataCandidateDto,
+  SaveOpenDataAssessmentDto,
+  UpdateOpenDataApprovalDto,
   UpdateOpenDataCandidateDto,
   UpdateOpenDataStatusDto,
 } from './open-data.dto';
@@ -89,6 +94,57 @@ export class OpenDataController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.updateStatus(user.roles, id, dto, user.email);
+  }
+
+  @Post(':id/assessment')
+  @RequirePermissions('open_data_candidates.edit')
+  saveAssessment(
+    @Param('id') id: string,
+    @Body() dto: SaveOpenDataAssessmentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.saveAssessment(user.roles, id, dto, user.email);
+  }
+
+  @Patch(':id/approvals/:approvalId')
+  @RequirePermissions('open_data_candidates.edit')
+  updateApproval(
+    @Param('id') id: string,
+    @Param('approvalId') approvalId: string,
+    @Body() dto: UpdateOpenDataApprovalDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.updateApproval(user.roles, id, approvalId, dto, user.email);
+  }
+
+  @Post(':id/publish')
+  @RequirePermissions('open_data_candidates.edit')
+  publish(
+    @Param('id') id: string,
+    @Body() dto: PublishOpenDataCandidateDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.publish(user.roles, id, dto, user.email);
+  }
+
+  @Post(':id/reviews')
+  @RequirePermissions('open_data_candidates.edit')
+  createReview(
+    @Param('id') id: string,
+    @Body() dto: CreateOpenDataReviewDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.createReview(user.roles, id, dto, user.email);
+  }
+
+  @Post(':id/usage')
+  @RequirePermissions('open_data_candidates.edit')
+  recordUsage(
+    @Param('id') id: string,
+    @Body() dto: CreateOpenDataUsageMetricDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.recordUsage(user.roles, id, dto, user.email);
   }
 
   @Delete(':id')

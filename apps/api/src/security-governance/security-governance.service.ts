@@ -3,6 +3,7 @@ import {
   AccessDecision,
   AccessReviewDecision,
   AccessReviewStatus,
+  CaseStatus,
   ClassificationRequestStatus,
   DlpIncidentStatus,
   MaskingTechnique,
@@ -12,6 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
+import { WorkflowService } from '../workflow/workflow.service';
 import {
   CreateAccessReviewDto,
   CreateClassificationChangeRequestDto,
@@ -104,6 +106,7 @@ export class SecurityGovernanceService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
+    private readonly workflow?: WorkflowService,
   ) {}
 
   private async visibleAssetIds(roleCodes: string[]): Promise<Set<string> | 'all'> {
@@ -258,6 +261,7 @@ export class SecurityGovernanceService {
 
   private async createSecurityWorkflow(
     client: PrismaWriter,
+    roleCodes: string[],
     actor: string,
     kind: 'dlp' | 'classification',
     target: { title: string; description?: string | null; assetId?: string | null; assigneePersonId?: string | null },
@@ -266,38 +270,22 @@ export class SecurityGovernanceService {
     const assignee = target.assigneePersonId
       ? await client.person.findUnique({ where: { id: target.assigneePersonId }, select: { userId: true, fullNameEn: true } })
       : null;
-    const wfCase = await client.workflowCase.create({
-      data: {
-        code,
+    if (!this.workflow) throw new BadRequestException('Workflow engine is unavailable');
+    const wfCase = await this.workflow.openRoutedCase(
+      {
+        roleCodes,
+        actor,
         title: target.title,
-        description: target.description ?? null,
+        description: target.description,
         type: kind === 'dlp' ? 'dlp_incident' : 'classification_change_request',
-        status: 'submitted',
-        assetId: target.assetId ?? null,
-        createdBy: actor,
+        status: CaseStatus.submitted,
+        assetId: target.assetId,
+        preferredCode: code,
+        initialAssigneeUserId: assignee?.userId ?? null,
+        initialTaskTitle: kind === 'dlp' ? 'Review and contain protection incident' : 'Review requested classification change',
       },
-    });
-    const task = await client.workflowTask.create({
-      data: {
-        caseId: wfCase.id,
-        title: kind === 'dlp' ? 'Review and contain protection incident' : 'Review requested classification change',
-        type: kind === 'dlp' ? 'security_review' : 'classification_review',
-        status: 'pending',
-        assigneeUserId: assignee?.userId ?? null,
-      },
-    });
-    await client.workflowEvent.createMany({
-      data: [
-        { caseId: wfCase.id, actor, action: 'case.created', toStatus: 'submitted' },
-        {
-          caseId: wfCase.id,
-          taskId: task.id,
-          actor,
-          action: 'task.assigned',
-          comment: assignee?.fullNameEn ?? 'No assignee selected yet',
-        },
-      ],
-    });
+      client as Prisma.TransactionClient,
+    );
     return wfCase.id;
   }
 
@@ -469,9 +457,30 @@ export class SecurityGovernanceService {
     });
     const row = existing
       ? await this.prisma.roleDataAccessMap.update({ where: { id: existing.id }, data, include: mappingInclude })
-      : await this.prisma.roleDataAccessMap.create({ data, include: mappingInclude });
+      : await this.createAccessMapWithRaceRecovery(dto.roleId, scopeKey, data);
     await this.audit.log({ actor, action: 'role_data_access_map.upsert', entityType: 'role_data_access_map', entityId: row.id, metadata: { role: role.code } });
     return row;
+  }
+
+  private async createAccessMapWithRaceRecovery(
+    roleId: string,
+    scopeKey: string,
+    data: Prisma.RoleDataAccessMapUncheckedCreateInput,
+  ) {
+    try {
+      return await this.prisma.roleDataAccessMap.create({ data, include: mappingInclude });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const existing = await this.prisma.roleDataAccessMap.findFirst({
+          where: { roleId, scopeKey, isActive: true },
+          select: { id: true },
+        });
+        if (existing) {
+          return this.prisma.roleDataAccessMap.update({ where: { id: existing.id }, data, include: mappingInclude });
+        }
+      }
+      throw error;
+    }
   }
 
   async createAccessReview(roleCodes: string[], dto: CreateAccessReviewDto, actor: string) {
@@ -571,7 +580,7 @@ export class SecurityGovernanceService {
           createdBy: actor,
         },
       });
-      const workflowCaseId = await this.createSecurityWorkflow(tx, actor, 'dlp', {
+      const workflowCaseId = await this.createSecurityWorkflow(tx, roleCodes, actor, 'dlp', {
         title: `Review DLP incident: ${created.title}`,
         description: created.description,
         assetId: created.assetId,
@@ -606,7 +615,7 @@ export class SecurityGovernanceService {
           requestedBy: actor,
         },
       });
-      const workflowCaseId = await this.createSecurityWorkflow(tx, actor, 'classification', {
+      const workflowCaseId = await this.createSecurityWorkflow(tx, roleCodes, actor, 'classification', {
         title: `Review classification change: ${asset.code}`,
         description: dto.reason,
         assetId: asset.id,

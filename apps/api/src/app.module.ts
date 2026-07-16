@@ -21,6 +21,16 @@ import { DataQualityModule } from './data-quality/data-quality.module';
 import { SecurityGovernanceModule } from './security-governance/security-governance.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { OpenDataModule } from './open-data/open-data.module';
+import { FoiModule } from './foi/foi.module';
+import { PrivacyModule } from './privacy/privacy.module';
+import { DataSharingModule } from './data-sharing/data-sharing.module';
+import { SearchModule } from './search/search.module';
+import { TransparencyModule } from './transparency/transparency.module';
+import { ReportsModule } from './reports/reports.module';
+import { AuditPacksModule } from './audit-packs/audit-packs.module';
+import { ExtendedDomainsModule } from './extended-domains/extended-domains.module';
+import { BusinessValueModule } from './business-value/business-value.module';
+import { GovernanceOperationsModule } from './governance-operations/governance-operations.module';
 import { AccessModule } from './access/access.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -55,6 +65,16 @@ import { PermissionsGuard } from './access/permissions.guard';
     SecurityGovernanceModule,
     IntegrationsModule,
     OpenDataModule,
+    FoiModule,
+    PrivacyModule,
+    DataSharingModule,
+    SearchModule,
+    TransparencyModule,
+    ReportsModule,
+    AuditPacksModule,
+    ExtendedDomainsModule,
+    BusinessValueModule,
+    GovernanceOperationsModule,
     HealthModule,
   ],
   providers: [

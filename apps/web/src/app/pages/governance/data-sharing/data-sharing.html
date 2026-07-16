@@ -1,0 +1,297 @@
+<section class="page dsi-page">
+  <header class="page__header dsi-hero">
+    <div>
+      <span class="eyebrow">{{ t('dsi.eyebrow') }}</span>
+      <h1>{{ t('dsi.title') }}</h1>
+      <p class="page__subtitle">{{ t('dsi.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
+      @if (activeTab() === 'requests' && canCreateRequest) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate('request')"><app-icon name="plus" />{{ t('dsi.newRequest') }}</button>
+      }
+      @if (activeTab() === 'agreements' && canCreateAgreement) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate('agreement')"><app-icon name="plus" />{{ t('dsi.newAgreement') }}</button>
+      }
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <section class="dsi-kpis" [attr.aria-label]="t('dsi.metrics')">
+      <article class="kpi kpi--hero"><span>{{ t('dsi.metric.requests') }}</span><strong>{{ s.totalRequests }}</strong><small>{{ s.underReview }} {{ t('dsi.metric.underReview') }}</small></article>
+      <article class="kpi"><span>{{ t('dsi.metric.highRisk') }}</span><strong>{{ s.highRisk }}</strong><small>{{ t('dsi.metric.highRiskHelp') }}</small></article>
+      <article class="kpi"><span>{{ t('dsi.metric.agreements') }}</span><strong>{{ s.activeAgreements }}</strong><small>{{ s.renewalDue }} {{ t('dsi.metric.renewals') }}</small></article>
+      <article class="kpi"><span>{{ t('dsi.metric.pending') }}</span><strong>{{ s.pendingReviews }}</strong><small>{{ t('dsi.metric.pendingHelp') }}</small></article>
+      <article class="kpi"><span>{{ t('dsi.metric.usage') }}</span><strong>{{ s.recordsShared }}</strong><small>{{ s.apiCalls }} {{ t('dsi.metric.apiCalls') }}</small></article>
+    </section>
+  }
+
+  <section class="ds-card dsi-filters">
+    <div>
+      <span class="eyebrow">{{ t('dsi.exchange') }}</span>
+      <div class="tab-strip" role="tablist" [attr.aria-label]="t('dsi.tabs')">
+        @for (tab of tabs(); track tab) {
+          <button type="button" class="tab-button" [class.tab-button--active]="activeTab() === tab" (click)="setTab(tab)">
+            {{ t('dsi.tab.' + tab) }}
+          </button>
+        }
+      </div>
+    </div>
+    <input type="search" [ngModel]="search()" (ngModelChange)="setFilter('search', $event)" [placeholder]="t('dsi.search')" [attr.aria-label]="t('dsi.search')" />
+    <select [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('dsi.field.status')">
+      <option value="">{{ t('dsi.allStatuses') }}</option>
+      @for (option of statusOptions(); track option) {
+        <option [value]="option">{{ statusLabel(activeTab() === 'requests' ? 'dsi.status' : 'dsi.agreementStatus', option) }}</option>
+      }
+    </select>
+  </section>
+
+  @if (state() === 'loading') {
+    <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
+  } @else if (state() === 'error') {
+    <section class="ds-card"><p class="error">{{ t('dsi.error.load') }}</p></section>
+  } @else {
+    <div class="dsi-workspace">
+      <section class="ds-card queue-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('dsi.queue.eyebrow') }}</span>
+            <h2>{{ t('dsi.queue.' + activeTab()) }}</h2>
+            <p>{{ total() }} {{ t('assets.records') }}</p>
+          </div>
+        </div>
+        <div class="queue-list">
+          @if (activeTab() === 'requests') {
+            @for (request of requests(); track request.id) {
+              <button type="button" class="queue-row" [class.queue-row--active]="selectedRequest()?.id === request.id" (click)="select(request.id)">
+                <span class="risk-tile risk-tile--{{ statusKind(request.status) }}">{{ request.riskScore }}</span>
+                <span class="queue-row__main">
+                  <strong>{{ request.recipientOrg }}</strong>
+                  <small>{{ request.requestNumber }} - {{ request.requesterOrg }}</small>
+                  <small>{{ request.purpose }}</small>
+                </span>
+                <span class="queue-row__chips">
+                  <app-status-chip [kind]="riskKind(request.riskScore)" [label]="t('dsi.riskScore')" />
+                  <app-status-chip [kind]="statusKind(request.status)" [label]="statusLabel('dsi.status', request.status)" />
+                </span>
+              </button>
+            } @empty {
+              <div class="empty">{{ t('dsi.empty') }}</div>
+            }
+          }
+
+          @if (activeTab() === 'agreements') {
+            @for (agreement of agreements(); track agreement.id) {
+              <button type="button" class="queue-row" [class.queue-row--active]="selectedAgreement()?.id === agreement.id" (click)="select(agreement.id)">
+                <span class="risk-tile risk-tile--{{ agreement.renewalSignal || agreement.status }}">{{ daysUntil(agreement.renewalDueAt) ?? '-' }}d</span>
+                <span class="queue-row__main">
+                  <strong>{{ agreement.recipientOrg }}</strong>
+                  <small>{{ agreement.agreementNumber }} - {{ name(agreement.asset || agreement.domain) }}</small>
+                  <small>{{ agreement.purpose }}</small>
+                </span>
+                <span class="queue-row__chips">
+                  <app-status-chip [kind]="statusKind(agreement.renewalSignal)" [label]="statusLabel('dsi.renewal', agreement.renewalSignal)" />
+                  <app-status-chip [kind]="statusKind(agreement.status)" [label]="statusLabel('dsi.agreementStatus', agreement.status)" />
+                </span>
+              </button>
+            } @empty {
+              <div class="empty">{{ t('dsi.empty') }}</div>
+            }
+          }
+        </div>
+        <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" [pageSize]="pageSize()" (pageChange)="goToPage($event)" />
+      </section>
+
+      <section class="ds-card detail-panel">
+        <div class="detail-head">
+          <div>
+            <span class="eyebrow">{{ t('dsi.detail.eyebrow') }}</span>
+            <h2>{{ selectedTitle() }}</h2>
+            <p>{{ t('dsi.detail.help') }}</p>
+          </div>
+        </div>
+
+        @if (activeTab() === 'requests') {
+          @if (selectedRequest(); as request) {
+            <div class="signal-strip">
+              <div><span>{{ t('dsi.field.requesterOrg') }}</span><strong>{{ request.requesterOrg }}</strong></div>
+              <div><span>{{ t('dsi.field.recipientOrg') }}</span><strong>{{ request.recipientOrg }}</strong></div>
+              <div><span>{{ t('dsi.field.asset') }}</span><strong>{{ name(request.asset || request.domain) }}</strong></div>
+              <div><span>{{ t('dsi.field.workflow') }}</span><strong>{{ request.workflowCase?.code || t('dsi.noWorkflow') }}</strong></div>
+            </div>
+            <div class="protection-map">
+              <article>
+                <strong>{{ t('dsi.map.legal') }}</strong>
+                <span>{{ name(request.legalBasis) || t('dsi.noLegalBasis') }}</span>
+              </article>
+              <article>
+                <strong>{{ t('dsi.map.classification') }}</strong>
+                <span>{{ name(request.classification || request.asset?.classification) }}</span>
+              </article>
+              <article>
+                <strong>{{ t('dsi.map.masking') }}</strong>
+                <span>{{ name(request.maskingPolicy) || t('dsi.noMasking') }}</span>
+              </article>
+              <article>
+                <strong>{{ t('dsi.map.controls') }}</strong>
+                <span>{{ request.requiredControlsJson.length }} {{ t('dsi.map.controlsCount') }}</span>
+              </article>
+            </div>
+            <div class="review-map">
+              @for (review of request.reviews; track review.id) {
+                <article class="review-node review-node--{{ review.decision }}">
+                  <strong>{{ statusLabel('dsi.step', review.step) }}</strong>
+                  <app-status-chip [kind]="statusKind(review.decision)" [label]="statusLabel('dsi.decision', review.decision)" />
+                  <small>{{ name(review.reviewerPerson) }} {{ review.decidedAt ? (review.decidedAt | date: 'mediumDate') : '' }}</small>
+                </article>
+              }
+            </div>
+            @if ((request.requiredControlsJson || []).length) {
+              <div class="control-list">
+                @for (control of request.requiredControlsJson; track control) {
+                  <span>{{ control }}</span>
+                }
+              </div>
+            }
+            @if (canEditRequest) {
+              <div class="action-box">
+                <h3>{{ t('dsi.reviewAction') }}</h3>
+                <div class="form-grid">
+                  <select [ngModel]="reviewDraft().step" (ngModelChange)="patchReview('step', $event)">
+                    @for (step of reviewSteps(); track step) { <option [value]="step">{{ statusLabel('dsi.step', step) }}</option> }
+                  </select>
+                  <select [ngModel]="reviewDraft().decision" (ngModelChange)="patchReview('decision', $event)">
+                    @for (decision of reviewDecisions(); track decision) { <option [value]="decision">{{ statusLabel('dsi.decision', decision) }}</option> }
+                  </select>
+                  <select [ngModel]="reviewDraft().reviewerPersonId" (ngModelChange)="patchReview('reviewerPersonId', $event)">
+                    <option value="">{{ t('dsi.unassigned') }}</option>
+                    @for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }
+                  </select>
+                  <input type="text" [ngModel]="reviewDraft().note" (ngModelChange)="patchReview('note', $event)" [placeholder]="t('dsi.field.note')" />
+                </div>
+                <div class="action-row">
+                  <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveReview(request)">{{ t('dsi.saveReview') }}</button>
+                  @if (canCreateAgreement) {
+                    <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate('agreement', request)">{{ t('dsi.createAgreementFromRequest') }}</button>
+                  }
+                </div>
+              </div>
+            }
+          }
+        }
+
+        @if (activeTab() === 'agreements') {
+          @if (selectedAgreement(); as agreement) {
+            <div class="signal-strip">
+              <div><span>{{ t('dsi.field.recipientOrg') }}</span><strong>{{ agreement.recipientOrg }}</strong></div>
+              <div><span>{{ t('dsi.field.asset') }}</span><strong>{{ name(agreement.asset || agreement.domain) }}</strong></div>
+              <div><span>{{ t('dsi.field.owner') }}</span><strong>{{ name(agreement.ownerPerson) }}</strong></div>
+              <div><span>{{ t('dsi.field.renewal') }}</span><strong>{{ agreement.renewalDueAt | date: 'mediumDate' }}</strong></div>
+            </div>
+            <p class="detail-copy">{{ agreement.purpose }}</p>
+            <div class="usage-grid">
+              @for (metric of agreement.usageMetrics; track metric.id) {
+                <article>
+                  <strong>{{ metric.metricDate | date: 'mediumDate' }}</strong>
+                  <span>{{ metric.recordsShared }} {{ t('dsi.metric.records') }}</span>
+                  <small>{{ metric.apiCalls }} {{ t('dsi.metric.apiCalls') }} - {{ metric.incidents }} {{ t('dsi.metric.incidents') }}</small>
+                  <app-status-chip [kind]="statusKind(metric.status)" [label]="statusLabel('dsi.usageStatus', metric.status)" />
+                </article>
+              } @empty {
+                <p class="muted">{{ t('dsi.usage.empty') }}</p>
+              }
+            </div>
+            @if (canEditAgreement) {
+              <div class="action-box">
+                <h3>{{ t('dsi.usage.title') }}</h3>
+                <div class="form-grid">
+                  <input type="number" min="0" [ngModel]="usageDraft().recordsShared" (ngModelChange)="patchUsage('recordsShared', $event)" [placeholder]="t('dsi.metric.records')" />
+                  <input type="number" min="0" [ngModel]="usageDraft().apiCalls" (ngModelChange)="patchUsage('apiCalls', $event)" [placeholder]="t('dsi.metric.apiCalls')" />
+                  <input type="number" min="0" [ngModel]="usageDraft().incidents" (ngModelChange)="patchUsage('incidents', $event)" [placeholder]="t('dsi.metric.incidents')" />
+                  <select [ngModel]="usageDraft().status" (ngModelChange)="patchUsage('status', $event)">
+                    @for (status of usageStatuses(); track status) { <option [value]="status">{{ statusLabel('dsi.usageStatus', status) }}</option> }
+                  </select>
+                  <input class="wide" type="text" [ngModel]="usageDraft().note" (ngModelChange)="patchUsage('note', $event)" [placeholder]="t('dsi.field.note')" />
+                </div>
+                <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="recordUsage(agreement)">{{ t('dsi.recordUsage') }}</button>
+              </div>
+            }
+          }
+        }
+      </section>
+    </div>
+
+    <section class="lower-grid">
+      <article class="ds-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('dsi.reviewQueue.eyebrow') }}</span>
+            <h2>{{ t('dsi.reviewQueue.title') }}</h2>
+            <p>{{ t('dsi.reviewQueue.help') }}</p>
+          </div>
+        </div>
+        <div class="mini-list">
+          @for (request of reviewQueue(); track request.id) {
+            <article>
+              <strong>{{ request.recipientOrg }}</strong>
+              <span>{{ request.requestNumber }} - {{ request.reviewSummary.pending }} {{ t('dsi.reviewQueue.pending') }}</span>
+              <app-status-chip [kind]="riskKind(request.riskScore)" [label]="request.riskScore + ' ' + t('dsi.riskScore')" />
+            </article>
+          } @empty {
+            <p class="muted">{{ t('dsi.reviewQueue.empty') }}</p>
+          }
+        </div>
+      </article>
+      <article class="ds-card evidence-panel">
+        <span class="eyebrow">{{ t('dsi.model.eyebrow') }}</span>
+        <h2>{{ t('dsi.model.title') }}</h2>
+        <div class="flow-line">
+          <span>{{ t('dsi.model.request') }}</span>
+          <span>{{ t('dsi.model.review') }}</span>
+          <span>{{ t('dsi.model.agreement') }}</span>
+          <span>{{ t('dsi.model.monitor') }}</span>
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (createMode(); as mode) {
+    <app-modal [title]="t('dsi.create.' + mode)" size="lg" (close)="closeModal()">
+      @if (mode === 'request') {
+        <div class="modal-grid">
+          <label>{{ t('dsi.field.requesterOrg') }}<input type="text" [ngModel]="requestDraft().requesterOrg" (ngModelChange)="patchRequest('requesterOrg', $event)" /></label>
+          <label>{{ t('dsi.field.recipientOrg') }}<input type="text" [ngModel]="requestDraft().recipientOrg" (ngModelChange)="patchRequest('recipientOrg', $event)" /></label>
+          <label class="wide">{{ t('dsi.field.purpose') }}<textarea rows="3" [ngModel]="requestDraft().purpose" (ngModelChange)="patchRequest('purpose', $event)"></textarea></label>
+          <label>{{ t('dsi.field.asset') }}<select [ngModel]="requestDraft().assetId" (ngModelChange)="patchRequest('assetId', $event)"><option value="">{{ t('dsi.noAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ name(asset) }}</option> }</select></label>
+          <label>{{ t('dsi.field.legalBasis') }}<select [ngModel]="requestDraft().legalBasisId" (ngModelChange)="patchRequest('legalBasisId', $event)"><option value="">{{ t('dsi.noLegalBasis') }}</option>@for (basis of legalBases(); track basis.id) { <option [value]="basis.id">{{ name(basis) }}</option> }</select></label>
+          <label>{{ t('dsi.field.masking') }}<select [ngModel]="requestDraft().maskingPolicyId" (ngModelChange)="patchRequest('maskingPolicyId', $event)"><option value="">{{ t('dsi.noMasking') }}</option>@for (policy of maskingPolicies(); track policy.id) { <option [value]="policy.id">{{ name(policy) }}</option> }</select></label>
+          <label class="check"><input type="checkbox" [ngModel]="requestDraft().consentRequired" (ngModelChange)="patchRequest('consentRequired', $event)" />{{ t('dsi.field.consent') }}</label>
+          <label class="check"><input type="checkbox" [ngModel]="requestDraft().crossBorderTransfer" (ngModelChange)="patchRequest('crossBorderTransfer', $event)" />{{ t('dsi.field.crossBorder') }}</label>
+        </div>
+      }
+
+      @if (mode === 'agreement') {
+        <div class="modal-grid">
+          <label>{{ t('dsi.field.request') }}<select [ngModel]="agreementDraft().requestId" (ngModelChange)="patchAgreement('requestId', $event)"><option value="">{{ t('dsi.noRequest') }}</option>@for (request of requests(); track request.id) { <option [value]="request.id">{{ request.requestNumber }} - {{ request.recipientOrg }}</option> }</select></label>
+          <label>{{ t('dsi.field.recipientOrg') }}<input type="text" [ngModel]="agreementDraft().recipientOrg" (ngModelChange)="patchAgreement('recipientOrg', $event)" /></label>
+          <label class="wide">{{ t('dsi.field.purpose') }}<textarea rows="3" [ngModel]="agreementDraft().purpose" (ngModelChange)="patchAgreement('purpose', $event)"></textarea></label>
+          <label>{{ t('dsi.field.asset') }}<select [ngModel]="agreementDraft().assetId" (ngModelChange)="patchAgreement('assetId', $event)"><option value="">{{ t('dsi.noAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ name(asset) }}</option> }</select></label>
+          <label>{{ t('dsi.field.owner') }}<select [ngModel]="agreementDraft().ownerPersonId" (ngModelChange)="patchAgreement('ownerPersonId', $event)"><option value="">{{ t('dsi.unassigned') }}</option>@for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }</select></label>
+          <label>{{ t('dsi.field.url') }}<input type="url" [ngModel]="agreementDraft().agreementUrl" (ngModelChange)="patchAgreement('agreementUrl', $event)" /></label>
+          <label>{{ t('dsi.field.start') }}<input type="date" [ngModel]="agreementDraft().startAt" (ngModelChange)="patchAgreement('startAt', $event)" /></label>
+          <label>{{ t('dsi.field.renewal') }}<input type="date" [ngModel]="agreementDraft().renewalDueAt" (ngModelChange)="patchAgreement('renewalDueAt', $event)" /></label>
+        </div>
+      }
+
+      <ng-container footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModal()">{{ t('crud.cancel') }}</button>
+        @if (mode === 'request') {
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createRequest()">{{ t('crud.save') }}</button>
+        }
+        @if (mode === 'agreement') {
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createAgreement()">{{ t('crud.save') }}</button>
+        }
+      </ng-container>
+    </app-modal>
+  }
+</section>

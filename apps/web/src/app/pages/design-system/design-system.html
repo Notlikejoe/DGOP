@@ -155,10 +155,73 @@
 
       <div class="component-block">
         <h3>{{ t('ds.forms') }}</h3>
-        <label class="sample-field">
-          <span>{{ t('crud.search') }}</span>
-          <input type="search" [placeholder]="t('ds.console.searchPlaceholder')" />
-        </label>
+        <div class="sample-field search-engine">
+          <label for="design-global-search">{{ t('search.title') }}</label>
+          <div class="search-box">
+            <input
+              id="design-global-search"
+              type="search"
+              [ngModel]="searchQuery()"
+              (ngModelChange)="onSearchInput($event)"
+              [placeholder]="t('ds.console.searchPlaceholder')"
+              autocomplete="off"
+            />
+            @if (searchQuery()) {
+              <button type="button" class="search-clear" (click)="clearSearch()" [attr.aria-label]="t('crud.clear')">
+                &times;
+              </button>
+            }
+          </div>
+
+          <div class="search-help">
+            @if (searchState() === 'idle') {
+              <span>{{ t('search.help') }}</span>
+            } @else if (searchState() === 'typing' || searchState() === 'loading') {
+              <span>{{ t('search.loading') }}</span>
+            } @else if (searchState() === 'error') {
+              <span class="error">{{ t('search.error') }}</span>
+            } @else if (searchResponse()?.total === 0) {
+              <span>{{ t('search.empty') }}</span>
+            } @else {
+              <span>{{ searchResponse()?.total }} {{ t('search.results') }}</span>
+            }
+          </div>
+
+          @if (searchResponse(); as response) {
+            @if (response.groups.length > 0) {
+              <div class="search-results">
+                @for (group of response.groups; track group.type) {
+                  <section class="search-group">
+                    <div class="search-group__head">
+                      <strong>{{ groupLabel(group.type) }}</strong>
+                      <span>{{ group.count }}</span>
+                    </div>
+                    <div class="search-group__items">
+                      @for (result of group.results; track result.entityType + result.id) {
+                        <a
+                          class="search-result"
+                          [routerLink]="result.route.path"
+                          [queryParams]="result.route.queryParams || null"
+                        >
+                          <span class="search-result__type">{{ result.entityType }}</span>
+                          <span class="search-result__text">
+                            <b>{{ result.title }}</b>
+                            @if (result.subtitle || result.detail) {
+                              <small>{{ result.subtitle }} @if (result.detail) { &middot; {{ result.detail }} }</small>
+                            }
+                          </span>
+                          @if (result.status) {
+                            <span class="search-result__status">{{ result.status }}</span>
+                          }
+                        </a>
+                      }
+                    </div>
+                  </section>
+                }
+              </div>
+            }
+          }
+        </div>
       </div>
     </div>
   </section>

@@ -1,0 +1,148 @@
+.audit-packs-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero,
+.control-panel,
+.metric,
+.ds-card {
+  border: 1px solid var(--command-border);
+  background: var(--command-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.control-panel {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: min(100%, 28rem);
+  color: var(--command-muted);
+  font-weight: 700;
+}
+
+.field select {
+  min-height: 2.75rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 0 0.8rem;
+}
+
+.readiness-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.readiness-chip strong {
+  font-size: 1.6rem;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  border-radius: 8px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.metric span,
+.metric small {
+  color: var(--command-muted);
+}
+
+.metric strong {
+  font-size: 2rem;
+}
+
+.audit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(22rem, 0.65fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.panel-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.manifest-list,
+.pack-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.manifest-row,
+.pack-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.8rem;
+}
+
+.manifest-row strong,
+.pack-row strong {
+  overflow-wrap: anywhere;
+}
+
+.manifest-row span,
+.pack-row span,
+.pack-row small {
+  color: var(--command-muted);
+}
+
+.pack-row div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.count-pill {
+  border: 1px solid var(--command-border);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-weight: 800;
+}
+
+code {
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 920px) {
+  .control-panel,
+  .manifest-row,
+  .pack-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kpi-grid,
+  .audit-layout {
+    grid-template-columns: 1fr;
+  }
+}

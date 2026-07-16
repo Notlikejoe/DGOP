@@ -17,7 +17,7 @@
 
 .od-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -81,6 +81,7 @@
 
 .field__input {
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   color: var(--on-surface);
   background: var(--surface-2);
@@ -258,6 +259,105 @@
   border-radius: var(--radius-sm);
 }
 
+.lifecycle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.lifecycle-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.lifecycle-panel--wide {
+  grid-column: 1 / -1;
+}
+
+.lifecycle-panel h3 {
+  margin: var(--space-1) 0;
+  font-size: 1rem;
+}
+
+.check-grid,
+.usage-grid,
+.compact-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.lifecycle-panel:not(.lifecycle-panel--wide) .compact-form {
+  grid-template-columns: 1fr;
+}
+
+.usage-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.check-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--on-surface);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-weight: 750;
+}
+
+.check-item--inverse {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+}
+
+.check-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.approval-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.approval-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.approval-row strong,
+.approval-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.approval-row small {
+  color: var(--on-surface-muted);
+}
+
+.approval-actions,
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  grid-column: 1 / -1;
+}
+
 .facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -337,7 +437,8 @@
 
 @media (max-width: 1180px) {
   .od-strip,
-  .signal-grid {
+  .signal-grid,
+  .usage-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -350,7 +451,11 @@
 @media (max-width: 760px) {
   .od-filters,
   .od-form,
-  .facts {
+  .facts,
+  .lifecycle-grid,
+  .check-grid,
+  .compact-form,
+  .usage-grid {
     grid-template-columns: 1fr;
   }
 
@@ -366,5 +471,9 @@
   .candidate-row__score {
     width: 100%;
     height: 38px;
+  }
+
+  .lifecycle-panel--wide {
+    grid-column: auto;
   }
 }

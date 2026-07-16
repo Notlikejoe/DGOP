@@ -1,0 +1,293 @@
+<section class="page business-value-page">
+  <header class="page__header hero">
+    <div>
+      <span class="eyebrow">{{ t('businessValue.eyebrow') }}</span>
+      <h1>{{ t('businessValue.title') }}</h1>
+      <p class="page__subtitle">{{ t('businessValue.subtitle') }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--ghost" (click)="loadWorkspace()">
+      <app-icon name="refresh" />
+      {{ t('roles.refresh') }}
+    </button>
+  </header>
+
+  @if (state() === 'loading') {
+    <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
+  } @else if (state() === 'error') {
+    <section class="ds-card"><p class="error">{{ t('businessValue.error') }}</p></section>
+  } @else if (workspace(); as w) {
+    <section class="metric-strip" [attr.aria-label]="t('businessValue.kpis')">
+      <article class="metric">
+        <span>{{ t('businessValue.kpi.glossary') }}</span>
+        <strong>{{ w.summary.glossary.readinessScore }}%</strong>
+        <small>{{ w.summary.glossary.reviewDue }} {{ t('businessValue.kpi.reviewDue') }}</small>
+      </article>
+      <article class="metric">
+        <span>{{ t('businessValue.kpi.lineage') }}</span>
+        <strong>{{ w.summary.verifiedLineage }}/{{ w.summary.lineageMaps }}</strong>
+        <small>{{ t('businessValue.kpi.verified') }}</small>
+      </article>
+      <article class="metric">
+        <span>{{ t('businessValue.kpi.impact') }}</span>
+        <strong>{{ w.summary.criticalImpact }}</strong>
+        <small>{{ t('businessValue.kpi.critical') }}</small>
+      </article>
+      <article class="metric">
+        <span>{{ t('businessValue.kpi.value') }}</span>
+        <strong>{{ money(w.summary.totalAnnualValue) }}</strong>
+        <small>{{ w.summary.realizedKpis }}/{{ w.summary.valueKpis }} {{ t('businessValue.kpi.realized') }}</small>
+      </article>
+    </section>
+
+    <section class="workspace-grid">
+      <article class="ds-card map-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('businessValue.map.eyebrow') }}</span>
+            <h2>{{ t('businessValue.map.title') }}</h2>
+          </div>
+          <app-status-chip [kind]="statusKind(w.summary.glossary.status)" [label]="w.summary.glossary.status" />
+        </div>
+        <div class="meaning-map">
+          @for (node of w.graph.nodes; track node.id) {
+            <div class="map-node" [class]="'tone-' + statusKind(node.status)">
+              <span>{{ node.type }}</span>
+              <strong>{{ node.label }}</strong>
+              <small>{{ node.count }}</small>
+            </div>
+          } @empty {
+            <p class="empty">{{ t('businessValue.map.empty') }}</p>
+          }
+        </div>
+      </article>
+
+      <article class="ds-card queue-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('businessValue.queue.eyebrow') }}</span>
+            <h2>{{ t('businessValue.queue.title') }}</h2>
+          </div>
+          <app-status-chip kind="warning" [label]="w.summary.lifecyclePending + ''" />
+        </div>
+        <div class="review-list">
+          @for (row of w.lifecycle.slice(0, 5); track row.id) {
+            <article class="review-row">
+              <div>
+                <strong>{{ row.code }}</strong>
+                <span>{{ assetLabel(row.asset) }} &middot; {{ row.currentStatus }} {{ t('businessValue.to') }} {{ row.proposedStatus }}</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideLifecycle(row, 'implemented')">
+                {{ t('businessValue.implement') }}
+              </button>
+            </article>
+          } @empty {
+            <p class="empty">{{ t('businessValue.queue.empty') }}</p>
+          }
+        </div>
+      </article>
+    </section>
+
+    <section class="lane-grid">
+      <article class="ds-card lane">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">BDE</span>
+            <h2>{{ t('businessValue.glossary.title') }}</h2>
+          </div>
+          <app-status-chip kind="info" [label]="w.glossary.length + ''" />
+        </div>
+        <div class="form-grid">
+          <input [placeholder]="t('businessValue.term')" [(ngModel)]="glossaryForm.termEn" />
+          <select [(ngModel)]="glossaryForm.assetId">
+            <option value="">{{ t('extended.asset') }}</option>
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ asset.code }} - {{ name(asset) }}</option>
+            }
+          </select>
+          <select [(ngModel)]="glossaryForm.domainId">
+            <option value="">{{ t('extended.domain') }}</option>
+            @for (domain of domains(); track domain.id) {
+              <option [value]="domain.id">{{ domain.code }} - {{ name(domain) }}</option>
+            }
+          </select>
+          <textarea [placeholder]="t('businessValue.definition')" [(ngModel)]="glossaryForm.definition"></textarea>
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createGlossary()" [disabled]="saving()">
+            {{ t('businessValue.createTerm') }}
+          </button>
+        </div>
+        <div class="rows">
+          @for (row of w.glossary; track row.id) {
+            <article class="row-card">
+              <div>
+                <strong>{{ row.termEn }}</strong>
+                <span>{{ row.definition }}</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <div class="actions">
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideGlossary(row, 'approved')">{{ t('extended.approve') }}</button>
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideGlossary(row, 'needs_revision')">{{ t('extended.needsChanges') }}</button>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty">{{ t('businessValue.glossary.empty') }}</p>
+          }
+        </div>
+      </article>
+
+      <article class="ds-card lane">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">BLI</span>
+            <h2>{{ t('businessValue.lineage.title') }}</h2>
+          </div>
+          <app-status-chip kind="info" [label]="w.lineage.length + ''" />
+        </div>
+        <div class="form-grid">
+          <input [placeholder]="t('businessValue.process')" [(ngModel)]="lineageForm.processName" />
+          <select [(ngModel)]="lineageForm.sourceAssetId">
+            <option value="">{{ t('businessValue.source') }}</option>
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ asset.code }} - {{ name(asset) }}</option>
+            }
+          </select>
+          <select [(ngModel)]="lineageForm.targetAssetId">
+            <option value="">{{ t('businessValue.target') }}</option>
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ asset.code }} - {{ name(asset) }}</option>
+            }
+          </select>
+          <input type="number" min="0" max="100" [(ngModel)]="lineageForm.impactScore" />
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createLineage()" [disabled]="saving()">
+            {{ t('businessValue.createLineage') }}
+          </button>
+        </div>
+        <div class="rows">
+          @for (row of w.lineage; track row.id) {
+            <article class="row-card">
+              <div>
+                <strong>{{ row.processName }}</strong>
+                <span>{{ row.sourceAsset?.code || '-' }} {{ t('businessValue.to') }} {{ row.targetAsset?.code || '-' }} &middot; {{ row.impactScore }}%</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="updateLineage(row, 'verified')">{{ t('businessValue.verify') }}</button>
+            </article>
+          } @empty {
+            <p class="empty">{{ t('businessValue.lineage.empty') }}</p>
+          }
+        </div>
+      </article>
+
+      <article class="ds-card lane">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">BIA</span>
+            <h2>{{ t('businessValue.bia.title') }}</h2>
+          </div>
+          <app-status-chip kind="info" [label]="w.assessments.length + ''" />
+        </div>
+        <div class="form-grid">
+          <input [placeholder]="t('businessValue.process')" [(ngModel)]="biaForm.processName" />
+          <select [(ngModel)]="biaForm.assetId">
+            <option value="">{{ t('extended.asset') }}</option>
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ asset.code }} - {{ name(asset) }}</option>
+            }
+          </select>
+          <input type="number" min="0" max="100" [(ngModel)]="biaForm.impactScore" />
+          <input type="number" min="0" [(ngModel)]="biaForm.rtoHours" />
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createBia()" [disabled]="saving()">{{ t('businessValue.createBia') }}</button>
+        </div>
+        <div class="rows compact">
+          @for (row of w.assessments; track row.id) {
+            <article class="row-card">
+              <div>
+                <strong>{{ row.processName }}</strong>
+                <span>{{ assetLabel(row.asset) }} &middot; {{ row.impactScore }}%</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.impactLevel)" [label]="row.impactLevel" />
+            </article>
+          } @empty {
+            <p class="empty">{{ t('businessValue.bia.empty') }}</p>
+          }
+        </div>
+      </article>
+
+      <article class="ds-card lane">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">DVR</span>
+            <h2>{{ t('businessValue.value.title') }}</h2>
+          </div>
+          <app-status-chip kind="info" [label]="w.valuations.length + ''" />
+        </div>
+        <div class="form-grid">
+          <select [(ngModel)]="valueForm.assetId">
+            <option value="">{{ t('extended.asset') }}</option>
+            @for (asset of assets(); track asset.id) {
+              <option [value]="asset.id">{{ asset.code }} - {{ name(asset) }}</option>
+            }
+          </select>
+          <input [placeholder]="t('businessValue.useCase')" [(ngModel)]="valueForm.useCase" />
+          <input type="number" min="0" [(ngModel)]="valueForm.annualValue" />
+          <input type="number" min="0" max="1000" [(ngModel)]="valueForm.roiPercent" />
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createValuation()" [disabled]="saving()">{{ t('businessValue.createValue') }}</button>
+        </div>
+        <div class="form-grid secondary">
+          <select [(ngModel)]="surveyForm.valuationId">
+            <option value="">{{ t('businessValue.valuation') }}</option>
+            @for (row of w.valuations; track row.id) {
+              <option [value]="row.id">{{ row.code }} - {{ row.useCase }}</option>
+            }
+          </select>
+          <input type="number" min="0" max="100" [(ngModel)]="surveyForm.score" />
+          <input [placeholder]="t('businessValue.feedback')" [(ngModel)]="surveyForm.feedback" />
+          <button class="ds-btn ds-btn--ghost" type="button" (click)="createSurvey()" [disabled]="saving()">{{ t('businessValue.recordSurvey') }}</button>
+        </div>
+        <div class="rows">
+          @for (row of w.valuations; track row.id) {
+            <article class="row-card">
+              <div>
+                <strong>{{ row.useCase }}</strong>
+                <span>{{ assetLabel(row.asset) }} &middot; {{ money(row.annualValue) }}</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+            </article>
+          } @empty {
+            <p class="empty">{{ t('businessValue.value.empty') }}</p>
+          }
+        </div>
+      </article>
+    </section>
+
+    <section class="ds-card kpi-builder">
+      <div class="panel-head">
+        <div>
+          <span class="eyebrow">DVR</span>
+          <h2>{{ t('businessValue.kpiBuilder.title') }}</h2>
+        </div>
+        <app-status-chip kind="info" [label]="w.kpis.length + ''" />
+      </div>
+      <div class="form-grid kpi-form">
+        <input [placeholder]="t('businessValue.kpiName')" [(ngModel)]="kpiForm.name" />
+        <input [placeholder]="t('businessValue.kpiType')" [(ngModel)]="kpiForm.valueType" />
+        <input [placeholder]="t('businessValue.period')" [(ngModel)]="kpiForm.period" />
+        <input type="number" [(ngModel)]="kpiForm.targetValue" />
+        <input type="number" [(ngModel)]="kpiForm.actualValue" />
+        <input [placeholder]="t('businessValue.unit')" [(ngModel)]="kpiForm.unit" />
+        <button class="ds-btn ds-btn--primary" type="button" (click)="createKpi()" [disabled]="saving()">{{ t('businessValue.createKpi') }}</button>
+      </div>
+      <div class="kpi-list">
+        @for (row of w.kpis; track row.id) {
+          <article>
+            <strong>{{ row.name }}</strong>
+            <span>{{ row.actualValue }} / {{ row.targetValue }} {{ row.unit || '' }}</span>
+            <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+          </article>
+        } @empty {
+          <p class="empty">{{ t('businessValue.kpiBuilder.empty') }}</p>
+        }
+      </div>
+    </section>
+  }
+</section>

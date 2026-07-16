@@ -65,6 +65,18 @@ export class AuthService {
     return this.toProfile(user);
   }
 
+  async sessionFromToken(token?: string | null) {
+    if (!token) return null;
+    try {
+      const payload = this.jwt.verify<JwtPayload>(token);
+      const user = await this.users.findByIdWithRoles(payload.sub);
+      if (!user?.isActive) return null;
+      return this.toProfile(user);
+    } catch {
+      return null;
+    }
+  }
+
   async logout(user: AuthUser) {
     await this.audit.log({
       actor: user.email,

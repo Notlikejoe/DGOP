@@ -1,0 +1,241 @@
+<section class="page operations-page">
+  <header class="page__header hero">
+    <div>
+      <span class="eyebrow">{{ t('operations.eyebrow') }}</span>
+      <h1>{{ t('operations.title') }}</h1>
+      <p class="page__subtitle">{{ t('operations.subtitle') }}</p>
+    </div>
+    <div class="hero-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="loadWorkspace()" [disabled]="busy()">
+        <app-icon name="refresh" />
+        {{ t('roles.refresh') }}
+      </button>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="recalculate()" [disabled]="busy()">
+        <app-icon name="activity" />
+        {{ t('operations.recalculate') }}
+      </button>
+    </div>
+  </header>
+
+  @if (state() === 'loading') {
+    <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
+  } @else if (state() === 'error') {
+    <section class="ds-card"><p class="error">{{ t('operations.error') }}</p></section>
+  } @else if (workspace(); as w) {
+    <section class="metric-strip" [attr.aria-label]="t('operations.kpis')">
+      <article class="metric">
+        <span>{{ t('operations.kpi.tasks') }}</span>
+        <strong>{{ w.summary.openTasks }}</strong>
+        <small>{{ w.summary.atRiskTasks }} {{ t('operations.kpi.atRisk') }}</small>
+      </article>
+      <article class="metric">
+        <span>{{ t('operations.kpi.overdue') }}</span>
+        <strong>{{ w.summary.overdueTasks }}</strong>
+        <small>{{ t('operations.kpi.ksa') }}</small>
+      </article>
+      <article class="metric">
+        <span>{{ t('operations.kpi.notifications') }}</span>
+        <strong>{{ w.summary.unreadNotifications }}</strong>
+        <small>{{ t('operations.kpi.unread') }}</small>
+      </article>
+      <article class="metric">
+        <span>{{ t('operations.kpi.calendar') }}</span>
+        <strong>{{ w.summary.calendarItems }}</strong>
+        <small>{{ w.summary.holidaysConfigured }} {{ t('operations.kpi.holidays') }}</small>
+      </article>
+    </section>
+
+    <section class="ops-grid">
+      <article class="ds-card graph-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.graph.eyebrow') }}</span>
+            <h2>{{ t('operations.graph.title') }}</h2>
+          </div>
+          <app-status-chip [kind]="w.summary.activeEscalations ? 'warning' : 'success'" [label]="w.summary.activeEscalations + ' ' + t('operations.graph.active')" />
+        </div>
+
+        <div class="escalation-map" role="img" [attr.aria-label]="t('operations.graph.title')">
+          <svg class="graph-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <marker id="ops-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" />
+              </marker>
+            </defs>
+            @for (edge of w.graph.edges; track edge.id) {
+              <line
+                [attr.x1]="edgeLine(edge).x1"
+                [attr.y1]="edgeLine(edge).y1"
+                [attr.x2]="edgeLine(edge).x2"
+                [attr.y2]="edgeLine(edge).y2"
+                [attr.class]="'edge tone-' + edge.tone"
+                marker-end="url(#ops-arrow)"
+              />
+            }
+          </svg>
+          @for (node of w.graph.nodes; track node.id) {
+            <article class="graph-node" [class]="'node-' + node.type + ' tone-' + statusKind(node.status)" [style.left]="node.x + '%'" [style.top]="node.y + '%'">
+              <span>{{ node.type === 'level' ? t('operations.graph.level') : t('operations.graph.work') }}</span>
+              <strong>{{ node.label }}</strong>
+              <small>{{ node.sublabel || (node.count + ' ' + t('operations.graph.items')) }}</small>
+            </article>
+          }
+        </div>
+      </article>
+
+      <aside class="side-stack">
+        <article class="ds-card">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">{{ t('operations.notifications.eyebrow') }}</span>
+              <h2>{{ t('operations.notifications.title') }}</h2>
+            </div>
+            <app-status-chip kind="info" [label]="w.notifications.length + ''" />
+          </div>
+          <div class="compact-list">
+            @for (row of w.notifications.slice(0, 6); track row.id) {
+              <article class="list-row">
+                <div>
+                  <strong>{{ row.title }}</strong>
+                  <span>{{ row.message }}</span>
+                </div>
+                <app-status-chip [kind]="statusKind(row.severity)" [label]="row.severity" />
+                @if (row.status === 'unread') {
+                  <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="markRead(row)">{{ t('operations.read') }}</button>
+                }
+              </article>
+            } @empty {
+              <p class="empty">{{ t('operations.notifications.empty') }}</p>
+            }
+          </div>
+        </article>
+
+        <article class="ds-card">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">{{ t('operations.tasks.eyebrow') }}</span>
+              <h2>{{ t('operations.tasks.title') }}</h2>
+            </div>
+            <app-status-chip kind="warning" [label]="w.taskSignals.length + ''" />
+          </div>
+          <div class="compact-list">
+            @for (row of w.taskSignals.slice(0, 6); track row.id) {
+              <article class="list-row">
+                <div>
+                  <strong>{{ row.case?.code }} - {{ row.title }}</strong>
+                  <span>{{ formatDate(row.dueDate) }} &middot; {{ row.overdueBusinessDays }} {{ t('operations.tasks.businessDays') }}</span>
+                </div>
+                <app-status-chip [kind]="statusKind(row.slaSignal)" [label]="row.slaSignal" />
+              </article>
+            } @empty {
+              <p class="empty">{{ t('operations.tasks.empty') }}</p>
+            }
+          </div>
+        </article>
+      </aside>
+    </section>
+
+    <section class="lower-grid">
+      <article class="ds-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.escalations.eyebrow') }}</span>
+            <h2>{{ t('operations.escalations.title') }}</h2>
+          </div>
+          <app-status-chip kind="warning" [label]="w.escalations.length + ''" />
+        </div>
+        <div class="wide-list">
+          @for (row of w.escalations; track row.id) {
+            <article class="wide-row">
+              <div>
+                <strong>{{ row.workflowCase?.code || row.code }} - {{ row.workflowTask?.title || row.reason }}</strong>
+                <span>{{ shortLevel(row.level) }} &middot; {{ row.penaltyPoints }} {{ t('operations.escalations.points') }}</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <div class="actions">
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="updateEscalation(row, 'acknowledged')">{{ t('operations.acknowledge') }}</button>
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="updateEscalation(row, 'resolved')">{{ t('operations.resolve') }}</button>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty">{{ t('operations.escalations.empty') }}</p>
+          }
+        </div>
+      </article>
+
+      <article class="ds-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.calendar.eyebrow') }}</span>
+            <h2>{{ t('operations.calendar.title') }}</h2>
+          </div>
+          <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="generateCalendar()" [disabled]="busy()">
+            <app-icon name="plus" />
+            {{ t('operations.calendar.generate') }}
+          </button>
+        </div>
+        <div class="form-grid">
+          <input [placeholder]="t('operations.calendar.templateTitle')" [(ngModel)]="templateForm.title" />
+          <select [(ngModel)]="templateForm.type">
+            <option value="processing_activity_review">{{ t('operations.calendar.processing') }}</option>
+            <option value="cross_border_transfer_monitoring">{{ t('operations.calendar.crossBorder') }}</option>
+            <option value="annual_dpia_review">{{ t('operations.calendar.dpia') }}</option>
+            <option value="monthly_dq_scorecard_review">{{ t('operations.calendar.dq') }}</option>
+          </select>
+          <select [(ngModel)]="templateForm.cadence">
+            <option value="weekly">{{ t('operations.calendar.weekly') }}</option>
+            <option value="monthly">{{ t('operations.calendar.monthly') }}</option>
+            <option value="quarterly">{{ t('operations.calendar.quarterly') }}</option>
+            <option value="annual">{{ t('operations.calendar.annual') }}</option>
+          </select>
+          <input type="datetime-local" [(ngModel)]="templateForm.nextRunAt" />
+          <input type="number" min="1" [(ngModel)]="templateForm.defaultSlaBusinessDays" />
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createTemplate()" [disabled]="busy()">{{ t('operations.calendar.create') }}</button>
+        </div>
+        <div class="compact-list">
+          @for (row of w.templates; track row.id) {
+            <article class="list-row">
+              <div>
+                <strong>{{ row.title }}</strong>
+                <span>{{ row.cadence }} &middot; {{ formatDate(row.nextRunAt) }}</span>
+              </div>
+              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+            </article>
+          }
+        </div>
+      </article>
+
+      <article class="ds-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.holidays.eyebrow') }}</span>
+            <h2>{{ t('operations.holidays.title') }}</h2>
+          </div>
+          <app-status-chip kind="info" [label]="w.holidays.length + ''" />
+        </div>
+        <div class="form-grid holiday-form">
+          <input type="date" [(ngModel)]="holidayForm.date" />
+          <input [placeholder]="t('operations.holidays.name')" [(ngModel)]="holidayForm.nameEn" />
+          <label class="check-row">
+            <input type="checkbox" [(ngModel)]="holidayForm.isRecurring" />
+            <span>{{ t('operations.holidays.recurring') }}</span>
+          </label>
+          <button class="ds-btn ds-btn--primary" type="button" (click)="createHoliday()" [disabled]="busy()">{{ t('operations.holidays.add') }}</button>
+        </div>
+        <div class="compact-list">
+          @for (row of w.holidays.slice(0, 8); track row.id) {
+            <article class="list-row">
+              <div>
+                <strong>{{ row.nameEn }}</strong>
+                <span>{{ formatDate(row.date) }}</span>
+              </div>
+              <app-status-chip [kind]="row.isRecurring ? 'info' : 'success'" [label]="row.isRecurring ? t('operations.holidays.recurring') : t('operations.holidays.fixed')" />
+            </article>
+          } @empty {
+            <p class="empty">{{ t('operations.holidays.empty') }}</p>
+          }
+        </div>
+      </article>
+    </section>
+  }
+</section>

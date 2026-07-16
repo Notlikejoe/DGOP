@@ -7,12 +7,14 @@ import { ForbiddenException } from '@nestjs/common';
 import {
   IntegrationConnectorStatus,
   IntegrationDirection,
+  IntegrationEventStatus,
   IntegrationSourceTrust,
 } from '@prisma/client';
 import { IntegrationsService } from '../src/integrations/integrations.service';
 import {
   buildCatalogWritebackPayload,
   catalogMappingPreview,
+  normalizeIntegrationEventPayload,
   normalizeCatalogAssetRow,
 } from '../src/integrations/integrations.logic';
 
@@ -44,6 +46,19 @@ function serviceWith(
 }
 
 function prismaBase(tx: Record<string, any>) {
+  const reconciliationReports: any[] = [];
+  const txClient = {
+    ...tx,
+    integrationReconciliationReport: tx.integrationReconciliationReport ?? {
+      count: async () => reconciliationReports.length,
+      findUnique: async ({ where }: any) => reconciliationReports.find((report) => report.code === where.code) ?? null,
+      create: async (args: any) => {
+        const report = { id: `report-${reconciliationReports.length + 1}`, ...args.data };
+        reconciliationReports.push(report);
+        return report;
+      },
+    },
+  };
   return {
     integrationConnector: {
       findFirst: async () => connector,
@@ -58,7 +73,7 @@ function prismaBase(tx: Record<string, any>) {
     systemPlatform: { findMany: async () => [] },
     businessCapability: { findMany: async () => [] },
     classification: { findMany: async () => [{ id: 'class-1', code: 'internal' }] },
-    $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
+    $transaction: async (fn: (client: unknown) => unknown) => fn(txClient),
   };
 }
 
@@ -270,6 +285,127 @@ test('buildCatalogWritebackPayload exposes owner, steward, and governance status
     domainCode: 'finance',
     classificationCode: 'restricted',
   });
+});
+
+test('normalizeIntegrationEventPayload rejects adapter payloads that are not ready', () => {
+  const result = normalizeIntegrationEventPayload('mock_data_quality', 'dq.issue.detected', {
+    assetCode: 'AST-1',
+    forceFail: true,
+  });
+  assert.strictEqual(result.accepted, false);
+  assert.strictEqual(result.normalized.subject, 'AST-1');
+  assert.ok(result.issues.some((issue) => issue.field === 'payload'));
+});
+
+test('receiveWebhook persists, processes, reconciles, and audits integration events', async () => {
+  const auditLog: unknown[] = [];
+  const reports: any[] = [];
+  let eventRow: any;
+  const prisma = {
+    integrationConnector: {
+      findFirst: async () => ({
+        ...connector,
+        type: 'data_quality',
+        configJson: { adapterType: 'mock_data_quality', defaultEventType: 'dq.issue.detected' },
+      }),
+    },
+    integrationEvent: {
+      count: async () => 0,
+      findUnique: async (args: any) => {
+        if (args.where?.dedupeKey) return null;
+        if (args.where?.code) return null;
+        if (args.where?.id) return { ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } };
+        return null;
+      },
+      create: async (args: any) => {
+        eventRow = { id: 'event-1', attempts: 0, maxAttempts: 3, ...args.data };
+        return eventRow;
+      },
+    },
+    $transaction: async (fn: (client: unknown) => unknown) =>
+      fn({
+        integrationEvent: {
+          findUnique: async () => ({ ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } }),
+          update: async (args: any) => {
+            eventRow = { ...eventRow, ...args.data, connector };
+            return eventRow;
+          },
+        },
+        integrationReconciliationReport: {
+          count: async () => reports.length,
+          findUnique: async () => null,
+          create: async (args: any) => {
+            reports.push(args.data);
+            return args.data;
+          },
+        },
+        integrationConnector: { update: async () => undefined },
+        integrationJob: { updateMany: async () => ({ count: 1 }) },
+      }),
+  };
+  const service = serviceWith(prisma, auditLog);
+
+  const result = await service.receiveWebhook('DQ-MOCK', {
+    externalEventId: 'DQ-1',
+    eventType: 'dq.issue.detected',
+    payload: { assetCode: 'AST-1', severity: 'low' },
+  }) as any;
+
+  assert.strictEqual(result.status, IntegrationEventStatus.succeeded);
+  assert.strictEqual(result.attempts, 1);
+  assert.strictEqual(reports.length, 1);
+  assert.ok(auditLog.some((entry: any) => entry.action === 'integration.webhook.receive'));
+  assert.ok(auditLog.some((entry: any) => entry.action === 'integration.event.process'));
+});
+
+test('retryEvent reprocesses retry-scheduled events through the same engine', async () => {
+  const auditLog: unknown[] = [];
+  const reports: any[] = [];
+  let eventRow: any = {
+    id: 'event-1',
+    code: 'INT-EVT-00001',
+    dedupeKey: 'connector-1:dq.issue.detected:DQ-1',
+    connectorId: connector.id,
+    adapterType: 'mock_data_quality',
+    eventType: 'dq.issue.detected',
+    payloadJson: { assetCode: 'AST-1' },
+    status: IntegrationEventStatus.retry_scheduled,
+    attempts: 1,
+    maxAttempts: 3,
+  };
+  const prisma = {
+    integrationEvent: {
+      findUnique: async () => eventRow,
+    },
+    $transaction: async (fn: (client: unknown) => unknown) =>
+      fn({
+        integrationEvent: {
+          findUnique: async () => ({ ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } }),
+          update: async (args: any) => {
+            eventRow = { ...eventRow, ...args.data, connector };
+            return eventRow;
+          },
+        },
+        integrationReconciliationReport: {
+          count: async () => reports.length,
+          findUnique: async () => null,
+          create: async (args: any) => {
+            reports.push(args.data);
+            return args.data;
+          },
+        },
+        integrationConnector: { update: async () => undefined },
+        integrationJob: { updateMany: async () => ({ count: 1 }) },
+      }),
+  };
+  const service = serviceWith(prisma, auditLog);
+
+  const result = await service.retryEvent(['system_admin'], 'event-1', { reason: 'fixed source payload' }, 'admin@dgop.local') as any;
+
+  assert.strictEqual(result.status, IntegrationEventStatus.succeeded);
+  assert.strictEqual(result.attempts, 2);
+  assert.strictEqual(reports.length, 1);
+  assert.ok(auditLog.some((entry: any) => entry.action === 'integration.event.retry'));
 });
 
 (async () => {

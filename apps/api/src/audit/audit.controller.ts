@@ -12,6 +12,12 @@ export class AuditController {
     return this.service.facets();
   }
 
+  @Get('chain/verify')
+  @RequirePermissions('audit.view')
+  verifyChain(@Query('limit') limit?: string) {
+    return this.service.verifyChain(limit);
+  }
+
   @Get()
   @RequirePermissions('audit.view')
   list(

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  CaseStatus,
   DataQualityDimension,
   DataQualityIssueStatus,
   DataQualityPriority,
@@ -14,11 +15,11 @@ import {
   DataQualitySlaStage,
   DataQualitySlaStatus,
   Prisma,
-  TaskStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
+import { WorkflowService } from '../workflow/workflow.service';
 import { parseCsv } from '../common/csv';
 import { parsePageParams, toPaged } from '../common/pagination';
 import {
@@ -90,6 +91,7 @@ export class DataQualityService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
+    private readonly workflow?: WorkflowService,
   ) {}
 
   private assetScopeWhere(scope: EffectiveScope): Record<string, unknown> {
@@ -456,7 +458,7 @@ export class DataQualityService {
         },
       });
       await this.writeEvidence(tx, issue.id, 'issue.created', actor, 'Issue registered and ready for triage.');
-      await this.createWorkflow(tx, issue.id, actor);
+      await this.createWorkflow(tx, issue.id, roleCodes, actor);
       await this.writeAudit(tx, actor, 'data_quality_issue.create', 'data_quality_issue', issue.id, {
         code,
         assetId: dto.assetId ?? null,
@@ -525,26 +527,19 @@ export class DataQualityService {
         data: { status: DataQualitySlaStatus.completed },
       });
       if (existing.workflowCaseId) {
-        await tx.workflowTask.updateMany({
-          where: {
-            caseId: existing.workflowCaseId,
-            status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
-          },
-          data: { status: TaskStatus.completed, completedAt: now },
-        });
-        await tx.workflowCase.update({
-          where: { id: existing.workflowCaseId },
-          data: { status: 'closed' },
-        });
-        await tx.workflowEvent.create({
-          data: {
-            caseId: existing.workflowCaseId,
-            actor,
-            action: 'case.closed',
-            fromStatus: String(existing.workflowCase?.status ?? ''),
-            toStatus: 'closed',
-            comment: 'Data quality issue closed with evidence note.',
-          },
+        if (!this.workflow) throw new BadRequestException('Workflow engine is unavailable');
+        await this.workflow.recordDomainCaseProgress({
+          caseId: existing.workflowCaseId,
+          roleCodes,
+          actor,
+          targetStatus: CaseStatus.closed,
+          eventAction: 'data_quality_issue.closed',
+          comment: dto.resolutionSummary,
+          completeOpenTasks: true,
+        }, tx);
+      } else {
+        await this.writeAudit(tx, actor, 'workflow_case.not_linked', 'data_quality_issue', id, {
+          reason: 'Data quality issue closed without a linked workflow case',
         });
       }
       await this.writeAudit(tx, actor, 'data_quality_issue.close', 'data_quality_issue', id);
@@ -561,51 +556,38 @@ export class DataQualityService {
     return { success: true };
   }
 
-  private async createWorkflow(client: PrismaWriter, issueId: string, actor: string): Promise<void> {
+  private async createWorkflow(
+    client: PrismaWriter,
+    issueId: string,
+    roleCodes: string[],
+    actor: string,
+  ): Promise<void> {
     const issue = await client.dataQualityIssue.findUnique({
       where: { id: issueId },
       include: { responsiblePerson: true },
     });
     if (!issue || issue.workflowCaseId) return;
-    const code = await this.nextCaseCode(client, issue.code);
-    const wfCase = await client.workflowCase.create({
-      data: {
-        code,
+    if (!this.workflow) throw new BadRequestException('Workflow engine is unavailable');
+    const wfCase = await this.workflow.openRoutedCase(
+      {
+        roleCodes,
+        actor,
         title: `Resolve DQ issue: ${issue.title}`,
         description: issue.description,
         type: 'data_quality_issue',
-        status: 'submitted',
+        status: CaseStatus.submitted,
         assetId: issue.assetId,
-        createdBy: actor,
+        preferredCode: await this.nextCaseCode(client, issue.code),
+        initialAssigneeUserId: issue.responsiblePerson?.userId ?? null,
+        initialDueDate: issue.dueDate,
       },
-    });
-    const task = await client.workflowTask.create({
-      data: {
-        caseId: wfCase.id,
-        title: 'Investigate and remediate data quality issue',
-        type: 'remediation',
-        status: 'pending',
-        assigneeUserId: issue.responsiblePerson?.userId ?? null,
-        dueDate: issue.dueDate,
-      },
-    });
-    await client.workflowEvent.createMany({
-      data: [
-        { caseId: wfCase.id, actor, action: 'case.created', toStatus: 'submitted' },
-        {
-          caseId: wfCase.id,
-          taskId: task.id,
-          actor,
-          action: 'task.assigned',
-          comment: issue.responsiblePerson?.fullNameEn ?? 'No responsible steward found yet',
-        },
-      ],
-    });
+      client as Prisma.TransactionClient,
+    );
     await client.dataQualityIssue.update({
       where: { id: issueId },
       data: { workflowCaseId: wfCase.id },
     });
-    await this.writeEvidence(client, issueId, 'workflow.created', actor, `Workflow case ${code} opened.`);
+    await this.writeEvidence(client, issueId, 'workflow.created', actor, `Workflow case ${wfCase.code} opened.`);
   }
 
   private async writeEvidence(client: PrismaWriter, issueId: string, action: string, actor: string, note?: string) {

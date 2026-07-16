@@ -219,3 +219,307 @@ export const MOCK_CATALOG_ROWS: Record<string, string>[] = [
     classificationcode: 'internal',
   },
 ];
+
+export type IntegrationAdapterKey =
+  | 'catalog_csv'
+  | 'mock_rest'
+  | 'webhook_json'
+  | 'mock_data_quality'
+  | 'mock_dlp'
+  | 'mock_open_data'
+  | 'mock_foi'
+  | 'mock_lms'
+  | 'mock_siem'
+  | 'mock_iam_sso';
+
+export type IntegrationConnectorKey =
+  | 'catalog'
+  | 'lineage'
+  | 'data_quality'
+  | 'dlp'
+  | 'pdp'
+  | 'ndi'
+  | 'risk'
+  | 'profiling'
+  | 'training'
+  | 'open_data'
+  | 'foi'
+  | 'lms'
+  | 'siem'
+  | 'iam_sso'
+  | 'masking'
+  | 'abac';
+
+export interface DefaultIntegrationConnectorDefinition {
+  code: string;
+  nameEn: string;
+  nameAr: string;
+  description: string;
+  type: IntegrationConnectorKey;
+  adapterType: IntegrationAdapterKey;
+  defaultEventType: string;
+  sourceName: string;
+}
+
+export const DEFAULT_INTEGRATION_CONNECTORS: DefaultIntegrationConnectorDefinition[] = [
+  {
+    code: 'DQ-MOCK',
+    nameEn: 'Data Quality Engine',
+    nameAr: 'Data Quality Engine',
+    description: 'Receives rule runs, profiling alerts, and data quality score events.',
+    type: 'data_quality',
+    adapterType: 'mock_data_quality',
+    defaultEventType: 'dq.issue.detected',
+    sourceName: 'Mock DQ engine',
+  },
+  {
+    code: 'DLP-MOCK',
+    nameEn: 'DLP Monitor',
+    nameAr: 'DLP Monitor',
+    description: 'Receives data loss prevention incidents and policy alerts.',
+    type: 'dlp',
+    adapterType: 'mock_dlp',
+    defaultEventType: 'dlp.incident.opened',
+    sourceName: 'Mock DLP monitor',
+  },
+  {
+    code: 'OPEN-DATA-MOCK',
+    nameEn: 'Open Data Portal',
+    nameAr: 'Open Data Portal',
+    description: 'Tracks publication package status, portal acknowledgements, and release errors.',
+    type: 'open_data',
+    adapterType: 'mock_open_data',
+    defaultEventType: 'open_data.package.status',
+    sourceName: 'Mock Open Data portal',
+  },
+  {
+    code: 'FOI-MOCK',
+    nameEn: 'FOI Channel',
+    nameAr: 'FOI Channel',
+    description: 'Receives public request events, response due dates, and closure signals.',
+    type: 'foi',
+    adapterType: 'mock_foi',
+    defaultEventType: 'foi.request.received',
+    sourceName: 'Mock FOI channel',
+  },
+  {
+    code: 'LMS-MOCK',
+    nameEn: 'Awareness LMS',
+    nameAr: 'Awareness LMS',
+    description: 'Receives training completion and awareness campaign signals.',
+    type: 'lms',
+    adapterType: 'mock_lms',
+    defaultEventType: 'training.completion.updated',
+    sourceName: 'Mock LMS',
+  },
+  {
+    code: 'SIEM-MOCK',
+    nameEn: 'Security SIEM',
+    nameAr: 'Security SIEM',
+    description: 'Receives sensitive access, privileged activity, and security monitoring events.',
+    type: 'siem',
+    adapterType: 'mock_siem',
+    defaultEventType: 'security.sensitive_access.detected',
+    sourceName: 'Mock SIEM',
+  },
+];
+
+export interface IntegrationAdapterProfile {
+  adapterType: IntegrationAdapterKey;
+  family: string;
+  defaultEventType: string;
+  supportsRetry: boolean;
+  requiredPayloadFields: string[];
+}
+
+const ADAPTER_PROFILES: Record<IntegrationAdapterKey, IntegrationAdapterProfile> = {
+  catalog_csv: {
+    adapterType: 'catalog_csv',
+    family: 'catalog',
+    defaultEventType: 'catalog.asset.imported',
+    supportsRetry: false,
+    requiredPayloadFields: ['code'],
+  },
+  mock_rest: {
+    adapterType: 'mock_rest',
+    family: 'catalog',
+    defaultEventType: 'catalog.asset.imported',
+    supportsRetry: true,
+    requiredPayloadFields: ['code'],
+  },
+  webhook_json: {
+    adapterType: 'webhook_json',
+    family: 'generic',
+    defaultEventType: 'integration.event.received',
+    supportsRetry: true,
+    requiredPayloadFields: [],
+  },
+  mock_data_quality: {
+    adapterType: 'mock_data_quality',
+    family: 'data_quality',
+    defaultEventType: 'dq.issue.detected',
+    supportsRetry: true,
+    requiredPayloadFields: ['assetCode'],
+  },
+  mock_dlp: {
+    adapterType: 'mock_dlp',
+    family: 'security',
+    defaultEventType: 'dlp.incident.opened',
+    supportsRetry: true,
+    requiredPayloadFields: ['assetCode'],
+  },
+  mock_open_data: {
+    adapterType: 'mock_open_data',
+    family: 'transparency',
+    defaultEventType: 'open_data.package.status',
+    supportsRetry: true,
+    requiredPayloadFields: ['packageCode'],
+  },
+  mock_foi: {
+    adapterType: 'mock_foi',
+    family: 'transparency',
+    defaultEventType: 'foi.request.received',
+    supportsRetry: true,
+    requiredPayloadFields: ['requestCode'],
+  },
+  mock_lms: {
+    adapterType: 'mock_lms',
+    family: 'awareness',
+    defaultEventType: 'training.completion.updated',
+    supportsRetry: true,
+    requiredPayloadFields: ['personEmail'],
+  },
+  mock_siem: {
+    adapterType: 'mock_siem',
+    family: 'security',
+    defaultEventType: 'security.sensitive_access.detected',
+    supportsRetry: true,
+    requiredPayloadFields: ['actor'],
+  },
+  mock_iam_sso: {
+    adapterType: 'mock_iam_sso',
+    family: 'access',
+    defaultEventType: 'iam.role.changed',
+    supportsRetry: true,
+    requiredPayloadFields: ['subject'],
+  },
+};
+
+export interface NormalizedIntegrationEvent {
+  adapterType: IntegrationAdapterKey;
+  family: string;
+  eventType: string;
+  externalId: string | null;
+  subject: string;
+  status: string;
+  severity: 'warning' | 'error';
+  sourceSystem: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface IntegrationEventIssue {
+  field?: string;
+  message: string;
+}
+
+export interface IntegrationEventNormalization {
+  accepted: boolean;
+  normalized: NormalizedIntegrationEvent;
+  issues: IntegrationEventIssue[];
+}
+
+export function integrationAdapterProfile(adapterType: IntegrationAdapterKey): IntegrationAdapterProfile {
+  return ADAPTER_PROFILES[adapterType] ?? ADAPTER_PROFILES.webhook_json;
+}
+
+function payloadValue(payload: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function payloadRecord(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {};
+}
+
+export function normalizeIntegrationEventPayload(
+  adapterType: IntegrationAdapterKey,
+  eventType: string | null | undefined,
+  payload: unknown,
+): IntegrationEventNormalization {
+  const profile = integrationAdapterProfile(adapterType);
+  const raw = payloadRecord(payload);
+  const issues: IntegrationEventIssue[] = [];
+  for (const field of profile.requiredPayloadFields) {
+    if (!payloadValue(raw, [field])) {
+      issues.push({ field, message: `Missing required integration payload field: ${field}` });
+    }
+  }
+  if (raw['forceFail'] === true || raw['valid'] === false) {
+    issues.push({ field: 'payload', message: 'Adapter reported that the source payload is not ready to process' });
+  }
+  const externalId = payloadValue(raw, ['externalEventId', 'eventId', 'id', 'code', 'ticketId', 'requestCode', 'packageCode']);
+  const subject =
+    payloadValue(raw, ['assetCode', 'packageCode', 'requestCode', 'personEmail', 'actor', 'subject', 'code']) ??
+    externalId ??
+    'Unspecified subject';
+  const severityInput = (payloadValue(raw, ['severity', 'risk', 'priority']) ?? '').toLowerCase();
+  const severity = ['critical', 'high', 'error', 'severe'].includes(severityInput) || issues.length > 0 ? 'error' : 'warning';
+  const normalized: NormalizedIntegrationEvent = {
+    adapterType,
+    family: profile.family,
+    eventType: eventType?.trim() || profile.defaultEventType,
+    externalId,
+    subject,
+    status: payloadValue(raw, ['status', 'state', 'decision']) ?? 'received',
+    severity,
+    sourceSystem: payloadValue(raw, ['sourceSystem', 'source', 'system']) ?? null,
+    raw,
+  };
+  return { accepted: issues.length === 0, normalized, issues };
+}
+
+export function integrationRetryDelayMinutes(nextAttempt: number): number {
+  if (nextAttempt <= 1) return 5;
+  if (nextAttempt === 2) return 15;
+  return 60;
+}
+
+export function nextIntegrationEventStatus(input: {
+  accepted: boolean;
+  currentAttempts: number;
+  maxAttempts: number;
+}): {
+  attempts: number;
+  status: 'succeeded' | 'retry_scheduled' | 'dead_letter';
+  delayMinutes: number | null;
+} {
+  const attempts = input.currentAttempts + 1;
+  if (input.accepted) return { attempts, status: 'succeeded', delayMinutes: null };
+  if (attempts >= input.maxAttempts) return { attempts, status: 'dead_letter', delayMinutes: null };
+  return { attempts, status: 'retry_scheduled', delayMinutes: integrationRetryDelayMinutes(attempts) };
+}
+
+export function reconciliationForIntegrationEvent(input: {
+  accepted: boolean;
+  created?: boolean;
+  updated?: boolean;
+  issues: IntegrationEventIssue[];
+}) {
+  const failedRecords = input.accepted ? 0 : Math.max(1, input.issues.length);
+  return {
+    status: input.accepted ? ('healthy' as const) : ('review' as const),
+    totalRecords: 1,
+    matchedRecords: input.accepted ? 1 : 0,
+    createdRecords: input.created ? 1 : 0,
+    updatedRecords: input.updated ? 1 : 0,
+    failedRecords,
+    orphanedRecords: 0,
+    missingRecords: 0,
+  };
+}

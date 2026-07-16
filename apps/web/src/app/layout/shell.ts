@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  ViewChild,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   NavigationEnd,
@@ -23,6 +31,9 @@ import { AppIcon } from '../shared/app-icon';
   styleUrl: './shell.scss',
 })
 export class Shell {
+  @ViewChild('sidebar') private readonly sidebar?: ElementRef<HTMLElement>;
+  @ViewChild('navToggle') private readonly navToggle?: ElementRef<HTMLButtonElement>;
+
   protected readonly theme = inject(ThemeService);
   protected readonly i18n = inject(I18nService);
   protected readonly auth = inject(AuthService);
@@ -77,7 +88,7 @@ export class Shell {
       .subscribe((e) => {
         this.url.set(e.urlAfterRedirects);
         this.menuOpen.set(false);
-        this.mobileNavOpen.set(false);
+        this.closeMobileNav();
         this.refreshOpenTasks();
       });
     this.refreshOpenTasks();
@@ -124,7 +135,23 @@ export class Shell {
   }
 
   protected closeMobileNav(): void {
+    this.moveFocusOutOfSidebar();
     this.mobileNavOpen.set(false);
+  }
+
+  protected openMobileNav(): void {
+    this.mobileNavOpen.set(true);
+  }
+
+  private moveFocusOutOfSidebar(): void {
+    if (typeof document === 'undefined') return;
+    const sidebar = this.sidebar?.nativeElement;
+    const active = document.activeElement;
+    if (!sidebar || !(active instanceof HTMLElement) || !sidebar.contains(active)) return;
+    this.navToggle?.nativeElement.focus({ preventScroll: true });
+    if (sidebar.contains(document.activeElement)) {
+      document.getElementById('main-content')?.focus({ preventScroll: true });
+    }
   }
 
   protected sectionToggleLabel(section: NavSection): string {

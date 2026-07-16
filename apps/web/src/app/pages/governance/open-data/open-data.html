@@ -25,7 +25,9 @@
       </div>
       <div class="strip-card"><span>{{ t('openData.metric.total') }}</span><strong>{{ s.total }}</strong><small>{{ t('openData.metric.totalHelp') }}</small></div>
       <div class="strip-card"><span>{{ t('openData.metric.review') }}</span><strong>{{ s.underReview }}</strong><small>{{ t('openData.metric.reviewHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('openData.metric.approvals') }}</span><strong>{{ s.pendingApprovals }}</strong><small>{{ t('openData.metric.approvalsHelp') }}</small></div>
       <div class="strip-card"><span>{{ t('openData.metric.published') }}</span><strong>{{ s.published }}</strong><small>{{ t('openData.metric.publishedHelp') }}</small></div>
+      <div class="strip-card"><span>{{ t('openData.metric.usage') }}</span><strong>{{ s.downloads + s.apiCalls }}</strong><small>{{ t('openData.metric.usageHelp') }}</small></div>
       <div class="strip-card" [class.strip-card--danger]="s.overdueReview > 0"><span>{{ t('openData.metric.overdue') }}</span><strong>{{ s.overdueReview }}</strong><small>{{ t('openData.metric.overdueHelp') }}</small></div>
     </div>
   }
@@ -147,6 +149,190 @@
               <span>{{ t('openData.signal.value') }}</span>
               <app-status-chip [kind]="signalKind(candidate.publicationValueSignal)" [label]="t('openData.signal.' + candidate.publicationValueSignal)" />
             </div>
+          </div>
+
+          <div class="lifecycle-grid" aria-label="Open Data lifecycle controls">
+            <section class="lifecycle-panel lifecycle-panel--wide">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">{{ t('openData.assessment.eyebrow') }}</span>
+                  <h3>{{ t('openData.assessment.title') }}</h3>
+                  <p>{{ t('openData.assessment.subtitle') }}</p>
+                </div>
+                @if (latestAssessment(candidate); as assessment) {
+                  <app-status-chip [kind]="signalKind(assessment.resultSignal)" [label]="assessment.readinessScore + '%'" />
+                }
+              </div>
+              <div class="check-grid">
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().publicClassification" (ngModelChange)="assessmentDraft.update(d => ({ ...d, publicClassification: $event }))" />
+                  <span>{{ t('openData.assessment.publicClassification') }}</span>
+                </label>
+                <label class="check-item check-item--inverse">
+                  <input type="checkbox" [ngModel]="assessmentDraft().restrictedInformation" (ngModelChange)="assessmentDraft.update(d => ({ ...d, restrictedInformation: $event }))" />
+                  <span>{{ t('openData.assessment.restrictedInformation') }}</span>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().aggregationApplied" (ngModelChange)="assessmentDraft.update(d => ({ ...d, aggregationApplied: $event }))" />
+                  <span>{{ t('openData.assessment.aggregation') }}</span>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().anonymizationApplied" (ngModelChange)="assessmentDraft.update(d => ({ ...d, anonymizationApplied: $event }))" />
+                  <span>{{ t('openData.assessment.anonymization') }}</span>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().dqAcceptable" (ngModelChange)="assessmentDraft.update(d => ({ ...d, dqAcceptable: $event }))" />
+                  <span>{{ t('openData.assessment.dqAcceptable') }}</span>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().metadataComplete" (ngModelChange)="assessmentDraft.update(d => ({ ...d, metadataComplete: $event }))" />
+                  <span>{{ t('openData.assessment.metadata') }}</span>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().privacyReviewComplete" (ngModelChange)="assessmentDraft.update(d => ({ ...d, privacyReviewComplete: $event }))" />
+                  <span>{{ t('openData.assessment.privacy') }}</span>
+                </label>
+                <label class="check-item">
+                  <input type="checkbox" [ngModel]="assessmentDraft().legalReviewComplete" (ngModelChange)="assessmentDraft.update(d => ({ ...d, legalReviewComplete: $event }))" />
+                  <span>{{ t('openData.assessment.legal') }}</span>
+                </label>
+              </div>
+              <textarea
+                class="field__input"
+                rows="2"
+                [ngModel]="assessmentDraft().note"
+                (ngModelChange)="assessmentDraft.update(d => ({ ...d, note: $event }))"
+                [placeholder]="t('openData.assessment.notePlaceholder')"
+              ></textarea>
+              <div class="panel-actions">
+                <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="lifecycleSaving()" (click)="saveAssessment(candidate, false)">{{ t('openData.assessment.saveDraft') }}</button>
+                <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="lifecycleSaving()" (click)="saveAssessment(candidate, true)">{{ t('openData.assessment.complete') }}</button>
+              </div>
+            </section>
+
+            <section class="lifecycle-panel">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">{{ t('openData.approval.eyebrow') }}</span>
+                  <h3>{{ t('openData.approval.title') }}</h3>
+                  <p>{{ t('openData.approval.subtitle') }}</p>
+                </div>
+                <span class="queue-count">{{ pendingApprovalCount() }}</span>
+              </div>
+              <div class="approval-list">
+                @for (approval of candidate.approvals ?? []; track approval.id) {
+                  <div class="approval-row">
+                    <div>
+                      <strong>{{ t('openData.approval.step.' + approval.step) }}</strong>
+                      @if (approval.workflowCase) {
+                        <small>{{ approval.workflowCase.code }}</small>
+                      }
+                    </div>
+                    <app-status-chip [kind]="approvalKind(approval.decision)" [label]="t('openData.approval.decision.' + approval.decision)" />
+                    @if (canEdit && approval.decision === 'pending') {
+                      <div class="approval-actions">
+                        <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="lifecycleSaving()" (click)="decideApproval(candidate, approval, 'approved')">{{ t('openData.approval.approve') }}</button>
+                        <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="lifecycleSaving()" (click)="decideApproval(candidate, approval, 'needs_changes')">{{ t('openData.approval.needsChanges') }}</button>
+                      </div>
+                    }
+                  </div>
+                } @empty {
+                  <p class="muted">{{ t('openData.approval.empty') }}</p>
+                }
+              </div>
+            </section>
+
+            <section class="lifecycle-panel">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">{{ t('openData.publication.eyebrow') }}</span>
+                  <h3>{{ t('openData.publication.title') }}</h3>
+                  <p>{{ t('openData.publication.subtitle') }}</p>
+                </div>
+                @if (latestPublication(candidate); as publication) {
+                  <app-status-chip [kind]="publication.syncStatus === 'failed' ? 'danger' : 'success'" [label]="t('openData.publication.sync.' + publication.syncStatus)" />
+                }
+              </div>
+              <div class="compact-form">
+                <label class="field">
+                  <span class="field__label">{{ t('openData.publication.portalRecord') }}</span>
+                  <input class="field__input" [ngModel]="publicationDraft().portalRecordId" (ngModelChange)="publicationDraft.update(d => ({ ...d, portalRecordId: $event }))" />
+                </label>
+                <label class="field">
+                  <span class="field__label">{{ t('openData.field.nextReview') }}</span>
+                  <input class="field__input" type="date" [ngModel]="publicationDraft().nextReviewAt" (ngModelChange)="publicationDraft.update(d => ({ ...d, nextReviewAt: $event }))" />
+                </label>
+                <label class="field field--wide">
+                  <span class="field__label">{{ t('openData.field.portal') }}</span>
+                  <input class="field__input" [ngModel]="publicationDraft().portalUrl" (ngModelChange)="publicationDraft.update(d => ({ ...d, portalUrl: $event }))" />
+                </label>
+              </div>
+              <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="lifecycleSaving() || candidate.status !== 'approved'" (click)="publishCandidate(candidate)">
+                {{ t('openData.publication.publish') }}
+              </button>
+            </section>
+
+            <section class="lifecycle-panel">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">{{ t('openData.review.eyebrow') }}</span>
+                  <h3>{{ t('openData.review.title') }}</h3>
+                  <p>{{ t('openData.review.subtitle') }}</p>
+                </div>
+              </div>
+              <div class="compact-form">
+                <label class="field">
+                  <span class="field__label">{{ t('openData.review.decision') }}</span>
+                  <select class="field__input" [ngModel]="reviewDraft().decision" (ngModelChange)="reviewDraft.update(d => ({ ...d, decision: $event }))">
+                    @for (decision of reviewDecisions; track decision) {
+                      <option [value]="decision">{{ t('openData.review.decision.' + decision) }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">{{ t('openData.field.nextReview') }}</span>
+                  <input class="field__input" type="date" [ngModel]="reviewDraft().nextReviewAt" (ngModelChange)="reviewDraft.update(d => ({ ...d, nextReviewAt: $event }))" />
+                </label>
+              </div>
+              <textarea class="field__input" rows="2" [ngModel]="reviewDraft().note" (ngModelChange)="reviewDraft.update(d => ({ ...d, note: $event }))" [placeholder]="t('openData.review.notePlaceholder')"></textarea>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="lifecycleSaving() || candidate.status !== 'published'" (click)="createReview(candidate)">
+                {{ t('openData.review.record') }}
+              </button>
+            </section>
+
+            <section class="lifecycle-panel lifecycle-panel--wide">
+              <div class="panel-head compact">
+                <div>
+                  <span class="eyebrow">{{ t('openData.usage.eyebrow') }}</span>
+                  <h3>{{ t('openData.usage.title') }}</h3>
+                  <p>{{ t('openData.usage.subtitle') }}</p>
+                </div>
+                @if (usageTotals(candidate); as usage) {
+                  <span class="queue-count">{{ usage.downloads + usage.apiCalls }}</span>
+                }
+              </div>
+              <div class="usage-grid">
+                <label class="field">
+                  <span class="field__label">{{ t('openData.usage.downloads') }}</span>
+                  <input class="field__input" type="number" min="0" [ngModel]="usageDraft().downloads" (ngModelChange)="usageDraft.update(d => ({ ...d, downloads: +$event }))" />
+                </label>
+                <label class="field">
+                  <span class="field__label">{{ t('openData.usage.apiCalls') }}</span>
+                  <input class="field__input" type="number" min="0" [ngModel]="usageDraft().apiCalls" (ngModelChange)="usageDraft.update(d => ({ ...d, apiCalls: +$event }))" />
+                </label>
+                <label class="field">
+                  <span class="field__label">{{ t('openData.usage.uniqueUsers') }}</span>
+                  <input class="field__input" type="number" min="0" [ngModel]="usageDraft().uniqueUsers" (ngModelChange)="usageDraft.update(d => ({ ...d, uniqueUsers: +$event }))" />
+                </label>
+                <label class="field">
+                  <span class="field__label">{{ t('openData.usage.source') }}</span>
+                  <input class="field__input" [ngModel]="usageDraft().source" (ngModelChange)="usageDraft.update(d => ({ ...d, source: $event }))" />
+                </label>
+              </div>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="lifecycleSaving() || candidate.status !== 'published'" (click)="recordUsage(candidate)">
+                {{ t('openData.usage.record') }}
+              </button>
+            </section>
           </div>
 
           <dl class="facts">
@@ -316,7 +502,7 @@
         </div>
         <div class="field field--wide">
           <label class="field__label">{{ t('openData.field.portal') }}</label>
-          <input class="field__input" [ngModel]="draft().portalUrl" name="portalUrl" (ngModelChange)="draft.update(d => ({ ...d, portalUrl: $event }))" placeholder="https://data.gov.sa/..." />
+          <input class="field__input" [ngModel]="draft().portalUrl" name="portalUrl" (ngModelChange)="draft.update(d => ({ ...d, portalUrl: $event }))" [placeholder]="t('openData.placeholder.portalUrl')" />
         </div>
         <div class="field field--wide">
           <label class="field__label">{{ t('openData.field.note') }}</label>

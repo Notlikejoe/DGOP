@@ -68,6 +68,21 @@ const ADMIN_RESOURCES = [
   'classification_change_requests',
   'integrations',
   'open_data_candidates',
+  'foi_requests',
+  'foi_disclosures',
+  'foi_appeals',
+  'privacy_operations',
+  'privacy_legal_bases',
+  'privacy_ropa_records',
+  'privacy_dpias',
+  'privacy_dsr_requests',
+  'privacy_breaches',
+  'data_sharing_requests',
+  'data_sharing_agreements',
+  'ndi_audit_packs',
+  'extended_domains',
+  'business_value',
+  'governance_operations',
 ];
 const CRUD_ACTIONS = ['view', 'create', 'edit', 'delete'];
 
@@ -87,11 +102,15 @@ const permissionCatalog: { resource: string; action: string }[] = [
   { resource: 'evidence', action: 'delete' },
   // NDI scoring & gap analysis (read-only readiness views).
   { resource: 'ndi_scoring', action: 'view' },
+  // Audit-pack packaging needs explicit generate/download actions.
+  { resource: 'ndi_audit_packs', action: 'generate' },
+  { resource: 'ndi_audit_packs', action: 'download' },
   // Bulk CSV import of data quality issues.
   { resource: 'data_quality_issues', action: 'import' },
   // Catalog and external tool integration operations.
   { resource: 'integrations', action: 'run' },
   { resource: 'integrations', action: 'writeback' },
+  { resource: 'governance_operations', action: 'run' },
   ...ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => ({ resource: r, action: a }))),
 ];
 
@@ -110,9 +129,12 @@ const rolePermissionMap: Record<string, string[]> = {
     'evidence.review',
     'evidence.delete',
     'ndi_scoring.view',
+    'ndi_audit_packs.generate',
+    'ndi_audit_packs.download',
     'data_quality_issues.import',
     'integrations.run',
     'integrations.writeback',
+    'governance_operations.run',
     'audit.view',
   ],
   business_steward: [
@@ -122,6 +144,11 @@ const rolePermissionMap: Record<string, string[]> = {
     'workflow_cases.view',
     'workflow_tasks.view',
     'ndi_specifications.view',
+    'extended_domains.view',
+    'business_value.view',
+    'business_value.create',
+    'business_value.edit',
+    'governance_operations.view',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -146,6 +173,14 @@ const rolePermissionMap: Record<string, string[]> = {
     'open_data_candidates.view',
     'open_data_candidates.create',
     'open_data_candidates.edit',
+    'privacy_operations.view',
+    'data_sharing_requests.view',
+    'data_sharing_requests.edit',
+    'extended_domains.view',
+    'business_value.view',
+    'business_value.create',
+    'business_value.edit',
+    'governance_operations.view',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -164,6 +199,13 @@ const rolePermissionMap: Record<string, string[]> = {
     'assignments.view',
     'workflow_cases.view',
     'workflow_tasks.view',
+    'extended_domains.view',
+    'extended_domains.create',
+    'extended_domains.edit',
+    'business_value.view',
+    'business_value.create',
+    'business_value.edit',
+    'governance_operations.view',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -182,6 +224,10 @@ const rolePermissionMap: Record<string, string[]> = {
     'assignments.view',
     'workflow_cases.view',
     'workflow_tasks.view',
+    'extended_domains.view',
+    'business_value.view',
+    'business_value.create',
+    'governance_operations.view',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -200,6 +246,13 @@ const rolePermissionMap: Record<string, string[]> = {
     'assignments.view',
     'workflow_cases.view',
     'workflow_tasks.view',
+    'extended_domains.view',
+    'extended_domains.create',
+    'extended_domains.edit',
+    'business_value.view',
+    'business_value.create',
+    'business_value.edit',
+    'governance_operations.view',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -221,6 +274,15 @@ const rolePermissionMap: Record<string, string[]> = {
     'workflow_tasks.view',
     'ndi_specifications.view',
     'ndi_scoring.view',
+    'ndi_audit_packs.view',
+    'extended_domains.view',
+    'extended_domains.create',
+    'extended_domains.edit',
+    'business_value.view',
+    'business_value.create',
+    'business_value.edit',
+    'governance_operations.view',
+    'governance_operations.run',
     'security_governance.view',
     'access_reviews.view',
     'open_data_candidates.view',
@@ -260,6 +322,7 @@ const rolePermissionMap: Record<string, string[]> = {
     'data_quality_rules.edit',
     'data_quality_profiles.view',
     'data_quality_profiles.create',
+    'governance_operations.view',
     'training_assignments.view',
     'training_assignments.edit',
     'certification_tracks.view',
@@ -282,6 +345,11 @@ const rolePermissionMap: Record<string, string[]> = {
     'ndi_specifications.view',
     'evidence.view',
     'ndi_scoring.view',
+    'ndi_audit_packs.view',
+    'ndi_audit_packs.download',
+    'extended_domains.view',
+    'business_value.view',
+    'governance_operations.view',
     'training_courses.view',
     'training_requirements.view',
     'training_assignments.view',
@@ -303,6 +371,15 @@ const rolePermissionMap: Record<string, string[]> = {
     'integrations.view',
     'open_data_candidates.view',
     'audit.view',
+    'privacy_operations.view',
+    'privacy_legal_bases.view',
+    'privacy_ropa_records.view',
+    'privacy_dpias.view',
+    'privacy_dsr_requests.view',
+    'privacy_breaches.view',
+    'data_sharing_requests.view',
+    'data_sharing_agreements.view',
+    'governance_operations.view',
   ],
   privacy_officer: [
     ...BASE_PERMS,
@@ -329,6 +406,29 @@ const rolePermissionMap: Record<string, string[]> = {
     'integrations.run',
     'integrations.writeback',
     'open_data_candidates.view',
+    'privacy_operations.view',
+    'privacy_operations.create',
+    'privacy_operations.edit',
+    'privacy_legal_bases.view',
+    'privacy_legal_bases.create',
+    'privacy_legal_bases.edit',
+    'privacy_ropa_records.view',
+    'privacy_ropa_records.create',
+    'privacy_ropa_records.edit',
+    'privacy_dpias.view',
+    'privacy_dpias.create',
+    'privacy_dpias.edit',
+    'privacy_dsr_requests.view',
+    'privacy_dsr_requests.create',
+    'privacy_dsr_requests.edit',
+    'privacy_breaches.view',
+    'privacy_breaches.create',
+    'privacy_breaches.edit',
+    'data_sharing_requests.view',
+    'data_sharing_requests.create',
+    'data_sharing_requests.edit',
+    'data_sharing_agreements.view',
+    'governance_operations.view',
     'audit.view',
   ],
   od_officer: [
@@ -347,6 +447,27 @@ const rolePermissionMap: Record<string, string[]> = {
     'open_data_candidates.create',
     'open_data_candidates.edit',
     'open_data_candidates.delete',
+    'privacy_operations.view',
+    'data_sharing_requests.view',
+    'data_sharing_agreements.view',
+    'governance_operations.view',
+    'audit.view',
+  ],
+  foi_officer: [
+    ...BASE_PERMS,
+    'data_assets.view',
+    'people.view',
+    'classifications.view',
+    'workflow_cases.view',
+    'workflow_tasks.view',
+    'governance_operations.view',
+    'foi_requests.view',
+    'foi_requests.create',
+    'foi_requests.edit',
+    'foi_disclosures.view',
+    'foi_disclosures.create',
+    'foi_appeals.view',
+    'foi_appeals.create',
     'audit.view',
   ],
   security_reviewer: [
@@ -371,6 +492,14 @@ const rolePermissionMap: Record<string, string[]> = {
     'dlp_incidents.edit',
     'classification_change_requests.view',
     'classification_change_requests.edit',
+    'privacy_operations.view',
+    'privacy_breaches.view',
+    'privacy_breaches.edit',
+    'data_sharing_requests.view',
+    'data_sharing_requests.edit',
+    'data_sharing_agreements.view',
+    'data_sharing_agreements.edit',
+    'governance_operations.view',
     'audit.view',
   ],
   ndi_evidence_owner: [
@@ -378,6 +507,8 @@ const rolePermissionMap: Record<string, string[]> = {
     'ndi_specifications.view',
     'evidence.view',
     'evidence.create',
+    'ndi_audit_packs.view',
+    'governance_operations.view',
     'training_courses.view',
     'training_assignments.view',
     'training_assignments.edit',
@@ -694,7 +825,7 @@ const people = [
 ];
 
 const sampleUserRoles = [
-  { email: 'sara.alamri@dgop.local', roleCodes: ['enterprise_data_steward', 'ndi_evidence_owner', 'privacy_officer', 'od_officer'] },
+  { email: 'sara.alamri@dgop.local', roleCodes: ['enterprise_data_steward', 'ndi_evidence_owner', 'privacy_officer', 'od_officer', 'foi_officer'] },
   { email: 'khalid.hassan@dgop.local', roleCodes: ['data_owner'] },
   { email: 'mona.youssef@dgop.local', roleCodes: ['business_steward', 'dq_steward'] },
   { email: 'omar.farouk@dgop.local', roleCodes: ['technical_steward', 'operational_data_steward', 'security_reviewer'] },
@@ -1021,6 +1152,178 @@ const sampleOpenDataCandidates = [
   },
 ];
 
+const sampleFoiResponseTemplates = [
+  {
+    code: 'FOI-TPL-APPROVED',
+    nameEn: 'Approved disclosure response',
+    nameAr: 'Approved disclosure response',
+    outcome: 'approved',
+    bodyEn: 'Your information request has been approved. The disclosure package is attached or linked below.',
+    bodyAr: 'Your information request has been approved. The disclosure package is attached or linked below.',
+  },
+  {
+    code: 'FOI-TPL-PARTIAL',
+    nameEn: 'Partial disclosure response',
+    nameAr: 'Partial disclosure response',
+    outcome: 'partially_approved',
+    bodyEn: 'Your request has been partially approved. Restricted sections are withheld with the exemption basis documented.',
+    bodyAr: 'Your request has been partially approved. Restricted sections are withheld with the exemption basis documented.',
+  },
+  {
+    code: 'FOI-TPL-REJECTED',
+    nameEn: 'Rejected request response',
+    nameAr: 'Rejected request response',
+    outcome: 'rejected',
+    bodyEn: 'Your request cannot be fulfilled as submitted. The reason and appeal path are documented below.',
+    bodyAr: 'Your request cannot be fulfilled as submitted. The reason and appeal path are documented below.',
+  },
+];
+
+const sampleFoiRequests = [
+  {
+    requestNumber: 'FOI-2026-0001',
+    requesterName: 'Abeer Citizen',
+    requesterEmail: 'abeer.requester@example.com',
+    requesterType: 'individual',
+    channel: 'web',
+    category: 'statistics',
+    subject: 'Monthly supplier payment statistics',
+    description: 'Request for aggregated supplier payment statistics for the previous quarter.',
+    status: 'under_review',
+    assetCode: 'AST-FIN-INVOICES',
+    domainCode: 'finance',
+    classificationCode: 'internal',
+    assignedEmail: 'sara.alamri@dgop.local',
+    identityValidated: true,
+    contactValidated: true,
+  },
+  {
+    requestNumber: 'FOI-2026-0002',
+    requesterName: 'Media Research Desk',
+    requesterEmail: 'research@example.com',
+    requesterType: 'media',
+    channel: 'email',
+    category: 'record_request',
+    subject: 'Revenue cycle public indicators',
+    description: 'Request for the non-sensitive indicators behind the revenue public dashboard.',
+    status: 'decision_due',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    classificationCode: 'restricted',
+    assignedEmail: 'sara.alamri@dgop.local',
+    identityValidated: true,
+    contactValidated: true,
+  },
+];
+
+const samplePrivacyLegalBases = [
+  {
+    code: 'public-task',
+    nameEn: 'Public task',
+    nameAr: 'مهمة عامة',
+    category: 'public_task',
+    authority: 'PDPL 2023',
+    description: 'Processing is necessary for official public-sector duties.',
+  },
+  {
+    code: 'consent',
+    nameEn: 'Consent',
+    nameAr: 'الموافقة',
+    category: 'consent',
+    authority: 'PDPL 2023',
+    description: 'The data subject has granted specific consent for the stated purpose.',
+  },
+  {
+    code: 'legal-obligation',
+    nameEn: 'Legal obligation',
+    nameAr: 'التزام نظامي',
+    category: 'legal_obligation',
+    authority: 'PDPL 2023',
+    description: 'Processing is required to meet a legal or regulatory obligation.',
+  },
+];
+
+const samplePrivacyRopaRecords = [
+  {
+    processName: 'Supplier payment transparency reporting',
+    purpose: 'Maintain an accountable register for quarterly supplier payment transparency indicators.',
+    assetCode: 'AST-FIN-INVOICES',
+    domainCode: 'finance',
+    legalBasisCode: 'public-task',
+    ownerEmail: 'khalid.hassan@dgop.local',
+    dataSubjects: 'Suppliers, authorized finance staff',
+    recipients: 'Finance leadership, ODIAO reviewers',
+    retentionSummary: 'Retain reporting evidence for 5 years, then review.',
+    status: 'under_review',
+  },
+];
+
+const samplePrivacyDpias = [
+  {
+    title: 'Revenue cycle analytics privacy review',
+    description: 'DPIA for restricted revenue indicators used by open data, FOI, and data sharing workflows.',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    legalBasisCode: 'public-task',
+    reviewerEmail: 'sara.alamri@dgop.local',
+    crossBorderTransfer: false,
+    gateStatuses: {
+      requirements: 'approved',
+      design: 'pending',
+      development: 'pending',
+      testing: 'pending',
+      deployment: 'pending',
+    },
+  },
+];
+
+const samplePrivacyDsrRequests = [
+  {
+    requesterName: 'Noura Al-Harbi',
+    requesterEmail: 'noura.requester@example.com',
+    requestType: 'access',
+    description: 'Request for access to personal billing records and correction path if inaccurate.',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    assignedEmail: 'sara.alamri@dgop.local',
+    identityValidated: true,
+    status: 'in_progress',
+  },
+];
+
+const samplePrivacyBreaches = [
+  {
+    title: 'Restricted export sent to wrong internal group',
+    description: 'A restricted finance extract was shared with an unintended internal distribution group.',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    severity: 'high',
+    assignedEmail: 'omar.farouk@dgop.local',
+    status: 'triage',
+  },
+];
+
+const sampleDataSharingRequests = [
+  {
+    requesterOrg: 'Finance Department',
+    recipientOrg: 'Planning Analytics Office',
+    purpose: 'Share aggregated revenue indicators for quarterly planning models.',
+    assetCode: 'AST-FIN-REVENUE',
+    domainCode: 'finance',
+    legalBasisCode: 'public-task',
+    classificationCode: 'restricted',
+    maskingPolicyCode: 'MSK-FINANCE-TOKEN',
+    consentRequired: false,
+    crossBorderTransfer: false,
+    reviews: {
+      owner: 'approved',
+      privacy: 'pending',
+      security: 'pending',
+      technical: 'pending',
+    },
+  },
+];
+
 const sampleMaskingPolicies = [
   {
     code: 'MSK-PERSONAL-ID',
@@ -1288,14 +1591,19 @@ async function main() {
   const seedEnvironment = process.env.NODE_ENV ?? 'development';
   const strictSeed = !['development', 'test'].includes(seedEnvironment);
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@dgop.local';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? (strictSeed ? '' : 'Admin@12345');
+  const configuredAdminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const adminPassword = configuredAdminPassword ?? (strictSeed ? '' : 'Admin@12345');
   if (!adminPassword) {
     throw new Error('SEED_ADMIN_PASSWORD must be set outside development');
   }
   const passwordHash = await bcrypt.hash(adminPassword, 10);
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { displayName: 'System Administrator', isActive: true },
+    update: {
+      displayName: 'System Administrator',
+      isActive: true,
+      ...(configuredAdminPassword ? { passwordHash } : {}),
+    },
     create: { email: adminEmail, passwordHash, displayName: 'System Administrator', isActive: true },
   });
   const adminRole = await prisma.role.findUnique({ where: { code: 'system_admin' } });
@@ -1479,7 +1787,8 @@ async function main() {
 
   // Seed people; give each a login account (1:1) so they can act in workflows, and link them.
   const dmoRole = await prisma.role.findUnique({ where: { code: 'dmo_admin' } });
-  const personPassword = process.env.SEED_PERSON_PASSWORD ?? (strictSeed ? '' : 'Password@123');
+  const configuredPersonPassword = process.env.SEED_PERSON_PASSWORD;
+  const personPassword = configuredPersonPassword ?? (strictSeed ? '' : 'Password@123');
   if (!personPassword) {
     throw new Error('SEED_PERSON_PASSWORD must be set outside development');
   }
@@ -1487,7 +1796,11 @@ async function main() {
   for (const p of people) {
     const user = await prisma.user.upsert({
       where: { email: p.email },
-      update: { displayName: p.fullNameEn, isActive: true },
+      update: {
+        displayName: p.fullNameEn,
+        isActive: true,
+        ...(configuredPersonPassword ? { passwordHash: personPasswordHash } : {}),
+      },
       create: { email: p.email, passwordHash: personPasswordHash, displayName: p.fullNameEn, isActive: true },
     });
     if (dmoRole) {
@@ -2224,6 +2537,149 @@ async function main() {
     });
   }
 
+  const foiSeedDueDate = (start: Date, days: number) => {
+    const due = new Date(start);
+    let remaining = days;
+    while (remaining > 0) {
+      due.setDate(due.getDate() + 1);
+      if (![5, 6].includes(due.getDay())) remaining -= 1;
+    }
+    return due;
+  };
+
+  for (const templateSeed of sampleFoiResponseTemplates) {
+    await prisma.foiResponseTemplate.upsert({
+      where: { code: templateSeed.code },
+      update: {
+        nameEn: templateSeed.nameEn,
+        nameAr: templateSeed.nameAr,
+        outcome: templateSeed.outcome as any,
+        bodyEn: templateSeed.bodyEn,
+        bodyAr: templateSeed.bodyAr,
+        isActive: true,
+      },
+      create: {
+        code: templateSeed.code,
+        nameEn: templateSeed.nameEn,
+        nameAr: templateSeed.nameAr,
+        outcome: templateSeed.outcome as any,
+        bodyEn: templateSeed.bodyEn,
+        bodyAr: templateSeed.bodyAr,
+      },
+    });
+  }
+
+  for (const requestSeed of sampleFoiRequests) {
+    const assetId = assetByCode.get(requestSeed.assetCode) ?? null;
+    const dataDomainId = domainByCode.get(requestSeed.domainCode) ?? null;
+    const classificationId = classificationByCode.get(requestSeed.classificationCode) ?? null;
+    const assignedOfficerPersonId = personByEmail.get(requestSeed.assignedEmail) ?? null;
+    const receivedAt = new Date();
+    receivedAt.setDate(receivedAt.getDate() - 4);
+    const dueAt = foiSeedDueDate(receivedAt, 20);
+    const foiRequest = await prisma.foiRequest.upsert({
+      where: { requestNumber: requestSeed.requestNumber },
+      update: {
+        requesterName: requestSeed.requesterName,
+        requesterEmail: requestSeed.requesterEmail,
+        requesterType: requestSeed.requesterType as any,
+        channel: requestSeed.channel as any,
+        category: requestSeed.category as any,
+        subject: requestSeed.subject,
+        description: requestSeed.description,
+        status: requestSeed.status as any,
+        identityValidated: requestSeed.identityValidated,
+        contactValidated: requestSeed.contactValidated,
+        assetId,
+        dataDomainId,
+        classificationId,
+        assignedOfficerPersonId,
+        receivedAt,
+        dueAt,
+        updatedBy: adminEmail,
+        deletedAt: null,
+      },
+      create: {
+        requestNumber: requestSeed.requestNumber,
+        requesterName: requestSeed.requesterName,
+        requesterEmail: requestSeed.requesterEmail,
+        requesterType: requestSeed.requesterType as any,
+        channel: requestSeed.channel as any,
+        category: requestSeed.category as any,
+        subject: requestSeed.subject,
+        description: requestSeed.description,
+        status: requestSeed.status as any,
+        identityValidated: requestSeed.identityValidated,
+        contactValidated: requestSeed.contactValidated,
+        assetId,
+        dataDomainId,
+        classificationId,
+        assignedOfficerPersonId,
+        receivedAt,
+        dueAt,
+        createdBy: adminEmail,
+      },
+    });
+    for (const reviewType of ['classification', 'privacy', 'legal']) {
+      await prisma.foiReview.upsert({
+        where: { requestId_reviewType: { requestId: foiRequest.id, reviewType: reviewType as any } },
+        update: {
+          status: reviewType === 'classification' ? 'completed' as any : 'pending' as any,
+          reviewerPersonId: assignedOfficerPersonId,
+          note: reviewType === 'classification' ? 'Seeded classification triage completed.' : null,
+          completedAt: reviewType === 'classification' ? new Date() : null,
+        },
+        create: {
+          requestId: foiRequest.id,
+          reviewType: reviewType as any,
+          status: reviewType === 'classification' ? 'completed' as any : 'pending' as any,
+          reviewerPersonId: assignedOfficerPersonId,
+          note: reviewType === 'classification' ? 'Seeded classification triage completed.' : null,
+          completedAt: reviewType === 'classification' ? new Date() : null,
+          createdBy: adminEmail,
+        },
+      });
+    }
+    const caseCode = `WFC-${requestSeed.requestNumber}`;
+    const wfCase = await prisma.workflowCase.upsert({
+      where: { code: caseCode },
+      update: {
+        title: `FOI request ${requestSeed.requestNumber}`,
+        description: requestSeed.subject,
+        type: 'foi_request',
+        status: 'submitted' as any,
+        assetId,
+      },
+      create: {
+        code: caseCode,
+        title: `FOI request ${requestSeed.requestNumber}`,
+        description: requestSeed.subject,
+        type: 'foi_request',
+        status: 'submitted' as any,
+        assetId,
+        createdBy: adminEmail,
+      },
+    });
+    if (foiRequest.workflowCaseId !== wfCase.id) {
+      await prisma.foiRequest.update({ where: { id: foiRequest.id }, data: { workflowCaseId: wfCase.id } });
+    }
+    const taskExists = await prisma.workflowTask.findFirst({
+      where: { caseId: wfCase.id, title: 'Validate FOI intake and prepare review' },
+      select: { id: true },
+    });
+    if (!taskExists) {
+      await prisma.workflowTask.create({
+        data: {
+          caseId: wfCase.id,
+          title: 'Validate FOI intake and prepare review',
+          type: 'information',
+          status: 'pending' as any,
+          dueDate: foiSeedDueDate(new Date(), 1),
+        },
+      });
+    }
+  }
+
   // Sprint 14 v4: classification, masking, role-data access, access review, DLP, and ABAC evidence.
   for (const policySeed of sampleMaskingPolicies) {
     const domainId = domainByCode.get(policySeed.domainCode) ?? null;
@@ -2389,6 +2845,411 @@ async function main() {
     else await prisma.classificationChangeRequest.create({ data });
   }
 
+  // Sprint 22 v4: PDP privacy operations foundation.
+  for (const basisSeed of samplePrivacyLegalBases) {
+    await prisma.privacyLegalBasis.upsert({
+      where: { code: basisSeed.code },
+      update: {
+        nameEn: basisSeed.nameEn,
+        nameAr: basisSeed.nameAr,
+        category: basisSeed.category as any,
+        authority: basisSeed.authority,
+        description: basisSeed.description,
+        isActive: true,
+      },
+      create: {
+        code: basisSeed.code,
+        nameEn: basisSeed.nameEn,
+        nameAr: basisSeed.nameAr,
+        category: basisSeed.category as any,
+        authority: basisSeed.authority,
+        description: basisSeed.description,
+      },
+    });
+  }
+  const legalBasisByCode = new Map((await prisma.privacyLegalBasis.findMany()).map((basis) => [basis.code, basis.id]));
+
+  for (const ropaSeed of samplePrivacyRopaRecords) {
+    const assetId = assetByCode.get(ropaSeed.assetCode) ?? null;
+    const domainId = domainByCode.get(ropaSeed.domainCode) ?? null;
+    const ownerPersonId = personByEmail.get(ropaSeed.ownerEmail) ?? null;
+    const legalBasisId = legalBasisByCode.get(ropaSeed.legalBasisCode) ?? null;
+    const code = `ROPA-${ropaSeed.assetCode}`;
+    const reviewDueAt = new Date();
+    reviewDueAt.setDate(reviewDueAt.getDate() + 45);
+    await prisma.privacyRopaRecord.upsert({
+      where: { code },
+      update: {
+        processName: ropaSeed.processName,
+        purpose: ropaSeed.purpose,
+        assetId,
+        domainId,
+        legalBasisId,
+        ownerPersonId,
+        dataSubjects: ropaSeed.dataSubjects,
+        recipients: ropaSeed.recipients,
+        retentionSummary: ropaSeed.retentionSummary,
+        status: ropaSeed.status as any,
+        reviewDueAt,
+        updatedBy: adminEmail,
+        deletedAt: null,
+      },
+      create: {
+        code,
+        processName: ropaSeed.processName,
+        purpose: ropaSeed.purpose,
+        assetId,
+        domainId,
+        legalBasisId,
+        ownerPersonId,
+        dataSubjects: ropaSeed.dataSubjects,
+        recipients: ropaSeed.recipients,
+        retentionSummary: ropaSeed.retentionSummary,
+        status: ropaSeed.status as any,
+        reviewDueAt,
+        createdBy: adminEmail,
+      },
+    });
+  }
+
+  for (const dpiaSeed of samplePrivacyDpias) {
+    const assetId = assetByCode.get(dpiaSeed.assetCode) ?? null;
+    const asset = assetId ? await prisma.dataAsset.findUnique({ where: { id: assetId }, include: { classification: true, subjects: true } }) : null;
+    const domainId = domainByCode.get(dpiaSeed.domainCode) ?? asset?.domainId ?? null;
+    const legalBasisId = legalBasisByCode.get(dpiaSeed.legalBasisCode) ?? null;
+    const reviewerPersonId = personByEmail.get(dpiaSeed.reviewerEmail) ?? null;
+    const code = `DPIA-${dpiaSeed.assetCode}`;
+    const dueAt = foiSeedDueDate(new Date(), 10);
+    const inherentRiskScore = Math.min(100, (asset?.classification?.rank ?? 2) * 18 + (dpiaSeed.crossBorderTransfer ? 32 : 20));
+    const residualRiskScore = Math.max(0, inherentRiskScore - 20);
+    const dpia = await prisma.privacyDpia.upsert({
+      where: { code },
+      update: {
+        title: dpiaSeed.title,
+        description: dpiaSeed.description,
+        assetId,
+        domainId,
+        legalBasisId,
+        classificationId: asset?.classificationId ?? null,
+        status: 'under_review' as any,
+        riskLevel: residualRiskScore >= 80 ? 'critical' as any : residualRiskScore >= 60 ? 'high' as any : 'medium' as any,
+        inherentRiskScore,
+        residualRiskScore,
+        crossBorderTransfer: dpiaSeed.crossBorderTransfer,
+        reviewerPersonId,
+        dueAt,
+        updatedBy: adminEmail,
+        deletedAt: null,
+      },
+      create: {
+        code,
+        title: dpiaSeed.title,
+        description: dpiaSeed.description,
+        assetId,
+        domainId,
+        legalBasisId,
+        classificationId: asset?.classificationId ?? null,
+        status: 'under_review' as any,
+        riskLevel: residualRiskScore >= 80 ? 'critical' as any : residualRiskScore >= 60 ? 'high' as any : 'medium' as any,
+        inherentRiskScore,
+        residualRiskScore,
+        crossBorderTransfer: dpiaSeed.crossBorderTransfer,
+        reviewerPersonId,
+        dueAt,
+        createdBy: adminEmail,
+      },
+    });
+    for (const [phase, status] of Object.entries(dpiaSeed.gateStatuses)) {
+      await prisma.privacyGate.upsert({
+        where: { dpiaId_phase: { dpiaId: dpia.id, phase: phase as any } },
+        update: {
+          status: status as any,
+          reviewerPersonId,
+          note: status === 'approved' ? 'Seeded gate approved for demo continuity.' : null,
+          completedAt: status === 'approved' ? new Date() : null,
+        },
+        create: {
+          dpiaId: dpia.id,
+          phase: phase as any,
+          status: status as any,
+          reviewerPersonId,
+          note: status === 'approved' ? 'Seeded gate approved for demo continuity.' : null,
+          completedAt: status === 'approved' ? new Date() : null,
+          dueAt: foiSeedDueDate(new Date(), 5),
+          createdBy: adminEmail,
+        },
+      });
+    }
+    const wfCase = await prisma.workflowCase.upsert({
+      where: { code: `WFC-${code}` },
+      update: { title: `DPIA ${code}`, description: dpiaSeed.title, type: 'privacy_dpia', status: 'submitted' as any, assetId },
+      create: { code: `WFC-${code}`, title: `DPIA ${code}`, description: dpiaSeed.title, type: 'privacy_dpia', status: 'submitted' as any, assetId, createdBy: adminEmail },
+    });
+    await prisma.privacyDpia.update({ where: { id: dpia.id }, data: { workflowCaseId: wfCase.id } });
+    const taskExists = await prisma.workflowTask.findFirst({ where: { caseId: wfCase.id, title: 'Review DPIA privacy gates' }, select: { id: true } });
+    if (!taskExists) {
+      const reviewerUserId = dpiaSeed.reviewerEmail ? userByEmail.get(dpiaSeed.reviewerEmail) ?? null : null;
+      await prisma.workflowTask.create({ data: { caseId: wfCase.id, title: 'Review DPIA privacy gates', type: 'review', status: 'pending' as any, assigneeUserId: reviewerUserId, dueDate: dueAt } });
+    }
+  }
+
+  for (const dsrSeed of samplePrivacyDsrRequests) {
+    const year = new Date().getFullYear();
+    const requestNumber = `DSR-${year}-0001`;
+    const assetId = assetByCode.get(dsrSeed.assetCode) ?? null;
+    const domainId = domainByCode.get(dsrSeed.domainCode) ?? null;
+    const assignedPersonId = personByEmail.get(dsrSeed.assignedEmail) ?? null;
+    const dueAt = foiSeedDueDate(new Date(), 20);
+    const dsr = await prisma.privacyDsrRequest.upsert({
+      where: { requestNumber },
+      update: {
+        requesterName: dsrSeed.requesterName,
+        requesterEmail: dsrSeed.requesterEmail,
+        requestType: dsrSeed.requestType as any,
+        description: dsrSeed.description,
+        identityValidated: dsrSeed.identityValidated,
+        status: dsrSeed.status as any,
+        assetId,
+        domainId,
+        assignedPersonId,
+        dueAt,
+        updatedBy: adminEmail,
+        deletedAt: null,
+      },
+      create: {
+        requestNumber,
+        requesterName: dsrSeed.requesterName,
+        requesterEmail: dsrSeed.requesterEmail,
+        requestType: dsrSeed.requestType as any,
+        description: dsrSeed.description,
+        identityValidated: dsrSeed.identityValidated,
+        status: dsrSeed.status as any,
+        assetId,
+        domainId,
+        assignedPersonId,
+        dueAt,
+        createdBy: adminEmail,
+      },
+    });
+    const wfCase = await prisma.workflowCase.upsert({
+      where: { code: `WFC-${requestNumber}` },
+      update: { title: `DSR ${requestNumber}`, description: dsr.description, type: 'privacy_dsr', status: 'submitted' as any, assetId },
+      create: { code: `WFC-${requestNumber}`, title: `DSR ${requestNumber}`, description: dsr.description, type: 'privacy_dsr', status: 'submitted' as any, assetId, createdBy: adminEmail },
+    });
+    await prisma.privacyDsrRequest.update({ where: { id: dsr.id }, data: { workflowCaseId: wfCase.id } });
+  }
+
+  for (const breachSeed of samplePrivacyBreaches) {
+    const year = new Date().getFullYear();
+    const code = `BRCH-${year}-0001`;
+    const assetId = assetByCode.get(breachSeed.assetCode) ?? null;
+    const domainId = domainByCode.get(breachSeed.domainCode) ?? null;
+    const assignedPersonId = personByEmail.get(breachSeed.assignedEmail) ?? null;
+    const detectedAt = new Date();
+    detectedAt.setHours(detectedAt.getHours() - 18);
+    const notificationDueAt = new Date(detectedAt);
+    notificationDueAt.setHours(notificationDueAt.getHours() + 72);
+    const breach = await prisma.privacyBreach.upsert({
+      where: { code },
+      update: {
+        title: breachSeed.title,
+        description: breachSeed.description,
+        assetId,
+        domainId,
+        severity: breachSeed.severity as any,
+        status: breachSeed.status as any,
+        detectedAt,
+        notificationDueAt,
+        assignedPersonId,
+        updatedBy: adminEmail,
+        deletedAt: null,
+      },
+      create: {
+        code,
+        title: breachSeed.title,
+        description: breachSeed.description,
+        assetId,
+        domainId,
+        severity: breachSeed.severity as any,
+        status: breachSeed.status as any,
+        detectedAt,
+        notificationDueAt,
+        assignedPersonId,
+        createdBy: adminEmail,
+      },
+    });
+    const wfCase = await prisma.workflowCase.upsert({
+      where: { code: `WFC-${code}` },
+      update: { title: `Breach ${code}`, description: breach.title, type: 'privacy_breach', status: 'submitted' as any, assetId },
+      create: { code: `WFC-${code}`, title: `Breach ${code}`, description: breach.title, type: 'privacy_breach', status: 'submitted' as any, assetId, createdBy: adminEmail },
+    });
+    await prisma.privacyBreach.update({ where: { id: breach.id }, data: { workflowCaseId: wfCase.id } });
+  }
+
+  const retentionAssetId = assetByCode.get('AST-FIN-REVENUE') ?? null;
+  await prisma.privacyRetentionRule.upsert({
+    where: { code: 'RET-FIN-REVENUE' },
+    update: {
+      nameEn: 'Revenue analytics retention review',
+      nameAr: 'مراجعة احتفاظ تحليلات الإيرادات',
+      assetId: retentionAssetId,
+      domainId: domainByCode.get('finance') ?? null,
+      trigger: 'creation' as any,
+      durationDays: 1825,
+      action: 'review_then_archive',
+      ownerPersonId: personByEmail.get('khalid.hassan@dgop.local') ?? null,
+      nextReviewAt: foiSeedDueDate(new Date(), 90),
+      isActive: true,
+    },
+    create: {
+      code: 'RET-FIN-REVENUE',
+      nameEn: 'Revenue analytics retention review',
+      nameAr: 'مراجعة احتفاظ تحليلات الإيرادات',
+      assetId: retentionAssetId,
+      domainId: domainByCode.get('finance') ?? null,
+      trigger: 'creation' as any,
+      durationDays: 1825,
+      action: 'review_then_archive',
+      ownerPersonId: personByEmail.get('khalid.hassan@dgop.local') ?? null,
+      nextReviewAt: foiSeedDueDate(new Date(), 90),
+      createdBy: adminEmail,
+    },
+  });
+
+  // Sprint 23 v4: Data Sharing and Integration governance MVP.
+  for (const sharingSeed of sampleDataSharingRequests) {
+    const year = new Date().getFullYear();
+    const requestNumber = `DSI-${year}-0001`;
+    const assetId = assetByCode.get(sharingSeed.assetCode) ?? null;
+    const domainId = domainByCode.get(sharingSeed.domainCode) ?? null;
+    const legalBasisId = legalBasisByCode.get(sharingSeed.legalBasisCode) ?? null;
+    const classificationId = classificationByCode.get(sharingSeed.classificationCode) ?? null;
+    const maskingPolicyId = maskingByCode.get(sharingSeed.maskingPolicyCode) ?? null;
+    const dataOwnerRole = roleByCode.get('data_owner');
+    const roleDataAccessMap = dataOwnerRole
+      ? await prisma.roleDataAccessMap.findFirst({ where: { roleId: dataOwnerRole.id, domainId, classificationId, isActive: true }, select: { id: true } })
+      : null;
+    const riskScore = classificationId ? 74 : 58;
+    const request = await prisma.dataSharingRequest.upsert({
+      where: { requestNumber },
+      update: {
+        requesterOrg: sharingSeed.requesterOrg,
+        recipientOrg: sharingSeed.recipientOrg,
+        purpose: sharingSeed.purpose,
+        legalBasisId,
+        assetId,
+        domainId,
+        classificationId,
+        maskingPolicyId,
+        roleDataAccessMapId: roleDataAccessMap?.id ?? null,
+        consentRequired: sharingSeed.consentRequired,
+        crossBorderTransfer: sharingSeed.crossBorderTransfer,
+        status: 'under_review' as any,
+        riskScore,
+        requiredControlsJson: ['owner_review', 'privacy_review', 'security_review', 'masked_or_aggregated_output'] as any,
+        updatedBy: adminEmail,
+        deletedAt: null,
+      },
+      create: {
+        requestNumber,
+        requesterOrg: sharingSeed.requesterOrg,
+        recipientOrg: sharingSeed.recipientOrg,
+        purpose: sharingSeed.purpose,
+        legalBasisId,
+        assetId,
+        domainId,
+        classificationId,
+        maskingPolicyId,
+        roleDataAccessMapId: roleDataAccessMap?.id ?? null,
+        consentRequired: sharingSeed.consentRequired,
+        crossBorderTransfer: sharingSeed.crossBorderTransfer,
+        status: 'under_review' as any,
+        riskScore,
+        requiredControlsJson: ['owner_review', 'privacy_review', 'security_review', 'masked_or_aggregated_output'] as any,
+        createdBy: adminEmail,
+      },
+    });
+    for (const [step, decision] of Object.entries(sharingSeed.reviews)) {
+      await prisma.dataSharingReview.upsert({
+        where: { requestId_step: { requestId: request.id, step: step as any } },
+        update: {
+          decision: decision as any,
+          reviewerPersonId: step === 'owner' ? personByEmail.get('khalid.hassan@dgop.local') ?? null : personByEmail.get('sara.alamri@dgop.local') ?? null,
+          note: decision === 'approved' ? 'Seeded approval for demo path.' : null,
+          decidedAt: decision === 'approved' ? new Date() : null,
+        },
+        create: {
+          requestId: request.id,
+          step: step as any,
+          decision: decision as any,
+          reviewerPersonId: step === 'owner' ? personByEmail.get('khalid.hassan@dgop.local') ?? null : personByEmail.get('sara.alamri@dgop.local') ?? null,
+          note: decision === 'approved' ? 'Seeded approval for demo path.' : null,
+          decidedAt: decision === 'approved' ? new Date() : null,
+          createdBy: adminEmail,
+        },
+      });
+    }
+    const wfCase = await prisma.workflowCase.upsert({
+      where: { code: `WFC-${requestNumber}` },
+      update: { title: `Data sharing ${requestNumber}`, description: sharingSeed.purpose, type: 'data_sharing_request', status: 'submitted' as any, assetId },
+      create: { code: `WFC-${requestNumber}`, title: `Data sharing ${requestNumber}`, description: sharingSeed.purpose, type: 'data_sharing_request', status: 'submitted' as any, assetId, createdBy: adminEmail },
+    });
+    await prisma.dataSharingRequest.update({ where: { id: request.id }, data: { workflowCaseId: wfCase.id } });
+    const agreementNumber = `DSA-${year}-0001`;
+    const startAt = new Date();
+    const endAt = new Date(startAt);
+    endAt.setFullYear(endAt.getFullYear() + 1);
+    const renewalDueAt = new Date(startAt);
+    renewalDueAt.setMonth(renewalDueAt.getMonth() + 11);
+    const agreement = await prisma.dataSharingAgreement.upsert({
+      where: { agreementNumber },
+      update: {
+        requestId: request.id,
+        assetId,
+        domainId,
+        recipientOrg: sharingSeed.recipientOrg,
+        purpose: sharingSeed.purpose,
+        status: 'active' as any,
+        ownerPersonId: personByEmail.get('khalid.hassan@dgop.local') ?? null,
+        agreementUrl: 'https://dgop.local/agreements/dsa-0001',
+        startAt,
+        endAt,
+        renewalDueAt,
+        updatedBy: adminEmail,
+      },
+      create: {
+        agreementNumber,
+        requestId: request.id,
+        assetId,
+        domainId,
+        recipientOrg: sharingSeed.recipientOrg,
+        purpose: sharingSeed.purpose,
+        status: 'active' as any,
+        ownerPersonId: personByEmail.get('khalid.hassan@dgop.local') ?? null,
+        agreementUrl: 'https://dgop.local/agreements/dsa-0001',
+        startAt,
+        endAt,
+        renewalDueAt,
+        createdBy: adminEmail,
+      },
+    });
+    const existingUsage = await prisma.dataSharingUsageMetric.findFirst({ where: { agreementId: agreement.id, note: 'Seeded monthly usage baseline.' }, select: { id: true } });
+    if (!existingUsage) {
+      await prisma.dataSharingUsageMetric.create({
+        data: {
+          agreementId: agreement.id,
+          metricDate: new Date(),
+          recordsShared: 12500,
+          apiCalls: 2400,
+          incidents: 0,
+          status: 'normal' as any,
+          note: 'Seeded monthly usage baseline.',
+          createdBy: adminEmail,
+        },
+      });
+    }
+  }
+
   await prisma.abacDecisionLog.deleteMany({ where: { reason: { contains: 'Seeded:' } } });
   const patientAssetId = assetByCode.get('AST-EMR-PATIENTS');
   const financeAssetId = assetByCode.get('AST-FIN-REVENUE');
@@ -2434,7 +3295,8 @@ async function main() {
       `${trainingCourses.length} training courses, ${certificationTracks.length} certification tracks, ` +
       `${communityArticles.length} community articles, ${expertProfiles.length} experts, ` +
       `${mentorshipPairs.length} mentorship pairs, ${sampleDataQualityIssues.length} DQ issues. ` +
-      `${sampleOpenDataCandidates.length} open data candidates. ` +
+      `${sampleOpenDataCandidates.length} open data candidates, ${sampleFoiRequests.length} FOI requests, ` +
+      `${samplePrivacyDpias.length} privacy DPIAs, ${sampleDataSharingRequests.length} DSI requests. ` +
       `Admin user: ${adminEmail}`,
   );
 }

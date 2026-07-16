@@ -178,6 +178,13 @@ export class EvidenceService {
       where: await this.scopedEvidenceWhere(actor, { specId }),
       orderBy: { createdAt: 'desc' },
     });
+    await this.audit.log({
+      actor: this.actorEmail(actor),
+      action: 'evidence.read_list',
+      entityType: 'evidence',
+      entityId: specId,
+      metadata: { specId, count: rows.length, sensitiveRead: true },
+    });
     return rows.map((r) => this.decorate(r));
   }
 
@@ -187,6 +194,18 @@ export class EvidenceService {
       include: { spec: specSelect },
     });
     if (!e) throw new NotFoundException('evidence not found');
+    await this.audit.log({
+      actor: this.actorEmail(actor),
+      action: 'evidence.read',
+      entityType: 'evidence',
+      entityId: id,
+      metadata: {
+        specId: e.specId,
+        status: e.status,
+        sha256: e.sha256,
+        sensitiveRead: true,
+      },
+    });
     return this.decorate(e);
   }
 
@@ -346,6 +365,12 @@ export class EvidenceService {
       action: 'evidence.download',
       entityType: 'evidence',
       entityId: id,
+      metadata: {
+        specId: e.specId,
+        sha256: e.sha256,
+        originalName: e.originalName,
+        sensitiveRead: true,
+      },
     });
     return { path, originalName: e.originalName, mimeType: e.mimeType };
   }

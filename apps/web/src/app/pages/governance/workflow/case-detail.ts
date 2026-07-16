@@ -16,11 +16,6 @@ import {
   UserRef,
 } from './workflow.types';
 
-const CASE_STATUSES = [
-  'draft', 'submitted', 'under_review', 'awaiting_information',
-  'decision_made', 'approved', 'rejected', 'implemented', 'closed',
-];
-
 @Component({
   selector: 'app-workflow-case',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,7 +30,6 @@ export class WorkflowCasePage implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
 
-  protected readonly caseStatuses = CASE_STATUSES;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly wfCase = signal<CaseRow | null>(null);
   protected readonly users = signal<UserRef[]>([]);
@@ -100,16 +94,6 @@ export class WorkflowCasePage implements OnInit {
   protected canDecide(task: Task): boolean {
     if (task.status === 'completed' || task.status === 'cancelled') return false;
     return this.isAdmin || task.assigneeUserId === this.auth.currentUser()?.id;
-  }
-
-  // ---------- status transition ----------
-  protected changeStatus(status: string): void {
-    const c = this.wfCase();
-    if (!c || status === c.status) return;
-    this.http.patch(`/api/workflow/cases/${c.id}`, { status }).subscribe({
-      next: () => { this.toast.success(this.t('wf.statusUpdated')); this.load(); },
-      error: () => this.toast.error(this.t('wf.saveError')),
-    });
   }
 
   protected submitCase(): void {

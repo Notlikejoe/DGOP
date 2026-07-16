@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DataAssetCatalogSyncStatus,
@@ -7,9 +8,11 @@ import {
   IntegrationConnectorType,
   IntegrationDirection,
   IntegrationEntityType,
+  IntegrationEventStatus,
   IntegrationImportErrorSeverity,
   IntegrationJobStatus,
   IntegrationJobType,
+  IntegrationReconciliationStatus,
   IntegrationSourceTrust,
   IntegrationWritebackStatus,
   Prisma,
@@ -22,15 +25,23 @@ import {
   buildCatalogWritebackPayload,
   catalogMappingPreview,
   catalogStatusAfterImport,
+  DEFAULT_INTEGRATION_CONNECTORS,
   hasBusinessAssetChanges,
+  integrationAdapterProfile,
   MOCK_CATALOG_ROWS,
+  nextIntegrationEventStatus,
+  normalizeIntegrationEventPayload,
   normalizeCatalogAssetRow,
+  reconciliationForIntegrationEvent,
   type CatalogRowIssue,
+  type IntegrationAdapterKey,
   type NormalizedCatalogAsset,
 } from './integrations.logic';
 import {
   CreateIntegrationConnectorDto,
   PreviewCatalogMappingDto,
+  ReceiveIntegrationWebhookDto,
+  RetryIntegrationEventDto,
   RunCatalogSyncDto,
   SimulateWritebackDto,
 } from './integrations.dto';
@@ -50,6 +61,8 @@ const connectorInclude = {
       importBatches: true,
       externalReferences: true,
       writebackLogs: true,
+      events: true,
+      reconciliationReports: true,
     },
   },
 };
@@ -68,6 +81,30 @@ const writebackInclude = {
   asset: { select: { id: true, code: true, nameEn: true, nameAr: true } },
 };
 
+const eventInclude = {
+  connector: { select: { id: true, code: true, nameEn: true, nameAr: true, status: true, type: true } },
+};
+
+const reconciliationInclude = {
+  connector: { select: { id: true, code: true, nameEn: true, nameAr: true, status: true, type: true } },
+  batch: { select: { id: true, code: true, status: true, totalRows: true, errorRows: true } },
+  event: { select: { id: true, code: true, status: true, eventType: true, entityType: true, entityId: true } },
+};
+
+const EVENT_STATUSES = new Set(Object.values(IntegrationEventStatus));
+const ADAPTER_TYPES = new Set<IntegrationAdapterKey>([
+  'catalog_csv',
+  'mock_rest',
+  'webhook_json',
+  'mock_data_quality',
+  'mock_dlp',
+  'mock_open_data',
+  'mock_foi',
+  'mock_lms',
+  'mock_siem',
+  'mock_iam_sso',
+]);
+
 @Injectable()
 export class IntegrationsService {
   constructor(
@@ -75,6 +112,86 @@ export class IntegrationsService {
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
   ) {}
+
+  private async ensureDefaultMockConnectors(actor = 'system'): Promise<void> {
+    for (const definition of DEFAULT_INTEGRATION_CONNECTORS) {
+      const existing = await this.prisma.integrationConnector.findUnique({ where: { code: definition.code } });
+      if (existing) continue;
+      await this.prisma.integrationConnector.create({
+        data: {
+          code: definition.code,
+          nameEn: definition.nameEn,
+          nameAr: definition.nameAr,
+          description: definition.description,
+          type: definition.type as IntegrationConnectorType,
+          direction: IntegrationDirection.inbound,
+          status: IntegrationConnectorStatus.warning,
+          sourceTrust: IntegrationSourceTrust.simulated,
+          configJson: {
+            adapterType: definition.adapterType,
+            defaultEventType: definition.defaultEventType,
+            sourceName: definition.sourceName,
+          } as Prisma.InputJsonValue,
+          createdBy: actor,
+          jobs: {
+            create: {
+              code: `JOB-${definition.code}`,
+              nameEn: `${definition.nameEn} event intake`,
+              nameAr: `${definition.nameAr} event intake`,
+              jobType: IntegrationJobType.signal_ingest,
+              status: IntegrationJobStatus.ready,
+              syncMode: 'webhook',
+              createdBy: actor,
+            },
+          },
+        },
+      });
+    }
+  }
+
+  private connectorAdapterType(connector: { type: IntegrationConnectorType; configJson?: Prisma.JsonValue | null }): IntegrationAdapterKey {
+    const configured =
+      connector.configJson && typeof connector.configJson === 'object' && !Array.isArray(connector.configJson)
+        ? (connector.configJson as Record<string, unknown>)['adapterType']
+        : null;
+    if (typeof configured === 'string' && ADAPTER_TYPES.has(configured as IntegrationAdapterKey)) {
+      return configured as IntegrationAdapterKey;
+    }
+    const byType: Partial<Record<IntegrationConnectorType, IntegrationAdapterKey>> = {
+      [IntegrationConnectorType.catalog]: 'mock_rest',
+      [IntegrationConnectorType.data_quality]: 'mock_data_quality',
+      [IntegrationConnectorType.dlp]: 'mock_dlp',
+      [IntegrationConnectorType.open_data]: 'mock_open_data',
+      [IntegrationConnectorType.foi]: 'mock_foi',
+      [IntegrationConnectorType.lms]: 'mock_lms',
+      [IntegrationConnectorType.siem]: 'mock_siem',
+      [IntegrationConnectorType.iam_sso]: 'mock_iam_sso',
+    };
+    return byType[connector.type] ?? 'webhook_json';
+  }
+
+  private connectorDefaultEventType(connector: { configJson?: Prisma.JsonValue | null; type: IntegrationConnectorType }): string {
+    const configured =
+      connector.configJson && typeof connector.configJson === 'object' && !Array.isArray(connector.configJson)
+        ? (connector.configJson as Record<string, unknown>)['defaultEventType']
+        : null;
+    if (typeof configured === 'string' && configured.trim()) return configured.trim();
+    return integrationAdapterProfile(this.connectorAdapterType(connector)).defaultEventType;
+  }
+
+  private webhookTokenIsValid(token?: string | null): boolean {
+    const expected = process.env.DGOP_WEBHOOK_TOKEN?.trim();
+    if (!expected) return process.env.NODE_ENV !== 'production';
+    return token === expected;
+  }
+
+  private dedupeKey(connectorId: string, externalEventId: string | null | undefined, eventType: string, payload: unknown): string {
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify(payload ?? {}))
+      .digest('hex')
+      .slice(0, 24);
+    return [connectorId, eventType, externalEventId?.trim() || payloadHash].join(':');
+  }
 
   private async visibleAssetIds(roleCodes: string[]): Promise<Set<string> | 'all'> {
     const scope = await this.scope.resolve(roleCodes);
@@ -117,8 +234,23 @@ export class IntegrationsService {
   }
 
   async summary(roleCodes: string[]) {
+    await this.ensureDefaultMockConnectors();
     const assetIds = await this.visibleAssetIds(roleCodes);
-    const [connectors, healthyConnectors, attentionConnectors, syncedAssets, batches, failedBatches, openErrors, simulatedWritebacks, lastBatch] =
+    const [
+      connectors,
+      healthyConnectors,
+      attentionConnectors,
+      syncedAssets,
+      batches,
+      failedBatches,
+      openErrors,
+      simulatedWritebacks,
+      failedEvents,
+      deadLetterEvents,
+      retryReadyEvents,
+      reconciliationReports,
+      lastBatch,
+    ] =
       await Promise.all([
         this.prisma.integrationConnector.count({ where: { deletedAt: null, isActive: true } }),
         this.prisma.integrationConnector.count({
@@ -144,6 +276,21 @@ export class IntegrationsService {
         this.prisma.integrationWritebackLog.count({
           where: { status: IntegrationWritebackStatus.simulated, ...this.assetRelationWhere(assetIds) },
         }),
+        this.prisma.integrationEvent.count({
+          where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] } },
+        }),
+        this.prisma.integrationEvent.count({
+          where: { status: IntegrationEventStatus.dead_letter },
+        }),
+        this.prisma.integrationEvent.count({
+          where: {
+            status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] },
+            OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
+          },
+        }),
+        this.prisma.integrationReconciliationReport.count({
+          where: { status: { in: [IntegrationReconciliationStatus.review, IntegrationReconciliationStatus.failed] } },
+        }),
         this.prisma.integrationImportBatch.findFirst({
           orderBy: { startedAt: 'desc' },
           select: { startedAt: true, completedAt: true, status: true },
@@ -158,12 +305,17 @@ export class IntegrationsService {
       failedBatches,
       openErrors,
       simulatedWritebacks,
+      failedEvents,
+      deadLetterEvents,
+      retryReadyEvents,
+      reconciliationReports,
       lastRunAt: lastBatch?.completedAt ?? lastBatch?.startedAt ?? null,
       lastRunStatus: lastBatch?.status ?? null,
     };
   }
 
   async connectors(_roleCodes: string[]) {
+    await this.ensureDefaultMockConnectors();
     return this.prisma.integrationConnector.findMany({
       where: { deletedAt: null },
       include: connectorInclude,
@@ -189,17 +341,119 @@ export class IntegrationsService {
     });
   }
 
+  async events(_roleCodes: string[], status?: string, limit = 25) {
+    const statuses = (status ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value): value is IntegrationEventStatus => EVENT_STATUSES.has(value as IntegrationEventStatus));
+    return this.prisma.integrationEvent.findMany({
+      where: statuses.length ? { status: { in: statuses } } : {},
+      include: eventInclude,
+      orderBy: [{ status: 'asc' }, { receivedAt: 'desc' }],
+      take: Math.min(Math.max(limit, 1), 100),
+    });
+  }
+
+  async reconciliationReports(_roleCodes: string[], limit = 20) {
+    return this.prisma.integrationReconciliationReport.findMany({
+      include: reconciliationInclude,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+    });
+  }
+
+  async receiveWebhook(connectorCode: string, dto: ReceiveIntegrationWebhookDto, token?: string | null) {
+    if (!this.webhookTokenIsValid(token)) {
+      throw new ForbiddenException('Invalid integration webhook token');
+    }
+    const connector = await this.prisma.integrationConnector.findFirst({
+      where: { code: connectorCode, deletedAt: null, isActive: true },
+    });
+    if (!connector) throw new NotFoundException('integration connector not found');
+    const adapterType = this.connectorAdapterType(connector);
+    const eventType = dto.eventType?.trim() || this.connectorDefaultEventType(connector);
+    const payload = dto.payload ?? {};
+    const normalization = normalizeIntegrationEventPayload(adapterType, eventType, {
+      ...payload,
+      externalEventId: dto.externalEventId ?? (payload as Record<string, unknown>)['externalEventId'],
+    });
+    const dedupeKey = this.dedupeKey(
+      connector.id,
+      dto.externalEventId ?? normalization.normalized.externalId,
+      eventType,
+      payload,
+    );
+    const existing = await this.prisma.integrationEvent.findUnique({
+      where: { dedupeKey },
+      include: eventInclude,
+    });
+    if (existing) return existing;
+
+    const event = await this.prisma.integrationEvent.create({
+      data: {
+        code: await this.nextEventCode(),
+        dedupeKey,
+        connectorId: connector.id,
+        adapterType: adapterType as IntegrationAdapterType,
+        eventType,
+        sourceName: dto.sourceName ?? normalization.normalized.sourceSystem ?? connector.code,
+        externalEventId: dto.externalEventId ?? normalization.normalized.externalId,
+        entityType: dto.entityType ?? null,
+        entityId: dto.entityId ?? null,
+        status: IntegrationEventStatus.queued,
+        severity: normalization.normalized.severity as IntegrationImportErrorSeverity,
+        payloadJson: payload as Prisma.InputJsonValue,
+        actor: 'webhook',
+      },
+    });
+    await this.audit.log({
+      actor: 'webhook',
+      action: 'integration.webhook.receive',
+      entityType: 'integration_event',
+      entityId: event.id,
+      metadata: { connectorCode: connector.code, eventType, adapterType },
+    });
+    return this.processIntegrationEvent(event.id, 'webhook');
+  }
+
+  async retryEvent(_roleCodes: string[], id: string, dto: RetryIntegrationEventDto, actor: string) {
+    const event = await this.prisma.integrationEvent.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('integration event not found');
+    const retryableStatuses: IntegrationEventStatus[] = [
+      IntegrationEventStatus.failed,
+      IntegrationEventStatus.retry_scheduled,
+      IntegrationEventStatus.dead_letter,
+    ];
+    if (!retryableStatuses.includes(event.status)) {
+      throw new BadRequestException('Only failed or queued-for-retry integration events can be retried');
+    }
+    await this.audit.log({
+      actor,
+      action: 'integration.event.retry',
+      entityType: 'integration_event',
+      entityId: id,
+      metadata: { reason: dto.reason ?? null, previousStatus: event.status },
+    });
+    return this.processIntegrationEvent(id, actor, dto.reason ?? null);
+  }
+
   async createConnector(dto: CreateIntegrationConnectorDto, actor: string) {
+    const type = (dto.type ?? IntegrationConnectorType.catalog) as IntegrationConnectorType;
+    const adapterType = (dto.adapterType ?? (type === IntegrationConnectorType.catalog ? 'catalog_csv' : 'webhook_json')) as IntegrationAdapterKey;
     const connector = await this.prisma.integrationConnector.create({
       data: {
         code: dto.code,
         nameEn: dto.nameEn,
         nameAr: dto.nameAr,
         description: dto.description ?? null,
-        type: IntegrationConnectorType.catalog,
-        direction: IntegrationDirection.bidirectional,
+        type,
+        direction: (dto.direction ?? IntegrationDirection.bidirectional) as IntegrationDirection,
         status: IntegrationConnectorStatus.warning,
-        sourceTrust: IntegrationSourceTrust.authoritative,
+        sourceTrust: (dto.sourceTrust ?? IntegrationSourceTrust.authoritative) as IntegrationSourceTrust,
+        configJson: {
+          adapterType,
+          defaultEventType: integrationAdapterProfile(adapterType).defaultEventType,
+        } as Prisma.InputJsonValue,
         createdBy: actor,
       },
       include: connectorInclude,
@@ -323,7 +577,7 @@ export class IntegrationsService {
           lastError: counters.errorRows > 0 ? `${counters.errorRows} catalog rows need review` : null,
         },
       });
-      return tx.integrationImportBatch.update({
+      const updatedBatch = await tx.integrationImportBatch.update({
         where: { id: createdBatch.id },
         data: {
           ...counters,
@@ -339,6 +593,31 @@ export class IntegrationsService {
         },
         include: batchInclude,
       });
+      await this.createReconciliationReport(tx, {
+        connectorId: connector.id,
+        batchId: updatedBatch.id,
+        status:
+          status === IntegrationBatchStatus.completed
+            ? IntegrationReconciliationStatus.healthy
+            : IntegrationReconciliationStatus.review,
+        totalRecords: rows.length,
+        matchedRecords: counters.createdRows + counters.updatedRows + counters.unchangedRows,
+        createdRecords: counters.createdRows,
+        updatedRecords: counters.updatedRows,
+        failedRecords: counters.errorRows,
+        orphanedRecords: 0,
+        missingRecords: counters.errorRows,
+        summaryJson: {
+          batchCode: updatedBatch.code,
+          created: counters.createdRows,
+          updated: counters.updatedRows,
+          unchanged: counters.unchangedRows,
+          errors: counters.errorRows,
+          warnings: counters.warningRows,
+        },
+        createdBy: actor,
+      });
+      return updatedBatch;
     });
 
     await this.audit.log({
@@ -409,6 +688,129 @@ export class IntegrationsService {
     return log;
   }
 
+  private async processIntegrationEvent(id: string, actor: string, retryReason?: string | null) {
+    const processed = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.integrationEvent.findUnique({
+        where: { id },
+        include: { connector: { select: { id: true, code: true, type: true, configJson: true } } },
+      });
+      if (!event) throw new NotFoundException('integration event not found');
+      const adapterType = event.adapterType as IntegrationAdapterKey;
+      const normalization = normalizeIntegrationEventPayload(adapterType, event.eventType, event.payloadJson);
+      const next = nextIntegrationEventStatus({
+        accepted: normalization.accepted,
+        currentAttempts: event.attempts,
+        maxAttempts: event.maxAttempts,
+      });
+      const now = new Date();
+      const lastError = normalization.accepted
+        ? null
+        : normalization.issues.map((issue) => issue.message).join('; ');
+      const nextRetryAt = next.delayMinutes == null ? null : new Date(now.getTime() + next.delayMinutes * 60_000);
+      const resultJson = {
+        accepted: normalization.accepted,
+        retryReason: retryReason ?? null,
+        issues: normalization.issues,
+        nextStatus: next.status,
+      } as unknown as Prisma.InputJsonValue;
+      const updated = await tx.integrationEvent.update({
+        where: { id },
+        data: {
+          status: next.status as IntegrationEventStatus,
+          attempts: next.attempts,
+          severity: normalization.normalized.severity as IntegrationImportErrorSeverity,
+          normalizedJson: normalization.normalized as unknown as Prisma.InputJsonValue,
+          resultJson,
+          lastError,
+          nextRetryAt,
+          processedAt: next.status === IntegrationEventStatus.succeeded ? now : null,
+          deadLetteredAt: next.status === IntegrationEventStatus.dead_letter ? now : null,
+        },
+        include: eventInclude,
+      });
+      const reconciliation = reconciliationForIntegrationEvent({
+        accepted: normalization.accepted,
+        issues: normalization.issues,
+        created: normalization.accepted && event.attempts === 0,
+        updated: normalization.accepted && event.attempts > 0,
+      });
+      await this.createReconciliationReport(tx, {
+        connectorId: event.connectorId,
+        eventId: event.id,
+        status:
+          next.status === IntegrationEventStatus.dead_letter
+            ? IntegrationReconciliationStatus.failed
+            : (reconciliation.status as IntegrationReconciliationStatus),
+        totalRecords: reconciliation.totalRecords,
+        matchedRecords: reconciliation.matchedRecords,
+        createdRecords: reconciliation.createdRecords,
+        updatedRecords: reconciliation.updatedRecords,
+        failedRecords: reconciliation.failedRecords,
+        orphanedRecords: reconciliation.orphanedRecords,
+        missingRecords: reconciliation.missingRecords,
+        summaryJson: {
+          eventCode: event.code,
+          eventType: event.eventType,
+          subject: normalization.normalized.subject,
+          issues: normalization.issues,
+        },
+        createdBy: actor,
+      });
+      if (event.connectorId) {
+        const connectorStatus =
+          next.status === IntegrationEventStatus.succeeded
+            ? IntegrationConnectorStatus.healthy
+            : next.status === IntegrationEventStatus.dead_letter
+              ? IntegrationConnectorStatus.failed
+              : IntegrationConnectorStatus.warning;
+        const jobStatus =
+          next.status === IntegrationEventStatus.succeeded
+            ? IntegrationJobStatus.completed
+            : next.status === IntegrationEventStatus.dead_letter
+              ? IntegrationJobStatus.failed
+              : IntegrationJobStatus.completed_with_errors;
+        await tx.integrationConnector.update({
+          where: { id: event.connectorId },
+          data: {
+            status: connectorStatus,
+            lastRunAt: now,
+            lastSuccessAt: next.status === IntegrationEventStatus.succeeded ? now : undefined,
+            lastError: lastError ?? null,
+          },
+        });
+        await tx.integrationJob.updateMany({
+          where: { connectorId: event.connectorId, jobType: IntegrationJobType.signal_ingest, deletedAt: null },
+          data: {
+            status: jobStatus,
+            lastRunAt: now,
+            lastSuccessAt: next.status === IntegrationEventStatus.succeeded ? now : undefined,
+            lastError: lastError ?? null,
+          },
+        });
+      }
+      return updated;
+    });
+
+    await this.audit.log({
+      actor,
+      action:
+        processed.status === IntegrationEventStatus.succeeded
+          ? 'integration.event.process'
+          : processed.status === IntegrationEventStatus.dead_letter
+            ? 'integration.event.dead_letter'
+            : 'integration.event.retry_scheduled',
+      entityType: 'integration_event',
+      entityId: processed.id,
+      metadata: {
+        code: processed.code,
+        connectorCode: processed.connector?.code ?? null,
+        status: processed.status,
+        attempts: processed.attempts,
+      },
+    });
+    return processed;
+  }
+
   private rowsFromAdapter(adapterType: string, csv?: string | null): Record<string, string>[] {
     if (adapterType === 'mock_rest') return MOCK_CATALOG_ROWS;
     if (!csv?.trim()) throw new BadRequestException('Catalog CSV is required');
@@ -461,6 +863,64 @@ export class IntegrationsService {
       if (!exists) return code;
     }
     return `INT-BAT-${Date.now()}`;
+  }
+
+  private async nextEventCode(): Promise<string> {
+    const count = await this.prisma.integrationEvent.count();
+    for (let i = 1; i <= 50; i++) {
+      const code = `INT-EVT-${String(count + i).padStart(5, '0')}`;
+      const exists = await this.prisma.integrationEvent.findUnique({ where: { code } });
+      if (!exists) return code;
+    }
+    return `INT-EVT-${Date.now()}`;
+  }
+
+  private async nextReconciliationCode(client: PrismaWriter): Promise<string> {
+    const count = await client.integrationReconciliationReport.count();
+    for (let i = 1; i <= 50; i++) {
+      const code = `INT-REC-${String(count + i).padStart(5, '0')}`;
+      const exists = await client.integrationReconciliationReport.findUnique({ where: { code } });
+      if (!exists) return code;
+    }
+    return `INT-REC-${Date.now()}`;
+  }
+
+  private async createReconciliationReport(
+    client: PrismaWriter,
+    data: {
+      connectorId?: string | null;
+      batchId?: string | null;
+      eventId?: string | null;
+      status: IntegrationReconciliationStatus;
+      totalRecords: number;
+      matchedRecords: number;
+      createdRecords: number;
+      updatedRecords: number;
+      failedRecords: number;
+      orphanedRecords: number;
+      missingRecords: number;
+      summaryJson?: Record<string, unknown> | null;
+      createdBy: string;
+    },
+  ) {
+    return client.integrationReconciliationReport.create({
+      data: {
+        code: await this.nextReconciliationCode(client),
+        connectorId: data.connectorId ?? null,
+        batchId: data.batchId ?? null,
+        eventId: data.eventId ?? null,
+        status: data.status,
+        totalRecords: data.totalRecords,
+        matchedRecords: data.matchedRecords,
+        createdRecords: data.createdRecords,
+        updatedRecords: data.updatedRecords,
+        failedRecords: data.failedRecords,
+        orphanedRecords: data.orphanedRecords,
+        missingRecords: data.missingRecords,
+        summaryJson: (data.summaryJson ?? undefined) as Prisma.InputJsonValue | undefined,
+        createdBy: data.createdBy,
+      },
+    });
   }
 
   private async referenceMaps() {

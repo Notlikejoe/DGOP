@@ -1,0 +1,110 @@
+<section class="page audit-packs-page">
+  <header class="page__header hero">
+    <div>
+      <span class="eyebrow">{{ t('auditPacks.eyebrow') }}</span>
+      <h1>{{ t('auditPacks.title') }}</h1>
+      <p class="page__subtitle">{{ t('auditPacks.subtitle') }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--primary" (click)="generate()" [disabled]="generating()">
+      <app-icon name="fileCheck" />
+      {{ generating() ? t('auditPacks.generating') : t('auditPacks.generate') }}
+    </button>
+  </header>
+
+  @if (state() === 'loading') {
+    <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
+  } @else if (state() === 'error') {
+    <section class="ds-card"><p class="error">{{ t('auditPacks.error') }}</p></section>
+  } @else {
+    <section class="ds-card control-panel">
+      <label class="field">
+        <span>{{ t('auditPacks.scope') }}</span>
+        <select [ngModel]="selectedDomainId()" (ngModelChange)="setDomain($event)">
+          <option value="">{{ t('auditPacks.fullScope') }}</option>
+          @for (domain of domains(); track domain.id) {
+            <option [value]="domain.id">{{ domain.shortCode || domain.code }} - {{ domain.nameEn }}</option>
+          }
+        </select>
+      </label>
+      @if (preview(); as p) {
+        <div class="readiness-chip">
+          <app-status-chip [kind]="statusKind(p.summary.status)" [label]="p.summary.status" />
+          <strong>{{ p.summary.readinessScore }}%</strong>
+          <span>{{ t('auditPacks.readiness') }}</span>
+        </div>
+      }
+    </section>
+
+    @if (preview(); as p) {
+      <section class="kpi-grid" aria-label="Audit pack readiness">
+        <div class="metric">
+          <span>{{ t('auditPacks.specs') }}</span>
+          <strong>{{ p.summary.specCount }}</strong>
+          <small>{{ t('auditPacks.specsHint') }}</small>
+        </div>
+        <div class="metric">
+          <span>{{ t('auditPacks.evidence') }}</span>
+          <strong>{{ p.summary.approvedEvidenceCount }}</strong>
+          <small>{{ t('auditPacks.evidenceHint') }}</small>
+        </div>
+        <div class="metric">
+          <span>{{ t('auditPacks.gaps') }}</span>
+          <strong>{{ p.summary.gapCount }}</strong>
+          <small>{{ p.summary.blockerCount }} {{ t('auditPacks.blockers') }}</small>
+        </div>
+        <div class="metric">
+          <span>{{ t('auditPacks.files') }}</span>
+          <strong>{{ p.manifest.files.length }}</strong>
+          <small>{{ p.manifest.evidence.length }} {{ t('auditPacks.evidenceHashes') }}</small>
+        </div>
+      </section>
+
+      <div class="audit-layout">
+        <section class="ds-card evidence-map">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">{{ t('auditPacks.manifest') }}</span>
+              <h2>{{ t('auditPacks.manifestTitle') }}</h2>
+            </div>
+          </div>
+          <div class="manifest-list">
+            @for (file of p.manifest.files; track file.path) {
+              <div class="manifest-row">
+                <strong>{{ file.path }}</strong>
+                <span>{{ file.bytes }} bytes</span>
+                <code>{{ shortHash(file.sha256) }}</code>
+              </div>
+            }
+          </div>
+        </section>
+
+        <aside class="ds-card history-card">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">{{ t('auditPacks.history') }}</span>
+              <h2>{{ t('auditPacks.generatedPacks') }}</h2>
+            </div>
+            <span class="count-pill">{{ packs().length }}</span>
+          </div>
+          <div class="pack-list">
+            @for (pack of packs(); track pack.id) {
+              <article class="pack-row">
+                <div>
+                  <strong>{{ pack.code }}</strong>
+                  <span>{{ pack.domain?.shortCode || pack.scopeType }} · {{ pack.readinessScore }}%</span>
+                  <small>{{ pack.generatedAt || pack.requestedBy }}</small>
+                </div>
+                <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="download(pack)">
+                  <app-icon name="fileCheck" />
+                  ZIP
+                </button>
+              </article>
+            } @empty {
+              <p class="empty">{{ t('auditPacks.empty') }}</p>
+            }
+          </div>
+        </aside>
+      </div>
+    }
+  }
+</section>

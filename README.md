@@ -45,6 +45,15 @@ npm start
 # open http://localhost:3005
 ```
 
+Client-demo mode uses production security posture, requires a non-placeholder
+`JWT_SECRET`, and redacts detailed health metadata:
+
+```bash
+npm run build
+npm run start:demo
+# open http://localhost:3005
+```
+
 Health check: `GET http://localhost:3005/api/health`
 
 ## 4. Publish externally (simplest, temporary)
@@ -78,6 +87,7 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | `npm run dev` | Run API + Angular dev server together |
 | `npm run build` | Build web then api |
 | `npm start` | Run the API (serves built UI) on `PORT` |
+| `npm run start:demo` | Run the built API/UI with production demo safeguards |
 | `npm run db:migrate` | Apply Prisma migrations to `dgop_dev` |
 | `npm run db:seed` | Seed lookup data |
 | `npm run publish:external` | Build, run, and expose over HTTPS |
@@ -101,5 +111,11 @@ Per-sprint user stories and test cases live under `QA/Sprint-XX/`.
 - [`QA/Sprint-11/`](QA/Sprint-11/README.md) - dashboards MVP: adaptive role-aware dashboard (My work / Governance / NDI readiness / Reference), permission-gated `/dashboard/summary`, scoring-engine reuse, ownership & stewardship coverage, shared KPI/progress/mini-chart components, dashboard unit tests.
 - [`QA/Sprint-16/`](QA/Sprint-16/README.md) - Release 2 hardening & UAT: evidence access hardening, JWT role refresh, safe config defaults, upload dependency patching, and Release 2 UAT scenarios.
 - [`QA/Sprint-17/`](QA/Sprint-17/README.md) - Open Data candidate registry: asset-linked candidates, ODIAO reviewer accountability, publication metadata, eligibility signals, lifecycle controls, and Asset 360 readiness surfacing.
+- [`QA/Sprint-18/`](QA/Sprint-18/README.md) - Open Data assessment and approval workflow: readiness checklist, risk scoring, approval tasks, ODIAO workflow link, and publication gate.
+- [`QA/Sprint-19/`](QA/Sprint-19/README.md) - Open Data publication, review, and usage monitoring: portal sync mock, review cadence, retirement/update decisions, and usage metrics.
+- [`QA/Sprint-20/`](QA/Sprint-20/README.md) - FOI request registry and intake: channel-based intake, generated request numbers, SLA countdown, validation flags, and workflow case creation.
+- [`QA/Sprint-21/`](QA/Sprint-21/README.md) - FOI review, decision, disclosure, and appeals: review evidence, exemptions, decision templates, disclosure trail, appeal workflow, and auditability.
+- [`QA/Sprint-22/`](QA/Sprint-22/README.md) - PDP privacy operations: legal bases, RoPA, DPIA gates, DSR queue, breach notifications, consent/retention records, workflow creation, and privacy workspace.
+- [`QA/Sprint-23/`](QA/Sprint-23/README.md) - data sharing governance: sharing requests, review decisions, agreements, renewal/usage monitoring, workflow creation, and exchange workspace.
 
 Default local admin for local demo data only: `admin@dgop.local` / `Admin@12345`.

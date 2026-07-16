@@ -13,6 +13,10 @@ export class HealthController {
 
   @Get()
   async check() {
+    const environment = this.config.get<string>('NODE_ENV') ?? 'development';
+    const includeDetails =
+      environment !== 'production' ||
+      this.config.get<string>('HEALTH_INCLUDE_DETAILS') === 'true';
     let dbStatus = 'up';
     try {
       await this.prisma.$queryRaw`SELECT 1`;
@@ -20,17 +24,23 @@ export class HealthController {
       dbStatus = 'down';
     }
 
-    return {
+    const response: Record<string, unknown> = {
       status: dbStatus === 'up' ? 'ok' : 'degraded',
       service: 'dgop-api',
       version: '0.1.0',
-      environment: this.config.get<string>('NODE_ENV') ?? 'development',
       timestamp: new Date().toISOString(),
-      uptimeSeconds: Math.round(process.uptime()),
       database: {
         status: dbStatus,
-        name: this.config.get<string>('DB_NAME') ?? 'unknown',
       },
     };
+    if (includeDetails) {
+      response['environment'] = environment;
+      response['uptimeSeconds'] = Math.round(process.uptime());
+      response['database'] = {
+        status: dbStatus,
+        name: this.config.get<string>('DB_NAME') ?? 'unknown',
+      };
+    }
+    return response;
   }
 }

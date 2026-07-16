@@ -1,5 +1,6 @@
 <div class="shell">
   <aside
+    #sidebar
     class="shell__sidebar"
     [class.shell__sidebar--open]="mobileNavOpen()"
     [attr.aria-label]="t('nav.primary')"
@@ -100,7 +101,7 @@
 
   <div class="shell__main">
     <header class="topbar">
-      <button type="button" class="topbar__nav-toggle" (click)="mobileNavOpen.set(true)" [attr.aria-label]="t('nav.openMenu')">
+      <button #navToggle type="button" class="topbar__nav-toggle" (click)="openMobileNav()" [attr.aria-label]="t('nav.openMenu')">
         <app-icon name="menu" />
       </button>
       <nav class="crumbs" [attr.aria-label]="t('nav.breadcrumb')">
@@ -156,7 +157,7 @@
       </div>
     </header>
 
-    <main class="content" id="main-content">
+    <main class="content" id="main-content" tabindex="-1">
       <router-outlet />
     </main>
   </div>

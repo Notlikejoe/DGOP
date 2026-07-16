@@ -1,0 +1,257 @@
+.operations-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero,
+.metric,
+.graph-card,
+.side-stack .ds-card,
+.lower-grid .ds-card {
+  border: 1px solid var(--command-border);
+  background: var(--command-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.hero-actions,
+.actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.metric span,
+.metric small,
+.list-row span,
+.wide-row span,
+.graph-node span,
+.graph-node small,
+.empty {
+  color: var(--command-muted);
+}
+
+.metric strong {
+  font-size: 1.8rem;
+  line-height: 1.05;
+}
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.55fr);
+  gap: 1rem;
+}
+
+.side-stack,
+.lower-grid,
+.compact-list,
+.wide-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.lower-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(320px, 0.8fr);
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.escalation-map {
+  position: relative;
+  min-height: 34rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(var(--command-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--command-border) 1px, transparent 1px),
+    var(--surface);
+  background-size: 52px 52px;
+}
+
+.graph-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.graph-lines marker path {
+  fill: var(--command-muted);
+}
+
+.edge {
+  stroke: var(--command-muted);
+  stroke-width: 0.35;
+  vector-effect: non-scaling-stroke;
+}
+
+.edge.tone-warning {
+  stroke: var(--warning);
+}
+
+.edge.tone-muted {
+  stroke: var(--command-border);
+}
+
+.graph-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: min(17rem, 22%);
+  min-height: 5.4rem;
+  border: 1px solid var(--command-border);
+  border-top: 4px solid var(--primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--command-surface) 92%, transparent);
+  box-shadow: var(--shadow-sm);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+}
+
+.node-escalation {
+  width: min(15rem, 21%);
+  min-height: 5rem;
+}
+
+.graph-node strong,
+.list-row strong,
+.wide-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tone-success {
+  border-top-color: var(--success);
+}
+
+.tone-warning {
+  border-top-color: var(--warning);
+}
+
+.tone-danger {
+  border-top-color: var(--danger);
+}
+
+.list-row,
+.wide-row {
+  min-width: 0;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.8rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.wide-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.list-row div,
+.wide-row div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.btn-sm {
+  min-height: 2.1rem;
+  padding: 0 0.7rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.form-grid input,
+.form-grid select {
+  min-width: 0;
+  min-height: 2.5rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 0 0.75rem;
+}
+
+.check-row {
+  min-height: 2.5rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--command-muted);
+  font-weight: 700;
+}
+
+.error {
+  color: var(--danger);
+}
+
+@media (max-width: 1220px) {
+  .metric-strip,
+  .ops-grid,
+  .lower-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .escalation-map {
+    min-height: auto;
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .graph-lines {
+    display: none;
+  }
+
+  .graph-node {
+    position: static;
+    transform: none;
+    width: auto;
+  }
+
+  .form-grid,
+  .list-row,
+  .wide-row {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions .ds-btn,
+  .form-grid .ds-btn {
+    width: 100%;
+  }
+}

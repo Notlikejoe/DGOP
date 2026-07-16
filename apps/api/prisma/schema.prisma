@@ -98,6 +98,7 @@ model User {
   ownedAccessReviews AccessReview[] @relation("AccessReviewOwner")
   accessReviewItems AccessReviewItem[]
   abacDecisions AbacDecisionLog[]
+  governanceNotifications GovernanceNotification[]
 
   @@map("users")
 }
@@ -144,6 +145,17 @@ model Person {
   openDataOwnerCandidates OpenDataCandidate[] @relation("OpenDataOwner")
   openDataStewardCandidates OpenDataCandidate[] @relation("OpenDataSteward")
   openDataReviewerCandidates OpenDataCandidate[] @relation("OpenDataReviewer")
+  foiAssignedRequests FoiRequest[] @relation("FoiAssignedOfficer")
+  foiReviews FoiReview[] @relation("FoiReviewer")
+  foiAppeals FoiAppeal[] @relation("FoiAppealOfficer")
+  privacyRopaRecords PrivacyRopaRecord[] @relation("PrivacyRopaOwner")
+  privacyDpiaReviews PrivacyDpia[] @relation("PrivacyDpiaReviewer")
+  privacyGateReviews PrivacyGate[] @relation("PrivacyGateReviewer")
+  privacyDsrRequests PrivacyDsrRequest[] @relation("PrivacyDsrAssignee")
+  privacyBreaches PrivacyBreach[] @relation("PrivacyBreachAssignee")
+  privacyRetentionRules PrivacyRetentionRule[] @relation("PrivacyRetentionOwner")
+  dataSharingReviews DataSharingReview[] @relation("DataSharingReviewer")
+  dataSharingAgreements DataSharingAgreement[] @relation("DataSharingAgreementOwner")
 
   @@map("people")
 }
@@ -170,6 +182,10 @@ model Classification {
   classificationRequestsFrom ClassificationChangeRequest[] @relation("ClassificationChangeFrom")
   classificationRequestsTo ClassificationChangeRequest[] @relation("ClassificationChangeTo")
   openDataCandidates OpenDataCandidate[]
+  foiRequests FoiRequest[]
+  foiExemptions FoiExemptionEvidence[]
+  privacyDpiaRecords PrivacyDpia[]
+  dataSharingRequests DataSharingRequest[]
 
   @@map("classifications")
 }
@@ -299,6 +315,7 @@ model NdiDomain {
   updatedAt DateTime @updatedAt
 
   specifications NdiSpecification[]
+  auditPacks     NdiAuditPack[]
 
   @@map("ndi_domains")
 }
@@ -321,6 +338,21 @@ model DataDomain {
   dataAccessMappings RoleDataAccessMap[]
   accessReviewItems AccessReviewItem[]
   abacDecisions AbacDecisionLog[]
+  workflowTemplates WorkflowTemplate[]
+  foiRequests FoiRequest[]
+  privacyRopaRecords PrivacyRopaRecord[]
+  privacyDpiaRecords PrivacyDpia[]
+  privacyDsrRequests PrivacyDsrRequest[]
+  privacyBreaches PrivacyBreach[]
+  privacyRetentionRules PrivacyRetentionRule[]
+  dataSharingRequests DataSharingRequest[]
+  dataSharingAgreements DataSharingAgreement[]
+  referenceDataVersions ReferenceDataVersion[]
+  businessGlossaryTerms BusinessGlossaryTerm[]
+  businessLineageMaps BusinessLineageMap[]
+  dataAssetValuations DataAssetValuation[]
+  businessImpactAssessments BusinessImpactAssessment[]
+  dataValueKpis DataValueKpi[]
   isActive    Boolean      @default(true)
   deletedAt   DateTime?
   createdAt   DateTime     @default(now())
@@ -420,6 +452,12 @@ model NdiEvidence {
   updatedAt     DateTime          @updatedAt
 
   spec NdiSpecification @relation(fields: [specId], references: [id], onDelete: Cascade)
+  openDataAssessments OpenDataAssessment[] @relation("OpenDataAssessmentEvidence")
+  openDataPublications OpenDataPublication[] @relation("OpenDataPublicationEvidence")
+  mdmMatchCandidates MdmMatchCandidate[] @relation("MdmMatchEvidence")
+  referenceDataVersions ReferenceDataVersion[] @relation("ReferenceVersionEvidence")
+  metadataCertifications MetadataCertification[] @relation("MetadataCertificationEvidence")
+  architectureReviews ArchitectureReview[] @relation("ArchitectureReviewEvidence")
 
   @@index([specId])
   @@index([status])
@@ -498,6 +536,28 @@ model DataAsset {
   dlpIncidents      DlpIncident[]
   classificationRequests ClassificationChangeRequest[]
   openDataCandidates OpenDataCandidate[]
+  foiRequests       FoiRequest[]
+  privacyRopaRecords PrivacyRopaRecord[]
+  privacyDpiaRecords PrivacyDpia[]
+  privacyDsrRequests PrivacyDsrRequest[]
+  privacyBreaches PrivacyBreach[]
+  consentRecords PrivacyConsentRecord[]
+  privacyRetentionRules PrivacyRetentionRule[]
+  dataSharingRequests DataSharingRequest[]
+  dataSharingAgreements DataSharingAgreement[]
+  referenceDataVersions ReferenceDataVersion[]
+  mdmMatchSourceCandidates MdmMatchCandidate[] @relation("MdmMatchSourceAsset")
+  mdmMatchCandidateRecords MdmMatchCandidate[] @relation("MdmMatchCandidateAsset")
+  metadataCertifications MetadataCertification[]
+  architectureReviews ArchitectureReview[]
+  businessGlossaryTerms BusinessGlossaryTerm[]
+  businessLineageSourceMaps BusinessLineageMap[] @relation("BusinessLineageSourceAsset")
+  businessLineageTargetMaps BusinessLineageMap[] @relation("BusinessLineageTargetAsset")
+  dataAssetValuations DataAssetValuation[]
+  dataUserSurveys DataUserSurvey[]
+  assetLifecycleDecisions AssetLifecycleDecision[]
+  businessImpactAssessments BusinessImpactAssessment[]
+  dataValueKpis DataValueKpi[]
   externalCatalogId String?
   catalogSource     String?
   catalogSyncStatus DataAssetCatalogSyncStatus @default(not_synced)
@@ -664,9 +724,11 @@ model WorkflowCase {
   /// Case type: general | owner_assignment_approval | steward_assignment_approval.
   type         String                 @default("general")
   status       CaseStatus             @default(draft)
+  templateId   String?
   assetId      String?
   assignmentId String?
   createdBy    String
+  template     WorkflowTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
   asset        DataAsset?             @relation(fields: [assetId], references: [id], onDelete: SetNull)
   assignment   StewardshipAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   tasks        WorkflowTask[]
@@ -674,11 +736,28 @@ model WorkflowCase {
   dataQualityIssue DataQualityIssue?
   dlpIncident DlpIncident?
   classificationChangeRequest ClassificationChangeRequest?
+  openDataApprovals OpenDataApproval[]
+  foiRequest FoiRequest?
+  foiAppeal FoiAppeal?
+  privacyDpia PrivacyDpia?
+  privacyDsrRequest PrivacyDsrRequest?
+  privacyBreach PrivacyBreach?
+  dataSharingRequest DataSharingRequest?
+  metadataCertification MetadataCertification?
+  architectureReview ArchitectureReview?
+  businessGlossaryTerm BusinessGlossaryTerm?
+  businessLineageMap BusinessLineageMap?
+  assetLifecycleDecision AssetLifecycleDecision?
+  businessImpactAssessment BusinessImpactAssessment?
+  governanceNotifications GovernanceNotification[]
+  governanceEscalations GovernanceEscalation[]
+  complianceCalendarOccurrences ComplianceCalendarOccurrence[]
   createdAt    DateTime               @default(now())
   updatedAt    DateTime               @updatedAt
 
   @@index([status])
   @@index([type])
+  @@index([templateId])
   @@index([assetId])
   @@map("workflow_cases")
 }
@@ -697,14 +776,20 @@ model WorkflowTask {
   decisionComment String?
   completedAt     DateTime?
   case            WorkflowCase    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  templateStageId String?
+  templateStage   WorkflowTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
   assignee        User?           @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
   events          WorkflowEvent[]
+  governanceNotifications GovernanceNotification[]
+  governanceEscalations GovernanceEscalation[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   @@index([caseId])
+  @@index([templateStageId])
   @@index([assigneeUserId])
   @@index([status])
+  @@index([assigneeUserId, status, dueDate])
   @@map("workflow_tasks")
 }
 
@@ -726,6 +811,85 @@ model WorkflowEvent {
   @@map("workflow_events")
 }
 
+/// Reusable workflow route definition. Templates make case types visible and
+/// configurable without replacing the existing case/task engine.
+model WorkflowTemplate {
+  id             String                       @id @default(uuid())
+  code           String                       @unique
+  caseType       String
+  nameEn         String
+  nameAr         String
+  description    String?
+  trigger        String                       @default("manual")
+  domainId       String?
+  defaultSlaDays Int                          @default(5)
+  isSystem       Boolean                      @default(false)
+  isActive       Boolean                      @default(true)
+  deletedAt      DateTime?
+  createdBy      String?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  domain         DataDomain?                  @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  stages         WorkflowTemplateStage[]
+  transitions    WorkflowTemplateTransition[]
+  cases          WorkflowCase[]
+
+  @@index([caseType])
+  @@index([domainId])
+  @@index([isActive])
+  @@map("workflow_templates")
+}
+
+/// A visible node in a workflow route. Stages can create default tasks when a
+/// case is opened from the template.
+model WorkflowTemplateStage {
+  id               String                       @id @default(uuid())
+  templateId       String
+  code             String
+  nameEn           String
+  nameAr           String
+  description      String?
+  kind             String                       @default("review")
+  taskType         String                       @default("review")
+  assigneeRoleCode String?
+  dueDays          Int                          @default(2)
+  sortOrder        Int                          @default(0)
+  isStart          Boolean                      @default(false)
+  isDecision       Boolean                      @default(false)
+  isFinal          Boolean                      @default(false)
+  isActive         Boolean                      @default(true)
+  template         WorkflowTemplate             @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  outgoing         WorkflowTemplateTransition[] @relation("WorkflowTransitionFrom")
+  incoming         WorkflowTemplateTransition[] @relation("WorkflowTransitionTo")
+  tasks            WorkflowTask[]
+
+  @@unique([templateId, code])
+  @@index([templateId])
+  @@index([sortOrder])
+  @@map("workflow_template_stages")
+}
+
+/// Directed branch between route stages, including decision branches.
+model WorkflowTemplateTransition {
+  id          String                @id @default(uuid())
+  templateId  String
+  fromStageId String
+  toStageId   String
+  labelEn     String
+  labelAr     String
+  decision    String?
+  sortOrder   Int                   @default(0)
+  isHappyPath Boolean               @default(true)
+  template    WorkflowTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  fromStage   WorkflowTemplateStage @relation("WorkflowTransitionFrom", fields: [fromStageId], references: [id], onDelete: Cascade)
+  toStage     WorkflowTemplateStage @relation("WorkflowTransitionTo", fields: [toStageId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+  @@index([fromStageId])
+  @@index([toStageId])
+  @@map("workflow_template_transitions")
+}
+
 /// Append-only audit log foundation.
 model AuditLog {
   id         String   @id @default(uuid())
@@ -734,9 +898,14 @@ model AuditLog {
   entityType String
   entityId   String?
   metadata   Json?
+  previousHash String?
+  entryHash    String?
+  chainVersion Int      @default(1)
   createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])
+  @@index([entryHash])
+  @@index([createdAt])
   @@map("audit_logs")
 }
 
@@ -1249,6 +1418,32 @@ enum OpenDataPersonalDataAssessment {
   unknown
 }
 
+enum OpenDataAssessmentStatus {
+  draft
+  completed
+}
+
+enum OpenDataApprovalDecision {
+  pending
+  approved
+  rejected
+  needs_changes
+}
+
+enum OpenDataPortalSyncStatus {
+  pending
+  simulated
+  sent
+  failed
+}
+
+enum OpenDataReviewDecision {
+  continue_publication
+  update_required
+  retire
+  reassess
+}
+
 model OpenDataCandidate {
   id                     String                         @id @default(uuid())
   code                   String                         @unique
@@ -1288,6 +1483,11 @@ model OpenDataCandidate {
   ownerPerson            Person?                        @relation("OpenDataOwner", fields: [ownerPersonId], references: [id], onDelete: SetNull)
   stewardPerson          Person?                        @relation("OpenDataSteward", fields: [stewardPersonId], references: [id], onDelete: SetNull)
   odiaoReviewerPerson    Person?                        @relation("OpenDataReviewer", fields: [odiaoReviewerPersonId], references: [id], onDelete: SetNull)
+  assessments            OpenDataAssessment[]
+  approvals              OpenDataApproval[]
+  publications           OpenDataPublication[]
+  reviews                OpenDataReview[]
+  usageMetrics           OpenDataUsageMetric[]
 
   @@index([assetId])
   @@index([status])
@@ -1299,6 +1499,879 @@ model OpenDataCandidate {
   @@index([nextReviewAt])
   @@index([eligibilityScore])
   @@map("open_data_candidates")
+}
+
+model OpenDataAssessment {
+  id                    String                   @id @default(uuid())
+  candidateId           String
+  status                OpenDataAssessmentStatus @default(draft)
+  publicClassification  Boolean                  @default(false)
+  restrictedInformation Boolean                  @default(false)
+  aggregationApplied    Boolean                  @default(false)
+  anonymizationApplied  Boolean                  @default(false)
+  dqAcceptable          Boolean                  @default(false)
+  metadataComplete      Boolean                  @default(false)
+  privacyReviewComplete Boolean                  @default(false)
+  legalReviewComplete   Boolean                  @default(false)
+  readinessScore        Int                      @default(0)
+  riskScore             Int                      @default(0)
+  resultSignal          OpenDataSignalStatus     @default(needs_review)
+  blockersJson          Json?
+  reviewItemsJson       Json?
+  note                  String?
+  assessedBy            String
+  completedAt           DateTime?
+  evidenceId            String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  candidate             OpenDataCandidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  evidence              NdiEvidence?             @relation("OpenDataAssessmentEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([candidateId])
+  @@index([evidenceId])
+  @@index([status])
+  @@index([resultSignal])
+  @@index([createdAt])
+  @@map("open_data_assessments")
+}
+
+model OpenDataApproval {
+  id             String                   @id @default(uuid())
+  candidateId    String
+  step           String
+  decision       OpenDataApprovalDecision @default(pending)
+  decidedBy      String?
+  decidedAt      DateTime?
+  note           String?
+  workflowCaseId String?
+  workflowTaskId String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  candidate      OpenDataCandidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  workflowCase   WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@unique([candidateId, step])
+  @@index([candidateId])
+  @@index([decision])
+  @@index([workflowCaseId])
+  @@map("open_data_approvals")
+}
+
+model OpenDataPublication {
+  id             String                   @id @default(uuid())
+  candidateId    String
+  portalRecordId String?
+  portalUrl      String?
+  format         OpenDataPublicationFormat
+  syncStatus     OpenDataPortalSyncStatus @default(simulated)
+  publishedAt    DateTime                 @default(now())
+  nextReviewAt   DateTime?
+  publishedBy    String
+  note           String?
+  evidenceId     String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  candidate      OpenDataCandidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  evidence       NdiEvidence?             @relation("OpenDataPublicationEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@unique([portalRecordId])
+  @@index([candidateId])
+  @@index([evidenceId])
+  @@index([publishedAt])
+  @@index([nextReviewAt])
+  @@index([syncStatus])
+  @@map("open_data_publications")
+}
+
+model OpenDataReview {
+  id           String                 @id @default(uuid())
+  candidateId  String
+  reviewDate   DateTime               @default(now())
+  decision     OpenDataReviewDecision
+  reviewer     String
+  note         String?
+  nextReviewAt DateTime?
+  createdAt    DateTime               @default(now())
+  candidate    OpenDataCandidate      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([reviewDate])
+  @@index([decision])
+  @@index([nextReviewAt])
+  @@map("open_data_reviews")
+}
+
+model OpenDataUsageMetric {
+  id          String            @id @default(uuid())
+  candidateId String
+  metricDate  DateTime          @default(now())
+  downloads   Int               @default(0)
+  apiCalls    Int               @default(0)
+  uniqueUsers Int               @default(0)
+  source      String            @default("manual")
+  createdBy   String
+  createdAt   DateTime          @default(now())
+  candidate   OpenDataCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([metricDate])
+  @@index([source])
+  @@map("open_data_usage_metrics")
+}
+
+enum FoiRequesterType {
+  individual
+  business
+  government
+  media
+  nonprofit
+  other
+}
+
+enum FoiRequestChannel {
+  web
+  email
+  crm
+  call_center
+  manual
+}
+
+enum FoiRequestCategory {
+  data_request
+  record_request
+  policy_request
+  statistics
+  other
+}
+
+enum FoiRequestStatus {
+  registered
+  under_review
+  awaiting_clarification
+  decision_due
+  approved
+  partially_approved
+  rejected
+  extended
+  disclosed
+  appealed
+  closed
+  cancelled
+}
+
+enum FoiReviewType {
+  classification
+  privacy
+  legal
+  owner
+  disclosure
+}
+
+enum FoiReviewStatus {
+  pending
+  completed
+  blocked
+}
+
+enum FoiDecisionOutcome {
+  approved
+  partially_approved
+  rejected
+  extended
+}
+
+enum FoiDisclosureMethod {
+  secure_link
+  email
+  pickup
+  portal
+  other
+}
+
+enum FoiAppealStatus {
+  submitted
+  under_review
+  upheld
+  overturned
+  closed
+  withdrawn
+}
+
+model FoiRequest {
+  id                       String             @id @default(uuid())
+  requestNumber            String             @unique
+  requesterName            String
+  requesterEmail           String?
+  requesterPhone           String?
+  requesterType            FoiRequesterType   @default(individual)
+  channel                  FoiRequestChannel  @default(manual)
+  category                 FoiRequestCategory @default(record_request)
+  subject                  String
+  description              String
+  receivedAt               DateTime           @default(now())
+  dueAt                    DateTime
+  status                   FoiRequestStatus   @default(registered)
+  identityValidated        Boolean            @default(false)
+  contactValidated         Boolean            @default(false)
+  assignedOfficerPersonId  String?
+  assetId                  String?
+  dataDomainId             String?
+  classificationId         String?
+  responseTemplateId       String?
+  decisionOutcome          FoiDecisionOutcome?
+  decisionSummary          String?
+  extendedDueAt            DateTime?
+  workflowCaseId           String?            @unique
+  createdBy                String
+  updatedBy                String?
+  deletedAt                DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  assignedOfficer          Person?            @relation("FoiAssignedOfficer", fields: [assignedOfficerPersonId], references: [id], onDelete: SetNull)
+  asset                    DataAsset?         @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  dataDomain               DataDomain?        @relation(fields: [dataDomainId], references: [id], onDelete: SetNull)
+  classification           Classification?    @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  responseTemplate         FoiResponseTemplate? @relation(fields: [responseTemplateId], references: [id], onDelete: SetNull)
+  workflowCase             WorkflowCase?      @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  reviews                  FoiReview[]
+  exemptions               FoiExemptionEvidence[]
+  decisions                FoiDecision[]
+  disclosures              FoiDisclosure[]
+  appeals                  FoiAppeal[]
+
+  @@index([status])
+  @@index([channel])
+  @@index([category])
+  @@index([dueAt])
+  @@index([assetId])
+  @@index([dataDomainId])
+  @@index([classificationId])
+  @@index([assignedOfficerPersonId])
+  @@index([workflowCaseId])
+  @@map("foi_requests")
+}
+
+model FoiReview {
+  id               String          @id @default(uuid())
+  requestId        String
+  reviewType       FoiReviewType
+  status           FoiReviewStatus @default(pending)
+  reviewerPersonId String?
+  note             String?
+  evidenceSummary  String?
+  completedAt      DateTime?
+  createdBy        String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  request          FoiRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewer         Person?         @relation("FoiReviewer", fields: [reviewerPersonId], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, reviewType])
+  @@index([requestId])
+  @@index([reviewType])
+  @@index([status])
+  @@index([reviewerPersonId])
+  @@map("foi_reviews")
+}
+
+model FoiExemptionEvidence {
+  id               String          @id @default(uuid())
+  requestId        String
+  basisCode        String
+  title            String
+  description      String?
+  classificationId String?
+  recordedBy       String
+  createdAt        DateTime        @default(now())
+  request          FoiRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  classification   Classification? @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([basisCode])
+  @@index([classificationId])
+  @@map("foi_exemption_evidence")
+}
+
+model FoiDecision {
+  id                 String             @id @default(uuid())
+  requestId          String
+  outcome            FoiDecisionOutcome
+  summary            String
+  justification      String
+  responseTemplateId String?
+  decidedBy          String
+  decidedAt          DateTime           @default(now())
+  extendedDueAt      DateTime?
+  createdAt          DateTime           @default(now())
+  request            FoiRequest         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  responseTemplate   FoiResponseTemplate? @relation(fields: [responseTemplateId], references: [id], onDelete: SetNull)
+  disclosures        FoiDisclosure[]
+
+  @@index([requestId])
+  @@index([outcome])
+  @@index([responseTemplateId])
+  @@map("foi_decisions")
+}
+
+model FoiDisclosure {
+  id          String              @id @default(uuid())
+  requestId   String
+  decisionId  String?
+  method      FoiDisclosureMethod @default(secure_link)
+  recipient   String
+  recordUrl   String?
+  summary     String?
+  disclosedBy String
+  releasedAt  DateTime            @default(now())
+  createdAt   DateTime            @default(now())
+  request     FoiRequest          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  decision    FoiDecision?        @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([decisionId])
+  @@index([releasedAt])
+  @@map("foi_disclosures")
+}
+
+model FoiAppeal {
+  id                      String          @id @default(uuid())
+  requestId               String
+  appealNumber            String          @unique
+  status                  FoiAppealStatus @default(submitted)
+  reason                  String
+  submittedAt             DateTime        @default(now())
+  dueAt                   DateTime
+  assignedOfficerPersonId String?
+  decision                String?
+  closedAt                DateTime?
+  workflowCaseId          String?         @unique
+  createdBy               String
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  request                 FoiRequest      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assignedOfficer         Person?         @relation("FoiAppealOfficer", fields: [assignedOfficerPersonId], references: [id], onDelete: SetNull)
+  workflowCase            WorkflowCase?   @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([assignedOfficerPersonId])
+  @@index([workflowCaseId])
+  @@map("foi_appeals")
+}
+
+model FoiResponseTemplate {
+  id          String              @id @default(uuid())
+  code        String              @unique
+  nameEn      String
+  nameAr      String
+  outcome     FoiDecisionOutcome
+  bodyEn      String
+  bodyAr      String
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  requests    FoiRequest[]
+  decisions   FoiDecision[]
+
+  @@index([outcome])
+  @@index([isActive])
+  @@map("foi_response_templates")
+}
+
+enum PrivacyLegalBasisCategory {
+  consent
+  contract
+  legal_obligation
+  vital_interests
+  public_task
+  legitimate_interest
+}
+
+enum PrivacyWorkStatus {
+  draft
+  submitted
+  under_review
+  action_required
+  approved
+  rejected
+  closed
+}
+
+enum PrivacyGatePhase {
+  requirements
+  design
+  development
+  testing
+  deployment
+}
+
+enum PrivacyGateStatus {
+  pending
+  approved
+  blocked
+  not_required
+}
+
+enum DpiaRiskLevel {
+  low
+  medium
+  high
+  critical
+}
+
+enum DsrRequestType {
+  access
+  correction
+  deletion
+  restriction
+  portability
+  objection
+}
+
+enum DsrRequestStatus {
+  received
+  identity_validation
+  in_progress
+  awaiting_data_owner
+  fulfilled
+  rejected
+  closed
+}
+
+enum BreachSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum BreachStatus {
+  detected
+  triage
+  contained
+  notified
+  closed
+  false_positive
+}
+
+enum ConsentStatus {
+  active
+  withdrawn
+  expired
+}
+
+enum RetentionTrigger {
+  creation
+  last_use
+  contract_end
+  manual
+}
+
+model PrivacyLegalBasis {
+  id          String                    @id @default(uuid())
+  code        String                    @unique
+  nameEn      String
+  nameAr      String
+  category    PrivacyLegalBasisCategory
+  description String?
+  authority   String?
+  isActive    Boolean                   @default(true)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  ropaRecords PrivacyRopaRecord[]
+  dpias       PrivacyDpia[]
+  consents    PrivacyConsentRecord[]
+  sharingRequests DataSharingRequest[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("privacy_legal_bases")
+}
+
+model PrivacyRopaRecord {
+  id               String            @id @default(uuid())
+  code             String            @unique
+  processName      String
+  purpose          String
+  assetId          String?
+  domainId         String?
+  legalBasisId     String?
+  ownerPersonId    String?
+  dataSubjects     String?
+  recipients       String?
+  retentionSummary String?
+  status           PrivacyWorkStatus @default(draft)
+  reviewDueAt      DateTime?
+  reviewedAt       DateTime?
+  createdBy        String
+  updatedBy        String?
+  deletedAt        DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  asset            DataAsset?        @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain           DataDomain?       @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  legalBasis       PrivacyLegalBasis? @relation(fields: [legalBasisId], references: [id], onDelete: SetNull)
+  ownerPerson      Person?           @relation("PrivacyRopaOwner", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([legalBasisId])
+  @@index([ownerPersonId])
+  @@index([status])
+  @@index([reviewDueAt])
+  @@map("privacy_ropa_records")
+}
+
+model PrivacyDpia {
+  id               String         @id @default(uuid())
+  code             String         @unique
+  title            String
+  description      String?
+  assetId          String?
+  domainId         String?
+  legalBasisId     String?
+  classificationId String?
+  status           PrivacyWorkStatus @default(draft)
+  riskLevel        DpiaRiskLevel  @default(medium)
+  inherentRiskScore Int           @default(50)
+  residualRiskScore Int           @default(50)
+  crossBorderTransfer Boolean     @default(false)
+  reviewerPersonId String?
+  workflowCaseId   String?        @unique
+  decisionSummary  String?
+  dueAt            DateTime?
+  completedAt      DateTime?
+  createdBy        String
+  updatedBy        String?
+  deletedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  asset            DataAsset?     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain           DataDomain?    @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  legalBasis       PrivacyLegalBasis? @relation(fields: [legalBasisId], references: [id], onDelete: SetNull)
+  classification   Classification? @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  reviewerPerson   Person?        @relation("PrivacyDpiaReviewer", fields: [reviewerPersonId], references: [id], onDelete: SetNull)
+  workflowCase     WorkflowCase?  @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  gates            PrivacyGate[]
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([legalBasisId])
+  @@index([classificationId])
+  @@index([status])
+  @@index([riskLevel])
+  @@index([reviewerPersonId])
+  @@index([workflowCaseId])
+  @@index([dueAt])
+  @@map("privacy_dpias")
+}
+
+model PrivacyGate {
+  id               String            @id @default(uuid())
+  dpiaId           String
+  phase            PrivacyGatePhase
+  status           PrivacyGateStatus @default(pending)
+  reviewerPersonId String?
+  note             String?
+  dueAt            DateTime?
+  completedAt      DateTime?
+  createdBy        String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  dpia             PrivacyDpia       @relation(fields: [dpiaId], references: [id], onDelete: Cascade)
+  reviewerPerson   Person?           @relation("PrivacyGateReviewer", fields: [reviewerPersonId], references: [id], onDelete: SetNull)
+
+  @@unique([dpiaId, phase])
+  @@index([dpiaId])
+  @@index([phase])
+  @@index([status])
+  @@index([reviewerPersonId])
+  @@index([dueAt])
+  @@map("privacy_gates")
+}
+
+model PrivacyDsrRequest {
+  id                String           @id @default(uuid())
+  requestNumber     String           @unique
+  requesterName     String
+  requesterEmail    String?
+  requestType       DsrRequestType
+  status            DsrRequestStatus @default(received)
+  description       String
+  identityValidated Boolean          @default(false)
+  assetId           String?
+  domainId          String?
+  assignedPersonId  String?
+  dueAt             DateTime
+  fulfilledAt       DateTime?
+  workflowCaseId    String?          @unique
+  decisionSummary   String?
+  createdBy         String
+  updatedBy         String?
+  deletedAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  asset             DataAsset?       @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain            DataDomain?      @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  assignedPerson    Person?          @relation("PrivacyDsrAssignee", fields: [assignedPersonId], references: [id], onDelete: SetNull)
+  workflowCase      WorkflowCase?    @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([requestType])
+  @@index([assetId])
+  @@index([domainId])
+  @@index([assignedPersonId])
+  @@index([dueAt])
+  @@index([workflowCaseId])
+  @@map("privacy_dsr_requests")
+}
+
+model PrivacyBreach {
+  id                String         @id @default(uuid())
+  code              String         @unique
+  title             String
+  description       String?
+  assetId           String?
+  domainId          String?
+  severity          BreachSeverity @default(medium)
+  status            BreachStatus   @default(detected)
+  detectedAt        DateTime       @default(now())
+  containedAt       DateTime?
+  notificationDueAt DateTime
+  notifiedAt        DateTime?
+  assignedPersonId  String?
+  workflowCaseId    String?        @unique
+  regulatorNotified Boolean        @default(false)
+  subjectNotified   Boolean        @default(false)
+  createdBy         String
+  updatedBy         String?
+  deletedAt         DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  asset             DataAsset?     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain            DataDomain?    @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  assignedPerson    Person?        @relation("PrivacyBreachAssignee", fields: [assignedPersonId], references: [id], onDelete: SetNull)
+  workflowCase      WorkflowCase?  @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([severity])
+  @@index([status])
+  @@index([assetId])
+  @@index([domainId])
+  @@index([assignedPersonId])
+  @@index([notificationDueAt])
+  @@index([workflowCaseId])
+  @@map("privacy_breaches")
+}
+
+model PrivacyConsentRecord {
+  id             String        @id @default(uuid())
+  assetId        String?
+  subjectRef     String
+  purpose        String
+  legalBasisId   String?
+  status         ConsentStatus @default(active)
+  capturedAt     DateTime      @default(now())
+  expiresAt      DateTime?
+  withdrawnAt    DateTime?
+  source         String        @default("manual")
+  createdBy      String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  asset          DataAsset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  legalBasis     PrivacyLegalBasis? @relation(fields: [legalBasisId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([legalBasisId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("privacy_consent_records")
+}
+
+model PrivacyRetentionRule {
+  id            String           @id @default(uuid())
+  code          String           @unique
+  nameEn        String
+  nameAr        String
+  assetId       String?
+  domainId      String?
+  trigger       RetentionTrigger @default(creation)
+  durationDays  Int
+  action        String           @default("review")
+  ownerPersonId String?
+  nextReviewAt  DateTime?
+  isActive      Boolean          @default(true)
+  createdBy     String
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  asset         DataAsset?       @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain        DataDomain?      @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  ownerPerson   Person?          @relation("PrivacyRetentionOwner", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([ownerPersonId])
+  @@index([nextReviewAt])
+  @@index([isActive])
+  @@map("privacy_retention_rules")
+}
+
+enum DataSharingRequestStatus {
+  draft
+  submitted
+  under_review
+  approved
+  rejected
+  agreement_active
+  retired
+}
+
+enum DataSharingReviewStep {
+  owner
+  privacy
+  security
+  technical
+}
+
+enum DataSharingReviewDecision {
+  pending
+  approved
+  rejected
+  needs_changes
+}
+
+enum DataSharingAgreementStatus {
+  draft
+  active
+  renewal_due
+  expired
+  retired
+}
+
+enum DataSharingUsageStatus {
+  normal
+  watch
+  escalated
+}
+
+model DataSharingRequest {
+  id                 String                   @id @default(uuid())
+  requestNumber      String                   @unique
+  requesterOrg       String
+  recipientOrg       String
+  purpose            String
+  legalBasisId       String?
+  assetId            String?
+  domainId           String?
+  classificationId   String?
+  maskingPolicyId    String?
+  roleDataAccessMapId String?
+  consentRequired    Boolean                  @default(false)
+  crossBorderTransfer Boolean                 @default(false)
+  status             DataSharingRequestStatus @default(draft)
+  riskScore          Int                      @default(50)
+  requiredControlsJson Json?
+  workflowCaseId     String?                  @unique
+  createdBy          String
+  updatedBy          String?
+  deletedAt          DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  legalBasis         PrivacyLegalBasis?       @relation(fields: [legalBasisId], references: [id], onDelete: SetNull)
+  asset              DataAsset?               @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain             DataDomain?              @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  classification     Classification?          @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  maskingPolicy      MaskingPolicy?           @relation(fields: [maskingPolicyId], references: [id], onDelete: SetNull)
+  roleDataAccessMap  RoleDataAccessMap?       @relation(fields: [roleDataAccessMapId], references: [id], onDelete: SetNull)
+  workflowCase       WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  reviews            DataSharingReview[]
+  agreements         DataSharingAgreement[]
+
+  @@index([status])
+  @@index([assetId])
+  @@index([domainId])
+  @@index([classificationId])
+  @@index([legalBasisId])
+  @@index([maskingPolicyId])
+  @@index([roleDataAccessMapId])
+  @@index([workflowCaseId])
+  @@index([riskScore])
+  @@map("data_sharing_requests")
+}
+
+model DataSharingReview {
+  id               String                    @id @default(uuid())
+  requestId        String
+  step             DataSharingReviewStep
+  decision         DataSharingReviewDecision @default(pending)
+  reviewerPersonId String?
+  note             String?
+  decidedAt        DateTime?
+  createdBy        String
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  request          DataSharingRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewerPerson   Person?                   @relation("DataSharingReviewer", fields: [reviewerPersonId], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, step])
+  @@index([requestId])
+  @@index([step])
+  @@index([decision])
+  @@index([reviewerPersonId])
+  @@map("data_sharing_reviews")
+}
+
+model DataSharingAgreement {
+  id              String                    @id @default(uuid())
+  agreementNumber String                    @unique
+  requestId       String?
+  assetId         String?
+  domainId        String?
+  recipientOrg    String
+  purpose         String
+  status          DataSharingAgreementStatus @default(draft)
+  ownerPersonId   String?
+  agreementUrl    String?
+  startAt         DateTime?
+  endAt           DateTime?
+  renewalDueAt    DateTime?
+  retiredAt       DateTime?
+  createdBy       String
+  updatedBy       String?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  request         DataSharingRequest?       @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  asset           DataAsset?                @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain          DataDomain?               @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  ownerPerson     Person?                   @relation("DataSharingAgreementOwner", fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  usageMetrics    DataSharingUsageMetric[]
+
+  @@index([requestId])
+  @@index([assetId])
+  @@index([domainId])
+  @@index([status])
+  @@index([ownerPersonId])
+  @@index([renewalDueAt])
+  @@map("data_sharing_agreements")
+}
+
+model DataSharingUsageMetric {
+  id             String                 @id @default(uuid())
+  agreementId    String
+  metricDate     DateTime               @default(now())
+  recordsShared  Int                    @default(0)
+  apiCalls       Int                    @default(0)
+  incidents      Int                    @default(0)
+  status         DataSharingUsageStatus @default(normal)
+  note           String?
+  createdBy      String
+  createdAt      DateTime               @default(now())
+  agreement      DataSharingAgreement   @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+  @@index([agreementId])
+  @@index([metricDate])
+  @@index([status])
+  @@map("data_sharing_usage_metrics")
 }
 
 model DataQualityProfile {
@@ -1464,6 +2537,7 @@ model MaskingPolicy {
   domain          DataDomain?       @relation(fields: [domainId], references: [id], onDelete: SetNull)
   classification  Classification?   @relation(fields: [classificationId], references: [id], onDelete: SetNull)
   accessMappings  RoleDataAccessMap[]
+  dataSharingRequests DataSharingRequest[]
   decisions       AbacDecisionLog[]
 
   @@index([domainId])
@@ -1494,6 +2568,7 @@ model RoleDataAccessMap {
   domain              DataDomain?      @relation(fields: [domainId], references: [id], onDelete: SetNull)
   classification      Classification?  @relation(fields: [classificationId], references: [id], onDelete: SetNull)
   maskingPolicy       MaskingPolicy?   @relation(fields: [maskingPolicyId], references: [id], onDelete: SetNull)
+  dataSharingRequests  DataSharingRequest[]
 
   @@index([roleId])
   @@index([domainId])
@@ -1501,6 +2576,8 @@ model RoleDataAccessMap {
   @@index([maskingPolicyId])
   @@index([scopeKey])
   @@index([isActive])
+  /// Active role/scope uniqueness is enforced by a Postgres partial unique index
+  /// in migration 20260713100000_role_data_access_map_active_unique.
   @@index([roleId, scopeKey, isActive])
   @@map("role_data_access_maps")
 }
@@ -1648,6 +2725,13 @@ enum IntegrationConnectorType {
   risk
   profiling
   training
+  open_data
+  foi
+  lms
+  siem
+  iam_sso
+  masking
+  abac
 }
 
 enum IntegrationDirection {
@@ -1673,6 +2757,14 @@ enum IntegrationSourceTrust {
 enum IntegrationAdapterType {
   catalog_csv
   mock_rest
+  webhook_json
+  mock_data_quality
+  mock_dlp
+  mock_open_data
+  mock_foi
+  mock_lms
+  mock_siem
+  mock_iam_sso
 }
 
 enum IntegrationJobType {
@@ -1715,6 +2807,21 @@ enum IntegrationWritebackStatus {
   failed
 }
 
+enum IntegrationEventStatus {
+  queued
+  processing
+  succeeded
+  failed
+  retry_scheduled
+  dead_letter
+}
+
+enum IntegrationReconciliationStatus {
+  healthy
+  review
+  failed
+}
+
 enum DataAssetCatalogSyncStatus {
   not_synced
   synced
@@ -1747,6 +2854,8 @@ model IntegrationConnector {
   importBatches    IntegrationImportBatch[]
   externalReferences IntegrationExternalReference[]
   writebackLogs    IntegrationWritebackLog[]
+  events           IntegrationEvent[]
+  reconciliationReports IntegrationReconciliationReport[]
 
   @@index([type])
   @@index([status])
@@ -1805,6 +2914,7 @@ model IntegrationImportBatch {
   job                IntegrationJob?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
   errors             IntegrationImportError[]
   writebackLogs      IntegrationWritebackLog[]
+  reconciliationReports IntegrationReconciliationReport[]
 
   @@index([connectorId])
   @@index([jobId])
@@ -1873,4 +2983,677 @@ model IntegrationWritebackLog {
   @@index([status])
   @@index([createdAt])
   @@map("integration_writeback_logs")
+}
+
+model IntegrationEvent {
+  id              String                 @id @default(uuid())
+  code            String                 @unique
+  dedupeKey       String                 @unique
+  connectorId     String?
+  adapterType     IntegrationAdapterType @default(webhook_json)
+  eventType       String
+  sourceName      String?
+  externalEventId String?
+  entityType      String?
+  entityId        String?
+  status          IntegrationEventStatus @default(queued)
+  severity        IntegrationImportErrorSeverity @default(warning)
+  attempts        Int                    @default(0)
+  maxAttempts     Int                    @default(3)
+  nextRetryAt     DateTime?
+  lastError       String?
+  payloadJson     Json
+  normalizedJson  Json?
+  resultJson      Json?
+  receivedAt      DateTime               @default(now())
+  processedAt     DateTime?
+  deadLetteredAt  DateTime?
+  actor           String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  connector       IntegrationConnector?  @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+  reconciliationReports IntegrationReconciliationReport[]
+
+  @@index([connectorId])
+  @@index([status])
+  @@index([nextRetryAt])
+  @@index([eventType])
+  @@index([receivedAt])
+  @@map("integration_events")
+}
+
+model IntegrationReconciliationReport {
+  id             String                          @id @default(uuid())
+  code           String                          @unique
+  connectorId    String?
+  batchId        String?
+  eventId        String?
+  status         IntegrationReconciliationStatus @default(healthy)
+  totalRecords   Int                             @default(0)
+  matchedRecords Int                             @default(0)
+  createdRecords Int                             @default(0)
+  updatedRecords Int                             @default(0)
+  failedRecords  Int                             @default(0)
+  orphanedRecords Int                            @default(0)
+  missingRecords Int                             @default(0)
+  summaryJson    Json?
+  createdBy      String
+  createdAt      DateTime                        @default(now())
+  connector      IntegrationConnector?           @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+  batch          IntegrationImportBatch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  event          IntegrationEvent?               @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([connectorId])
+  @@index([batchId])
+  @@index([eventId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("integration_reconciliation_reports")
+}
+
+enum NdiAuditPackStatus {
+  queued
+  generated
+  failed
+}
+
+enum MdmMatchStatus {
+  candidate
+  under_review
+  merged
+  rejected
+  superseded
+}
+
+enum MdmResolutionStep {
+  identify
+  compare
+  survivorship
+  approval
+  publish
+}
+
+enum ReferenceDataVersionStatus {
+  draft
+  under_review
+  approved
+  active
+  rejected
+  retired
+}
+
+enum MetadataCertificationStatus {
+  draft
+  submitted
+  certified
+  needs_remediation
+  expired
+}
+
+enum ArchitectureReviewDecision {
+  pending
+  approved
+  approved_with_conditions
+  rejected
+  needs_changes
+}
+
+model NdiAuditPack {
+  id                    String             @id @default(uuid())
+  code                  String             @unique
+  scopeType             String             @default("full")
+  domainId              String?
+  status                NdiAuditPackStatus @default(queued)
+  readinessScore        Int                @default(0)
+  specCount             Int                @default(0)
+  approvedEvidenceCount Int                @default(0)
+  gapCount              Int                @default(0)
+  blockerCount          Int                @default(0)
+  manifestJson          Json
+  summaryJson           Json
+  fileSha256            String?
+  generatedAt           DateTime?
+  requestedBy           String
+  errorMessage          String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  domain                NdiDomain?         @relation(fields: [domainId], references: [id], onDelete: SetNull)
+
+  @@index([domainId])
+  @@index([status])
+  @@index([generatedAt])
+  @@map("ndi_audit_packs")
+}
+
+model MdmMatchCandidate {
+  id                       String            @id @default(uuid())
+  code                     String            @unique
+  sourceAssetId            String
+  candidateAssetId         String
+  matchScore               Int               @default(0)
+  status                   MdmMatchStatus    @default(candidate)
+  resolutionStep           MdmResolutionStep @default(identify)
+  sourceTrustRank          Int               @default(50)
+  survivorshipRulesJson    Json?
+  proposedGoldenRecordJson Json?
+  resolutionNote           String?
+  evidenceId               String?
+  decidedBy                String?
+  decidedAt                DateTime?
+  createdBy                String
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  sourceAsset              DataAsset         @relation("MdmMatchSourceAsset", fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  candidateAsset           DataAsset         @relation("MdmMatchCandidateAsset", fields: [candidateAssetId], references: [id], onDelete: Cascade)
+  evidence                 NdiEvidence?      @relation("MdmMatchEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceAssetId, candidateAssetId])
+  @@index([sourceAssetId])
+  @@index([candidateAssetId])
+  @@index([status])
+  @@index([resolutionStep])
+  @@index([evidenceId])
+  @@map("mdm_match_candidates")
+}
+
+model ReferenceDataVersion {
+  id              String                     @id @default(uuid())
+  code            String
+  name            String
+  version         String
+  status          ReferenceDataVersionStatus @default(draft)
+  domainId        String?
+  assetId         String?
+  changeSummary   String?
+  sourceTrustRank Int                        @default(50)
+  valuesCount     Int                        @default(0)
+  effectiveFrom   DateTime?
+  effectiveTo     DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  evidenceId      String?
+  createdBy       String
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  domain          DataDomain?                @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  asset           DataAsset?                 @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  evidence        NdiEvidence?               @relation("ReferenceVersionEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@unique([code, version])
+  @@index([domainId])
+  @@index([assetId])
+  @@index([status])
+  @@index([evidenceId])
+  @@map("reference_data_versions")
+}
+
+model MetadataCertification {
+  id                String                      @id @default(uuid())
+  code              String                      @unique
+  assetId           String
+  status            MetadataCertificationStatus @default(draft)
+  qualityScore      Int                         @default(0)
+  completenessScore Int                         @default(0)
+  ownerConfirmed    Boolean                     @default(false)
+  glossaryAligned   Boolean                     @default(false)
+  lineageReviewed   Boolean                     @default(false)
+  certificationNote String?
+  certifiedBy       String?
+  certifiedAt       DateTime?
+  expiresAt         DateTime?
+  workflowCaseId    String?                     @unique
+  evidenceId        String?
+  createdBy         String
+  updatedBy         String?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  asset             DataAsset                   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workflowCase      WorkflowCase?               @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  evidence          NdiEvidence?                @relation("MetadataCertificationEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([status])
+  @@index([workflowCaseId])
+  @@index([evidenceId])
+  @@index([expiresAt])
+  @@map("metadata_certifications")
+}
+
+model ArchitectureReview {
+  id                   String                     @id @default(uuid())
+  code                 String                     @unique
+  assetId              String
+  reviewType           String                     @default("data_model")
+  title                String
+  decision             ArchitectureReviewDecision @default(pending)
+  architectureDecision String?
+  lineageImpact        String?
+  riskLevel            String                     @default("medium")
+  conditionsJson       Json?
+  evidenceId           String?
+  workflowCaseId       String?                    @unique
+  reviewedBy           String?
+  reviewedAt           DateTime?
+  createdBy            String
+  updatedBy            String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  asset                DataAsset                  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workflowCase         WorkflowCase?              @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  evidence             NdiEvidence?               @relation("ArchitectureReviewEvidence", fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([decision])
+  @@index([workflowCaseId])
+  @@index([evidenceId])
+  @@map("architecture_reviews")
+}
+
+enum BusinessGlossaryStatus {
+  draft
+  under_review
+  approved
+  needs_revision
+  retired
+  expired
+}
+
+enum BusinessLineageStatus {
+  mapped
+  under_review
+  verified
+  needs_update
+}
+
+enum BusinessImpactLevel {
+  low
+  medium
+  high
+  critical
+}
+
+enum DataValueStatus {
+  planned
+  measuring
+  realized
+  at_risk
+  retired
+}
+
+enum LifecycleDecisionStatus {
+  proposed
+  approved
+  implemented
+  rejected
+}
+
+enum RetentionDecision {
+  retain
+  archive
+  dispose
+  review
+}
+
+model BusinessGlossaryTerm {
+  id             String                 @id @default(uuid())
+  code           String                 @unique
+  termEn         String
+  termAr         String?
+  definition     String
+  status         BusinessGlossaryStatus @default(draft)
+  version        Int                    @default(1)
+  reviewDueAt    DateTime?
+  assetId        String?
+  domainId       String?
+  workflowCaseId String?                @unique
+  approvedBy     String?
+  approvedAt     DateTime?
+  createdBy      String
+  updatedBy      String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  asset          DataAsset?             @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain         DataDomain?            @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  workflowCase   WorkflowCase?          @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  versions       BusinessGlossaryTermVersion[]
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([status])
+  @@index([reviewDueAt])
+  @@map("business_glossary_terms")
+}
+
+model BusinessGlossaryTermVersion {
+  id         String                 @id @default(uuid())
+  termId     String
+  version    Int
+  definition String
+  status     BusinessGlossaryStatus
+  changedBy  String
+  createdAt  DateTime               @default(now())
+  term       BusinessGlossaryTerm    @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([termId, version])
+  @@index([termId])
+  @@map("business_glossary_term_versions")
+}
+
+model BusinessLineageMap {
+  id              String                @id @default(uuid())
+  code            String                @unique
+  processName     String
+  businessProcess String?
+  technicalBridge String?
+  status          BusinessLineageStatus @default(mapped)
+  impactLevel     BusinessImpactLevel   @default(medium)
+  impactScore     Int                   @default(50)
+  sourceAssetId   String?
+  targetAssetId   String?
+  domainId        String?
+  workflowCaseId  String?               @unique
+  createdBy       String
+  updatedBy       String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  sourceAsset     DataAsset?            @relation("BusinessLineageSourceAsset", fields: [sourceAssetId], references: [id], onDelete: SetNull)
+  targetAsset     DataAsset?            @relation("BusinessLineageTargetAsset", fields: [targetAssetId], references: [id], onDelete: SetNull)
+  domain          DataDomain?           @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  workflowCase    WorkflowCase?         @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([sourceAssetId])
+  @@index([targetAssetId])
+  @@index([domainId])
+  @@index([status])
+  @@map("business_lineage_maps")
+}
+
+model DataAssetValuation {
+  id             String          @id @default(uuid())
+  code           String          @unique
+  assetId        String
+  domainId       String?
+  useCase        String
+  valueDriver    String?
+  annualValue    Float           @default(0)
+  roiPercent     Int             @default(0)
+  adoptionScore  Int             @default(0)
+  surveyScore    Int             @default(0)
+  status         DataValueStatus @default(measuring)
+  ownerName      String?
+  createdBy      String
+  updatedBy      String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  asset          DataAsset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  domain         DataDomain?     @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  surveys        DataUserSurvey[]
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([status])
+  @@map("data_asset_valuations")
+}
+
+model DataUserSurvey {
+  id          String              @id @default(uuid())
+  valuationId String?
+  assetId     String?
+  respondent  String?
+  score       Int                 @default(0)
+  feedback    String?
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  valuation   DataAssetValuation? @relation(fields: [valuationId], references: [id], onDelete: SetNull)
+  asset       DataAsset?          @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([valuationId])
+  @@index([assetId])
+  @@map("data_user_surveys")
+}
+
+model AssetLifecycleDecision {
+  id                String                  @id @default(uuid())
+  code              String                  @unique
+  assetId           String
+  currentStatus     String
+  proposedStatus    String
+  retentionDecision RetentionDecision       @default(review)
+  retentionBasis    String?
+  disposalDueAt     DateTime?
+  status            LifecycleDecisionStatus @default(proposed)
+  workflowCaseId    String?                 @unique
+  approvedBy        String?
+  approvedAt        DateTime?
+  createdBy         String
+  updatedBy         String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  asset             DataAsset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workflowCase      WorkflowCase?           @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([status])
+  @@index([disposalDueAt])
+  @@map("asset_lifecycle_decisions")
+}
+
+model BusinessImpactAssessment {
+  id                String              @id @default(uuid())
+  code              String              @unique
+  assetId           String?
+  domainId          String?
+  processName       String
+  impactLevel       BusinessImpactLevel @default(medium)
+  impactScore       Int                 @default(50)
+  rtoHours          Int?
+  revenueImpact     Float               @default(0)
+  citizenImpact     String?
+  operationalImpact String?
+  status            DataValueStatus     @default(measuring)
+  workflowCaseId    String?             @unique
+  createdBy         String
+  updatedBy         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  asset             DataAsset?          @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain            DataDomain?         @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  workflowCase      WorkflowCase?       @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([impactLevel])
+  @@index([status])
+  @@map("business_impact_assessments")
+}
+
+model DataValueKpi {
+  id          String          @id @default(uuid())
+  code        String          @unique
+  name        String
+  valueType   String
+  period      String
+  targetValue Float           @default(0)
+  actualValue Float           @default(0)
+  unit        String?
+  useCase     String?
+  ownerName   String?
+  status      DataValueStatus @default(measuring)
+  assetId     String?
+  domainId    String?
+  createdBy   String
+  updatedBy   String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  asset       DataAsset?      @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  domain      DataDomain?     @relation(fields: [domainId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([domainId])
+  @@index([status])
+  @@map("data_value_kpis")
+}
+
+enum GovernanceNotificationSeverity {
+  info
+  success
+  warning
+  critical
+}
+
+enum GovernanceNotificationStatus {
+  unread
+  read
+  archived
+}
+
+enum GovernanceEscalationLevel {
+  domain_council
+  data_stewardship_council
+  data_governance_board
+  executive_steering_committee
+}
+
+enum GovernanceEscalationStatus {
+  open
+  acknowledged
+  resolved
+  cancelled
+}
+
+enum ComplianceCalendarType {
+  processing_activity_review
+  cross_border_transfer_monitoring
+  annual_dpia_review
+  monthly_dq_scorecard_review
+}
+
+enum ComplianceCalendarStatus {
+  active
+  paused
+  completed
+  archived
+}
+
+model GovernanceNotification {
+  id             String                         @id @default(uuid())
+  dedupeKey      String?                        @unique
+  title          String
+  message        String
+  severity       GovernanceNotificationSeverity @default(info)
+  status         GovernanceNotificationStatus   @default(unread)
+  sourceType     String?
+  sourceId       String?
+  targetRoleCode String?
+  assigneeUserId String?
+  workflowCaseId String?
+  workflowTaskId String?
+  emailTo        String?
+  emailSentAt    DateTime?
+  readAt         DateTime?
+  createdBy      String
+  createdAt      DateTime                       @default(now())
+  updatedAt      DateTime                       @updatedAt
+  assignee       User?                          @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  workflowCase   WorkflowCase?                  @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  workflowTask   WorkflowTask?                  @relation(fields: [workflowTaskId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([severity])
+  @@index([targetRoleCode])
+  @@index([assigneeUserId])
+  @@index([workflowCaseId])
+  @@index([workflowTaskId])
+  @@map("governance_notifications")
+}
+
+model GovernanceEscalation {
+  id             String                    @id @default(uuid())
+  dedupeKey      String?                   @unique
+  code           String                    @unique
+  level          GovernanceEscalationLevel
+  status         GovernanceEscalationStatus @default(open)
+  sourceType     String
+  sourceId       String
+  reason         String
+  penaltyPoints  Int                       @default(0)
+  ownerRoleCode  String?
+  dueAt          DateTime?
+  escalatedAt    DateTime                  @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  workflowCaseId String?
+  workflowTaskId String?
+  createdBy      String
+  updatedBy      String?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  workflowCase   WorkflowCase?             @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  workflowTask   WorkflowTask?             @relation(fields: [workflowTaskId], references: [id], onDelete: SetNull)
+
+  @@index([level])
+  @@index([status])
+  @@index([sourceType, sourceId])
+  @@index([workflowCaseId])
+  @@index([workflowTaskId])
+  @@map("governance_escalations")
+}
+
+model ComplianceCalendarTemplate {
+  id                     String                 @id @default(uuid())
+  code                   String                 @unique
+  title                  String
+  type                   ComplianceCalendarType
+  cadence                String
+  ownerRoleCode          String?
+  nextRunAt              DateTime
+  lastRunAt              DateTime?
+  defaultSlaBusinessDays Int                    @default(5)
+  status                 ComplianceCalendarStatus @default(active)
+  createdBy              String
+  updatedBy              String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  occurrences            ComplianceCalendarOccurrence[]
+
+  @@index([type])
+  @@index([status])
+  @@index([nextRunAt])
+  @@map("compliance_calendar_templates")
+}
+
+model ComplianceCalendarOccurrence {
+  id             String                   @id @default(uuid())
+  templateId     String
+  code           String                   @unique
+  title          String
+  status         ComplianceCalendarStatus @default(active)
+  dueAt          DateTime
+  completedAt    DateTime?
+  workflowCaseId String?
+  createdBy      String
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  template       ComplianceCalendarTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  workflowCase   WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+
+  @@index([templateId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([workflowCaseId])
+  @@map("compliance_calendar_occurrences")
+}
+
+model KsaHoliday {
+  id          String   @id @default(uuid())
+  date        DateTime @unique
+  nameEn      String
+  nameAr      String?
+  isRecurring Boolean  @default(false)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isRecurring])
+  @@map("ksa_holidays")
 }

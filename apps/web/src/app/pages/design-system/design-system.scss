@@ -592,10 +592,15 @@
   gap: var(--space-2);
 }
 
-.sample-field span {
+.sample-field > span,
+.sample-field > label {
   color: var(--command-muted);
   font-size: var(--font-size-sm);
   font-weight: 750;
+}
+
+.search-box {
+  position: relative;
 }
 
 .sample-field input {
@@ -609,9 +614,101 @@
   font: inherit;
 }
 
+.search-box input {
+  padding-inline-end: 44px;
+}
+
 .sample-field input:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.search-clear {
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  inset-block-start: 7px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--command-muted);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+}
+
+.search-help {
+  color: var(--command-muted);
+  font-size: var(--font-size-xs);
+}
+
+.search-results {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 380px;
+  overflow: auto;
+}
+
+.search-group {
+  padding: var(--space-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-sm);
+}
+
+.search-group__head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  color: var(--command-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 850;
+}
+
+.search-group__items {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.search-result {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 54px;
+  padding: var(--space-2);
+  color: var(--command-on);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-sm);
+}
+
+.search-result__type {
+  flex: 0 0 72px;
+  color: var(--command-muted);
+  font-size: var(--font-size-xs);
+}
+
+.search-result__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.search-result__text b,
+.search-result__text small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.search-result__text b {
+  color: var(--command-on);
+  font-size: var(--font-size-sm);
+}
+
+.search-result__text small {
+  color: var(--command-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
 }
 
 @media (max-width: 1320px) {

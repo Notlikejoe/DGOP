@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
@@ -28,16 +30,49 @@ interface RuleCard {
   tone: 'success' | 'warning' | 'danger' | 'info';
 }
 
+interface SearchRoute {
+  path: string;
+  queryParams?: Record<string, string>;
+}
+
+interface SearchResult {
+  id: string;
+  entityType: string;
+  title: string;
+  subtitle?: string | null;
+  detail?: string | null;
+  status?: string | null;
+  route: SearchRoute;
+}
+
+interface SearchGroup {
+  type: string;
+  count: number;
+  results: SearchResult[];
+}
+
+interface GlobalSearchResponse {
+  query: string;
+  total: number;
+  groups: SearchGroup[];
+}
+
 @Component({
   selector: 'app-design-system',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusChip],
+  imports: [FormsModule, RouterLink, StatusChip],
   templateUrl: './design-system.html',
   styleUrl: './design-system.scss',
 })
-export class DesignSystem {
+export class DesignSystem implements OnDestroy {
+  private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   protected readonly activeTreeIndex = signal(0);
+  protected readonly searchQuery = signal('');
+  protected readonly searchState = signal<'idle' | 'typing' | 'loading' | 'ok' | 'error'>('idle');
+  protected readonly searchResponse = signal<GlobalSearchResponse | null>(null);
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private searchRequestId = 0;
 
   protected readonly metrics: ConsoleMetric[] = [
     {
@@ -105,6 +140,52 @@ export class DesignSystem {
 
   protected showTree(index: number): void {
     this.activeTreeIndex.set(index);
+  }
+
+  protected onSearchInput(value: string): void {
+    this.searchQuery.set(value);
+    this.searchResponse.set(null);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    const query = value.trim();
+    if (query.length < 2) {
+      this.searchState.set('idle');
+      return;
+    }
+    this.searchState.set('typing');
+    this.searchTimer = setTimeout(() => this.runSearch(query), 250);
+  }
+
+  protected clearSearch(): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchQuery.set('');
+    this.searchResponse.set(null);
+    this.searchState.set('idle');
+  }
+
+  protected groupLabel(type: string): string {
+    return this.t(`search.group.${type}`);
+  }
+
+  ngOnDestroy(): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+  }
+
+  private runSearch(query: string): void {
+    const requestId = ++this.searchRequestId;
+    this.searchState.set('loading');
+    const params = new HttpParams().set('q', query).set('limit', '5');
+    this.http.get<GlobalSearchResponse>('/api/search', { params }).subscribe({
+      next: (response) => {
+        if (requestId !== this.searchRequestId) return;
+        this.searchResponse.set(response);
+        this.searchState.set('ok');
+      },
+      error: () => {
+        if (requestId !== this.searchRequestId) return;
+        this.searchResponse.set(null);
+        this.searchState.set('error');
+      },
+    });
   }
 
   private groupsFor(sectionIds: NavSectionId[]): DesignTree['groups'] {

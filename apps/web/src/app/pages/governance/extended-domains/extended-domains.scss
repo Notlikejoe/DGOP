@@ -1,0 +1,139 @@
+.extended-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.hero,
+.metric,
+.lane {
+  border: 1px solid var(--command-border);
+  background: var(--command-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  border-radius: 8px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.metric span,
+.metric small {
+  color: var(--command-muted);
+}
+
+.metric strong {
+  font-size: 1.9rem;
+}
+
+.lane-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.lane {
+  min-width: 0;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.form-grid input,
+.form-grid select {
+  min-width: 0;
+  min-height: 2.5rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 0 0.75rem;
+}
+
+.form-grid label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--command-muted);
+  font-weight: 700;
+}
+
+.rows {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.row-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.8rem;
+}
+
+.row-card div:first-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.row-card strong,
+.row-card span {
+  overflow-wrap: anywhere;
+}
+
+.row-card span {
+  color: var(--command-muted);
+}
+
+.actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  min-height: 2.1rem;
+  padding: 0 0.7rem;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+@media (max-width: 1050px) {
+  .kpi-grid,
+  .lane-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid,
+  .row-card {
+    grid-template-columns: 1fr;
+  }
+}

@@ -34,6 +34,16 @@
         <small>{{ t('integrations.metric.errorsHelp') }}</small>
       </article>
       <article class="strip-card">
+        <span>{{ t('integrations.metric.events') }}</span>
+        <strong>{{ s.failedEvents + s.deadLetterEvents }}</strong>
+        <small>{{ s.retryReadyEvents }} {{ t('integrations.metric.retryReady') }}</small>
+      </article>
+      <article class="strip-card">
+        <span>{{ t('integrations.metric.reconciliation') }}</span>
+        <strong>{{ s.reconciliationReports }}</strong>
+        <small>{{ t('integrations.metric.reconciliationHelp') }}</small>
+      </article>
+      <article class="strip-card">
         <span>{{ t('integrations.metric.writebacks') }}</span>
         <strong>{{ s.simulatedWritebacks }}</strong>
         <small>{{ t('integrations.metric.writebackHelp') }}</small>
@@ -69,6 +79,10 @@
               <span class="connector-row__main">
                 <strong>{{ name(connector) }}</strong>
                 <small>{{ connector.code }} - {{ t('integrations.trust.' + connector.sourceTrust) }}</small>
+                <small>
+                  {{ connector._count?.events ?? 0 }} {{ t('integrations.connectors.events') }} -
+                  {{ connector._count?.reconciliationReports ?? 0 }} {{ t('integrations.connectors.reconciliations') }}
+                </small>
               </span>
               <app-status-chip [kind]="connectorKind(connector.status)" [label]="t('integrations.connectorStatus.' + connector.status)" />
               @if (connector.lastError) {
@@ -278,6 +292,83 @@
         } @else {
           <div class="empty"><p>{{ t('integrations.history.empty') }}</p></div>
         }
+      </aside>
+    </div>
+
+    <div class="ops-grid">
+      <section class="ds-card event-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('integrations.events.eyebrow') }}</span>
+            <h2>{{ t('integrations.events.title') }}</h2>
+            <p>{{ t('integrations.events.subtitle') }}</p>
+          </div>
+          <app-icon name="refresh" />
+        </div>
+
+        <div class="event-list">
+          @for (event of events(); track event.id) {
+            <article class="event-row">
+              <div class="event-row__code">
+                <span class="badge-code">{{ event.code }}</span>
+                <app-status-chip [kind]="eventKind(event.status)" [label]="t('integrations.eventStatus.' + event.status)" />
+              </div>
+              <div class="event-row__main">
+                <strong>{{ event.eventType }}</strong>
+                <p>{{ name(event.connector) }} - {{ event.sourceName || '-' }}</p>
+                @if (event.lastError) {
+                  <small>{{ event.lastError }}</small>
+                } @else {
+                  <small>{{ t('integrations.events.noError') }}</small>
+                }
+              </div>
+              <div class="event-row__meta">
+                <span>{{ event.attempts }}/{{ event.maxAttempts }}</span>
+                <small>{{ date(event.nextRetryAt || event.receivedAt) }}</small>
+              </div>
+              <button
+                type="button"
+                class="ds-btn ds-btn--ghost btn-sm"
+                [disabled]="!canRun || retryingEventId() === event.id"
+                (click)="retryEvent(event)"
+              >
+                {{ retryingEventId() === event.id ? t('integrations.events.retrying') : t('integrations.events.retry') }}
+              </button>
+            </article>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('integrations.events.empty') }}</p></div>
+          }
+        </div>
+      </section>
+
+      <aside class="ds-card reconciliation-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('integrations.reconciliation.eyebrow') }}</span>
+            <h2>{{ t('integrations.reconciliation.title') }}</h2>
+            <p>{{ t('integrations.reconciliation.subtitle') }}</p>
+          </div>
+        </div>
+
+        <div class="report-list">
+          @for (report of reports(); track report.id) {
+            <article class="report-row">
+              <div>
+                <span class="badge-code">{{ report.code }}</span>
+                <strong>{{ report.connector ? name(report.connector) : (report.event?.eventType || report.batch?.code || '-') }}</strong>
+                <small>{{ date(report.createdAt) }}</small>
+              </div>
+              <app-status-chip [kind]="reportKind(report.status)" [label]="t('integrations.reconciliationStatus.' + report.status)" />
+              <dl>
+                <div><dt>{{ t('integrations.reconciliation.matched') }}</dt><dd>{{ report.matchedRecords }}</dd></div>
+                <div><dt>{{ t('integrations.reconciliation.failed') }}</dt><dd>{{ report.failedRecords }}</dd></div>
+                <div><dt>{{ t('integrations.reconciliation.missing') }}</dt><dd>{{ report.missingRecords }}</dd></div>
+              </dl>
+            </article>
+          } @empty {
+            <div class="empty empty--small"><p>{{ t('integrations.reconciliation.empty') }}</p></div>
+          }
+        </div>
       </aside>
     </div>
 

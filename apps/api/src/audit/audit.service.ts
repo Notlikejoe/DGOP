@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePageParams, toPaged, type Paged } from '../common/pagination';
+import { hashAuditEntry, verifyAuditHashChain } from './audit.logic';
 
 export interface AuditEntry {
   actor: string;
@@ -18,21 +20,44 @@ export interface AuditFilters {
   to?: string;
 }
 
+type AuditWriter = PrismaService | Prisma.TransactionClient;
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger('Audit');
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(entry: AuditEntry): Promise<void> {
+  async log(entry: AuditEntry, client: AuditWriter = this.prisma): Promise<void> {
     try {
-      await this.prisma.auditLog.create({
+      const previous = await client.auditLog.findFirst({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: { entryHash: true },
+      });
+      const createdAt = new Date();
+      const previousHash = previous?.entryHash ?? null;
+      const chainVersion = 1;
+      const entryHash = hashAuditEntry({
+        actor: entry.actor,
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId ?? null,
+        metadata: entry.metadata ?? null,
+        createdAt,
+        previousHash,
+        chainVersion,
+      });
+      await client.auditLog.create({
         data: {
           actor: entry.actor,
           action: entry.action,
           entityType: entry.entityType,
           entityId: entry.entityId ?? null,
-          metadata: (entry.metadata ?? undefined) as object | undefined,
+          metadata: (entry.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+          previousHash,
+          entryHash,
+          chainVersion,
+          createdAt,
         },
       });
     } catch (err) {
@@ -95,5 +120,30 @@ export class AuditService {
       this.prisma.auditLog.count({ where }),
     ]);
     return toPaged(rows, total, params);
+  }
+
+  async verifyChain(limit?: string | number) {
+    const parsed = Number(limit ?? 1000);
+    const take = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 5000) : 1000;
+    const rows = await this.prisma.auditLog.findMany({
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+      select: {
+        id: true,
+        actor: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        metadata: true,
+        previousHash: true,
+        entryHash: true,
+        chainVersion: true,
+        createdAt: true,
+      },
+    });
+    return {
+      totalRowsRead: rows.length,
+      ...verifyAuditHashChain(rows),
+    };
   }
 }

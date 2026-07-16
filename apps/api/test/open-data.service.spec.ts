@@ -1,15 +1,23 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
+  OpenDataApprovalDecision,
   OpenDataCandidateStatus,
   OpenDataPersonalDataAssessment,
   OpenDataPublicationFormat,
   OpenDataPublicationFrequency,
+  OpenDataReviewDecision,
 } from '@prisma/client';
 import { OpenDataService } from '../src/open-data/open-data.service';
 import {
   canTransitionOpenDataStatus,
+  scoreOpenDataAssessment,
   scoreOpenDataEligibility,
 } from '../src/open-data/open-data.logic';
+
+process.env.EVIDENCE_STORAGE_DIR = mkdtempSync(join(tmpdir(), 'dgop-open-data-evidence-'));
 
 type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
@@ -56,6 +64,17 @@ function makeService(overrides: Record<string, any> = {}) {
       { personId: 'owner-1', roleType: { code: 'data_owner' } },
       { personId: 'steward-1', roleType: { code: 'business_steward' } },
     ],
+    assessments: overrides.assessments ?? [],
+    approvals: overrides.approvals ?? [],
+    publications: overrides.publications ?? [],
+    reviews: overrides.reviews ?? [],
+    usageMetrics: overrides.usageMetrics ?? [],
+    ndiSpec: Object.prototype.hasOwnProperty.call(overrides, 'ndiSpec')
+      ? overrides.ndiSpec
+      : { id: 'spec-open-data' },
+    workflowCases: [],
+    workflowTasks: [],
+    evidence: [],
     created: null,
     updated: null,
     audit: [],
@@ -98,14 +117,147 @@ function makeService(overrides: Record<string, any> = {}) {
       },
       update: async (args: any) => {
         data.updated = args.data;
+        if (data.candidate) data.candidate = { ...data.candidate, ...args.data };
         return { ...(data.candidate ?? { id: 'candidate-1', code: 'ODC-1' }), ...args.data, asset: data.asset };
       },
       findMany: async () => [],
     },
+    openDataAssessment: {
+      create: async (args: any) => {
+        const row = { id: `assessment-${data.assessments.length + 1}`, ...args.data };
+        data.assessments.push(row);
+        return row;
+      },
+      findFirst: async () => data.assessments.find((row: any) => row.status === 'completed') ?? null,
+      update: async (args: any) => {
+        const index = data.assessments.findIndex((row: any) => row.id === args.where.id);
+        if (index >= 0) data.assessments[index] = { ...data.assessments[index], ...args.data };
+        return data.assessments[index] ?? null;
+      },
+    },
+    openDataApproval: {
+      count: async () => data.approvals.filter((row: any) => row.decision === 'pending').length,
+      findMany: async () => data.approvals,
+      findFirst: async (args: any) =>
+        data.approvals.find((row: any) => row.id === args?.where?.id && row.candidateId === args?.where?.candidateId) ?? null,
+      upsert: async (args: any) => {
+        const key = args.where.candidateId_step;
+        const index = data.approvals.findIndex((row: any) => row.candidateId === key.candidateId && row.step === key.step);
+        if (index >= 0) {
+          data.approvals[index] = { ...data.approvals[index], ...args.update };
+          return data.approvals[index];
+        }
+        const row = { id: `approval-${data.approvals.length + 1}`, ...args.create };
+        data.approvals.push(row);
+        return row;
+      },
+      update: async (args: any) => {
+        const index = data.approvals.findIndex((row: any) => row.id === args.where.id);
+        data.approvals[index] = { ...data.approvals[index], ...args.data };
+        return data.approvals[index];
+      },
+    },
+    openDataPublication: {
+      create: async (args: any) => {
+        const row = { id: `publication-${data.publications.length + 1}`, ...args.data };
+        data.publications.push(row);
+        return row;
+      },
+      update: async (args: any) => {
+        const index = data.publications.findIndex((row: any) => row.id === args.where.id);
+        if (index >= 0) data.publications[index] = { ...data.publications[index], ...args.data };
+        return data.publications[index] ?? null;
+      },
+    },
+    openDataReview: {
+      create: async (args: any) => {
+        const row = { id: `review-${data.reviews.length + 1}`, ...args.data };
+        data.reviews.push(row);
+        return row;
+      },
+    },
+    openDataUsageMetric: {
+      aggregate: async () => ({
+        _sum: {
+          downloads: data.usageMetrics.reduce((sum: number, row: any) => sum + row.downloads, 0),
+          apiCalls: data.usageMetrics.reduce((sum: number, row: any) => sum + row.apiCalls, 0),
+          uniqueUsers: data.usageMetrics.reduce((sum: number, row: any) => sum + row.uniqueUsers, 0),
+        },
+      }),
+      create: async (args: any) => {
+        const row = { id: `usage-${data.usageMetrics.length + 1}`, ...args.data };
+        data.usageMetrics.push(row);
+        return row;
+      },
+    },
+    workflowCase: {
+      count: async () => data.workflowCases.length,
+      findUnique: async () => null,
+      create: async (args: any) => {
+        const row = { id: `case-${data.workflowCases.length + 1}`, ...args.data };
+        data.workflowCases.push(row);
+        return args.select ? { id: row.id } : row;
+      },
+    },
+    workflowTask: {
+      create: async (args: any) => {
+        const row = { id: `task-${data.workflowTasks.length + 1}`, ...args.data };
+        data.workflowTasks.push(row);
+        return args.select ? { id: row.id } : row;
+      },
+      update: async (args: any) => {
+        const index = data.workflowTasks.findIndex((row: any) => row.id === args.where.id);
+        if (index >= 0) data.workflowTasks[index] = { ...data.workflowTasks[index], ...args.data };
+        return data.workflowTasks[index] ?? null;
+      },
+    },
+    workflowEvent: {
+      create: async (args: any) => args.data,
+    },
+    ndiSpecification: {
+      findFirst: async () => data.ndiSpec,
+    },
+    ndiEvidence: {
+      create: async (args: any) => {
+        const row = { id: `evidence-${data.evidence.length + 1}`, ...args.data };
+        data.evidence.push(row);
+        return args.select ? { id: row.id } : row;
+      },
+    },
+    auditLog: {
+      create: async (args: any) => data.audit.push(args.data),
+    },
+    $transaction: async (fn: any) => fn(prisma),
   };
   const audit = { log: async (entry: any) => data.audit.push(entry) };
   const scope = { resolve: async () => data.scope };
-  return { service: new OpenDataService(prisma as any, audit as any, scope as any), data };
+  const workflow = {
+    openRoutedCase: async (input: any) => {
+      const task = {
+        id: `task-${data.workflowTasks.length + 1}`,
+        caseId: `case-${data.workflowCases.length + 1}`,
+        title: input.initialTaskTitle,
+        type: 'approval',
+        status: 'pending',
+        assigneeUserId: input.initialAssigneeUserId ?? null,
+        dueDate: input.initialDueDate ?? null,
+      };
+      const wfCase = {
+        id: task.caseId,
+        code: input.preferredCode,
+        title: input.title,
+        description: input.description,
+        type: input.type,
+        status: input.status,
+        assetId: input.assetId ?? null,
+        tasks: [task],
+      };
+      data.workflowCases.push(wfCase);
+      data.workflowTasks.push(task);
+      return wfCase;
+    },
+  };
+  return { service: new OpenDataService(prisma as any, audit as any, scope as any, workflow as any), data };
 }
 
 test('eligibility flags restricted personal data as blocked', () => {
@@ -120,6 +272,25 @@ test('eligibility flags restricted personal data as blocked', () => {
   assert.equal(result.overallSignal, 'blocked');
   assert.ok(result.blockers.includes('classificationSignal'));
   assert.ok(result.blockers.includes('personalDataSignal'));
+});
+
+test('assessment scoring blocks publication when public, privacy, legal, or metadata checks fail', () => {
+  const result = scoreOpenDataAssessment({
+    publicClassification: false,
+    restrictedInformation: true,
+    aggregationApplied: false,
+    anonymizationApplied: false,
+    dqAcceptable: true,
+    metadataComplete: false,
+    privacyReviewComplete: false,
+    legalReviewComplete: true,
+    personalDataAssessment: OpenDataPersonalDataAssessment.personal_data,
+  });
+  assert.equal(result.resultSignal, 'blocked');
+  assert.ok(result.blockers.includes('publicClassification'));
+  assert.ok(result.blockers.includes('restrictedInformation'));
+  assert.ok(result.blockers.includes('metadataComplete'));
+  assert.ok(result.requiredApprovalSteps.includes('odiao'));
 });
 
 test('status lifecycle rejects direct draft to published transition', () => {
@@ -233,6 +404,311 @@ test('updateStatus: approval is blocked while readiness still needs review', asy
       ),
     /review items/,
   );
+});
+
+test('saveAssessment: completed assessment creates approval tasks and ODIAO workflow link', async () => {
+  const candidate = {
+    id: 'candidate-ready',
+    code: 'ODC-READY',
+    assetId: asset.id,
+    titleEn: 'Ready dataset',
+    titleAr: 'Ready dataset',
+    status: OpenDataCandidateStatus.assessment,
+    ownerPersonId: 'owner-1',
+    stewardPersonId: 'steward-1',
+    odiaoReviewerPerson: { userId: 'user-odiao' },
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    publishedAt: null,
+    nextReviewAt: null,
+  };
+  const { service, data } = makeService({ candidate, dqScore: { id: 'score-ready', score: 94 } });
+  await service.saveAssessment(
+    ['system_admin'],
+    candidate.id,
+    {
+      complete: true,
+      publicClassification: true,
+      restrictedInformation: false,
+      aggregationApplied: true,
+      anonymizationApplied: true,
+      dqAcceptable: true,
+      metadataComplete: true,
+      privacyReviewComplete: true,
+      legalReviewComplete: true,
+      note: 'Ready for approval.',
+    },
+    'odiao@dgop.local',
+  );
+  assert.equal(data.assessments.length, 1);
+  assert.equal(data.assessments[0].status, 'completed');
+  assert.equal(data.approvals.length, 6);
+  assert.ok(data.approvals.some((row: any) => row.step === 'odiao' && row.workflowCaseId));
+  assert.equal(data.workflowCases[0].type, 'open_data_publication_approval');
+  assert.equal(data.workflowTasks[0].assigneeUserId, 'user-odiao');
+  assert.equal(data.updated.status, OpenDataCandidateStatus.under_review);
+});
+
+test('updateStatus: manual approval is blocked until all assessment approvals are approved', async () => {
+  const candidate = {
+    id: 'candidate-pending',
+    code: 'ODC-PENDING',
+    assetId: asset.id,
+    status: OpenDataCandidateStatus.under_review,
+    ownerPersonId: 'owner-1',
+    stewardPersonId: 'steward-1',
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    publishedAt: null,
+    nextReviewAt: null,
+  };
+  const { service } = makeService({
+    candidate,
+    asset: {
+      ...asset,
+      classificationId: 'class-public',
+      classification: { id: 'class-public', code: 'public', nameEn: 'Public', nameAr: 'Public', rank: 1, color: '#2ecc71' },
+    },
+    dqScore: { id: 'score-ready', score: 94 },
+    assessments: [{ status: 'completed', resultSignal: 'ready' }],
+    approvals: [{ id: 'approval-1', candidateId: candidate.id, step: 'owner', decision: OpenDataApprovalDecision.pending }],
+  });
+  await assert.rejects(
+    () =>
+      service.updateStatus(
+        ['system_admin'],
+        candidate.id,
+        { status: OpenDataCandidateStatus.approved },
+        'admin@dgop.local',
+      ),
+    /approvals/,
+  );
+});
+
+test('updateApproval: all approved steps move candidate to approved', async () => {
+  const candidate = {
+    id: 'candidate-approval',
+    code: 'ODC-APPROVAL',
+    assetId: asset.id,
+    status: OpenDataCandidateStatus.under_review,
+    ownerPersonId: 'owner-1',
+    stewardPersonId: 'steward-1',
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    publishedAt: null,
+    nextReviewAt: null,
+  };
+  const approvals = ['owner', 'steward', 'privacy', 'legal', 'data_quality', 'odiao'].map((step, index) => ({
+    id: `approval-${index + 1}`,
+    candidateId: candidate.id,
+    step,
+    decision: step === 'odiao' ? OpenDataApprovalDecision.pending : OpenDataApprovalDecision.approved,
+  }));
+  const { service, data } = makeService({ candidate, approvals });
+  data.assessments.push({
+    id: 'assessment-approved',
+    candidateId: candidate.id,
+    status: 'completed',
+    evidenceId: null,
+    readinessScore: 100,
+    riskScore: 0,
+    resultSignal: 'ready',
+    blockersJson: [],
+    reviewItemsJson: [],
+  });
+  await service.updateApproval(
+    ['system_admin'],
+    candidate.id,
+    'approval-6',
+    { decision: OpenDataApprovalDecision.approved, note: 'Approved.' },
+    'odiao@dgop.local',
+  );
+  assert.equal(data.updated.status, OpenDataCandidateStatus.approved);
+  assert.equal(data.approvals.find((row: any) => row.id === 'approval-6').decidedBy, 'odiao@dgop.local');
+  assert.equal(data.evidence.length, 1);
+  assert.equal(data.evidence[0].specId, 'spec-open-data');
+  assert.equal(data.evidence[0].status, 'submitted');
+  assert.equal(data.evidence[0].reviewedBy, null);
+  assert.equal(data.assessments[0].evidenceId, 'evidence-1');
+});
+
+test('updateApproval: rejects users without authority for the approval step', async () => {
+  const candidate = {
+    id: 'candidate-authz',
+    code: 'ODC-AUTHZ',
+    assetId: asset.id,
+    status: OpenDataCandidateStatus.under_review,
+    ownerPersonId: 'owner-1',
+    ownerPerson: { email: 'owner@dgop.local' },
+    stewardPersonId: 'steward-1',
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    publishedAt: null,
+    nextReviewAt: null,
+  };
+  const approvals = [{ id: 'approval-owner', candidateId: candidate.id, step: 'owner', decision: OpenDataApprovalDecision.pending }];
+  const { service } = makeService({ candidate, approvals });
+  await assert.rejects(
+    () =>
+      service.updateApproval(
+        ['auditor'],
+        candidate.id,
+        'approval-owner',
+        { decision: OpenDataApprovalDecision.approved },
+        'auditor@dgop.local',
+      ),
+    /cannot decide/,
+  );
+});
+
+test('updateApproval: missing OD NDI spec fails closed instead of skipping evidence', async () => {
+  const candidate = {
+    id: 'candidate-missing-spec',
+    code: 'ODC-NOSPEC',
+    assetId: asset.id,
+    status: OpenDataCandidateStatus.under_review,
+    ownerPersonId: 'owner-1',
+    stewardPersonId: 'steward-1',
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    publishedAt: null,
+    nextReviewAt: null,
+  };
+  const approvals = ['owner', 'steward', 'privacy', 'legal', 'data_quality', 'odiao'].map((step, index) => ({
+    id: `approval-nospec-${index + 1}`,
+    candidateId: candidate.id,
+    step,
+    decision: step === 'odiao' ? OpenDataApprovalDecision.pending : OpenDataApprovalDecision.approved,
+  }));
+  const { service, data } = makeService({ candidate, approvals, ndiSpec: null });
+  data.assessments.push({
+    id: 'assessment-nospec',
+    candidateId: candidate.id,
+    status: 'completed',
+    evidenceId: null,
+    readinessScore: 100,
+    riskScore: 0,
+    resultSignal: 'ready',
+    blockersJson: [],
+    reviewItemsJson: [],
+  });
+  await assert.rejects(
+    () =>
+      service.updateApproval(
+        ['system_admin'],
+        candidate.id,
+        'approval-nospec-6',
+        { decision: OpenDataApprovalDecision.approved },
+        'odiao@dgop.local',
+      ),
+    /Required Open Data NDI specification/,
+  );
+});
+
+test('publish: creates portal sync record and moves candidate to published', async () => {
+  const candidate = {
+    id: 'candidate-publish',
+    code: 'ODC-PUBLISH',
+    assetId: asset.id,
+    status: OpenDataCandidateStatus.approved,
+    ownerPersonId: 'owner-1',
+    stewardPersonId: 'steward-1',
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    portalUrl: null,
+    publishedAt: null,
+    nextReviewAt: null,
+  };
+  const approvals = ['owner', 'steward', 'privacy', 'legal', 'data_quality', 'odiao'].map((step, index) => ({
+    id: `approval-${index + 1}`,
+    candidateId: candidate.id,
+    step,
+    decision: OpenDataApprovalDecision.approved,
+  }));
+  const { service, data } = makeService({
+    candidate,
+    approvals,
+    assessments: [{ status: 'completed', resultSignal: 'ready' }],
+  });
+  await service.publish(
+    ['system_admin'],
+    candidate.id,
+    { portalUrl: 'https://data.gov.sa/datasets/ODC-PUBLISH', portalRecordId: 'portal-1' },
+    'odiao@dgop.local',
+  );
+  assert.equal(data.publications.length, 1);
+  assert.equal(data.publications[0].syncStatus, 'simulated');
+  assert.equal(data.evidence.length, 1);
+  assert.equal(data.evidence[0].status, 'submitted');
+  assert.equal(data.publications[0].evidenceId, 'evidence-1');
+  assert.equal(data.updated.status, OpenDataCandidateStatus.published);
+  assert.ok(data.updated.nextReviewAt);
+});
+
+test('createReview and recordUsage keep published data governed and measured', async () => {
+  const candidate = {
+    id: 'candidate-monitor',
+    code: 'ODC-MONITOR',
+    assetId: asset.id,
+    status: OpenDataCandidateStatus.published,
+    ownerPersonId: 'owner-1',
+    stewardPersonId: 'steward-1',
+    personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
+    publicationValueScore: 90,
+    publicationFrequency: OpenDataPublicationFrequency.monthly,
+    publicationFormat: OpenDataPublicationFormat.csv,
+    eligibilityScore: 100,
+    eligibilityJson: { overallSignal: 'ready' },
+    createdBy: 'owner@dgop.local',
+    publishedAt: new Date(),
+    nextReviewAt: null,
+  };
+  const { service, data } = makeService({ candidate });
+  await service.recordUsage(
+    ['system_admin'],
+    candidate.id,
+    { downloads: 22, apiCalls: 7, uniqueUsers: 5, source: 'portal_mock' },
+    'odiao@dgop.local',
+  );
+  await service.createReview(
+    ['system_admin'],
+    candidate.id,
+    { decision: OpenDataReviewDecision.continue_publication, note: 'Still useful.' },
+    'odiao@dgop.local',
+  );
+  assert.equal(data.usageMetrics[0].downloads, 22);
+  assert.equal(data.reviews[0].decision, OpenDataReviewDecision.continue_publication);
+  assert.equal(data.updated.status, OpenDataCandidateStatus.published);
 });
 
 (async () => {

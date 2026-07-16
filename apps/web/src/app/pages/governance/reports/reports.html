@@ -1,0 +1,155 @@
+<section class="page reports-page">
+  <header class="page__header reports-hero">
+    <div>
+      <span class="eyebrow">{{ t('reports.eyebrow') }}</span>
+      <h1>{{ t('reports.title') }}</h1>
+      <p class="page__subtitle">{{ t('reports.subtitle') }}</p>
+    </div>
+    <button type="button" class="ds-btn ds-btn--primary" (click)="run()" [disabled]="running() || !selected()">
+      <app-icon name="refresh" />
+      {{ t('reports.run') }}
+    </button>
+  </header>
+
+  @if (state() === 'loading') {
+    <section class="ds-card">
+      <p>{{ t('assets.loading') }}</p>
+    </section>
+  } @else if (state() === 'error') {
+    <section class="ds-card">
+      <p class="error">{{ t('reports.error') }}</p>
+    </section>
+  } @else {
+    <div class="reports-layout">
+      <aside class="ds-card report-catalog">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('reports.catalog') }}</span>
+            <h2>{{ t('reports.available') }}</h2>
+          </div>
+          <span class="count-pill">{{ catalog().length }}</span>
+        </div>
+        <div class="report-list">
+          @for (report of catalog(); track report.id) {
+            <button
+              type="button"
+              class="report-card"
+              [class.report-card--active]="selectedId() === report.id"
+              (click)="select(report)"
+            >
+              <span class="report-card__tower">{{ report.tower }}</span>
+              <strong>{{ report.title }}</strong>
+              <small>{{ report.description }}</small>
+              <span class="format-row">
+                @for (format of report.supportedFormats; track format) {
+                  <app-status-chip [kind]="formatKind(format)" [label]="format.toUpperCase()" />
+                }
+              </span>
+            </button>
+          } @empty {
+            <p class="empty">{{ t('reports.empty') }}</p>
+          }
+        </div>
+      </aside>
+
+      <main class="report-workspace">
+        @if (selected(); as report) {
+          <section class="ds-card report-runner">
+            <div class="panel-head">
+              <div>
+                <span class="eyebrow">{{ t('reports.builder') }}</span>
+                <h2>{{ report.title }}</h2>
+                <p>{{ report.description }}</p>
+              </div>
+              @if (report.scheduledPlaceholder) {
+                <app-status-chip kind="info" [label]="t('reports.scheduledPlaceholder')" />
+              }
+            </div>
+
+            <div class="filter-grid">
+              @for (filter of report.filters; track filter.key) {
+                <label class="field">
+                  <span class="field__label">{{ filter.label }}</span>
+                  @if (filter.type === 'select') {
+                    <select class="field__input" [ngModel]="filters()[filter.key] || ''" (ngModelChange)="setFilter(filter.key, $event)">
+                      <option value="">{{ t('reports.allValues') }}</option>
+                      @for (option of filter.options || []; track option) {
+                        <option [value]="option">{{ option }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <input
+                      class="field__input"
+                      [type]="filter.type === 'date' ? 'date' : 'text'"
+                      [ngModel]="filters()[filter.key] || ''"
+                      (ngModelChange)="setFilter(filter.key, $event)"
+                    />
+                  }
+                </label>
+              }
+              <button type="button" class="ds-btn ds-btn--ghost self-end" (click)="run()" [disabled]="running()">
+                {{ running() ? t('reports.running') : t('reports.run') }}
+              </button>
+            </div>
+
+            <div class="export-row">
+              @for (format of report.supportedFormats; track format) {
+                <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="export(format)">
+                  <app-icon name="fileCheck" />
+                  {{ t('reports.export') }} {{ format.toUpperCase() }}
+                </button>
+              }
+            </div>
+          </section>
+
+          @if (result(); as reportResult) {
+            <section class="ds-card result-card">
+              <div class="panel-head">
+                <div>
+                  <span class="eyebrow">{{ t('reports.results') }}</span>
+                  <h2>{{ reportResult.title }}</h2>
+                  <p>{{ t('reports.generated') }} {{ reportResult.generatedAt }}</p>
+                </div>
+                <span class="count-pill">{{ reportResult.rows.length }}</span>
+              </div>
+
+              <div class="summary-grid">
+                @for (entry of summaryEntries(reportResult); track entry.key) {
+                  <div>
+                    <span>{{ entry.key }}</span>
+                    <strong>{{ entry.value }}</strong>
+                  </div>
+                }
+              </div>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      @for (column of reportResult.columns; track column.key) {
+                        <th>{{ column.label }}</th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of reportResult.rows; track $index) {
+                      <tr>
+                        @for (column of reportResult.columns; track column.key) {
+                          <td>{{ value(row, column.key) }}</td>
+                        }
+                      </tr>
+                    } @empty {
+                      <tr>
+                        <td [attr.colspan]="reportResult.columns.length">{{ t('reports.noRows') }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          }
+        }
+      </main>
+    </div>
+  }
+</section>

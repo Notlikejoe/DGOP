@@ -1,0 +1,247 @@
+<section class="page foi-page">
+  <header class="page__header foi-hero">
+    <div>
+      <span class="eyebrow">{{ t('foi.eyebrow') }}</span>
+      <h1>{{ t('foi.title') }}</h1>
+      <p class="page__subtitle">{{ t('foi.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()"><app-icon name="plus" />{{ t('foi.new') }}</button>
+      }
+    </div>
+  </header>
+
+  @if (summary(); as s) {
+    <section class="foi-kpis" [attr.aria-label]="t('foi.metrics')">
+      <article class="kpi kpi--hero"><span class="kpi__label">{{ t('foi.metric.open') }}</span><strong class="kpi__value">{{ s.open }}</strong><small>{{ s.total }} {{ t('foi.metric.total') }}</small></article>
+      <article class="kpi"><span class="kpi__label">{{ t('foi.metric.overdue') }}</span><strong class="kpi__value">{{ s.overdue }}</strong><small>{{ t('foi.metric.overdueHelp') }}</small></article>
+      <article class="kpi"><span class="kpi__label">{{ t('foi.metric.dueSoon') }}</span><strong class="kpi__value">{{ s.dueSoon }}</strong><small>{{ t('foi.metric.dueSoonHelp') }}</small></article>
+      <article class="kpi"><span class="kpi__label">{{ t('foi.metric.disclosures') }}</span><strong class="kpi__value">{{ s.disclosures }}</strong><small>{{ t('foi.metric.disclosuresHelp') }}</small></article>
+      <article class="kpi"><span class="kpi__label">{{ t('foi.metric.appeals') }}</span><strong class="kpi__value">{{ s.appeals }}</strong><small>{{ t('foi.metric.appealsHelp') }}</small></article>
+    </section>
+  }
+
+  <section class="ds-card foi-filters">
+    <div>
+      <span class="eyebrow">{{ t('foi.filters') }}</span>
+      <p>{{ t('foi.filtersHelp') }}</p>
+    </div>
+    <input type="search" class="filter-search" [ngModel]="filters().search" (ngModelChange)="setFilter('search', $event)" [placeholder]="t('foi.search')" [attr.aria-label]="t('foi.search')" />
+    <select class="inline-select" [ngModel]="filters().status" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('foi.field.status')">
+      <option value="">{{ t('foi.allStatuses') }}</option>
+      @for (status of statuses(); track status) {
+        <option [value]="status">{{ t('foi.status.' + status) }}</option>
+      }
+    </select>
+    <select class="inline-select" [ngModel]="filters().channel" (ngModelChange)="setFilter('channel', $event)" [attr.aria-label]="t('foi.field.channel')">
+      <option value="">{{ t('foi.allChannels') }}</option>
+      @for (channel of channels(); track channel) {
+        <option [value]="channel">{{ t('foi.channel.' + channel) }}</option>
+      }
+    </select>
+    <button type="button" class="ds-btn ds-btn--ghost" (click)="clearFilters()">{{ t('users.filter.clear') }}</button>
+  </section>
+
+  @if (state() === 'loading') {
+    <div class="ds-card"><p>{{ t('assets.loading') }}</p></div>
+  } @else if (state() === 'error') {
+    <div class="ds-card"><p class="error">{{ t('foi.error.load') }}</p></div>
+  } @else {
+    <div class="foi-workspace">
+      <section class="ds-card foi-queue">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('foi.queue.eyebrow') }}</span>
+            <h2>{{ t('foi.queue.title') }}</h2>
+            <p>{{ total() }} {{ t('assets.records') }}</p>
+          </div>
+        </div>
+        <div class="request-list">
+          @for (request of requests(); track request.id) {
+            <button type="button" class="request-row" [class.request-row--active]="selected()?.id === request.id" (click)="select(request)">
+              <span class="sla-pill sla-pill--{{ request.slaStatus }}">{{ daysUntil(request.dueAt) }}d</span>
+              <div class="request-row__main">
+                <strong>{{ request.subject }}</strong>
+                <span>{{ request.requestNumber }} · {{ request.requesterName }}</span>
+                <small>{{ t('foi.due') }} {{ request.dueAt | date: 'mediumDate' }}</small>
+              </div>
+              <div class="request-row__chips">
+                <app-status-chip [kind]="statusKind(request.status)" [label]="t('foi.status.' + request.status)" />
+                <app-status-chip [kind]="slaKind(request.slaStatus)" [label]="t('foi.sla.' + request.slaStatus)" />
+              </div>
+            </button>
+          } @empty {
+            <div class="empty"><p>{{ t('foi.empty') }}</p></div>
+          }
+        </div>
+        <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" [pageSize]="pageSize()" (pageChange)="goToPage($event)" />
+      </section>
+
+      <section class="ds-card foi-detail">
+        @if (selected(); as request) {
+          <div class="detail-head">
+            <div>
+              <span class="eyebrow">{{ t('foi.detail.eyebrow') }}</span>
+              <h2>{{ request.requestNumber }}</h2>
+              <p>{{ request.subject }}</p>
+            </div>
+            <app-status-chip [kind]="statusKind(request.status)" [label]="t('foi.status.' + request.status)" />
+          </div>
+
+          <div class="sla-banner sla-banner--{{ request.slaStatus }}">
+            <strong>{{ t('foi.sla.' + request.slaStatus) }}</strong>
+            <span>{{ t('foi.due') }} {{ request.dueAt | date: 'mediumDate' }} · {{ daysUntil(request.dueAt) }} {{ t('foi.daysRemaining') }}</span>
+          </div>
+
+          <div class="info-grid">
+            <div><span>{{ t('foi.field.requester') }}</span><strong>{{ request.requesterName }}</strong><small>{{ request.requesterEmail || t('foi.noEmail') }}</small></div>
+            <div><span>{{ t('foi.field.channel') }}</span><strong>{{ t('foi.channel.' + request.channel) }}</strong><small>{{ t('foi.category.' + request.category) }}</small></div>
+            <div><span>{{ t('foi.field.asset') }}</span><strong>{{ name(request.asset) || t('foi.noAsset') }}</strong><small>{{ name(request.dataDomain || request.asset?.domain) }}</small></div>
+            <div><span>{{ t('foi.field.officer') }}</span><strong>{{ name(request.assignedOfficer) || t('foi.unassigned') }}</strong><small>{{ request.workflowCase?.code || t('foi.noWorkflow') }}</small></div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-title">
+              <h3>{{ t('foi.review.title') }}</h3>
+              <p>{{ t('foi.review.help') }}</p>
+            </div>
+            <div class="review-strip">
+              @for (review of request.reviews; track review.id) {
+                <article>
+                  <strong>{{ t('foi.reviewType.' + review.reviewType) }}</strong>
+                  <app-status-chip [kind]="statusKind(review.status)" [label]="t('foi.reviewStatus.' + review.status)" />
+                  <small>{{ review.note || review.evidenceSummary || t('foi.review.pending') }}</small>
+                </article>
+              }
+            </div>
+            @if (canEdit) {
+              <div class="action-form action-form--compact">
+                <select class="inline-select" [ngModel]="reviewDraft().reviewType" (ngModelChange)="patchReviewDraft('reviewType', $event)">
+                  @for (type of reviewTypes(); track type) { <option [value]="type">{{ t('foi.reviewType.' + type) }}</option> }
+                </select>
+                <input type="text" [ngModel]="reviewDraft().evidenceSummary" (ngModelChange)="patchReviewDraft('evidenceSummary', $event)" [placeholder]="t('foi.review.evidence')" />
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="saving()" (click)="saveReview(request)">{{ t('foi.review.complete') }}</button>
+              </div>
+            }
+          </div>
+
+          <div class="detail-section two-col">
+            <div>
+              <div class="section-title">
+                <h3>{{ t('foi.exemption.title') }}</h3>
+                <p>{{ t('foi.exemption.help') }}</p>
+              </div>
+              <div class="mini-list">
+                @for (exemption of request.exemptions; track exemption.id) {
+                  <article><strong>{{ exemption.basisCode }}</strong><span>{{ exemption.title }}</span></article>
+                } @empty {
+                  <p class="muted">{{ t('foi.exemption.empty') }}</p>
+                }
+              </div>
+              @if (canEdit) {
+                <div class="action-form">
+                  <input type="text" [ngModel]="exemptionDraft().basisCode" (ngModelChange)="patchExemptionDraft('basisCode', $event)" [placeholder]="t('foi.exemption.basis')" />
+                  <input type="text" [ngModel]="exemptionDraft().title" (ngModelChange)="patchExemptionDraft('title', $event)" [placeholder]="t('foi.exemption.titleField')" />
+                  <button type="button" class="ds-btn ds-btn--ghost" [disabled]="saving()" (click)="saveExemption(request)">{{ t('foi.exemption.add') }}</button>
+                </div>
+              }
+            </div>
+
+            <div>
+              <div class="section-title">
+                <h3>{{ t('foi.decision.title') }}</h3>
+                <p>{{ request.decisionSummary || t('foi.decision.help') }}</p>
+              </div>
+              @if (canEdit) {
+                <div class="action-form">
+                  <select class="inline-select" [ngModel]="decisionDraft().outcome" (ngModelChange)="patchDecisionDraft('outcome', $event)">
+                    @for (decision of decisions(); track decision) { <option [value]="decision">{{ t('foi.decision.' + decision) }}</option> }
+                  </select>
+                  <select class="inline-select" [ngModel]="decisionDraft().responseTemplateId" (ngModelChange)="patchDecisionDraft('responseTemplateId', $event)">
+                    <option value="">{{ t('foi.template.none') }}</option>
+                    @for (template of activeTemplates(); track template.id) { <option [value]="template.id">{{ name(template) }}</option> }
+                  </select>
+                  <textarea rows="2" [ngModel]="decisionDraft().summary" (ngModelChange)="patchDecisionDraft('summary', $event)" [placeholder]="t('foi.decision.summary')"></textarea>
+                  <textarea rows="2" [ngModel]="decisionDraft().justification" (ngModelChange)="patchDecisionDraft('justification', $event)" [placeholder]="t('foi.decision.justification')"></textarea>
+                  <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveDecision(request)">{{ t('foi.decision.record') }}</button>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="detail-section two-col">
+            <div>
+              <div class="section-title">
+                <h3>{{ t('foi.disclosure.title') }}</h3>
+                <p>{{ t('foi.disclosure.help') }}</p>
+              </div>
+              <div class="mini-list">
+                @for (disclosure of request.disclosures; track disclosure.id) {
+                  <article><strong>{{ t('foi.method.' + disclosure.method) }}</strong><span>{{ disclosure.recipient }} · {{ disclosure.releasedAt | date: 'mediumDate' }}</span></article>
+                } @empty {
+                  <p class="muted">{{ t('foi.disclosure.empty') }}</p>
+                }
+              </div>
+              @if (canEdit && canDisclose(request)) {
+                <div class="action-form">
+                  <select class="inline-select" [ngModel]="disclosureDraft().method" (ngModelChange)="patchDisclosureDraft('method', $event)">
+                    @for (method of disclosureMethods(); track method) { <option [value]="method">{{ t('foi.method.' + method) }}</option> }
+                  </select>
+                  <input type="text" [ngModel]="disclosureDraft().recipient" (ngModelChange)="patchDisclosureDraft('recipient', $event)" [placeholder]="t('foi.disclosure.recipient')" />
+                  <input type="url" [ngModel]="disclosureDraft().recordUrl" (ngModelChange)="patchDisclosureDraft('recordUrl', $event)" [placeholder]="t('foi.disclosure.url')" />
+                  <button type="button" class="ds-btn ds-btn--ghost" [disabled]="saving()" (click)="saveDisclosure(request)">{{ t('foi.disclosure.record') }}</button>
+                </div>
+              }
+            </div>
+            <div>
+              <div class="section-title">
+                <h3>{{ t('foi.appeal.title') }}</h3>
+                <p>{{ t('foi.appeal.help') }}</p>
+              </div>
+              <div class="mini-list">
+                @for (appeal of request.appeals; track appeal.id) {
+                  <article><strong>{{ appeal.appealNumber }}</strong><span>{{ t('foi.appealStatus.' + appeal.status) }} · {{ appeal.dueAt | date: 'mediumDate' }}</span></article>
+                } @empty {
+                  <p class="muted">{{ t('foi.appeal.empty') }}</p>
+                }
+              </div>
+              @if (canEdit) {
+                <div class="action-form">
+                  <textarea rows="2" [ngModel]="appealDraft().reason" (ngModelChange)="patchAppealDraft('reason', $event)" [placeholder]="t('foi.appeal.reason')"></textarea>
+                  <button type="button" class="ds-btn ds-btn--ghost" [disabled]="saving()" (click)="saveAppeal(request)">{{ t('foi.appeal.create') }}</button>
+                </div>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="empty"><p>{{ t('foi.noSelection') }}</p></div>
+        }
+      </section>
+    </div>
+  }
+
+  @if (showCreate()) {
+    <app-modal [title]="t('foi.new')" size="lg" (close)="showCreate.set(false)">
+      <div class="modal-grid">
+        <label>{{ t('foi.field.requester') }}<input type="text" [ngModel]="requestDraft().requesterName" (ngModelChange)="patchRequestDraft('requesterName', $event)" /></label>
+        <label>{{ t('foi.field.email') }}<input type="email" [ngModel]="requestDraft().requesterEmail" (ngModelChange)="patchRequestDraft('requesterEmail', $event)" /></label>
+        <label>{{ t('foi.field.phone') }}<input type="text" [ngModel]="requestDraft().requesterPhone" (ngModelChange)="patchRequestDraft('requesterPhone', $event)" /></label>
+        <label>{{ t('foi.field.requesterType') }}<select [ngModel]="requestDraft().requesterType" (ngModelChange)="patchRequestDraft('requesterType', $event)">@for (type of requesterTypes(); track type) { <option [value]="type">{{ t('foi.requesterType.' + type) }}</option> }</select></label>
+        <label>{{ t('foi.field.channel') }}<select [ngModel]="requestDraft().channel" (ngModelChange)="patchRequestDraft('channel', $event)">@for (channel of channels(); track channel) { <option [value]="channel">{{ t('foi.channel.' + channel) }}</option> }</select></label>
+        <label>{{ t('foi.field.category') }}<select [ngModel]="requestDraft().category" (ngModelChange)="patchRequestDraft('category', $event)">@for (category of categories(); track category) { <option [value]="category">{{ t('foi.category.' + category) }}</option> }</select></label>
+        <label class="wide">{{ t('foi.field.subject') }}<input type="text" [ngModel]="requestDraft().subject" (ngModelChange)="patchRequestDraft('subject', $event)" /></label>
+        <label class="wide">{{ t('foi.field.description') }}<textarea rows="4" [ngModel]="requestDraft().description" (ngModelChange)="patchRequestDraft('description', $event)"></textarea></label>
+        <label>{{ t('foi.field.asset') }}<select [ngModel]="requestDraft().assetId" (ngModelChange)="patchRequestDraft('assetId', $event)"><option value="">{{ t('foi.noAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ name(asset) }}</option> }</select></label>
+        <label>{{ t('foi.field.officer') }}<select [ngModel]="requestDraft().assignedOfficerPersonId" (ngModelChange)="patchRequestDraft('assignedOfficerPersonId', $event)"><option value="">{{ t('foi.unassigned') }}</option>@for (person of people(); track person.id) { <option [value]="person.id">{{ name(person) }}</option> }</select></label>
+        <label class="check"><input type="checkbox" [ngModel]="requestDraft().identityValidated" (ngModelChange)="patchRequestDraft('identityValidated', $event)" />{{ t('foi.field.identityValidated') }}</label>
+        <label class="check"><input type="checkbox" [ngModel]="requestDraft().contactValidated" (ngModelChange)="patchRequestDraft('contactValidated', $event)" />{{ t('foi.field.contactValidated') }}</label>
+      </div>
+      <ng-container footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="showCreate.set(false)">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveRequest()">{{ t('crud.save') }}</button>
+      </ng-container>
+    </app-modal>
+  }
+</section>

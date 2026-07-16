@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { LoginResponse, UserProfile } from './auth.models';
 
-const TOKEN_KEY = 'dgop.token';
+const LEGACY_TOKEN_KEY = 'dgop.token';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -15,22 +15,17 @@ export class AuthService {
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
 
   getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
-  }
-
-  private setToken(token: string): void {
-    localStorage.setItem(TOKEN_KEY, token);
+    return null;
   }
 
   private clearToken(): void {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
   }
 
-  /** Called at app startup: if a token exists, hydrate the current user. */
+  /** Called at app startup: if the HTTP-only session cookie exists, hydrate the current user. */
   async bootstrap(): Promise<void> {
-    if (!this.getToken()) return;
     try {
-      const user = await firstValueFrom(this.http.get<UserProfile>('/api/auth/me'));
+      const user = await firstValueFrom(this.http.get<UserProfile | null>('/api/auth/session'));
       this.currentUser.set(user);
     } catch {
       this.clearSession();
@@ -41,7 +36,7 @@ export class AuthService {
     const res = await firstValueFrom(
       this.http.post<LoginResponse>('/api/auth/login', { email, password }),
     );
-    this.setToken(res.accessToken);
+    this.clearToken();
     this.currentUser.set(res.user);
   }
 

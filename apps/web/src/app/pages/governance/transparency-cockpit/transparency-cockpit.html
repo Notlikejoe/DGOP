@@ -1,0 +1,132 @@
+<section class="page transparency-page">
+  <header class="page__header transparency-hero">
+    <div>
+      <span class="eyebrow">{{ t('transparency.eyebrow') }}</span>
+      <h1>{{ t('transparency.title') }}</h1>
+      <p class="page__subtitle">{{ t('transparency.subtitle') }}</p>
+    </div>
+    <div class="hero-actions">
+      <a class="ds-btn ds-btn--ghost" routerLink="/governance/open-data">
+        <app-icon name="globe" />
+        {{ t('nav.openData') }}
+      </a>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">
+        <app-icon name="refresh" />
+        {{ t('crud.retry') }}
+      </button>
+    </div>
+  </header>
+
+  @if (state() === 'loading') {
+    <section class="ds-card">
+      <p>{{ t('assets.loading') }}</p>
+    </section>
+  } @else if (state() === 'error') {
+    <section class="ds-card">
+      <p class="error">{{ t('transparency.error') }}</p>
+    </section>
+  } @else if (cockpit(); as data) {
+    <section class="transparency-kpis" [attr.aria-label]="t('transparency.kpis')">
+      @for (kpi of kpis(); track kpi.label) {
+        <article class="kpi-card kpi-card--{{ kpi.kind }}">
+          <span>{{ kpi.label }}</span>
+          <strong>{{ kpi.value }}</strong>
+          <small>{{ kpi.hint }}</small>
+        </article>
+      }
+    </section>
+
+    <div class="transparency-grid">
+      <section class="ds-card readiness-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('transparency.release') }}</span>
+            <h2>{{ t('transparency.releaseTitle') }}</h2>
+          </div>
+          <app-status-chip [kind]="statusKind(data.readiness.status)" [label]="t('transparency.readiness.' + data.readiness.status)" />
+        </div>
+        <div class="readiness-meter">
+          <span [style.width.%]="data.readiness.score"></span>
+        </div>
+        <div class="release-breakdown">
+          <div><span>{{ t('transparency.openDataReady') }}</span><strong>{{ num(data.openData, 'readinessPct') }}%</strong></div>
+          <div><span>{{ t('transparency.foiClosed') }}</span><strong>{{ num(data.foi, 'closed') }}</strong></div>
+          <div><span>{{ t('transparency.workflowOverdue') }}</span><strong>{{ num(data.workflow, 'overdueTasks') }}</strong></div>
+        </div>
+      </section>
+
+      <section class="ds-card risk-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('transparency.risks') }}</span>
+            <h2>{{ t('transparency.riskTitle') }}</h2>
+          </div>
+          <span class="count-pill">{{ data.risks.length }}</span>
+        </div>
+        <div class="risk-list">
+          @for (risk of data.risks; track risk.id) {
+            <a class="risk-row" [routerLink]="risk.route">
+              <span class="risk-row__source">{{ sourceLabel(risk.source) }}</span>
+              <span class="risk-row__main">
+                <strong>{{ risk.title }}</strong>
+                <small>{{ risk.detail }}</small>
+              </span>
+              <app-status-chip [kind]="statusKind(risk.severity)" [label]="t('transparency.severity.' + risk.severity)" />
+            </a>
+          } @empty {
+            <p class="empty">{{ t('transparency.noRisks') }}</p>
+          }
+        </div>
+      </section>
+    </div>
+
+    <section class="ds-card trend-card">
+      <div class="panel-head">
+        <div>
+          <span class="eyebrow">{{ t('transparency.trends') }}</span>
+          <h2>{{ t('transparency.trendTitle') }}</h2>
+        </div>
+        <small>{{ data.generatedAt | date: 'medium' }}</small>
+      </div>
+      <div class="trend-grid">
+        @for (bucket of data.trends; track bucket.label) {
+          <article class="trend-bucket">
+            <strong>{{ bucket.label }}</strong>
+            <div class="trend-line">
+              <span>{{ t('transparency.trend.odCreated') }}</span>
+              <i [style.width.%]="bar(bucket.openDataCreated, data)"></i>
+              <b>{{ bucket.openDataCreated }}</b>
+            </div>
+            <div class="trend-line trend-line--success">
+              <span>{{ t('transparency.trend.odPublished') }}</span>
+              <i [style.width.%]="bar(bucket.openDataPublished, data)"></i>
+              <b>{{ bucket.openDataPublished }}</b>
+            </div>
+            <div class="trend-line trend-line--warning">
+              <span>{{ t('transparency.trend.foiReceived') }}</span>
+              <i [style.width.%]="bar(bucket.foiReceived, data)"></i>
+              <b>{{ bucket.foiReceived }}</b>
+            </div>
+            <div class="trend-line trend-line--info">
+              <span>{{ t('transparency.trend.foiDisclosed') }}</span>
+              <i [style.width.%]="bar(bucket.foiDisclosed, data)"></i>
+              <b>{{ bucket.foiDisclosed }}</b>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+
+    <section class="scenario-grid" [attr.aria-label]="t('transparency.scenarios')">
+      @for (scenario of data.scenarios; track scenario.id) {
+        <article class="ds-card scenario-card">
+          <div class="scenario-card__head">
+            <h3>{{ scenario.title }}</h3>
+            <app-status-chip [kind]="statusKind(scenario.status)" [label]="t('transparency.scenario.' + scenario.status)" />
+          </div>
+          <p>{{ scenario.evidence }}</p>
+        </article>
+      }
+    </section>
+  }
+</section>

@@ -13,6 +13,11 @@
   </header>
 
   <div class="tabs">
+    @if (canViewCases) {
+      <button type="button" class="tab" [class.tab--active]="tab() === 'map'" (click)="tab.set('map')">
+        {{ t('wf.tab.map') }}
+      </button>
+    }
     <button type="button" class="tab" [class.tab--active]="tab() === 'tasks'" (click)="tab.set('tasks')">
       {{ t('wf.tab.myTasks') }} <span class="tab__count">{{ tasks().length }}</span>
     </button>
@@ -29,6 +34,224 @@
     } @else if (state() === 'error') {
       <p class="error">{{ t('crud.loadError') }}</p>
       <button type="button" class="ds-btn ds-btn--primary" (click)="loadAll()">{{ t('crud.retry') }}</button>
+    } @else if (tab() === 'map') {
+      @if (graph(); as g) {
+        <section class="workflow-console">
+          <div class="metric-strip" [attr.aria-label]="t('wf.graph.summary')">
+            <article class="metric">
+              <span>{{ t('wf.graph.templates') }}</span>
+              <strong>{{ g.summary.templates }}</strong>
+            </article>
+            <article class="metric">
+              <span>{{ t('wf.graph.stages') }}</span>
+              <strong>{{ g.summary.stages }}</strong>
+            </article>
+            <article class="metric">
+              <span>{{ t('wf.graph.activeCases') }}</span>
+              <strong>{{ g.summary.activeCases }}</strong>
+            </article>
+            <article class="metric" [class.metric--danger]="g.summary.overdueTasks > 0">
+              <span>{{ t('wf.graph.overdue') }}</span>
+              <strong>{{ g.summary.overdueTasks }}</strong>
+            </article>
+            <article class="metric">
+              <span>{{ t('wf.graph.domains') }}</span>
+              <strong>{{ g.summary.domainsCovered }}</strong>
+            </article>
+          </div>
+
+          <div class="route-workspace">
+            <aside class="route-directory" [attr.aria-label]="t('wf.graph.routes')">
+              <div class="route-directory__head">
+                <span>{{ t('wf.graph.routes') }}</span>
+                <h2>{{ t('wf.graph.chooseRoute') }}</h2>
+                <p>{{ t('wf.graph.chooseRouteHelp') }}</p>
+              </div>
+
+              <div class="route-list">
+                @for (route of routeSummaries(); track route.template.id) {
+                  <button
+                    type="button"
+                    class="route-option"
+                    [class.route-option--active]="selectedTemplateId() === route.template.id"
+                    (click)="selectTemplate(route.template)"
+                  >
+                    <span>{{ t('wf.type.' + route.template.caseType) }}</span>
+                    <strong>{{ templateName(route.template) }}</strong>
+                    <small>
+                      {{ route.activeCases.length }} {{ t('wf.graph.activeCases') }}
+                      &middot;
+                      {{ route.template.stages.length }} {{ t('wf.graph.stages') }}
+                    </small>
+                    <app-status-chip [kind]="graphKind(route.status)" [label]="t('wf.graph.status.' + route.status)" />
+                  </button>
+                }
+              </div>
+            </aside>
+
+            @if (selectedRoute(); as route) {
+              <section class="graph-card route-journey" [attr.aria-label]="t('wf.graph.title')">
+                <div class="graph-card__head">
+                  <div>
+                    <span class="section-kicker">{{ t('wf.graph.selectedRoute') }}</span>
+                    <h2>{{ templateName(route.template) }}</h2>
+                    <p>{{ t('wf.graph.selectedRouteHelp') }}</p>
+                  </div>
+                  <span class="graph-card__badge"><app-icon name="workflow" /> {{ t('wf.graph.live') }}</span>
+                </div>
+
+                <div class="journey-track" [attr.aria-label]="t('wf.graph.routeSteps')">
+                  @for (stage of selectedRouteStages(); track stage.id; let index = $index) {
+                    <article
+                      class="stage-card"
+                      [class.stage-card--decision]="stage.isDecision"
+                      [class.stage-card--final]="stage.isFinal"
+                    >
+                      <span class="stage-card__step">{{ index + 1 }}</span>
+                      <div class="stage-card__body">
+                        <span class="graph-node__type">{{ t('wf.stage.' + stage.kind) }}</span>
+                        <strong>{{ stageName(stage) }}</strong>
+                        <small>{{ t('wf.graph.ownerRole') }}: {{ roleLabel(stage.assigneeRoleCode) }}</small>
+                        <div class="stage-card__flags">
+                          @if (stage.isDecision) { <span>{{ t('wf.graph.decisionPoint') }}</span> }
+                          @if (stage.isFinal) { <span>{{ t('wf.graph.finalStep') }}</span> }
+                        </div>
+                      </div>
+                      <em>{{ stage.dueDays }} {{ t('wf.graph.days') }}</em>
+                    </article>
+                  }
+                </div>
+
+                <div class="case-flow-panel">
+                  <div class="case-flow-panel__head">
+                    <div>
+                      <span class="section-kicker">{{ t('wf.graph.activeQueue') }}</span>
+                      <h3>{{ t('wf.graph.routeCases') }}</h3>
+                    </div>
+                    <strong>{{ selectedRouteCases().length }}</strong>
+                  </div>
+
+                  @if (selectedRouteCases().length === 0) {
+                    <div class="empty-mini">{{ t('wf.graph.noRouteCases') }}</div>
+                  } @else {
+                    <div class="case-flow-grid">
+                      @for (c of selectedRouteCases(); track c.id) {
+                        <article class="case-card" [class.case-card--danger]="overdueTaskCount(c) > 0">
+                          <div>
+                            <code>{{ c.code }}</code>
+                            <strong>{{ c.title }}</strong>
+                            <span>{{ caseAssetLabel(c) }}</span>
+                          </div>
+                          <div class="case-card__meta">
+                            <app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" />
+                            <span>{{ openTaskCount(c) }} {{ t('wf.graph.openTasks') }}</span>
+                          </div>
+                          <a [routerLink]="['/governance/workflow/cases', c.id]">{{ t('wf.graph.openCase') }}</a>
+                        </article>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <aside class="node-detail route-insight">
+                <div class="node-detail__head">
+                  <span>{{ t('wf.graph.routeHealth') }}</span>
+                  <app-status-chip [kind]="graphKind(route.status)" [label]="t('wf.graph.status.' + route.status)" />
+                </div>
+                <h2>{{ t('wf.graph.oneRouteAtATime') }}</h2>
+                <p>{{ t('wf.graph.insightHelp') }}</p>
+
+                <dl class="route-health-grid">
+                  <div>
+                    <dt>{{ t('wf.graph.activeCases') }}</dt>
+                    <dd>{{ route.activeCases.length }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('wf.graph.openTasks') }}</dt>
+                    <dd>{{ route.openTasks }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('wf.graph.overdue') }}</dt>
+                    <dd>{{ route.overdueTasks }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('wf.graph.defaultSla') }}</dt>
+                    <dd>{{ route.template.defaultSlaDays }} {{ t('wf.graph.days') }}</dd>
+                  </div>
+                </dl>
+
+                <div class="route-domain">
+                  <span>{{ t('wf.graph.domain') }}</span>
+                  <strong>{{ route.template.domain ? name(route.template.domain) : t('wf.graph.noDomain') }}</strong>
+                </div>
+
+                @if (canCreateCase) {
+                  <button type="button" class="ds-btn ds-btn--primary route-insight__action" (click)="openNewCaseForRoute(route.template)">
+                    {{ t('wf.graph.startNewCase') }}
+                  </button>
+                }
+              </aside>
+            }
+          </div>
+
+          @if (selectedRoute(); as route) {
+            <section class="case-tree-card" [attr.aria-label]="t('wf.tree.title')">
+              <div class="case-tree-card__head">
+                <div>
+                  <span class="section-kicker">{{ t('wf.tree.eyebrow') }}</span>
+                  <h2>{{ t('wf.tree.title') }}</h2>
+                  <p>{{ t('wf.tree.subtitle') }}</p>
+                </div>
+                <div class="case-tree-root">
+                  <span>{{ t('wf.tree.root') }}</span>
+                  <strong>{{ templateName(route.template) }}</strong>
+                  <small>{{ selectedRouteCases().length }} {{ t('wf.graph.activeCases') }}</small>
+                </div>
+              </div>
+
+              <div class="case-tree">
+                @for (branch of caseTreeBranches(); track branch.stage.id) {
+                  <article class="case-tree-branch">
+                    <div class="case-tree-branch__head">
+                      <span class="case-tree-branch__node">{{ branch.stage.sortOrder }}</span>
+                      <div>
+                        <span class="graph-node__type">{{ t('wf.stage.' + branch.stage.kind) }}</span>
+                        <h3>{{ stageName(branch.stage) }}</h3>
+                        <p>
+                          {{ t('wf.tree.waitingAtStage') }}: {{ branch.cases.length }}
+                          @if (branch.openTasks > 0) { <span>&middot; {{ branch.openTasks }} {{ t('wf.graph.openTasks') }}</span> }
+                        </p>
+                      </div>
+                      <app-status-chip [kind]="graphKind(branch.status)" [label]="t('wf.graph.status.' + branch.status)" />
+                    </div>
+
+                    <div class="case-tree-leaves">
+                      @if (branch.cases.length === 0) {
+                        <div class="case-leaf case-leaf--empty">{{ t('wf.tree.noCasesAtStage') }}</div>
+                      } @else {
+                        @for (c of branch.cases; track c.id) {
+                          <a class="case-leaf" [class.case-leaf--danger]="overdueTaskCount(c) > 0" [routerLink]="['/governance/workflow/cases', c.id]">
+                            <span class="case-leaf__dot" aria-hidden="true"></span>
+                            <span class="case-leaf__body">
+                              <code>{{ c.code }}</code>
+                              <strong>{{ c.title }}</strong>
+                              <small>{{ caseAssetLabel(c) }}</small>
+                            </span>
+                            <span class="case-leaf__meta">{{ openTaskCount(c) }} {{ t('wf.graph.openTasks') }}</span>
+                          </a>
+                        }
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+        </section>
+      } @else {
+        <div class="empty"><p>{{ t('wf.graph.empty') }}</p></div>
+      }
     } @else if (tab() === 'tasks') {
       @if (tasks().length === 0) {
         <div class="empty"><p>{{ t('wf.noTasks') }}</p></div>
@@ -129,12 +352,37 @@
           <textarea class="field__input" rows="2" [ngModel]="newDescription()" (ngModelChange)="newDescription.set($event)" name="description"></textarea>
         </label>
         <label class="field">
+          <span class="field__label">{{ t('wf.field.type') }}</span>
+          <select class="field__input" [ngModel]="newType()" (ngModelChange)="setNewType($event)" name="type">
+            @for (type of caseTypes; track type) { <option [value]="type">{{ t('wf.type.' + type) }}</option> }
+          </select>
+        </label>
+        <label class="field">
           <span class="field__label">{{ t('wf.field.asset') }}</span>
-          <select class="field__input" [ngModel]="newAssetId()" (ngModelChange)="newAssetId.set($event)" name="asset">
+          <select class="field__input" [ngModel]="newAssetId()" (ngModelChange)="setNewAsset($event)" name="asset">
             <option value="">{{ t('wf.noAsset') }}</option>
             @for (a of assets(); track a.id) { <option [value]="a.id">{{ name(a) }}</option> }
           </select>
         </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.route') }}</span>
+          <select class="field__input" [ngModel]="newTemplateId()" (ngModelChange)="setNewTemplate($event)" name="template">
+            <option value="">{{ t('wf.route.recommended') }}</option>
+            @for (template of filteredTemplates(); track template.id) {
+              <option [value]="template.id">{{ templateName(template) }}</option>
+            }
+          </select>
+        </label>
+        @if (routePreview(); as preview) {
+          <div class="route-preview">
+            <strong>{{ templateName(preview.template) }}</strong>
+            <div>
+              @for (stage of preview.stages; track stage.id) {
+                <span>{{ stageName(stage) }}</span>
+              }
+            </div>
+          </div>
+        }
       </div>
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeNewCase()">{{ t('crud.cancel') }}</button>

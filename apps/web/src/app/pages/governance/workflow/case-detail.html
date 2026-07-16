@@ -28,12 +28,9 @@
         <dl class="meta">
           <dt>{{ t('wf.col.status') }}</dt>
           <dd>
-            @if (canEdit) {
-              <select class="field__input inline-select" [ngModel]="c.status" (ngModelChange)="changeStatus($event)" name="status">
-                @for (s of caseStatuses; track s) { <option [value]="s">{{ t('case.' + s) }}</option> }
-              </select>
-            } @else {
-              <app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" />
+            <app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" />
+            @if (c.templateId) {
+              <span class="muted status-note">{{ t('wf.routeControlledStatus') }}</span>
             }
           </dd>
           <dt>{{ t('wf.field.asset') }}</dt>

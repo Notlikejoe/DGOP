@@ -12,9 +12,12 @@ import {
   AddTaskDto,
   CreateCaseDto,
   DecisionDto,
+  ListMyTasksDto,
+  ListWorkflowCasesDto,
   SubmitAssignmentDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  WorkflowRoutePreviewDto,
 } from './workflow.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -23,15 +26,30 @@ import { AuthUser } from '../auth/auth.types';
 export class WorkflowController {
   constructor(private readonly service: WorkflowService) {}
 
+  // ----- route templates / graph -----
+  @Get('templates')
+  @RequirePermissions('workflow_cases.view')
+  templates(@CurrentUser() user: AuthUser) {
+    return this.service.listTemplates(user.roles);
+  }
+
+  @Get('graph')
+  @RequirePermissions('workflow_cases.view')
+  graph(@CurrentUser() user: AuthUser) {
+    return this.service.graph(user.roles, user);
+  }
+
+  @Post('route-preview')
+  @RequirePermissions('workflow_cases.view')
+  routePreview(@Body() dto: WorkflowRoutePreviewDto, @CurrentUser() user: AuthUser) {
+    return this.service.routePreview(dto, user.roles);
+  }
+
   // ----- cases -----
   @Get('cases')
   @RequirePermissions('workflow_cases.view')
-  listCases(
-    @CurrentUser() user: AuthUser,
-    @Query('status') status?: string,
-    @Query('type') type?: string,
-  ) {
-    return this.service.listCases(user.roles, { status, type });
+  listCases(@CurrentUser() user: AuthUser, @Query() query: ListWorkflowCasesDto) {
+    return this.service.listCases(user.roles, query, user);
   }
 
   @Post('cases')
@@ -43,7 +61,7 @@ export class WorkflowController {
   @Get('cases/:id')
   @RequirePermissions('workflow_cases.view')
   getCase(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.getCase(user.roles, id);
+    return this.service.getCase(user.roles, id, user);
   }
 
   @Patch('cases/:id')
@@ -74,8 +92,8 @@ export class WorkflowController {
   // ----- tasks (declare specific routes before :id) -----
   @Get('tasks/mine')
   @RequirePermissions('workflow_tasks.view')
-  myTasks(@CurrentUser() user: AuthUser, @Query('status') status?: string) {
-    return this.service.listMyTasks(user.id, { status });
+  myTasks(@CurrentUser() user: AuthUser, @Query() query: ListMyTasksDto) {
+    return this.service.listMyTasks(user, query);
   }
 
   @Get('tasks/:id')

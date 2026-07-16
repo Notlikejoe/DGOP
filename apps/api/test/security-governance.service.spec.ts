@@ -83,6 +83,9 @@ test('upsertAccessMap uses a stable scope key and updates an existing active map
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
+    {
+      openRoutedCase: async (input: any) => ({ id: 'case-1', code: input.preferredCode, tasks: [] }),
+    } as never,
   );
 
   await service.upsertAccessMap(
@@ -208,6 +211,9 @@ test('createDlpIncident links new incidents to workflow cases', async () => {
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
+    {
+      openRoutedCase: async (input: any) => ({ id: 'case-1', code: input.preferredCode, tasks: [] }),
+    } as never,
   );
 
   await service.createDlpIncident(
@@ -257,6 +263,9 @@ test('createClassificationRequest links new requests to workflow cases', async (
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+    {
+      openRoutedCase: async (input: any) => ({ id: 'case-class-1', code: input.preferredCode, tasks: [] }),
     } as never,
   );
 

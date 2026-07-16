@@ -12,6 +12,7 @@ import {
   SLA_KIND,
   CASE_STATUS_KIND,
   CaseRow,
+  Paged,
   Ref,
   Task,
   WorkflowGraph,
@@ -19,15 +20,6 @@ import {
   WorkflowTemplate,
   WorkflowTemplateStage,
 } from './workflow.types';
-
-const CASE_TYPES = [
-  'general',
-  'owner_assignment_approval',
-  'steward_assignment_approval',
-  'data_quality_issue',
-  'dlp_incident',
-  'classification_change_request',
-];
 
 @Component({
   selector: 'app-workflow',
@@ -44,15 +36,21 @@ export class WorkflowPage implements OnInit {
   private readonly inactiveCaseStatuses = new Set(['closed', 'rejected']);
   private readonly inactiveTaskStatuses = new Set(['completed', 'cancelled']);
 
-  protected readonly caseTypes = CASE_TYPES;
   protected readonly tab = signal<'map' | 'tasks' | 'cases'>('map');
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly tasks = signal<Task[]>([]);
+  protected readonly taskTotal = signal(0);
   protected readonly cases = signal<CaseRow[]>([]);
+  protected readonly caseTotal = signal(0);
   protected readonly assets = signal<Ref[]>([]);
   protected readonly templates = signal<WorkflowTemplate[]>([]);
   protected readonly graph = signal<WorkflowGraph | null>(null);
   protected readonly selectedTemplateId = signal<string>('');
+
+  protected readonly caseTypes = computed(() => {
+    const types = [...new Set(this.templates().map((template) => template.caseType).filter(Boolean))];
+    return types.length ? types : ['general'];
+  });
 
   // decision modal
   protected readonly decideTask = signal<Task | null>(null);
@@ -120,21 +118,31 @@ export class WorkflowPage implements OnInit {
 
   protected loadAll(): void {
     this.state.set('loading');
-    this.http.get<Task[]>('/api/workflow/tasks/mine?status=open').subscribe({
-      next: (t) => { this.tasks.set(t); this.state.set('ok'); },
-      error: () => this.state.set('error'),
-    });
+    this.loadPaged<Task>(
+      '/api/workflow/tasks/mine',
+      { status: 'open' },
+      (tasks, total) => {
+        this.tasks.set(tasks);
+        this.taskTotal.set(total);
+        this.state.set('ok');
+      },
+      () => this.state.set('error'),
+    );
     if (this.canViewCases) {
-      this.http.get<CaseRow[]>('/api/workflow/cases').subscribe({
-        next: (c) => {
-          this.cases.set(c);
+      this.loadPaged<CaseRow>(
+        '/api/workflow/cases',
+        {},
+        (cases, total) => {
+          this.cases.set(cases);
+          this.caseTotal.set(total);
           this.ensureSelectedTemplate();
         },
-        error: () => {},
-      });
+        () => {},
+      );
       this.http.get<WorkflowTemplate[]>('/api/workflow/templates').subscribe({
         next: (templates) => {
           this.templates.set(templates);
+          this.ensureNewCaseType();
           this.ensureSelectedTemplate(templates);
         },
         error: () => {},
@@ -143,6 +151,9 @@ export class WorkflowPage implements OnInit {
         next: (graph) => this.graph.set(graph),
         error: () => {},
       });
+    } else {
+      this.cases.set([]);
+      this.caseTotal.set(0);
     }
   }
 
@@ -229,10 +240,11 @@ export class WorkflowPage implements OnInit {
     this.openNewCaseForRoute(null);
   }
   protected openNewCaseForRoute(template: WorkflowTemplate | null): void {
+    const fallbackType = this.caseTypes()[0] ?? 'general';
     this.newTitle.set('');
     this.newDescription.set('');
     this.newAssetId.set('');
-    this.newType.set(template?.caseType ?? 'general');
+    this.newType.set(template?.caseType ?? fallbackType);
     this.newTemplateId.set(template?.id ?? '');
     this.routePreview.set(null);
     this.refreshRoutePreview();
@@ -241,8 +253,9 @@ export class WorkflowPage implements OnInit {
   protected closeNewCase(): void { this.caseModalOpen.set(false); }
 
   protected setNewType(value: string): void {
-    this.newType.set(value);
-    const matching = this.templates().find((template) => template.caseType === value);
+    const nextType = this.caseTypes().includes(value) ? value : this.caseTypes()[0] ?? 'general';
+    this.newType.set(nextType);
+    const matching = this.templates().find((template) => template.caseType === nextType);
     this.newTemplateId.set(matching?.id ?? '');
     this.refreshRoutePreview();
   }
@@ -333,5 +346,44 @@ export class WorkflowPage implements OnInit {
       this.cases().some((row) => this.caseMatchesTemplate(row, template) && !this.inactiveCaseStatuses.has(row.status)),
     );
     this.selectedTemplateId.set((routeWithCases ?? templates[0]).id);
+  }
+
+  private ensureNewCaseType(): void {
+    const types = this.caseTypes();
+    const fallbackType = types[0] ?? 'general';
+    if (!types.includes(this.newType())) {
+      this.newType.set(fallbackType);
+    }
+    if (this.newTemplateId() && this.templates().some((template) => template.id === this.newTemplateId())) {
+      return;
+    }
+    const matching = this.templates().find((template) => template.caseType === this.newType());
+    this.newTemplateId.set(matching?.id ?? '');
+  }
+
+  private loadPaged<T>(
+    url: string,
+    params: Record<string, string>,
+    onDone: (rows: T[], total: number) => void,
+    onError: () => void,
+  ): void {
+    const pageSize = 200;
+    const rows: T[] = [];
+    const loadPage = (page: number) => {
+      this.http
+        .get<Paged<T>>(url, { params: { ...params, page: String(page), pageSize: String(pageSize) } })
+        .subscribe({
+          next: (res) => {
+            rows.push(...res.data);
+            if (res.page < res.totalPages) {
+              loadPage(res.page + 1);
+              return;
+            }
+            onDone(rows, res.total);
+          },
+          error: onError,
+        });
+    };
+    loadPage(1);
   }
 }

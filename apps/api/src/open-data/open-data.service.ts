@@ -794,20 +794,18 @@ export class OpenDataService {
           data: { status: OpenDataCandidateStatus.assessment, updatedBy: actor },
         });
       }
-      await tx.auditLog.create({
-        data: {
-          actor,
-          action: complete ? 'open_data_assessment.complete' : 'open_data_assessment.save',
-          entityType: 'open_data_candidate',
-          entityId: current.id,
-          metadata: {
-            readinessScore: result.readinessScore,
-            riskScore: result.riskScore,
-            resultSignal: result.resultSignal,
-            blockers: result.blockers,
-          },
+      await this.audit.log({
+        actor,
+        action: complete ? 'open_data_assessment.complete' : 'open_data_assessment.save',
+        entityType: 'open_data_candidate',
+        entityId: current.id,
+        metadata: {
+          readinessScore: result.readinessScore,
+          riskScore: result.riskScore,
+          resultSignal: result.resultSignal,
+          blockers: result.blockers,
         },
-      });
+      }, tx);
     });
     return this.get(roleCodes, id);
   }
@@ -965,15 +963,13 @@ export class OpenDataService {
           data: { status, updatedBy: actor },
         });
       }
-      await tx.auditLog.create({
-        data: {
-          actor,
-          action: `open_data_approval.${dto.decision}`,
-          entityType: 'open_data_candidate',
-          entityId: current.id,
-          metadata: { approvalId, step: approval.step },
-        },
-      });
+      await this.audit.log({
+        actor,
+        action: `open_data_approval.${dto.decision}`,
+        entityType: 'open_data_candidate',
+        entityId: current.id,
+        metadata: { approvalId, step: approval.step },
+      }, tx);
     });
     return this.get(roleCodes, id);
   }
@@ -1034,15 +1030,13 @@ export class OpenDataService {
           updatedBy: actor,
         },
       });
-      await tx.auditLog.create({
-        data: {
-          actor,
-          action: 'open_data_publication.simulate',
-          entityType: 'open_data_candidate',
-          entityId: current.id,
-          metadata: { portalRecordId, nextReviewAt },
-        },
-      });
+      await this.audit.log({
+        actor,
+        action: 'open_data_publication.simulate',
+        entityType: 'open_data_candidate',
+        entityId: current.id,
+        metadata: { portalRecordId, nextReviewAt: nextReviewAt?.toISOString() ?? null },
+      }, tx);
     });
     return this.get(roleCodes, id);
   }
@@ -1081,14 +1075,12 @@ export class OpenDataService {
           updatedBy: actor,
         },
       });
-      await tx.auditLog.create({
-        data: {
-          actor,
-          action: `open_data_review.${dto.decision}`,
-          entityType: 'open_data_candidate',
-          entityId: current.id,
-        },
-      });
+      await this.audit.log({
+        actor,
+        action: `open_data_review.${dto.decision}`,
+        entityType: 'open_data_candidate',
+        entityId: current.id,
+      }, tx);
     });
     return this.get(roleCodes, id);
   }

@@ -329,7 +329,12 @@ export class DataSharingService {
       }
       const workflowCaseId = await this.createWorkflow(tx, request, roleCodes, actor);
       await tx.dataSharingRequest.update({ where: { id: request.id }, data: { workflowCaseId } });
-      await tx.auditLog.create({ data: { actor, action: 'data_sharing_request.create', entityType: 'data_sharing_request', entityId: request.id } });
+      await this.audit.log({
+        actor,
+        action: 'data_sharing_request.create',
+        entityType: 'data_sharing_request',
+        entityId: request.id,
+      }, tx);
       return tx.dataSharingRequest.findUniqueOrThrow({ where: { id: request.id }, include: requestInclude });
     }).then((row) => this.decorateRequest(row));
   }

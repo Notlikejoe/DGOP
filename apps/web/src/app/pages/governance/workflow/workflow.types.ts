@@ -1,5 +1,13 @@
 import { StatusKind } from '../../../shared/status-chip';
 
+export interface Paged<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface Ref { id: string; code?: string; nameEn: string; nameAr: string; }
 export interface UserRef { id: string; email: string; displayName: string; }
 export interface TaskCaseRef { id: string; code: string; title: string; type: string; status: string; }

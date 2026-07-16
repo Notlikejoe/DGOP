@@ -313,7 +313,13 @@ export class FoiService {
       for (const reviewType of [FoiReviewType.classification, FoiReviewType.privacy, FoiReviewType.legal]) {
         await tx.foiReview.create({ data: { requestId: created.id, reviewType, status: FoiReviewStatus.pending, createdBy: actor } });
       }
-      await tx.auditLog.create({ data: { actor, action: 'foi_request.create', entityType: 'foi_request', entityId: created.id, metadata: { requestNumber: created.requestNumber } } });
+      await this.audit.log({
+        actor,
+        action: 'foi_request.create',
+        entityType: 'foi_request',
+        entityId: created.id,
+        metadata: { requestNumber: created.requestNumber },
+      }, tx);
       return created;
     });
     return this.get(roleCodes, request.id);
@@ -438,7 +444,13 @@ export class FoiService {
           comment: dto.outcome,
         }, tx);
       }
-      await tx.auditLog.create({ data: { actor, action: 'foi_decision.save', entityType: 'foi_request', entityId: id, metadata: { outcome: dto.outcome } } });
+      await this.audit.log({
+        actor,
+        action: 'foi_decision.save',
+        entityType: 'foi_request',
+        entityId: id,
+        metadata: { outcome: dto.outcome },
+      }, tx);
     });
     return this.get(roleCodes, id);
   }
@@ -474,7 +486,12 @@ export class FoiService {
           completeOpenTasks: true,
         }, tx);
       }
-      await tx.auditLog.create({ data: { actor, action: 'foi_disclosure.create', entityType: 'foi_request', entityId: id } });
+      await this.audit.log({
+        actor,
+        action: 'foi_disclosure.create',
+        entityType: 'foi_request',
+        entityId: id,
+      }, tx);
     });
     return this.get(roleCodes, id);
   }
@@ -498,7 +515,13 @@ export class FoiService {
       const workflowCaseId = await this.createWorkflowForAppeal(tx, created, roleCodes, actor);
       await tx.foiAppeal.update({ where: { id: created.id }, data: { workflowCaseId } });
       await tx.foiRequest.update({ where: { id }, data: { status: FoiRequestStatus.appealed, updatedBy: actor } });
-      await tx.auditLog.create({ data: { actor, action: 'foi_appeal.create', entityType: 'foi_request', entityId: id, metadata: { appealNumber: created.appealNumber } } });
+      await this.audit.log({
+        actor,
+        action: 'foi_appeal.create',
+        entityType: 'foi_request',
+        entityId: id,
+        metadata: { appealNumber: created.appealNumber },
+      }, tx);
       return created;
     });
     return this.get(roleCodes, appeal.requestId);

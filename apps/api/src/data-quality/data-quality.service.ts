@@ -604,15 +604,13 @@ export class DataQualityService {
     entityId: string,
     metadata?: Record<string, unknown>,
   ) {
-    return client.auditLog.create({
-      data: {
-        actor,
-        action,
-        entityType,
-        entityId,
-        metadata: metadata ? (metadata as Prisma.InputJsonObject) : undefined,
-      },
-    });
+    return this.audit.log({
+      actor,
+      action,
+      entityType,
+      entityId,
+      metadata: metadata ?? null,
+    }, client);
   }
 
   async scorecard(roleCodes: string[]) {

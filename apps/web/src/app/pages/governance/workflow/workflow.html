@@ -19,11 +19,11 @@
       </button>
     }
     <button type="button" class="tab" [class.tab--active]="tab() === 'tasks'" (click)="tab.set('tasks')">
-      {{ t('wf.tab.myTasks') }} <span class="tab__count">{{ tasks().length }}</span>
+      {{ t('wf.tab.myTasks') }} <span class="tab__count">{{ taskTotal() }}</span>
     </button>
     @if (canViewCases) {
       <button type="button" class="tab" [class.tab--active]="tab() === 'cases'" (click)="tab.set('cases')">
-        {{ t('wf.tab.cases') }} <span class="tab__count">{{ cases().length }}</span>
+        {{ t('wf.tab.cases') }} <span class="tab__count">{{ caseTotal() }}</span>
       </button>
     }
   </div>
@@ -354,7 +354,7 @@
         <label class="field">
           <span class="field__label">{{ t('wf.field.type') }}</span>
           <select class="field__input" [ngModel]="newType()" (ngModelChange)="setNewType($event)" name="type">
-            @for (type of caseTypes; track type) { <option [value]="type">{{ t('wf.type.' + type) }}</option> }
+            @for (type of caseTypes(); track type) { <option [value]="type">{{ t('wf.type.' + type) }}</option> }
           </select>
         </label>
         <label class="field">

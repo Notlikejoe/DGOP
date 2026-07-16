@@ -109,7 +109,6 @@ export class WorkflowController {
   }
 
   @Post('tasks/:id/decision')
-  @RequirePermissions('workflow_tasks.view')
   decide(@Param('id') id: string, @Body() dto: DecisionDto, @CurrentUser() user: AuthUser) {
     return this.service.decideTask(id, dto, user);
   }

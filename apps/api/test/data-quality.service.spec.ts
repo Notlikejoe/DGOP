@@ -187,7 +187,6 @@ test('close delegates linked workflow closure to the workflow engine', async () 
     },
     dataQualityIssueEvidence: { create: async () => ({}) },
     dataQualitySlaBreach: { updateMany: async () => ({ count: 0 }) },
-    auditLog: { create: async () => ({}) },
   };
   const service = new DataQualityService(
     {
@@ -204,7 +203,7 @@ test('close delegates linked workflow closure to the workflow engine', async () 
       },
       $transaction: async (callback: any) => callback(tx),
     } as never,
-    {} as never,
+    { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,

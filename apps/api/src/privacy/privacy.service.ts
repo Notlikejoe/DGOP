@@ -427,7 +427,12 @@ export class PrivacyService {
         actor,
       );
       await tx.privacyDpia.update({ where: { id: dpia.id }, data: { workflowCaseId } });
-      await tx.auditLog.create({ data: { actor, action: 'privacy_dpia.create', entityType: 'privacy_dpia', entityId: dpia.id } });
+      await this.audit.log({
+        actor,
+        action: 'privacy_dpia.create',
+        entityType: 'privacy_dpia',
+        entityId: dpia.id,
+      }, tx);
       return tx.privacyDpia.findUniqueOrThrow({ where: { id: dpia.id }, include: dpiaInclude });
     }).then((row) => this.decorateDpia(row));
   }
@@ -524,7 +529,12 @@ export class PrivacyService {
       });
       const workflowCaseId = await this.createWorkflow(tx, { type: 'privacy_dsr', title: `DSR ${requestNumber}`, description: dto.description, assetId: dsr.assetId, assigneePersonId: dsr.assignedPersonId, dueAt }, roleCodes, actor);
       await tx.privacyDsrRequest.update({ where: { id: dsr.id }, data: { workflowCaseId } });
-      await tx.auditLog.create({ data: { actor, action: 'privacy_dsr.create', entityType: 'privacy_dsr_request', entityId: dsr.id } });
+      await this.audit.log({
+        actor,
+        action: 'privacy_dsr.create',
+        entityType: 'privacy_dsr_request',
+        entityId: dsr.id,
+      }, tx);
       return tx.privacyDsrRequest.findUniqueOrThrow({ where: { id: dsr.id }, include: dsrInclude });
     }).then((row) => this.decorateDsr(row));
   }
@@ -595,7 +605,12 @@ export class PrivacyService {
       });
       const workflowCaseId = await this.createWorkflow(tx, { type: 'privacy_breach', title: `Breach ${code}`, description: dto.title, assetId: breach.assetId, assigneePersonId: breach.assignedPersonId, dueAt: breach.notificationDueAt }, roleCodes, actor);
       await tx.privacyBreach.update({ where: { id: breach.id }, data: { workflowCaseId } });
-      await tx.auditLog.create({ data: { actor, action: 'privacy_breach.create', entityType: 'privacy_breach', entityId: breach.id } });
+      await this.audit.log({
+        actor,
+        action: 'privacy_breach.create',
+        entityType: 'privacy_breach',
+        entityId: breach.id,
+      }, tx);
       return tx.privacyBreach.findUniqueOrThrow({ where: { id: breach.id }, include: breachInclude });
     }).then((row) => this.decorateBreach(row));
   }

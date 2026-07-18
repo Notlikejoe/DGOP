@@ -99,4 +99,10 @@ export class SecurityGovernanceController {
   simulateDecision(@Body() dto: SimulateAccessDecisionDto, @CurrentUser() user: AuthUser) {
     return this.service.simulateDecision(user.roles, dto, user.email);
   }
+
+  @Post('workflow-backfill')
+  @RequirePermissions('security_governance.edit')
+  workflowBackfill(@CurrentUser() user: AuthUser) {
+    return this.service.backfillWorkflowLinks(user.roles, user.email);
+  }
 }

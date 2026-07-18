@@ -239,6 +239,7 @@ test('production readiness aggregates scoped engine signals into a ready respons
       expectedPreviousHash: null,
       actualPreviousHash: null,
     }),
+    legacyBaselineAccepted: async () => false,
   };
   const service = new GovernanceOperationsService(
     prisma,
@@ -257,6 +258,56 @@ test('production readiness aggregates scoped engine signals into a ready respons
   assert.equal(readiness.summary.integrationProblems, 0);
   assert.equal(readiness.checks.length, 6);
   assert.equal(readiness.checks.find((check) => check.code === 'audit_chain')?.status, 'ready');
+});
+
+test('production readiness treats verified accepted legacy audit baseline as ready', async () => {
+  const prisma: any = {
+    ksaHoliday: { findMany: async () => [] },
+    dataAsset: {
+      count: async () => 5,
+      findMany: async () => [],
+    },
+    workflowCase: { count: async () => 2 },
+    workflowTask: {
+      count: async () => 0,
+      findMany: async () => [],
+    },
+    dataQualityIssue: { count: async () => 0 },
+    auditLog: { count: async () => 30 },
+    integrationEvent: { count: async () => 0 },
+    integrationImportBatch: { count: async () => 0 },
+    integrationConnector: { count: async () => 0 },
+    governanceEscalation: { count: async () => 0 },
+  };
+  const audit = {
+    verifyChain: async () => ({
+      totalRowsRead: 30,
+      valid: true,
+      checked: 20,
+      legacyRows: 10,
+      brokenAt: null,
+      expectedHash: null,
+      actualHash: null,
+      expectedPreviousHash: null,
+      actualPreviousHash: null,
+    }),
+    legacyBaselineAccepted: async () => true,
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    audit as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const readiness = await service.productionReadiness({
+    id: 'admin',
+    email: 'admin@dgop.local',
+    roles: ['system_admin'],
+  });
+
+  const auditCheck = readiness.checks.find((check) => check.code === 'audit_chain');
+  assert.equal(auditCheck?.status, 'ready');
+  assert.equal(auditCheck?.metric.legacyBaselineAccepted, true);
 });
 
 test('operating model exposes v5 governance bodies, lifecycle, KPI traceability, and sizing', async () => {
@@ -337,6 +388,7 @@ test('platform architecture exposes v5 platform services, dependency map, and li
       expectedPreviousHash: null,
       actualPreviousHash: null,
     }),
+    legacyBaselineAccepted: async () => false,
   };
   const service = new GovernanceOperationsService(
     prisma,
@@ -405,6 +457,7 @@ test('enterprise close-out exposes control crosswalk, production acceptance, and
       expectedPreviousHash: null,
       actualPreviousHash: null,
     }),
+    legacyBaselineAccepted: async () => false,
   };
   const service = new GovernanceOperationsService(
     prisma,
@@ -483,6 +536,7 @@ test('SLA recalculation uses stable dedupe keys for workflow task signals', asyn
         updatedNotifications.push({ where, data });
         return { id: where.id, ...data };
       },
+      updateMany: async () => ({ count: 0 }),
     },
     governanceEscalation: {
       count: async () => 0,
@@ -499,6 +553,7 @@ test('SLA recalculation uses stable dedupe keys for workflow task signals', asyn
         updatedEscalations.push({ where, data });
         return { id: where.id, ...data };
       },
+      updateMany: async () => ({ count: 0 }),
     },
   };
   const service = new GovernanceOperationsService(

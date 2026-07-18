@@ -11,6 +11,7 @@ const cliPath = join(webDir, 'node_modules', '@angular', 'cli', 'bin', 'ng.js');
 const commandMap = {
   build: ['build'],
   start: ['serve'],
+  test: ['test'],
   watch: ['build', '--watch', '--configuration', 'development'],
 };
 
@@ -59,7 +60,7 @@ function resolveNode() {
 const [command = 'build', ...extraArgs] = process.argv.slice(2);
 const ngArgs = commandMap[command];
 if (!ngArgs) {
-  console.error(`Unknown web command "${command}". Use build, start, or watch.`);
+  console.error(`Unknown web command "${command}". Use build, start, test, or watch.`);
   process.exit(1);
 }
 

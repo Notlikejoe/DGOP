@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaClient, TaskStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const seedRiskScenario = process.env.DGOP_SEED_RISK_SCENARIO === 'true';
 
 const roles = [
   { code: 'system_admin', nameEn: 'System Administrator', nameAr: 'مدير النظام' },
@@ -90,6 +91,7 @@ const CRUD_ACTIONS = ['view', 'create', 'edit', 'delete'];
 const permissionCatalog: { resource: string; action: string }[] = [
   { resource: 'dashboard', action: 'view' },
   { resource: 'design_system', action: 'view' },
+  { resource: 'search', action: 'view' },
   { resource: 'audit', action: 'view' },
   // Bulk CSV import is a distinct, higher-privilege action on data assets.
   { resource: 'data_assets', action: 'import' },
@@ -114,7 +116,7 @@ const permissionCatalog: { resource: string; action: string }[] = [
   ...ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => ({ resource: r, action: a }))),
 ];
 
-const BASE_PERMS = ['dashboard.view', 'design_system.view'];
+const BASE_PERMS = ['dashboard.view', 'design_system.view', 'search.view'];
 const ADMIN_ALL = ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => `${r}.${a}`));
 
 // Default role -> permission keys. system_admin receives the full catalog.
@@ -1943,7 +1945,7 @@ async function main() {
     }
     const existingCase = await prisma.workflowCase.findUnique({ where: { code: 'WFC-SEED-1' } });
     const due = new Date();
-    due.setDate(due.getDate() + 3);
+    due.setDate(due.getDate() + 7);
     if (!existingCase) {
       const wfCase = await prisma.workflowCase.create({
         data: {
@@ -2683,7 +2685,7 @@ async function main() {
           title: 'Validate FOI intake and prepare review',
           type: 'information',
           status: 'pending' as any,
-          dueDate: foiSeedDueDate(new Date(), 1),
+          dueDate: foiSeedDueDate(new Date(), 7),
         },
       });
     }
@@ -2763,18 +2765,19 @@ async function main() {
     update: {
       title: sampleAccessReview.title,
       description: sampleAccessReview.description,
-      status: 'active' as any,
+      status: seedRiskScenario ? 'active' as any : 'completed' as any,
       ownerUserId: accessOwnerUserId,
       dueDate: accessDueDate,
-      completedAt: null,
+      completedAt: seedRiskScenario ? null : new Date(),
     },
     create: {
       code: sampleAccessReview.code,
       title: sampleAccessReview.title,
       description: sampleAccessReview.description,
-      status: 'active' as any,
+      status: seedRiskScenario ? 'active' as any : 'completed' as any,
       ownerUserId: accessOwnerUserId,
       dueDate: accessDueDate,
+      completedAt: seedRiskScenario ? null : new Date(),
       createdBy: adminEmail,
     },
   });
@@ -2783,6 +2786,7 @@ async function main() {
     const userId = userByEmail.get(item.userEmail);
     const role = roleByCode.get(item.roleCode);
     if (!userId || !role) continue;
+    const decision = seedRiskScenario ? item.decision : item.decision === 'pending' ? 'certified' : item.decision;
     await prisma.accessReviewItem.create({
       data: {
         reviewId: accessReview.id,
@@ -2791,10 +2795,10 @@ async function main() {
         assetId: assetByCode.get(item.assetCode) ?? null,
         domainId: domainByCode.get(item.domainCode) ?? null,
         classificationId: classificationByCode.get(item.classificationCode) ?? null,
-        decision: item.decision as any,
+        decision: decision as any,
         justification: item.justification,
-        reviewer: item.decision === 'pending' ? null : adminEmail,
-        reviewedAt: item.decision === 'pending' ? null : new Date(),
+        reviewer: decision === 'pending' ? null : adminEmail,
+        reviewedAt: decision === 'pending' ? null : new Date(),
       },
     });
   }
@@ -2803,13 +2807,14 @@ async function main() {
     const assetId = assetByCode.get(incidentSeed.assetCode) ?? null;
     const classificationId = classificationByCode.get(incidentSeed.classificationCode) ?? null;
     const assignedPersonId = personByEmail.get(incidentSeed.assignedEmail) ?? null;
+    const incidentStatus = seedRiskScenario ? incidentSeed.status : 'closed';
     await prisma.dlpIncident.upsert({
       where: { code: incidentSeed.code },
       update: {
         title: incidentSeed.title,
         description: incidentSeed.description,
         severity: incidentSeed.severity as any,
-        status: incidentSeed.status as any,
+        status: incidentStatus as any,
         assetId,
         classificationId,
         assignedPersonId,
@@ -2820,7 +2825,7 @@ async function main() {
         title: incidentSeed.title,
         description: incidentSeed.description,
         severity: incidentSeed.severity as any,
-        status: incidentSeed.status as any,
+        status: incidentStatus as any,
         assetId,
         classificationId,
         assignedPersonId,
@@ -2839,16 +2844,17 @@ async function main() {
       where: {
         assetId,
         toClassificationId,
-        status: { in: ['pending', 'approved'] as any },
+        status: { in: ['pending', 'approved', 'implemented'] as any },
       },
     });
+    const requestStatus = seedRiskScenario ? 'pending' : 'implemented';
     const data = {
       assetId,
       fromClassificationId: asset?.classificationId ?? null,
       toClassificationId,
       reason: requestSeed.reason,
       requestedBy: requestSeed.requestedBy,
-      status: 'pending' as any,
+      status: requestStatus as any,
     };
     if (existing) await prisma.classificationChangeRequest.update({ where: { id: existing.id }, data });
     else await prisma.classificationChangeRequest.create({ data });
@@ -3290,6 +3296,26 @@ async function main() {
         decision: 'review_required' as any,
         reason: 'Seeded: export of restricted finance data requires owner approval.',
       },
+    });
+  }
+
+  if (!seedRiskScenario) {
+    const demoWorkflowDueDate = foiSeedDueDate(new Date(), 10);
+    await prisma.workflowTask.updateMany({
+      where: {
+        status: { in: ['pending', 'in_progress'] as any },
+        dueDate: { lt: demoWorkflowDueDate },
+        case: { createdBy: adminEmail },
+      },
+      data: { dueDate: demoWorkflowDueDate },
+    });
+    await prisma.governanceNotification.updateMany({
+      where: { sourceType: 'workflow_task', status: { not: 'archived' as any } },
+      data: { status: 'archived' as any },
+    });
+    await prisma.governanceEscalation.updateMany({
+      where: { status: { in: ['open', 'acknowledged'] as any } },
+      data: { status: 'resolved' as any, updatedBy: adminEmail },
     });
   }
 

@@ -1,6 +1,6 @@
 # DGOP Sprint 0-36 Enterprise Readiness Gate
 
-Status: complete for controlled enterprise demo, UAT handoff, and production-style local validation. The release gate has no blocked checks after readiness remediation; historical audit rows created before hash-chain enforcement remain a documented watch item.
+Status: complete for controlled enterprise demo, UAT handoff, and production-style local validation. The release gate has no blocked checks after readiness remediation; historical audit rows created before hash-chain enforcement are handled through a verified legacy-baseline acceptance audit event.
 
 Target release: Sprint 0 through Sprint 36.
 
@@ -119,7 +119,7 @@ Production-style local handover requires:
 
 - Mock/simulated connectors are acceptable for Sprint 30 because the release proves the integration governance engine, not live vendor contracts.
 - Simulated connectors should be visibly marked through source trust, but should not count as unhealthy unless they have an actual failed run, warning run, or recorded error.
-- Historical audit rows created before hash-chain enforcement may remain a watch item when the chain verifies cleanly and no broken hash is reported.
+- Historical audit rows created before hash-chain enforcement are acceptable only when `/api/audit/chain/verify` reports a valid chain and `/api/audit/chain/accept-legacy-baseline` has recorded a system-admin or DMO-admin acceptance event.
 - Cloudflare quick tunnel remains a temporary demo path. Permanent hosting, DNS, DR, monitoring, and SIEM forwarding are production environment tasks.
 - The health endpoint redacts details in production-style runs unless explicitly configured.
 - Later v5 additions remain outside this gate unless they are already implemented by the current codebase.

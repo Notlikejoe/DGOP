@@ -38,6 +38,7 @@ async function bootstrap(): Promise<void> {
   assertSafeRuntimeConfig();
   const strictConfig = isProductionLikeRuntime();
   const allowedOrigins = configuredCorsOrigins();
+  const corsOrigins = allowedOrigins.length ? allowedOrigins : ['http://localhost:4205'];
 
   app.use(
     helmet({
@@ -50,7 +51,7 @@ async function bootstrap(): Promise<void> {
               styleSrc: ["'self'", "'unsafe-inline'"],
               imgSrc: ["'self'", 'data:'],
               fontSrc: ["'self'", 'data:'],
-              connectSrc: ["'self'", ...allowedOrigins],
+              connectSrc: ["'self'", ...corsOrigins],
               baseUri: ["'self'"],
               formAction: ["'self'"],
               frameAncestors: ["'none'"],
@@ -59,7 +60,7 @@ async function bootstrap(): Promise<void> {
         : false,
     }),
   );
-  app.enableCors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true });
+  app.enableCors({ origin: corsOrigins, credentials: true });
 
   app.use(
     '/api/auth/login',

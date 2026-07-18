@@ -62,6 +62,7 @@ const specSelect = {
 };
 
 const BROAD_EVIDENCE_ROLES = new Set(['system_admin', 'dmo_admin', 'auditor']);
+const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 
 @Injectable()
 export class EvidenceService {
@@ -118,6 +119,30 @@ export class EvidenceService {
 
   private actorEmail(actor: AuthUser): string {
     return actor.email;
+  }
+
+  private assertFileContentMatchesMime(file: UploadedFile): void {
+    const startsWith = (signature: Buffer | string) =>
+      typeof signature === 'string'
+        ? file.buffer.subarray(0, signature.length).toString('utf8') === signature
+        : file.buffer.subarray(0, signature.length).equals(signature);
+    const textLike = () => !file.buffer.includes(0);
+    const officePackage = (requiredPart: string) =>
+      startsWith('PK') &&
+      file.buffer.includes(Buffer.from('[Content_Types].xml', 'utf8')) &&
+      file.buffer.includes(Buffer.from(requiredPart, 'utf8'));
+    const valid =
+      (file.mimetype === 'application/pdf' && startsWith('%PDF-')) ||
+      (file.mimetype === 'image/png' && startsWith(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) ||
+      (file.mimetype === 'image/jpeg' && startsWith(Buffer.from([0xff, 0xd8, 0xff]))) ||
+      ((file.mimetype === 'text/plain' || file.mimetype === 'text/csv') && textLike()) ||
+      (file.mimetype === 'application/msword' && startsWith(OLE_MAGIC)) ||
+      (file.mimetype === 'application/vnd.ms-excel' && startsWith(OLE_MAGIC)) ||
+      (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+        officePackage('word/document.xml')) ||
+      (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' &&
+        officePackage('xl/workbook.xml'));
+    if (!valid) throw new BadRequestException('File content does not match the declared file type');
   }
 
   /**
@@ -232,11 +257,7 @@ export class EvidenceService {
   async create(dto: CreateEvidenceDto, file: UploadedFile, actor: AuthUser) {
     if (!file) throw new BadRequestException('A file is required');
     await this.requireSpec(dto.specId, actor);
-
-    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
-    const safeExt = (file.originalname.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? '').toLowerCase();
-    const storedName = `${randomUUID()}${safeExt}`;
-    await writeFile(join(this.storageDir, storedName), file.buffer);
+    this.assertFileContentMatchesMime(file);
 
     const submitNow = dto.submit === 'true' || dto.submit === '1';
     const expiryDate = dto.expiryDate ? new Date(dto.expiryDate) : null;
@@ -244,22 +265,34 @@ export class EvidenceService {
       throw new BadRequestException('Invalid expiry date');
     }
 
-    const evidence = await this.prisma.ndiEvidence.create({
-      data: {
-        specId: dto.specId,
-        title: dto.title,
-        descriptionEn: dto.descriptionEn ?? null,
-        status: submitNow ? 'submitted' : 'draft',
-        fileName: storedName,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
-        sha256,
-        submittedBy: this.actorEmail(actor),
-        submittedAt: submitNow ? new Date() : null,
-        expiryDate,
-      },
-    });
+    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+    const safeExt = (file.originalname.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? '').toLowerCase();
+    const storedName = `${randomUUID()}${safeExt}`;
+    const storedPath = join(this.storageDir, storedName);
+    await writeFile(storedPath, file.buffer);
+
+    let evidence;
+    try {
+      evidence = await this.prisma.ndiEvidence.create({
+        data: {
+          specId: dto.specId,
+          title: dto.title,
+          descriptionEn: dto.descriptionEn ?? null,
+          status: submitNow ? 'submitted' : 'draft',
+          fileName: storedName,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          sha256,
+          submittedBy: this.actorEmail(actor),
+          submittedAt: submitNow ? new Date() : null,
+          expiryDate,
+        },
+      });
+    } catch (error) {
+      await unlink(storedPath).catch(() => undefined);
+      throw error;
+    }
     await this.audit.log({
       actor: this.actorEmail(actor),
       action: submitNow ? 'evidence.submit' : 'evidence.create',

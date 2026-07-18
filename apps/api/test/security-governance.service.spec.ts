@@ -282,6 +282,82 @@ test('createClassificationRequest links new requests to workflow cases', async (
   assert.strictEqual(workflowCaseId, 'case-class-1');
 });
 
+test('backfillWorkflowLinks repairs legacy DLP and classification records', async () => {
+  const openedCases: any[] = [];
+  const updates: any[] = [];
+  const tx: any = {
+    dlpIncident: {
+      findMany: async () => [
+        {
+          id: 'dlp-old',
+          title: 'Legacy incident',
+          description: 'Needs route',
+          assetId: 'asset-1',
+          assignedPersonId: null,
+        },
+      ],
+      update: async (args: any) => {
+        updates.push({ type: 'dlp', ...args });
+        return { id: args.where.id, workflowCaseId: args.data.workflowCaseId };
+      },
+    },
+    classificationChangeRequest: {
+      findMany: async () => [
+        {
+          id: 'class-old',
+          reason: 'Legacy classification request',
+          assetId: 'asset-1',
+          asset: { code: 'AST-1', nameEn: 'Asset one' },
+        },
+      ],
+      update: async (args: any) => {
+        updates.push({ type: 'classification', ...args });
+        return { id: args.where.id, workflowCaseId: args.data.workflowCaseId };
+      },
+    },
+    workflowCase: {
+      count: async () => 0,
+      findUnique: async () => null,
+    },
+  };
+  const service = new SecurityGovernanceService(
+    {
+      $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+    {
+      openRoutedCase: async (input: any) => {
+        openedCases.push(input);
+        return { id: `case-${openedCases.length}`, code: input.preferredCode, tasks: [] };
+      },
+    } as never,
+  );
+
+  const result = await service.backfillWorkflowLinks(['system_admin'], 'admin@dgop.local');
+
+  assert.deepStrictEqual(result, { dlpIncidents: 1, classificationRequests: 1 });
+  assert.strictEqual(openedCases.length, 2);
+  assert.deepStrictEqual(updates.map((update) => update.data.workflowCaseId), ['case-1', 'case-2']);
+});
+
+test('backfillWorkflowLinks rejects non-admin callers', async () => {
+  const service = new SecurityGovernanceService(
+    {} as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await assert.rejects(
+    () => service.backfillWorkflowLinks(['security_reviewer'], 'reviewer@dgop.local'),
+    ForbiddenException,
+  );
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {

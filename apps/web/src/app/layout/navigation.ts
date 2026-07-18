@@ -73,7 +73,7 @@ export const NAV_SECTIONS: NavSection[] = [
         descriptionKey: 'nav.desc.designSystem',
         icon: 'DS',
         iconName: 'map',
-        link: '/design-system',
+        link: '/governance-map',
         permission: 'design_system.view',
       },
     ],
@@ -473,6 +473,7 @@ export const HUB_CONFIGS: HubConfig[] = [
 export const CRUMB_MAP: Record<string, string> = {
   '/dashboard': 'nav.dashboard',
   '/about': 'nav.about',
+  '/governance-map': 'nav.designSystem',
   '/design-system': 'nav.designSystem',
   '/assets': 'nav.dataAssets',
   '/governance/ownership': 'nav.ownership',

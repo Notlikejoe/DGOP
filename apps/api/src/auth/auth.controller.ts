@@ -21,7 +21,7 @@ export class AuthController {
     const ip = req.ip ?? req.socket?.remoteAddress;
     const result = await this.auth.login(dto.email, dto.password, ip);
     res.cookie(AUTH_COOKIE_NAME, result.accessToken, authCookieOptions(req));
-    return result;
+    return { user: result.user };
   }
 
   @Get('me')

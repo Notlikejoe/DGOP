@@ -130,7 +130,7 @@ export class ReportsService {
     if (definition.id === 'operational-transparency') return this.operationalTransparency(user, filters);
     if (definition.id === 'open-data-workload') return this.openDataWorkload(user, filters);
     if (definition.id === 'foi-sla') return this.foiSla(user, filters);
-    if (definition.id === 'ndi-readiness') return this.ndiReadiness(filters);
+    if (definition.id === 'ndi-readiness') return this.ndiReadiness(user, filters);
     throw new NotFoundException('report not found');
   }
 
@@ -165,6 +165,57 @@ export class ReportsService {
 
   private isUnrestricted(scope: EffectiveScope): boolean {
     return scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank == null;
+  }
+
+  private async actorPersonId(user: AuthUser): Promise<string | null> {
+    const person = await this.prisma.person.findFirst({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [{ userId: user.id }, { email: user.email }],
+      },
+      select: { id: true },
+    });
+    return person?.id ?? null;
+  }
+
+  private async ndiSpecVisibilityWhere(user: AuthUser): Promise<Prisma.NdiSpecificationWhereInput> {
+    const scope = await this.scope.resolve(user.roles);
+    if (this.isUnrestricted(scope)) return { deletedAt: null, isActive: true };
+
+    const personId = await this.actorPersonId(user);
+    const visibility: Prisma.NdiSpecificationWhereInput[] = [
+      {
+        evidence: {
+          some: {
+            deletedAt: null,
+            OR: [{ submittedBy: user.email }, { reviewedBy: user.email }],
+          },
+        },
+      },
+    ];
+    if (personId) visibility.push({ ownerPersonId: personId });
+    return {
+      deletedAt: null,
+      isActive: true,
+      OR: visibility,
+    };
+  }
+
+  private async ndiEvidenceVisibilityWhere(user: AuthUser): Promise<Prisma.NdiEvidenceWhereInput> {
+    const scope = await this.scope.resolve(user.roles);
+    if (this.isUnrestricted(scope)) return { deletedAt: null };
+
+    const personId = await this.actorPersonId(user);
+    const visibility: Prisma.NdiEvidenceWhereInput[] = [
+      { submittedBy: user.email },
+      { reviewedBy: user.email },
+    ];
+    if (personId) visibility.push({ spec: { ownerPersonId: personId } });
+    return {
+      deletedAt: null,
+      OR: visibility,
+    };
   }
 
   private async visibleAssetIdsForScope(scope: EffectiveScope): Promise<Set<string> | 'all'> {
@@ -426,22 +477,29 @@ export class ReportsService {
     );
   }
 
-  private async ndiReadiness(filters: ReportFilters): Promise<ReportResult> {
+  private async ndiReadiness(user: AuthUser, filters: ReportFilters): Promise<ReportResult> {
+    const scope = await this.scope.resolve(user.roles);
+    const unrestricted = this.isUnrestricted(scope);
+    const [specWhere, evidenceWhere] = await Promise.all([
+      this.ndiSpecVisibilityWhere(user),
+      this.ndiEvidenceVisibilityWhere(user),
+    ]);
     const domains = await this.prisma.ndiDomain.findMany({
       where: filters.domainId ? { id: filters.domainId } : undefined,
       orderBy: { sortOrder: 'asc' },
       include: {
         specifications: {
-          where: { deletedAt: null, isActive: true },
+          where: specWhere,
           select: {
             id: true,
             code: true,
-            evidence: { where: { deletedAt: null }, select: { status: true } },
+            evidence: { where: evidenceWhere, select: { status: true } },
           },
         },
       },
     });
-    const rows = domains.map((domain) => {
+    const visibleDomains = unrestricted ? domains : domains.filter((domain) => domain.specifications.length > 0);
+    const rows = visibleDomains.map((domain) => {
       const specs = domain.specifications;
       const approved = specs.filter((spec) => spec.evidence.some((evidence) => evidence.status === NdiEvidenceStatus.approved)).length;
       return {

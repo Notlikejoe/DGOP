@@ -141,7 +141,7 @@ export class AboutPage {
     {
       labelKey: 'about.link.design.title',
       bodyKey: 'about.link.design.body',
-      link: '/design-system',
+      link: '/governance-map',
     },
   ];
 

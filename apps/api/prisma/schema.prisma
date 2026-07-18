@@ -772,6 +772,7 @@ model WorkflowTask {
   type            String          @default("review")
   status          TaskStatus      @default(pending)
   assigneeUserId  String?
+  assigneeRoleCode String?
   dueDate         DateTime?
   decision        TaskDecision?
   decisionComment String?
@@ -789,8 +790,10 @@ model WorkflowTask {
   @@index([caseId])
   @@index([templateStageId])
   @@index([assigneeUserId])
+  @@index([assigneeRoleCode])
   @@index([status])
   @@index([assigneeUserId, status, dueDate])
+  @@index([assigneeRoleCode, status, dueDate])
   @@map("workflow_tasks")
 }
 

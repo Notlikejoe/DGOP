@@ -41,12 +41,38 @@ function run(command, args) {
   process.exit(result.status ?? 1);
 }
 
+function runGenerate() {
+  const result = spawnSync(npxCmd, ['prisma', 'generate'], {
+    cwd: apiDir,
+    env: process.env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+  if (
+    result.status !== 0 &&
+    process.platform === 'win32' &&
+    (output.includes('query_engine-windows.dll.node') || output.includes('EPERM'))
+  ) {
+    console.error(
+      '\nPrisma client generation could not replace the Windows query engine because a running API process is using it.',
+    );
+    console.error('Stop the DGOP backend process, rerun `npm run db:generate`, then start the backend again.');
+  }
+  if (result.error) {
+    console.error(result.error.message);
+  }
+  process.exit(result.status ?? 1);
+}
+
 loadRootEnv();
 
 const [command, migrationName = 'update'] = process.argv.slice(2);
 switch (command) {
   case 'generate':
-    run(npxCmd, ['prisma', 'generate']);
+    runGenerate();
     break;
   case 'status':
     run(npxCmd, ['prisma', 'migrate', 'status']);

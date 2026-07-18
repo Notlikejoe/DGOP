@@ -1,6 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Query } from '@nestjs/common';
 import { AuditService, AuditFilters } from './audit.service';
-import { RequirePermissions } from '../auth/decorators';
+import { CurrentUser, RequirePermissions, Roles } from '../auth/decorators';
+import { AuthUser } from '../auth/auth.types';
 
 @Controller('audit')
 export class AuditController {
@@ -16,6 +17,13 @@ export class AuditController {
   @RequirePermissions('audit.view')
   verifyChain(@Query('limit') limit?: string) {
     return this.service.verifyChain(limit);
+  }
+
+  @Post('chain/accept-legacy-baseline')
+  @Roles('system_admin', 'dmo_admin')
+  @RequirePermissions('audit.view')
+  acceptLegacyBaseline(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
+    return this.service.acceptLegacyBaseline(user.email, limit);
   }
 
   @Get()

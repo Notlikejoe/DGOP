@@ -29,9 +29,6 @@ export class HealthController {
       service: 'dgop-api',
       version: '0.1.0',
       timestamp: new Date().toISOString(),
-      database: {
-        status: dbStatus,
-      },
     };
     if (includeDetails) {
       response['environment'] = environment;

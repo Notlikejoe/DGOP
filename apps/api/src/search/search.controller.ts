@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { CurrentUser } from '../auth/decorators';
+import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import { SearchService } from './search.service';
 
@@ -8,6 +8,7 @@ export class SearchController {
   constructor(private readonly service: SearchService) {}
 
   @Get()
+  @RequirePermissions('search.view')
   search(
     @CurrentUser() user: AuthUser,
     @Query('q') query?: string,

@@ -90,6 +90,7 @@ const taskInclude = {
       nameEn: true,
       nameAr: true,
       kind: true,
+      assigneeRoleCode: true,
       sortOrder: true,
       isDecision: true,
       isFinal: true,
@@ -157,21 +158,49 @@ export class WorkflowService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     try {
       await this.ensureDefaultTemplates();
-      const backfilled = await this.backfillUnroutedOpenCases();
-      const reassigned = await this.assignUnownedRoutedTasks();
-      const normalizedSla = await this.normalizeImmediateSlaDueDates();
-      if (backfilled > 0) {
-        this.logger.log(`Backfilled ${backfilled} unrouted workflow cases into route templates`);
-      }
-      if (reassigned > 0) {
-        this.logger.log(`Assigned ${reassigned} routed workflow tasks to eligible role holders`);
-      }
-      if (normalizedSla > 0) {
-        this.logger.log(`Normalized ${normalizedSla} immediate workflow task due dates`);
+      if (this.shouldRunStartupMaintenance()) {
+        const result = await this.runMaintenanceInternal();
+        if (result.unroutedCases > 0) {
+          this.logger.log(`Backfilled ${result.unroutedCases} unrouted workflow cases into route templates`);
+        }
+        if (result.reassignedTasks > 0) {
+          this.logger.log(`Assigned ${result.reassignedTasks} routed workflow tasks to eligible role holders`);
+        }
+        if (result.normalizedSlaTasks > 0) {
+          this.logger.log(`Normalized ${result.normalizedSlaTasks} immediate workflow task due dates`);
+        }
       }
     } catch (err) {
       this.logger.error('Failed to initialize default workflow templates', err as Error);
     }
+  }
+
+  private shouldRunStartupMaintenance(): boolean {
+    const explicit = process.env.DGOP_WORKFLOW_STARTUP_MAINTENANCE?.trim().toLowerCase();
+    if (explicit) return ['1', 'true', 'yes', 'on'].includes(explicit);
+    return process.env.NODE_ENV !== 'production';
+  }
+
+  private async runMaintenanceInternal() {
+    const unroutedCases = await this.backfillUnroutedOpenCases();
+    const reassignedTasks = await this.assignUnownedRoutedTasks();
+    const normalizedSlaTasks = await this.normalizeImmediateSlaDueDates();
+    return { unroutedCases, reassignedTasks, normalizedSlaTasks };
+  }
+
+  async runMaintenance(user: AuthUser) {
+    if (!user.roles.some((role) => ADMIN_ROLES.includes(role))) {
+      throw new ForbiddenException('Only workflow administrators can run workflow maintenance');
+    }
+    await this.ensureDefaultTemplates();
+    const result = await this.runMaintenanceInternal();
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow.maintenance.run',
+      entityType: 'workflow_engine',
+      metadata: result,
+    });
+    return result;
   }
 
   // ---------- SLA ----------
@@ -320,7 +349,10 @@ export class WorkflowService implements OnModuleInit {
         if (firstStage && openUnroutedTaskIds.length) {
           await tx.workflowTask.updateMany({
             where: { id: { in: openUnroutedTaskIds }, templateStageId: null },
-            data: { templateStageId: firstStage.id },
+            data: {
+              templateStageId: firstStage.id,
+              assigneeRoleCode: firstStage.assigneeRoleCode ?? null,
+            },
           });
         } else if (firstStage && wfCase.tasks.length === 0) {
           await this.createStageTask(tx, wfCase.id, firstStage, 'system', { assetId: wfCase.assetId });
@@ -354,13 +386,17 @@ export class WorkflowService implements OnModuleInit {
       where: {
         assigneeUserId: null,
         status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
-        templateStage: { is: { assigneeRoleCode: { not: null }, isActive: true } },
+        OR: [
+          { assigneeRoleCode: { not: null } },
+          { templateStage: { is: { assigneeRoleCode: { not: null }, isActive: true } } },
+        ],
         case: { templateId: { not: null }, status: { notIn: [...FINAL_CASE_STATUSES] } },
       },
       select: {
         id: true,
         caseId: true,
         title: true,
+        assigneeRoleCode: true,
         case: { select: { assetId: true } },
         templateStage: { select: { nameEn: true, assigneeRoleCode: true } },
       },
@@ -369,7 +405,7 @@ export class WorkflowService implements OnModuleInit {
     });
     let assigned = 0;
     for (const task of tasks) {
-      const roleCode = task.templateStage?.assigneeRoleCode;
+      const roleCode = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode;
       if (!roleCode) continue;
       const didAssign = await this.prisma.$transaction(async (tx) => {
         const current = await tx.workflowTask.findUnique({
@@ -378,29 +414,31 @@ export class WorkflowService implements OnModuleInit {
             id: true,
             caseId: true,
             assigneeUserId: true,
+            assigneeRoleCode: true,
             status: true,
             case: { select: { assetId: true, status: true } },
             templateStage: { select: { nameEn: true, assigneeRoleCode: true } },
           },
         });
+        const targetRoleCode = current?.assigneeRoleCode ?? current?.templateStage?.assigneeRoleCode;
         if (
           !current ||
           current.assigneeUserId ||
           (current.status !== TaskStatus.pending && current.status !== TaskStatus.in_progress) ||
           FINAL_CASE_STATUSES.includes(current.case.status) ||
-          !current.templateStage?.assigneeRoleCode
+          !targetRoleCode
         ) {
           return false;
         }
         const assigneeUserId = await this.assigneeForRole(
           tx,
-          current.templateStage.assigneeRoleCode,
+          targetRoleCode,
           current.case.assetId,
         );
         if (!assigneeUserId) return false;
         await tx.workflowTask.update({
           where: { id: current.id },
-          data: { assigneeUserId },
+          data: { assigneeUserId, assigneeRoleCode: targetRoleCode },
         });
         await tx.workflowEvent.create({
           data: {
@@ -408,7 +446,7 @@ export class WorkflowService implements OnModuleInit {
             taskId: current.id,
             actor: 'system',
             action: 'task.auto_assigned',
-            comment: `${current.templateStage.assigneeRoleCode} -> ${assigneeUserId}`,
+            comment: `${targetRoleCode} -> ${assigneeUserId}`,
           },
         });
         await this.audit.log(
@@ -418,9 +456,9 @@ export class WorkflowService implements OnModuleInit {
             entityType: 'workflow_task',
             entityId: current.id,
             metadata: {
-              roleCode: current.templateStage.assigneeRoleCode,
+              roleCode: targetRoleCode,
               assigneeUserId,
-              fallbackQueue: roleCode !== current.templateStage.assigneeRoleCode ? roleCode : null,
+              fallbackQueue: roleCode !== targetRoleCode ? roleCode : null,
             },
           },
           tx,
@@ -861,9 +899,19 @@ export class WorkflowService implements OnModuleInit {
     const visible: Prisma.WorkflowCaseWhereInput[] = [];
     if (assetIds.size > 0) visible.push({ assetId: { in: [...assetIds] } });
     if (viewer) {
+      const taskVisibility: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: viewer.id }];
+      if (viewer.roles.length) {
+        taskVisibility.push({
+          assigneeUserId: null,
+          OR: [
+            { assigneeRoleCode: { in: viewer.roles } },
+            { templateStage: { assigneeRoleCode: { in: viewer.roles } } },
+          ],
+        });
+      }
       visible.push(
         { AND: [{ assetId: null }, { createdBy: viewer.email }] },
-        { AND: [{ assetId: null }, { tasks: { some: { assigneeUserId: viewer.id } } }] },
+        { AND: [{ assetId: null }, { tasks: { some: { OR: taskVisibility } } }] },
       );
     }
     return visible.length ? { OR: visible } : { id: { equals: '__no_visible_workflow_cases__' } };
@@ -1065,6 +1113,7 @@ export class WorkflowService implements OnModuleInit {
         type: stage.taskType,
         status: TaskStatus.pending,
         assigneeUserId: assigneeUserId ?? null,
+        assigneeRoleCode: stage.assigneeRoleCode ?? null,
         dueDate: this.dueDateForStage(stage, options.dueDate),
         templateStageId: stage.id,
       },
@@ -1473,8 +1522,18 @@ export class WorkflowService implements OnModuleInit {
   }
 
   async listMyTasks(user: AuthUser, filters: { status?: string; page?: string | number; pageSize?: string | number }) {
+    const ownership: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: user.id }];
+    if (user.roles.length) {
+      ownership.push({
+        assigneeUserId: null,
+        OR: [
+          { assigneeRoleCode: { in: user.roles } },
+          { templateStage: { assigneeRoleCode: { in: user.roles } } },
+        ],
+      });
+    }
     const where: Prisma.WorkflowTaskWhereInput = {
-      assigneeUserId: user.id,
+      OR: ownership,
       case: await this.workflowCaseVisibilityWhere(user.roles, user),
     };
     if (filters.status === 'open') {
@@ -1664,7 +1723,7 @@ export class WorkflowService implements OnModuleInit {
   async decideTask(id: string, dto: DecisionDto, user: AuthUser) {
     const task = await this.prisma.workflowTask.findUnique({
       where: { id },
-      include: { case: true },
+      include: { case: true, templateStage: { select: { assigneeRoleCode: true } } },
     });
     if (!task) throw new NotFoundException('workflow task not found');
     await this.assertCaseVisible(user.roles, task.case);
@@ -1673,8 +1732,13 @@ export class WorkflowService implements OnModuleInit {
       throw new BadRequestException('This task has already been decided');
     }
     const isAdmin = user.roles.some((r) => ADMIN_ROLES.includes(r));
-    if (!isAdmin && task.assigneeUserId !== user.id) {
-      throw new ForbiddenException('Only the assigned user can decide this task');
+    const taskQueueRoleCode = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
+    const isRoleQueueDecision =
+      !task.assigneeUserId &&
+      !!taskQueueRoleCode &&
+      user.roles.includes(taskQueueRoleCode);
+    if (!isAdmin && task.assigneeUserId !== user.id && !isRoleQueueDecision) {
+      throw new ForbiddenException('Only the assigned user or owning role queue can decide this task');
     }
 
     // Segregation of duties: the person who opened an approval case cannot also
@@ -1698,9 +1762,21 @@ export class WorkflowService implements OnModuleInit {
           decision: dto.decision,
           decisionComment: dto.comment ?? null,
           completedAt: new Date(),
+          ...(isRoleQueueDecision ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode } : {}),
         },
         include: taskInclude,
       });
+      if (isRoleQueueDecision) {
+        await tx.workflowEvent.create({
+          data: {
+            caseId: task.caseId,
+            taskId: id,
+            actor: user.email,
+            action: 'task.claimed',
+            comment: `Claimed from ${taskQueueRoleCode} queue`,
+          },
+        });
+      }
       await tx.workflowEvent.create({
         data: {
           caseId: task.caseId,

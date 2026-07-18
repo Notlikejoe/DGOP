@@ -72,6 +72,8 @@ const taskInclude = {
   },
 };
 
+const GOVERNANCE_SCHEDULER_LOCK_KEY = 174205361;
+
 function workflowTaskSignalKey(taskId: string, kind: 'notification' | 'escalation'): string {
   return `workflow_task:${taskId}:${kind}`;
 }
@@ -109,12 +111,26 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     if (this.slaWorkerRunning) return;
     this.slaWorkerRunning = true;
     try {
-      await this.recalculateSla(this.systemUser);
-      await this.generateCalendarOccurrences(this.systemUser);
+      await this.withSchedulerLock(async () => {
+        await this.recalculateSla(this.systemUser);
+        await this.generateCalendarOccurrences(this.systemUser);
+      });
     } catch (error) {
       console.warn('Governance operations scheduler failed', error instanceof Error ? error.message : error);
     } finally {
       this.slaWorkerRunning = false;
+    }
+  }
+
+  private async withSchedulerLock(work: () => Promise<void>): Promise<void> {
+    const [lock] = await this.prisma.$queryRaw<Array<{ locked: boolean }>>`
+      SELECT pg_try_advisory_lock(${GOVERNANCE_SCHEDULER_LOCK_KEY}) AS locked
+    `;
+    if (!lock?.locked) return;
+    try {
+      await work();
+    } finally {
+      await this.prisma.$executeRaw`SELECT pg_advisory_unlock(${GOVERNANCE_SCHEDULER_LOCK_KEY})`;
     }
   }
 
@@ -143,19 +159,38 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     const visible: Prisma.WorkflowCaseWhereInput[] = [];
     if (assetIds.size) visible.push({ assetId: { in: [...assetIds] } });
     if (user) {
+      const taskVisibility = this.workflowTaskOwnershipWhere(user);
       visible.push({ AND: [{ assetId: null }, { createdBy: user.email }] });
-      visible.push({ AND: [{ assetId: null }, { tasks: { some: { assigneeUserId: user.id } } }] });
+      visible.push({ AND: [{ assetId: null }, { tasks: { some: { OR: taskVisibility } } }] });
     }
     return visible.length ? { OR: visible } : { id: '__no_visible_governance_operations__' };
+  }
+
+  private workflowTaskOwnershipWhere(user: AuthUser): Prisma.WorkflowTaskWhereInput[] {
+    const ownership: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: user.id }];
+    if (user.roles.length) {
+      ownership.push({
+        assigneeUserId: null,
+        OR: [
+          { assigneeRoleCode: { in: user.roles } },
+          { templateStage: { assigneeRoleCode: { in: user.roles } } },
+        ],
+      });
+    }
+    return ownership;
   }
 
   private async scopedTaskWhere(user: AuthUser): Promise<Prisma.WorkflowTaskWhereInput> {
     const scope = await this.scope.resolve(user.roles);
     const assetIds = await this.visibleAssetIds(scope);
-    return {
+    const where: Prisma.WorkflowTaskWhereInput = {
       status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
       case: this.workflowCaseScopeWhere(assetIds, user),
     };
+    if (!user.roles.some((role) => ['system_admin', 'dmo_admin'].includes(role))) {
+      where.OR = this.workflowTaskOwnershipWhere(user);
+    }
+    return where;
   }
 
   private dataQualityIssueScopeWhere(assetIds: Set<string> | 'all'): Prisma.DataQualityIssueWhereInput {
@@ -287,6 +322,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       troubledConnectors,
       openEscalations,
       auditChain,
+      legacyBaselineAccepted,
     ] = await Promise.all([
       this.prisma.dataAsset.count({ where: this.assetScopeWhere(scope) }),
       this.prisma.workflowCase.count({ where: { AND: [caseWhere, { status: { not: CaseStatus.closed } }] } }),
@@ -330,13 +366,18 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         },
       }),
       this.audit.verifyChain(1000),
+      this.audit.legacyBaselineAccepted(),
     ]);
 
     const taskSignals = taskRows.map((task) => ksaSlaSignal(task, now, holidayDates, recurringHolidayDates));
     const overdueTasks = taskSignals.filter((signal) => signal === 'overdue').length;
     const atRiskTasks = taskSignals.filter((signal) => signal === 'at_risk').length;
     const integrationProblemCount = retryEvents + deadLetterEvents + failedBatches + troubledConnectors;
-    const auditStatus = !auditChain.valid ? 'blocked' : auditRows === 0 || auditChain.legacyRows > 0 ? 'watch' : 'ready';
+    const auditStatus = !auditChain.valid
+      ? 'blocked'
+      : auditRows === 0 || (auditChain.legacyRows > 0 && !legacyBaselineAccepted)
+        ? 'watch'
+        : 'ready';
     const checks = [
       {
         code: 'workflow_backlog',
@@ -365,6 +406,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
           verifiedRows: auditChain.totalRowsRead,
           checkedRows: auditChain.checked,
           legacyRows: auditChain.legacyRows,
+          legacyBaselineAccepted,
           brokenAt: auditChain.brokenAt,
         },
         guidance: 'The audit chain must verify cleanly because it is the evidence trail for governance decisions.',
@@ -445,6 +487,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       integrationProblems,
       importErrors,
       auditChain,
+      legacyBaselineAccepted,
     ] = await Promise.all([
       this.prisma.permission.count(),
       this.prisma.roleDataScope.count(),
@@ -475,6 +518,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       }),
       this.prisma.integrationImportError.count(),
       this.audit.verifyChain(1000),
+      this.audit.legacyBaselineAccepted(),
     ]);
 
     const evidenceSignals: Record<string, number> = {
@@ -497,7 +541,11 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       secure_search: 0,
       masking_classification: maskingPolicies === 0 ? 1 : 0,
       evidence_chain: approvedEvidence === 0 ? 1 : 0,
-      audit_chain_integrity: auditChain.valid ? auditChain.legacyRows : 1,
+      audit_chain_integrity: auditChain.valid
+        ? auditChain.legacyRows > 0 && !legacyBaselineAccepted
+          ? auditChain.legacyRows
+          : 0
+        : 1,
       privacy_by_design: privacyDpia === 0 ? 1 : 0,
       incident_response: openDlpIncidents + openClassificationRequests,
       compliance_calendar: calendarTemplates === 0 ? 1 : 0,
@@ -1023,10 +1071,16 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     });
     let notifications = 0;
     let escalations = 0;
+    let clearedNotifications = 0;
+    let resolvedEscalations = 0;
     const now = new Date();
+    const scopedTaskIds = tasks.map((task) => task.id);
+    const activeNotificationTaskIds = new Set<string>();
+    const activeEscalationTaskIds = new Set<string>();
     for (const task of tasks) {
       const signal = ksaSlaSignal(task, now, holidayDates, recurringHolidayDates);
       if (signal !== 'at_risk' && signal !== 'overdue') continue;
+      activeNotificationTaskIds.add(task.id);
       const overdueBusinessDays = task.dueDate ? Math.max(0, businessDaysBetween(task.dueDate, now, holidayDates, recurringHolidayDates)) : 0;
       const severity = notificationSeverity(signal, overdueBusinessDays);
       const notificationKey = workflowTaskSignalKey(task.id, 'notification');
@@ -1068,6 +1122,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         });
       }
       if (signal === 'overdue') {
+        activeEscalationTaskIds.add(task.id);
         const level = escalationLevel(overdueBusinessDays);
         const escalationKey = workflowTaskSignalKey(task.id, 'escalation');
         const existing = await this.prisma.governanceEscalation.findUnique({
@@ -1104,14 +1159,39 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         }
       }
     }
+    if (scopedTaskIds.length) {
+      const cleared = await this.prisma.governanceNotification.updateMany({
+        where: {
+          sourceType: 'workflow_task',
+          workflowTaskId: { in: scopedTaskIds },
+          status: { not: GovernanceNotificationStatus.archived },
+          ...(activeNotificationTaskIds.size
+            ? { NOT: { workflowTaskId: { in: [...activeNotificationTaskIds] } } }
+            : {}),
+        },
+        data: { status: GovernanceNotificationStatus.archived },
+      });
+      clearedNotifications = cleared.count;
+      const resolved = await this.prisma.governanceEscalation.updateMany({
+        where: {
+          workflowTaskId: { in: scopedTaskIds },
+          status: { in: [GovernanceEscalationStatus.open, GovernanceEscalationStatus.acknowledged] },
+          ...(activeEscalationTaskIds.size
+            ? { NOT: { workflowTaskId: { in: [...activeEscalationTaskIds] } } }
+            : {}),
+        },
+        data: { status: GovernanceEscalationStatus.resolved, updatedBy: user.email },
+      });
+      resolvedEscalations = resolved.count;
+    }
     await this.audit.log({
       actor: user.email,
       action: 'governance_operations.sla_recalculate',
       entityType: 'workflow_task',
       entityId: 'bulk',
-      metadata: { notifications, escalations },
+      metadata: { notifications, escalations, clearedNotifications, resolvedEscalations },
     });
-    return { notifications, escalations, workspace: await this.workspace(user) };
+    return { notifications, escalations, clearedNotifications, resolvedEscalations, workspace: await this.workspace(user) };
   }
 
   async generateCalendarOccurrences(user: AuthUser) {

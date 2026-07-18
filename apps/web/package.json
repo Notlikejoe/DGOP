@@ -6,7 +6,7 @@
     "start": "node ../../scripts/web.mjs start",
     "build": "node ../../scripts/web.mjs build",
     "watch": "node ../../scripts/web.mjs watch",
-    "test": "ng test"
+    "test": "node ../../scripts/web.mjs test"
   },
   "private": true,
   "packageManager": "npm@11.13.0",

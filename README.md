@@ -50,6 +50,8 @@ Client-demo mode uses production security posture, requires non-placeholder
 detailed health metadata:
 
 ```bash
+npm run demo:prepare
+npm run db:seed
 npm run build
 npm run start:demo
 # open http://localhost:3005
@@ -89,10 +91,12 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | `npm run dev` | Run API + Angular dev server together |
 | `npm run build` | Build web then api |
 | `npm start` | Run the API (serves built UI) on `PORT` |
+| `npm run demo:prepare` | Rotate ignored local `.env` demo secrets before shared demos |
 | `npm run start:demo` | Run the built API/UI with production demo safeguards |
 | `npm run db:status` | Check Prisma migration status using the root `.env` |
 | `npm run db:migrate` | Apply Prisma migrations to `dgop_dev` |
 | `npm run db:seed` | Seed lookup data |
+| `npm run qa:web` | Run static web UX/i18n/route/theme/RTL checks |
 | `npm run publish:external` | Build, run, and expose over HTTPS |
 
 ## QA deliverables
@@ -112,4 +116,6 @@ Detailed per-sprint QA packs are kept where deeper test stories were written:
 - [`QA/Sprint-22/`](QA/Sprint-22/README.md) - PDP privacy operations: legal bases, RoPA, DPIA gates, DSR queue, breach notifications, consent/retention records, workflow creation, and privacy workspace.
 - [`QA/Sprint-23/`](QA/Sprint-23/README.md) - data sharing governance: sharing requests, review decisions, agreements, renewal/usage monitoring, workflow creation, and exchange workspace.
 
-Default local admin for local demo data only: `admin@dgop.local` / `Admin@12345`.
+Local admin email for demo data: `admin@dgop.local`. Run `npm run demo:prepare`
+and `npm run db:seed`, then use the ignored local `.env` value
+`SEED_ADMIN_PASSWORD` for login. Do not commit or share that password.

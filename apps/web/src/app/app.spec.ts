@@ -7,11 +7,11 @@ describe('I18nService', () => {
     const i18n = TestBed.inject(I18nService);
 
     i18n.setLang('en');
-    expect(i18n.t('nav.dashboard')).toBe('Dashboard');
+    expect(i18n.t('nav.dashboard')).toBe('Command Center');
     expect(i18n.dir()).toBe('ltr');
 
     i18n.setLang('ar');
-    expect(i18n.t('nav.dashboard')).toBe('لوحة المعلومات');
+    expect(i18n.t('nav.dashboard')).toBe('مركز القيادة');
     expect(i18n.dir()).toBe('rtl');
   });
 });

@@ -33,12 +33,14 @@ test('strict runtime rejects unsafe secrets, wildcard origins, and missing webho
     JWT_SECRET: 'replace-with-at-least-32-random-characters',
     CORS_ORIGINS: '*',
     SEED_ADMIN_PASSWORD: 'Admin@12345',
+    DGOP_AUDIT_FAIL_CLOSED: 'false',
   });
 
   assert.ok(issues.some((issue) => issue.includes('JWT_SECRET')));
   assert.ok(issues.some((issue) => issue.includes('wildcard')));
   assert.ok(issues.some((issue) => issue.includes('SEED_ADMIN_PASSWORD')));
   assert.ok(issues.some((issue) => issue.includes('DGOP_WEBHOOK_TOKEN')));
+  assert.ok(issues.some((issue) => issue.includes('DGOP_AUDIT_FAIL_CLOSED')));
 });
 
 test('strict runtime accepts rotated demo settings', () => {

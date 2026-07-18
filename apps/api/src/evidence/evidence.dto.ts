@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export const EVIDENCE_STATUSES = [
   'draft',
@@ -20,7 +20,7 @@ export class CreateEvidenceDto {
   @IsString() @IsNotEmpty() title!: string;
   @IsOptional() @IsString() descriptionEn?: string | null;
   /** ISO date string; optional expiry for the evidence. */
-  @IsOptional() @IsString() expiryDate?: string | null;
+  @IsOptional() @IsDateString() expiryDate?: string | null;
   /** When 'true', the evidence is submitted for review immediately after upload. */
   @IsOptional() @IsString() submit?: string;
 }

@@ -24,6 +24,8 @@ DGOP is suitable for local demo and UAT-style walkthrough when the verification 
 - database backup, restore, DR test, and RTO/RPO sign-off
 - production load testing at the target data volumes
 
+Audit integrity note: legacy audit rows created before hash-chain enforcement are not rewritten. They must be verified with `/api/audit/chain/verify` and accepted with `/api/audit/chain/accept-legacy-baseline` by a system-admin or DMO-admin before the audit-chain readiness check is treated as ready.
+
 ## Verification Gate
 
 Run from the repo root unless a command says otherwise:

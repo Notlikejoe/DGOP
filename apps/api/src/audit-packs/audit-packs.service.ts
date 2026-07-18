@@ -154,7 +154,7 @@ export class AuditPacksService {
       gapCount: gaps.length,
       blockerCount,
       generatedAt: generatedAt.toISOString(),
-      frameworks: ['SDAIA NDI', 'NCA ECC-1:2024', 'PDPL 2023', 'DGOP ABAC', 'Data Quality', 'Training & Certification', 'Stewardship'],
+      frameworks: ['SDAIA NDI', 'NCA ECC-2:2024', 'PDPL 2023', 'DGOP ABAC', 'Data Quality', 'Training & Certification', 'Stewardship'],
     };
     const baseFiles: ZipEntry[] = [
       { path: 'summary.json', body: JSON.stringify(summary, null, 2) },

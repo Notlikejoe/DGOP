@@ -57,6 +57,12 @@ export class WorkflowController {
     return this.service.routePreview(dto, user.roles);
   }
 
+  @Post('maintenance')
+  @RequirePermissions('workflow_cases.edit')
+  maintenance(@CurrentUser() user: AuthUser) {
+    return this.service.runMaintenance(user);
+  }
+
   // ----- cases -----
   @Get('cases')
   @RequirePermissions('workflow_cases.view')
@@ -121,6 +127,7 @@ export class WorkflowController {
   }
 
   @Post('tasks/:id/decision')
+  @RequirePermissions('workflow_tasks.edit')
   decide(@Param('id') id: string, @Body() dto: DecisionDto, @CurrentUser() user: AuthUser) {
     return this.service.decideTask(id, dto, user);
   }

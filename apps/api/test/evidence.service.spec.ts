@@ -5,7 +5,7 @@
 import assert from 'node:assert';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readdirSync } from 'node:fs';
 
 // Point storage at a throwaway temp dir before importing the service.
 process.env.EVIDENCE_STORAGE_DIR = mkdtempSync(join(tmpdir(), 'dgop-evidence-'));
@@ -20,6 +20,7 @@ type Over = {
   onFindMany?: (args: any) => void;
   onFindFirst?: (args: any) => void;
   onUpdate?: (args: any) => void;
+  createThrows?: Error;
 };
 
 function makeService(over: Over): EvidenceService {
@@ -33,7 +34,10 @@ function makeService(over: Over): EvidenceService {
         over.onFindFirst?.(args);
         return over.evidenceRow ?? null;
       },
-      create: async (a: any) => ({ id: 'e_new', ...a.data }),
+      create: async (a: any) => {
+        if (over.createThrows) throw over.createThrows;
+        return { id: 'e_new', ...a.data };
+      },
       update: async (a: any) => {
         over.onUpdate?.(a);
         return { ...(over.evidenceRow ?? {}), ...a.data, id: a.where.id };
@@ -151,8 +155,8 @@ test('revoke: only approved evidence can be revoked', async () => {
 test('create: computes a sha256 and stores draft by default', async () => {
   const svc = makeService({ spec: { id: 'spec1', code: 'DG.1.1' } });
   const file = {
-    originalname: 'policy.pdf',
-    mimetype: 'application/pdf',
+    originalname: 'policy.txt',
+    mimetype: 'text/plain',
     size: 5,
     buffer: Buffer.from('hello'),
   };
@@ -164,13 +168,53 @@ test('create: computes a sha256 and stores draft by default', async () => {
 
 test('create: submit=true uploads as submitted', async () => {
   const svc = makeService({ spec: { id: 'spec1', code: 'DG.1.1' } });
-  const file = { originalname: 'a.pdf', mimetype: 'application/pdf', size: 3, buffer: Buffer.from('abc') };
+  const file = { originalname: 'a.pdf', mimetype: 'application/pdf', size: 8, buffer: Buffer.from('%PDF-abc') };
   const res: any = await svc.create(
     { specId: 'spec1', title: 'Doc', submit: 'true' },
     file as never,
     adminUser,
   );
   assert.strictEqual(res.status, 'submitted');
+});
+
+test('create: rejects files whose content does not match the declared mime type', async () => {
+  const svc = makeService({ spec: { id: 'spec1', code: 'DG.1.1' } });
+  const file = { originalname: 'a.pdf', mimetype: 'application/pdf', size: 3, buffer: Buffer.from('abc') };
+  await assert.rejects(
+    () => svc.create({ specId: 'spec1', title: 'Doc' }, file as never, adminUser),
+    /content does not match/,
+  );
+});
+
+test('create: rejects generic zip content pretending to be a DOCX package', async () => {
+  const svc = makeService({ spec: { id: 'spec1', code: 'DG.1.1' } });
+  const file = {
+    originalname: 'a.docx',
+    mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    size: 14,
+    buffer: Buffer.from('PK-not-a-docx'),
+  };
+  await assert.rejects(
+    () => svc.create({ specId: 'spec1', title: 'Doc' }, file as never, adminUser),
+    /content does not match/,
+  );
+});
+
+test('create: removes the stored file if database persistence fails', async () => {
+  const svc = makeService({
+    spec: { id: 'spec1', code: 'DG.1.1' },
+    createThrows: new Error('database unavailable'),
+  });
+  const storageDir = (svc as unknown as { storageDir: string }).storageDir;
+  const before = readdirSync(storageDir).length;
+  const file = { originalname: 'a.txt', mimetype: 'text/plain', size: 3, buffer: Buffer.from('abc') };
+
+  await assert.rejects(
+    () => svc.create({ specId: 'spec1', title: 'Doc' }, file as never, adminUser),
+    /database unavailable/,
+  );
+
+  assert.strictEqual(readdirSync(storageDir).length, before);
 });
 
 test('listBySpec: scoped users only query owned or submitted evidence', async () => {

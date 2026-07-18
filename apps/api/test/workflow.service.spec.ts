@@ -583,12 +583,28 @@ test('listMyTasks: applies case visibility to inbox rows', async () => {
     { status: 'open' },
   );
 
-  assert.strictEqual(over.taskFindManyArgs.where.assigneeUserId, 'u1');
+  assert.ok(over.taskFindManyArgs.where.OR.some((branch: any) => branch.assigneeUserId === 'u1'));
+  assert.ok(
+    over.taskFindManyArgs.where.OR.some(
+      (branch: any) =>
+        branch.assigneeUserId === null &&
+        branch.OR?.some((part: any) => part.assigneeRoleCode?.in?.includes('dq_steward')) &&
+        branch.OR?.some((part: any) => part.templateStage?.assigneeRoleCode?.in?.includes('dq_steward')),
+    ),
+  );
   assert.deepStrictEqual(over.taskFindManyArgs.where.status.in, ['pending', 'in_progress']);
   assert.strictEqual(over.taskFindManyArgs.take, 50);
   assert.strictEqual(over.taskFindManyArgs.skip, 0);
   assert.ok(over.taskFindManyArgs.where.case.OR.some((branch: any) => branch.assetId?.in?.includes('visible-asset')));
   assert.ok(over.taskFindManyArgs.where.case.OR.some((branch: any) => branch.AND?.some((part: any) => part.createdBy === 'user@dgop.local')));
+  assert.ok(
+    over.taskFindManyArgs.where.case.OR.some((branch: any) =>
+      branch.AND?.some((part: any) => part.tasks?.some?.OR?.some((taskBranch: any) =>
+        taskBranch.OR?.some((part: any) => part.assigneeRoleCode?.in?.includes('dq_steward')) ||
+        taskBranch.OR?.some((part: any) => part.templateStage?.assigneeRoleCode?.in?.includes('dq_steward')),
+      )),
+    ),
+  );
 });
 
 test('listCases: rejects invalid status filters before Prisma receives them', async () => {
@@ -733,6 +749,41 @@ test('decideTask: non-assignee without admin role is forbidden', async () => {
     () => svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-other', email: 'other@dgop.local', roles: ['auditor'] } as never),
     /Only the assigned user/,
   );
+});
+
+test('decideTask: role queue member can claim and decide an unassigned routed task', async () => {
+  const over: Over = {
+    taskUpdates: [],
+    events: [],
+    task: {
+      id: 't-role',
+      assigneeUserId: null,
+      status: 'pending',
+      caseId: 'c-role',
+      templateStageId: 'stage-review',
+      templateStage: { assigneeRoleCode: 'dq_steward' },
+      case: {
+        id: 'c-role',
+        type: 'data_quality_issue',
+        status: 'submitted',
+        createdBy: 'owner@dgop.local',
+        assignmentId: null,
+        templateId: null,
+        assetId: null,
+      },
+    },
+  };
+  const svc = makeService(over);
+
+  const res = await svc.decideTask(
+    't-role',
+    { decision: 'approved', comment: 'Reviewed from queue.' } as never,
+    { id: 'u-steward', email: 'steward@dgop.local', roles: ['dq_steward'] } as never,
+  );
+
+  assert.strictEqual(res.status, 'completed');
+  assert.strictEqual(over.taskUpdates?.[0].assigneeUserId, 'u-steward');
+  assert.ok(over.events?.some((event) => event.action === 'task.claimed'));
 });
 
 test('decideTask: cannot decide a task after the parent case is final', async () => {

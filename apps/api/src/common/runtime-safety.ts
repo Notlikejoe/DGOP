@@ -1,4 +1,5 @@
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const FALSE_VALUES = new Set(['0', 'false', 'no', 'off']);
 
 const UNSAFE_JWT_SECRETS = new Set([
   'dev-insecure-secret',
@@ -76,6 +77,9 @@ export function collectRuntimeSafetyIssues(env: RuntimeEnv = process.env): strin
   }
   if (!webhookToken || webhookToken.length < 32 || webhookToken.startsWith('replace-with')) {
     issues.push('DGOP_WEBHOOK_TOKEN must be configured with at least 32 random characters');
+  }
+  if (FALSE_VALUES.has((env.DGOP_AUDIT_FAIL_CLOSED ?? '').toLowerCase())) {
+    issues.push('DGOP_AUDIT_FAIL_CLOSED cannot be disabled in strict runtime');
   }
 
   return issues;

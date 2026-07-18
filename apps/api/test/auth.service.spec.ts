@@ -7,6 +7,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { AuthService } from '../src/auth/auth.service';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
+import { CSRF_HEADER_NAME, CSRF_HEADER_VALUE, CsrfGuard } from '../src/auth/csrf.guard';
 import { JwtPayload } from '../src/auth/auth.types';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
@@ -125,6 +126,52 @@ test('jwt guard rejects a token whose version no longer matches the user row', a
   };
 
   await assert.rejects(() => guard.canActivate(context as never), UnauthorizedException);
+});
+
+test('csrf guard requires the DGOP same-origin header for cookie-backed writes', () => {
+  const guard = new CsrfGuard({ getAllAndOverride: () => false } as never);
+  const context = {
+    getHandler: () => ({}),
+    getClass: () => ({}),
+    switchToHttp: () => ({
+      getRequest: () => ({
+        method: 'POST',
+        headers: { cookie: 'dgop_session=session-token' },
+      }),
+    }),
+  };
+
+  assert.throws(() => guard.canActivate(context as never), /Missing anti-CSRF header/);
+});
+
+test('csrf guard allows same-origin header and bearer-token writes', () => {
+  const guard = new CsrfGuard({ getAllAndOverride: () => false } as never);
+  const sameOriginContext = {
+    getHandler: () => ({}),
+    getClass: () => ({}),
+    switchToHttp: () => ({
+      getRequest: () => ({
+        method: 'PATCH',
+        headers: {
+          cookie: 'dgop_session=session-token',
+          [CSRF_HEADER_NAME]: CSRF_HEADER_VALUE,
+        },
+      }),
+    }),
+  };
+  const bearerContext = {
+    getHandler: () => ({}),
+    getClass: () => ({}),
+    switchToHttp: () => ({
+      getRequest: () => ({
+        method: 'POST',
+        headers: { authorization: 'Bearer api-token' },
+      }),
+    }),
+  };
+
+  assert.strictEqual(guard.canActivate(sameOriginContext as never), true);
+  assert.strictEqual(guard.canActivate(bearerContext as never), true);
 });
 
 (async () => {

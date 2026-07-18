@@ -139,7 +139,7 @@ export class WorkflowPage implements OnInit {
           this.caseTotal.set(total);
           this.ensureSelectedTemplate();
         },
-        () => {},
+        () => this.handleLoadError(),
       );
       this.http.get<WorkflowTemplate[]>('/api/workflow/templates').subscribe({
         next: (templates) => {
@@ -147,15 +147,15 @@ export class WorkflowPage implements OnInit {
           this.ensureNewCaseType();
           this.ensureSelectedTemplate(templates);
         },
-        error: () => {},
+        error: () => this.handleLoadError(),
       });
       this.http.get<WorkflowGraph>('/api/workflow/graph').subscribe({
         next: (graph) => this.graph.set(graph),
-        error: () => {},
+        error: () => this.handleLoadError(),
       });
       this.http.get<WorkflowConfiguration>('/api/workflow/configuration').subscribe({
         next: (configuration) => this.configuration.set(configuration),
-        error: () => {},
+        error: () => this.handleLoadError(),
       });
     } else {
       this.cases.set([]);
@@ -327,6 +327,12 @@ export class WorkflowPage implements OnInit {
     if (!stages.length) return null;
     const openTasks = (row.tasks ?? []).filter((task) => !this.inactiveTaskStatuses.has(task.status));
     for (const task of openTasks) {
+      if (task.templateStageId && stages.some((stage) => stage.id === task.templateStageId)) {
+        return task.templateStageId;
+      }
+      if (task.templateStage?.id && stages.some((stage) => stage.id === task.templateStage?.id)) {
+        return task.templateStage.id;
+      }
       const match = stages.find((stage) => stage.taskType === task.type);
       if (match) return match.id;
     }
@@ -392,5 +398,10 @@ export class WorkflowPage implements OnInit {
         });
     };
     loadPage(1);
+  }
+
+  private handleLoadError(): void {
+    this.state.set('error');
+    this.toast.error(this.t('crud.loadError'));
   }
 }

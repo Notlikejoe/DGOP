@@ -33,6 +33,7 @@ import { BusinessValueModule } from './business-value/business-value.module';
 import { GovernanceOperationsModule } from './governance-operations/governance-operations.module';
 import { AccessModule } from './access/access.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { CsrfGuard } from './auth/csrf.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { PermissionsGuard } from './access/permissions.guard';
 
@@ -78,8 +79,9 @@ import { PermissionsGuard } from './access/permissions.guard';
     HealthModule,
   ],
   providers: [
-    // Order matters: authenticate first, then authorize by role, then by permission.
+    // Order matters: authenticate first, protect cookie writes, then authorize by role and permission.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],

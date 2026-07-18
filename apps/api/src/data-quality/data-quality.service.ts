@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import {
   CaseStatus,
   DataQualityDimension,
@@ -1017,6 +1018,7 @@ export class DataQualityService {
   }
 
   async importCsv(roleCodes: string[], csv: string, actor: string) {
+    const batchId = `dq-import-${randomUUID()}`;
     const rows = parseCsv(csv);
     if (!rows.length) throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.emptyCsv);
     const assetIds = await this.visibleAssetIds(roleCodes);
@@ -1028,6 +1030,7 @@ export class DataQualityService {
     });
     const assetByCode = new Map(assets.map((a) => [a.code.toLowerCase(), a.id]));
     let created = 0;
+    const createdIds: string[] = [];
     const errors: DataQualityImportRowError[] = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -1045,7 +1048,7 @@ export class DataQualityService {
         continue;
       }
       try {
-        await this.create(
+        const issue = await this.create(
           roleCodes,
           {
             code: (row[DATA_QUALITY_IMPORT_ROW_KEYS.code] ?? '').trim() || undefined,
@@ -1060,7 +1063,11 @@ export class DataQualityService {
           },
           actor,
         );
+        if (!issue) {
+          throw new BadRequestException('Imported issue could not be loaded after creation');
+        }
         created++;
+        createdIds.push(issue.id);
       } catch (e) {
         errors.push({ row: line, code: 'row_rejected', params: { reason: (e as Error).message } });
       }
@@ -1069,9 +1076,9 @@ export class DataQualityService {
       actor,
       action: 'data_quality_issue.import',
       entityType: 'data_quality_issue',
-      entityId: 'bulk',
-      metadata: { processed: rows.length, created, errors: errors.length },
+      entityId: batchId,
+      metadata: { batchId, processed: rows.length, created, failed: errors.length, createdIds },
     });
-    return { processed: rows.length, created, errors };
+    return { batchId, processed: rows.length, created, failed: errors.length, createdIds, errors };
   }
 }

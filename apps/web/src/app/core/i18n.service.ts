@@ -382,7 +382,7 @@ const DICT: Dict = {
   'about.alignmentLabel': { en: 'Regulatory alignment', ar: 'المواءمة التنظيمية' },
   'about.alignment.sdaia': { en: 'SDAIA NDI', ar: 'المؤشر الوطني للبيانات SDAIA' },
   'about.alignment.nora': { en: 'DGA NORA', ar: 'نورا DGA' },
-  'about.alignment.ecc': { en: 'NCA ECC-1:2024', ar: 'ضوابط الأمن السيبراني NCA ECC-1:2024' },
+  'about.alignment.ecc': { en: 'NCA ECC-2:2024', ar: 'ضوابط الأمن السيبراني NCA ECC-2:2024' },
   'about.alignment.pdpl': { en: 'PDPL 2023', ar: 'نظام حماية البيانات الشخصية 2023' },
   'about.positioning.title': { en: 'Governance is not a document. It is an operation.', ar: 'الحوكمة ليست وثيقة. إنها عملية تشغيلية.' },
   'about.positioning.body': {

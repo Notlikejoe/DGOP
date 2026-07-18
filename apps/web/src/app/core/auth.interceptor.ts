@@ -19,6 +19,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         setHeaders: {
           'x-request-id': requestId,
           'x-correlation-id': requestId,
+          'x-dgop-csrf': 'same-origin',
         },
       })
     : req;

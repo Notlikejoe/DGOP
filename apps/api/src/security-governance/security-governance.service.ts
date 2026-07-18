@@ -26,6 +26,7 @@ import {
 import { classificationRisk, evaluateAccessDecision } from './security-governance.logic';
 
 type PrismaWriter = PrismaService | Prisma.TransactionClient;
+const SECURITY_MAINTENANCE_ROLES = new Set(['system_admin', 'dmo_admin']);
 
 function accessScopeKey(domainId?: string | null, classificationId?: string | null): string {
   return `domain:${domainId ?? 'all'}|class:${classificationId ?? 'all'}`;
@@ -287,6 +288,81 @@ export class SecurityGovernanceService {
       client as Prisma.TransactionClient,
     );
     return wfCase.id;
+  }
+
+  private assertSecurityMaintenanceRole(roleCodes: string[]): void {
+    if (!roleCodes.some((role) => SECURITY_MAINTENANCE_ROLES.has(role))) {
+      throw new ForbiddenException('Only security administrators can repair workflow links');
+    }
+  }
+
+  async backfillWorkflowLinks(roleCodes: string[], actor: string) {
+    this.assertSecurityMaintenanceRole(roleCodes);
+    if (!this.workflow) throw new BadRequestException('Workflow engine is unavailable');
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const dlpRows = await tx.dlpIncident.findMany({
+        where: { workflowCaseId: null },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          assetId: true,
+          assignedPersonId: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+      });
+      const classificationRows = await tx.classificationChangeRequest.findMany({
+        where: { workflowCaseId: null },
+        select: {
+          id: true,
+          reason: true,
+          assetId: true,
+          asset: { select: { code: true, nameEn: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+      });
+
+      let dlpIncidents = 0;
+      let classificationRequests = 0;
+      for (const incident of dlpRows) {
+        const workflowCaseId = await this.createSecurityWorkflow(tx, roleCodes, actor, 'dlp', {
+          title: `Review DLP incident: ${incident.title}`,
+          description: incident.description,
+          assetId: incident.assetId,
+          assigneePersonId: incident.assignedPersonId,
+        });
+        await tx.dlpIncident.update({
+          where: { id: incident.id },
+          data: { workflowCaseId },
+        });
+        dlpIncidents++;
+      }
+      for (const request of classificationRows) {
+        const assetLabel = request.asset?.code ?? request.asset?.nameEn ?? request.assetId;
+        const workflowCaseId = await this.createSecurityWorkflow(tx, roleCodes, actor, 'classification', {
+          title: `Review classification change: ${assetLabel}`,
+          description: request.reason,
+          assetId: request.assetId,
+        });
+        await tx.classificationChangeRequest.update({
+          where: { id: request.id },
+          data: { workflowCaseId },
+        });
+        classificationRequests++;
+      }
+      return { dlpIncidents, classificationRequests };
+    });
+
+    await this.audit.log({
+      actor,
+      action: 'security_governance.workflow_links.backfill',
+      entityType: 'security_governance',
+      metadata: result,
+    });
+    return result;
   }
 
   async summary(roleCodes: string[]) {

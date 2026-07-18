@@ -26,10 +26,11 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/about/about').then((m) => m.AboutPage),
       },
       {
-        path: 'design-system',
+        path: 'governance-map',
         loadComponent: () =>
           import('./pages/design-system/design-system').then((m) => m.DesignSystem),
       },
+      { path: 'design-system', pathMatch: 'full', redirectTo: 'governance-map' },
       {
         path: 'governance',
         loadComponent: () =>

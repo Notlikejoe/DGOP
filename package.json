@@ -10,6 +10,8 @@
     "db:migrate": "node scripts/db.mjs migrate",
     "db:deploy": "node scripts/db.mjs deploy",
     "db:seed": "node scripts/db.mjs seed",
+    "demo:prepare": "node scripts/prepare-demo-env.mjs",
+    "qa:web": "node scripts/web-quality.mjs",
     "build:web": "npm --prefix apps/web run build",
     "build:api": "npm --prefix apps/api run build",
     "build": "npm run build:web && npm run build:api",

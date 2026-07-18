@@ -18,7 +18,9 @@ export interface Task {
   title: string;
   type: string;
   status: string;
+  templateStageId?: string | null;
   assigneeUserId?: string | null;
+  assigneeRoleCode?: string | null;
   dueDate?: string | null;
   decision?: string | null;
   decisionComment?: string | null;
@@ -26,6 +28,7 @@ export interface Task {
   slaStatus: string;
   assignee?: UserRef | null;
   case?: TaskCaseRef | null;
+  templateStage?: WorkflowTemplateStage | null;
 }
 
 export interface CaseEvent {

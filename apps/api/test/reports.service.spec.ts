@@ -129,6 +129,56 @@ test('operational transparency report only includes permitted areas', async () =
   assert.equal(report.rows[0].total, 2);
 });
 
+test('NDI readiness report hides specifications outside the actor visibility scope', async () => {
+  let ndiArgs: any;
+  const scopedUser = { id: 'u-ndi', email: 'owner@dgop.local', roles: ['ndi_owner'] };
+  const prisma = {
+    person: { findFirst: async () => ({ id: 'person-1' }) },
+    ndiDomain: {
+      findMany: async (args: any) => {
+        ndiArgs = args;
+        return [
+          {
+            id: 'ndi-domain-1',
+            code: 'NDI-1',
+            shortCode: 'D1',
+            nameEn: 'Governance',
+            specifications: [
+              {
+                id: 'spec-1',
+                code: 'NDI-1.1',
+                evidence: [{ status: 'approved' }],
+              },
+            ],
+          },
+          {
+            id: 'ndi-domain-hidden',
+            code: 'NDI-H',
+            shortCode: 'DH',
+            nameEn: 'Hidden domain',
+            specifications: [],
+          },
+        ];
+      },
+    },
+  };
+  const service = new ReportsService(
+    prisma as any,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }) } as any,
+    accessWith(['ndi_scoring.view']) as any,
+  );
+
+  const report = await service.run(scopedUser, 'ndi-readiness');
+
+  assert.equal(report.rows.length, 1);
+  assert.equal(report.rows[0].domain, 'D1');
+  const specWhere = JSON.stringify(ndiArgs.include.specifications.where);
+  const evidenceWhere = JSON.stringify(ndiArgs.include.specifications.select.evidence.where);
+  assert.ok(specWhere.includes('ownerPersonId'));
+  assert.ok(specWhere.includes('submittedBy'));
+  assert.ok(evidenceWhere.includes('reviewedBy'));
+});
+
 test('reports service rejects inaccessible reports', async () => {
   const service = new ReportsService(
     {} as any,

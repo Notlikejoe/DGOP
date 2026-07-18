@@ -83,6 +83,20 @@ export class DashboardService {
     return where;
   }
 
+  private workflowTaskOwnershipWhere(userId: string, roleCodes: string[]): Record<string, unknown>[] {
+    const ownership: Record<string, unknown>[] = [{ assigneeUserId: userId }];
+    if (roleCodes.length) {
+      ownership.push({
+        assigneeUserId: null,
+        OR: [
+          { assigneeRoleCode: { in: roleCodes } },
+          { templateStage: { assigneeRoleCode: { in: roleCodes } } },
+        ],
+      });
+    }
+    return ownership;
+  }
+
   async stats(roleCodes: string[], userId: string): Promise<DashboardStats> {
     const scope = await this.scope.resolve(roleCodes);
     const assetWhere = { AND: [{ deletedAt: null }, this.assetScopeWhere(scope)] };
@@ -106,7 +120,7 @@ export class DashboardService {
         where: { deletedAt: null, approvalStatus: 'pending' },
       }),
       this.prisma.workflowTask.count({
-        where: { assigneeUserId: userId, status: { in: ['pending', 'in_progress'] } },
+        where: { OR: this.workflowTaskOwnershipWhere(userId, roleCodes), status: { in: ['pending', 'in_progress'] } },
       }),
       this.prisma.person.count({ where: { deletedAt: null } }),
       this.prisma.ndiSpecification.count({ where: { deletedAt: null, isActive: true } }),
@@ -214,11 +228,11 @@ export class DashboardService {
     if (can('workflow_tasks.view')) {
       const [myOpenTasks, myOverdueTasks] = await Promise.all([
         this.prisma.workflowTask.count({
-          where: { assigneeUserId: user.id, status: { in: ['pending', 'in_progress'] } },
+          where: { OR: this.workflowTaskOwnershipWhere(user.id, user.roles), status: { in: ['pending', 'in_progress'] } },
         }),
         this.prisma.workflowTask.count({
           where: {
-            assigneeUserId: user.id,
+            OR: this.workflowTaskOwnershipWhere(user.id, user.roles),
             status: { in: ['pending', 'in_progress'] },
             dueDate: { lt: new Date() },
           },

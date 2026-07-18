@@ -303,6 +303,8 @@ test('importCsv does not distinguish hidden asset codes from unavailable codes',
   );
 
   assert.strictEqual(result.created, 0);
+  assert.strictEqual(result.failed, 1);
+  assert.ok(result.batchId.startsWith('dq-import-'));
   assert.strictEqual(result.errors[0].code, 'asset_unavailable');
 });
 

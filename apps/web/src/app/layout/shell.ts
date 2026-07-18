@@ -23,6 +23,11 @@ import { ThemeService } from '../core/theme.service';
 import { CRUMB_MAP, NAV_SECTIONS, NavItem, NavSection } from './navigation';
 import { AppIcon } from '../shared/app-icon';
 
+interface PagedResponse<T> {
+  data: T[];
+  total: number;
+}
+
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -97,10 +102,14 @@ export class Shell {
   /** Loads the count of the user's open workflow tasks for the inbox badge. */
   private refreshOpenTasks(): void {
     if (!this.auth.hasPermission('workflow_tasks.view')) return;
-    this.http.get<unknown[]>('/api/workflow/tasks/mine?status=open').subscribe({
-      next: (tasks) => this.openTasks.set(tasks.length),
-      error: () => {},
-    });
+    this.http
+      .get<PagedResponse<unknown>>('/api/workflow/tasks/mine', {
+        params: { status: 'open', page: '1', pageSize: '1' },
+      })
+      .subscribe({
+        next: (tasks) => this.openTasks.set(tasks.total),
+        error: () => {},
+      });
   }
 
   protected t(key: string): string {

@@ -112,11 +112,21 @@ export class SearchService {
     user: AuthUser,
   ): Prisma.WorkflowCaseWhereInput {
     if (assetIds === 'all') return {};
+    const taskVisibility: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: user.id }];
+    if (user.roles.length) {
+      taskVisibility.push({
+        assigneeUserId: null,
+        OR: [
+          { assigneeRoleCode: { in: user.roles } },
+          { templateStage: { assigneeRoleCode: { in: user.roles } } },
+        ],
+      });
+    }
     const visible: Prisma.WorkflowCaseWhereInput[] = [];
     if (assetIds.size > 0) visible.push({ assetId: { in: [...assetIds] } });
     visible.push(
       { AND: [{ assetId: null }, { createdBy: user.email }] },
-      { AND: [{ assetId: null }, { tasks: { some: { assigneeUserId: user.id } } }] },
+      { AND: [{ assetId: null }, { tasks: { some: { OR: taskVisibility } } }] },
     );
     return visible.length ? { OR: visible } : { id: { equals: '__no_visible_records__' } };
   }

@@ -14,8 +14,8 @@ export interface PageParams {
   take: number;
 }
 
-const DEFAULT_PAGE_SIZE = 25;
-const MAX_PAGE_SIZE = 200;
+export const DEFAULT_PAGE_SIZE = 25;
+export const MAX_PAGE_SIZE = 200;
 
 /**
  * Parses `page` / `pageSize` query values into safe, bounded numbers.
@@ -31,6 +31,16 @@ export function parsePageParams(
   const rawSize = Math.floor(Number(pageSize)) || DEFAULT_PAGE_SIZE;
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
   return { page: p, pageSize: size, skip: (p - 1) * size, take: size };
+}
+
+/** Returns a bounded first-page limit for legacy list endpoints that still return arrays. */
+export function boundedFirstPageParams(
+  pageSize?: string | number,
+  defaultPageSize = MAX_PAGE_SIZE,
+): PageParams {
+  const rawSize = Math.floor(Number(pageSize)) || defaultPageSize;
+  const size = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
+  return { page: 1, pageSize: size, skip: 0, take: size };
 }
 
 export function toPaged<T>(data: T[], total: number, params: PageParams): Paged<T> {

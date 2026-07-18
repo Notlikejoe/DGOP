@@ -16,6 +16,7 @@ import {
   Ref,
   Task,
   WorkflowGraph,
+  WorkflowConfiguration,
   WorkflowRoutePreview,
   WorkflowTemplate,
   WorkflowTemplateStage,
@@ -45,6 +46,7 @@ export class WorkflowPage implements OnInit {
   protected readonly assets = signal<Ref[]>([]);
   protected readonly templates = signal<WorkflowTemplate[]>([]);
   protected readonly graph = signal<WorkflowGraph | null>(null);
+  protected readonly configuration = signal<WorkflowConfiguration | null>(null);
   protected readonly selectedTemplateId = signal<string>('');
 
   protected readonly caseTypes = computed(() => {
@@ -151,9 +153,14 @@ export class WorkflowPage implements OnInit {
         next: (graph) => this.graph.set(graph),
         error: () => {},
       });
+      this.http.get<WorkflowConfiguration>('/api/workflow/configuration').subscribe({
+        next: (configuration) => this.configuration.set(configuration),
+        error: () => {},
+      });
     } else {
       this.cases.set([]);
       this.caseTotal.set(0);
+      this.configuration.set(null);
     }
   }
 
@@ -166,9 +173,9 @@ export class WorkflowPage implements OnInit {
   protected slaKind(s: string): StatusKind { return SLA_KIND[s] ?? 'muted'; }
   protected caseKind(s: string): StatusKind { return CASE_STATUS_KIND[s] ?? 'muted'; }
   protected graphKind(s?: string | null): StatusKind {
-    if (s === 'healthy') return 'success';
-    if (s === 'review') return 'warning';
-    if (s === 'critical') return 'danger';
+    if (s === 'healthy' || s === 'ready') return 'success';
+    if (s === 'review' || s === 'watch') return 'warning';
+    if (s === 'critical' || s === 'blocked') return 'danger';
     return 'muted';
   }
   protected typeLabel(t: string): string { return this.t('wf.type.' + t); }

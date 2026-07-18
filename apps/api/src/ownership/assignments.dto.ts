@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -72,6 +73,13 @@ export class ApplyRecommendationDto {
   @IsString() @IsNotEmpty() assetId!: string;
   @IsString() @IsNotEmpty() roleTypeId!: string;
   @IsOptional() @IsString() justification?: string | null;
+}
+
+export class RecommendationFeedbackDto {
+  @IsIn(['accepted', 'rejected', 'override'])
+  decision!: 'accepted' | 'rejected' | 'override';
+  @IsOptional() @IsString() comment?: string | null;
+  @IsOptional() @IsString() selectedPersonId?: string | null;
 }
 
 export { RULE_SCOPES };

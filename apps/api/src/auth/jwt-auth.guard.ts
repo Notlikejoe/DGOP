@@ -39,6 +39,7 @@ export class JwtAuthGuard implements CanActivate {
           id: true,
           email: true,
           isActive: true,
+          tokenVersion: true,
           userRoles: {
             where: { role: { isActive: true, deletedAt: null } },
             select: { role: { select: { code: true } } },
@@ -46,6 +47,9 @@ export class JwtAuthGuard implements CanActivate {
         },
       });
       if (!row?.isActive) throw new UnauthorizedException('Invalid or expired token');
+      if (payload.tokenVersion !== row.tokenVersion) {
+        throw new UnauthorizedException('Invalid or expired token');
+      }
       const user: AuthUser = {
         id: row.id,
         email: row.email,

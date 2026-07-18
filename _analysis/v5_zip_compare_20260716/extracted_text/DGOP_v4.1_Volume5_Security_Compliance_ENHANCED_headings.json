@@ -1,0 +1,742 @@
+[
+  {
+    "style": "Heading 1",
+    "text": "Document Control"
+  },
+  {
+    "style": "Heading 1",
+    "text": "Table of Contents"
+  },
+  {
+    "style": "Compact",
+    "text": "5.1 Identity & Access Management (IAM)"
+  },
+  {
+    "style": "Compact",
+    "text": "5.1.6 Role-Data Mapping Designer (NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "5.2 Open Policy Agent (OPA) & ABAC (ENHANCED)"
+  },
+  {
+    "style": "Compact",
+    "text": "5.3 HashiCorp Vault"
+  },
+  {
+    "style": "Compact",
+    "text": "5.4 Mutual TLS (mTLS)"
+  },
+  {
+    "style": "Compact",
+    "text": "5.5 Privacy by Design (PbD) SDLC Integration (NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "5.6 Enhanced Search Security (v4.1 NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "5.7 Secure Error Handling & Notification Architecture (v4.1 NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "6.4 Data Masking Service (NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "7.1 Evidence Chain of Custody"
+  },
+  {
+    "style": "Compact",
+    "text": "7.2 Audit Log Schema & Integrity"
+  },
+  {
+    "style": "Compact",
+    "text": "7.3 SIEM Integration & Monitoring"
+  },
+  {
+    "style": "Compact",
+    "text": "Security Operations & Incident Response"
+  },
+  {
+    "style": "Compact",
+    "text": "8.5 Workflow Engine Security Controls (v4.1 NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "Compliance Automation & Evidence Management"
+  },
+  {
+    "style": "Compact",
+    "text": "9.5 Recurring Compliance Calendar (NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "9.6 Privacy Steward Recurring Responsibilities (NEW)"
+  },
+  {
+    "style": "Compact",
+    "text": "Appendix A: Consolidated ECC-to-DGOP Service Mapping"
+  },
+  {
+    "style": "Compact",
+    "text": "Appendix B: PDPL 2023 Requirement-to-Module Mapping"
+  },
+  {
+    "style": "Compact",
+    "text": "Appendix C: Security Controls Checklist (ENHANCED)"
+  },
+  {
+    "style": "Compact",
+    "text": "Appendix D: Abbreviations & Definitions (ENHANCED)"
+  },
+  {
+    "style": "Compact",
+    "text": "Appendix E: Further Information Required"
+  },
+  {
+    "style": "Compact",
+    "text": "Appendix F: ECC-to-DSP Activity Crosswalk (NEW)"
+  },
+  {
+    "style": "Heading 1",
+    "text": "1. Introduction to Volume 5"
+  },
+  {
+    "style": "First Paragraph",
+    "text": "Volume 5 of the DGOP v4.1 Master Specification defines the security architecture, regulatory compliance mappings, and audit framework for the Enterprise Data Governance Operations Platform. This volume translates the governance and operational requirements defined in Volumes 1-4 into concrete security controls, compliance evidence, and assurance mechanisms. It serves as the authoritative reference for security engineers, compliance officers, Data Protection Officers (DPO), and auditors responsible for certifying DGOP against KSA national standards."
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.1 Purpose"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.2 Scope"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.3 Regulatory Alignment Summary"
+  },
+  {
+    "style": "Heading 1",
+    "text": "2. Regulatory & Compliance Framework Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.1 SDAIA NDI Compliance Pillar"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.2 DGA NORA Security Domain Alignment"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.3 Risk-Based Compliance Approach"
+  },
+  {
+    "style": "Heading 1",
+    "text": "3. NCA ECC-1:2024 Control-by-Control Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.1 Control Family: Identity & Access Management (ECC-1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.2 Control Family: Network Security (ECC-2)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.3 Control Family: Data Protection (ECC-3)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.4 Control Family: Logging & Monitoring (ECC-4)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.5 Control Family: Application Security (ECC-5)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.6 Control Family: Cloud Security (ECC-6)"
+  },
+  {
+    "style": "Heading 1",
+    "text": "4. PDPL 2023 Requirement-by-Requirement Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.1 PDPL Chapter 2: General Provisions & Principles"
+  },
+  {
+    "style": "Heading 3",
+    "text": "4.1.1 Six Lawful Bases: Explicit Technical Mapping (ENHANCED)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.2 PDPL Chapter 3: Data Subject Rights (Articles 10-18)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.3 PDPL Chapter 4: Legal Basis & Consent (Articles 19-24)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.4 PDPL Chapter 5: Data Protection Impact Assessment (DPIA) & RoPA"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.5 PDPL Chapter 6: Data Breach Notification (Articles 29-31)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.6 PDPL Chapter 7: Cross-Border Data Transfer (Articles 32-35)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.7 PDPL Chapter 8: Controller & Processor Obligations (Articles 36-44)"
+  },
+  {
+    "style": "Heading 1",
+    "text": "5. Zero Trust Architecture"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.1 Identity & Access Management (IAM)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.1.1 Identity Provider Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.1.2 Authentication Flow (Human User)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.1.3 Token Structure & Claims"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.1.4 Role-Based Access Control (RBAC)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.1.5 Multi-Factor Authentication (MFA)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.1.6 Role-Data Mapping Designer (NEW)"
+  },
+  {
+    "style": "Heading 4",
+    "text": "Purpose"
+  },
+  {
+    "style": "Heading 4",
+    "text": "Attribute Model"
+  },
+  {
+    "style": "Heading 4",
+    "text": "Workflow: Mapping Definition, Approval, and Technical Enforcement"
+  },
+  {
+    "style": "Heading 4",
+    "text": "RACI: Role-Data Mapping Lifecycle"
+  },
+  {
+    "style": "Heading 4",
+    "text": "API Specification (Role-Data Mapping Designer)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.2 Open Policy Agent (OPA) & Attribute-Based Access Control (ABAC)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.2.1 ABAC Attribute Definitions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.2.2 Policy Grammar"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.2.3 ABAC Policy Examples for Confidential Data Protection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.2.4 OPA Deployment Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.2.5 Performance & Caching"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.3 HashiCorp Vault"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.3.1 Vault Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.3.2 Secret Types & Use Cases"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.3.3 Encryption-as-a-Service"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.3.4 Audit & Compliance"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.4 Mutual TLS (mTLS)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.4.1 Istio Service Mesh mTLS"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.4.2 Traffic Policies"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.4.3 East-West vs. North-South Traffic"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.4.4 mTLS Evidence for NDI"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.5 Privacy by Design (PbD) SDLC Integration (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.5.1 The 7 Foundational Principles of Privacy by Design"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.5.2 PbD Gates Across 5 SDLC Phases"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.5.3 PbD Workflow BPMN"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.5.4 PbD Evidence & NDI Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.6 Enhanced Search Security (v4.1 NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.1 Search Query Encryption"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.2 Search Result Access Control (ABAC-Enforced)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.3 Search Audit Logging"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.4 Federated Search Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.5 Full-Text Index Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.6 Search Rate Limiting and DDoS Protection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.6.7 Sensitive Data in Search Results Prevention"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.7 Secure Error Handling & Notification Architecture (v4.1 NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.1 RFC 7807 Problem Details with Security Extensions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.2 Error Message Sanitization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.3 Bilingual Secure Error Messages (Arabic / English)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.4 Notification Encryption"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.5 Error Correlation IDs for Secure Forensic Tracing"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.6 Notification Audit Trail"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5.7.7 Error Handling for Authentication Failures"
+  },
+  {
+    "style": "Heading 1",
+    "text": "6. Data Classification & Protection Matrix"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.1 Classification Levels & Security Controls"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Classification-to-Control Mapping Summary"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.2 Classification-Driven Workflow Enforcement"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.3 Personal Data & Sensitive Personal Data Handling"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.4 Data Masking Service (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6.4.1 Masking Techniques Overview"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6.4.2 Technique Selection Matrix"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6.4.3 Masking Service Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6.4.4 Masking API Specification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6.4.5 Masking Policy Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6.4.6 ECC-3.1 Mapping (Updated)"
+  },
+  {
+    "style": "Heading 1",
+    "text": "7. Audit & Logging Architecture"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.1 Audit Pipeline Architecture"
+  },
+  {
+    "style": "Compact",
+    "text": "Security Events: OPA decision logs (including ABAC attributes evaluated), Vault audit logs, Keycloak event logs, WAF alerts (ModSecurity), masking operation logs, PbD gate transitions, search query logs, error event logs, notification delivery logs, authentication failure logs, and SIEM correlation events aggregated via syslog-ng and Fluentd."
+  },
+  {
+    "style": "Compact",
+    "text": "Executive security dashboard (Grafana) displays: failed login attempts (last 24h), top 10 sensitive data access events, open DLP incidents, overdue security reviews, mTLS compliance percentage, ABAC decision latency, masking operation volume, search query volume and anomaly count, error rate by service, and notification delivery success rate."
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.2 Evidence Chain of Custody"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.3 Audit Log Schema"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.4 SIEM Integration & Real-Time Monitoring"
+  },
+  {
+    "style": "Heading 1",
+    "text": "8. Security Operations & Incident Response"
+  },
+  {
+    "style": "First Paragraph",
+    "text": "Security operations (SecOps) encompass the people, processes, and technologies that maintain DGOP security posture on a continuous basis. This section defines incident response procedures, vulnerability management, penetration testing, security monitoring, and workflow engine security controls aligned with NCA ECC and PDPL breach notification requirements."
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.1 Security Operations Center (SOC) Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.2 Incident Response Lifecycle"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.3 Vulnerability Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.4 Security Monitoring & Alerting"
+  },
+  {
+    "style": "Body Text",
+    "text": "Security Operations KPIs: These metrics are tracked in the DGOP KPI engine and contribute to the Security Reviewer and DPO steward scorecards:"
+  },
+  {
+    "style": "Compact",
+    "text": "Security Training Completion: % of security staff with current certifications (CISSP, CISM, GCIH, or KSA NCSC equivalent)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.5 Workflow Engine Security Controls (v4.1 NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.1 BPMN Model Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.2 Task Authorization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.3 Workflow Data Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.4 SLA Enforcement Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.5 Workflow Audit"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.6 Sub-Process Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.7 Notification Security within Workflows"
+  },
+  {
+    "style": "Heading 3",
+    "text": "8.5.8 Sub-Module Security Briefs"
+  },
+  {
+    "style": "Heading 4",
+    "text": "1. Workflow Configuration Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "2. Execution Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "3. Task Management Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "4. Role & Responsibility Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "5. RACI Enforcement"
+  },
+  {
+    "style": "Heading 4",
+    "text": "6. Approval Chain Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "7. Notification Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "8. SLA Enforcement Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "9. Evidence Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "10. Monitoring Security"
+  },
+  {
+    "style": "Compact",
+    "text": "Security-critical workflow alerts (SLA breach, unauthorized deployment, task delegation anomaly) route to SIEM"
+  },
+  {
+    "style": "Heading 4",
+    "text": "11. Audit Trail Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "12. Dashboard Security"
+  },
+  {
+    "style": "Heading 4",
+    "text": "13. Core Capability Security"
+  },
+  {
+    "style": "Heading 1",
+    "text": "9. Compliance Automation & Evidence Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.1 Automated Compliance Checking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.2 Evidence Collection & NDI Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.3 Gap Analysis & Remediation Queue"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.4 Compliance Automation Architecture"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.5 Recurring Compliance Calendar (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.5.1 Recurring Compliance Activities"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.5.2 Automated Scheduling & Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.5.3 Quarterly Processing Review Detail"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.5.4 Quarterly Cross-Border Monitoring Detail"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.6 Privacy Steward Recurring Responsibilities (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.6.1 Recurring Responsibility Matrix"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.6.2 Privacy Steward Score Formula"
+  },
+  {
+    "style": "Heading 3",
+    "text": "9.6.3 Privacy Steward Dashboard"
+  },
+  {
+    "style": "Compact",
+    "text": "Compliance Score: Privacy Steward Score with trend over time."
+  },
+  {
+    "style": "Heading 1",
+    "text": "10. Appendices"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix A: Consolidated NCA ECC-1:2024 to DGOP Service Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix B: PDPL 2023 Requirement-to-Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix C: Security Controls Checklist (ENHANCED)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "A. Identity & Access"
+  },
+  {
+    "style": "Heading 3",
+    "text": "B. Network & Communication"
+  },
+  {
+    "style": "Heading 3",
+    "text": "C. Data Protection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "D. Audit & Logging"
+  },
+  {
+    "style": "Heading 3",
+    "text": "E. Application & Cloud Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "F. Privacy by Design & Compliance (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "G. Recurring Compliance & Stewardship (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "H. ABAC & Masking Specific (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "I. Search Security (v4.1 NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "J. Error Handling & Notification Security (v4.1 NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "K. Workflow Engine Security (v4.1 NEW)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix D: Abbreviations & Definitions (ENHANCED)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix E: Further Information Required"
+  },
+  {
+    "style": "Compact",
+    "text": "Security operations maturity: Existing SOC (internal or outsourced)? SOC tier structure (L1/L2/L3)? 24/7 or business-hours coverage?"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix F: ECC-to-DSP Activity Crosswalk (NEW)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Unified Compliance Score"
+  }
+]

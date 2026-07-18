@@ -13,6 +13,7 @@ import {
   SetUserRolesDto,
   UpdateUserDto,
 } from './users.dto';
+import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
 
 @Injectable()
 export class UsersService {
@@ -35,12 +36,22 @@ export class UsersService {
     });
   }
 
-  async listUsers() {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: 'asc' },
+  async listUsers(page?: string | number, pageSize?: string | number) {
+    const query = {
+      orderBy: { createdAt: 'asc' as const },
       include: { userRoles: { include: { role: true } } },
-    });
-    return users.map((u) => this.toAdminUser(u));
+    };
+    const params = parsePageParams(page, pageSize);
+    if (!params) {
+      const bounded = boundedFirstPageParams(pageSize);
+      const users = await this.prisma.user.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+      return users.map((u) => this.toAdminUser(u));
+    }
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({ ...query, skip: params.skip, take: params.take }),
+      this.prisma.user.count(),
+    ]);
+    return toPaged(users.map((u) => this.toAdminUser(u)), total, params);
   }
 
   listRoles() {
@@ -52,6 +63,14 @@ export class UsersService {
 
   updateLastLogin(id: string) {
     return this.prisma.user.update({ where: { id }, data: { lastLoginAt: new Date() } });
+  }
+
+  bumpTokenVersion(id: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { tokenVersion: { increment: 1 } },
+      select: { id: true, tokenVersion: true },
+    });
   }
 
   async create(dto: CreateUserDto, actor: string) {
@@ -126,7 +145,10 @@ export class UsersService {
   async resetPassword(id: string, dto: ResetPasswordDto, actor: string) {
     const user = await this.requireUser(id);
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    });
     await this.audit.log({
       actor,
       action: 'user.password.reset',

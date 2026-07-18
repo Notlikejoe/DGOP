@@ -90,6 +90,87 @@
   align-items: start;
 }
 
+.configuration-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--command-surface);
+}
+
+.configuration-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.configuration-card__head h2 {
+  margin: 0.2rem 0 0;
+  color: var(--command-on);
+}
+
+.configuration-card__head p {
+  margin: 0.3rem 0 0;
+  color: var(--command-muted);
+}
+
+.configuration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.configuration-grid article {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: var(--command-surface-2);
+}
+
+.configuration-grid span,
+.configuration-grid small {
+  display: block;
+  color: var(--command-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.configuration-grid strong {
+  display: block;
+  margin: 0.2rem 0;
+  color: var(--command-on);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.registry-strip {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.registry-strip span {
+  max-width: 18rem;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--success) 44%, var(--command-border));
+  border-radius: 999px;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.registry-strip__item--watch {
+  border-color: color-mix(in srgb, var(--warning) 54%, var(--command-border)) !important;
+  color: var(--warning) !important;
+  background: color-mix(in srgb, var(--warning) 10%, transparent) !important;
+}
+
 .route-directory,
 .route-insight {
   border: 1px solid var(--command-border);
@@ -738,7 +819,8 @@
 @media (max-width: 720px) {
   .detail-grid { grid-template-columns: 1fr; }
   .metric-strip,
-  .route-workspace {
+  .route-workspace,
+  .configuration-grid {
     grid-template-columns: 1fr;
   }
   .route-insight {

@@ -39,6 +39,18 @@ export class WorkflowController {
     return this.service.graph(user.roles, user);
   }
 
+  @Get('configuration')
+  @RequirePermissions('workflow_cases.view')
+  configuration(@CurrentUser() user: AuthUser) {
+    return this.service.configuration(user.roles, user);
+  }
+
+  @Get('case-management')
+  @RequirePermissions('workflow_cases.view')
+  caseManagement(@CurrentUser() user: AuthUser) {
+    return this.service.caseManagement(user.roles, user);
+  }
+
   @Post('route-preview')
   @RequirePermissions('workflow_cases.view')
   routePreview(@Body() dto: WorkflowRoutePreviewDto, @CurrentUser() user: AuthUser) {

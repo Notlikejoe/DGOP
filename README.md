@@ -45,8 +45,9 @@ npm start
 # open http://localhost:3005
 ```
 
-Client-demo mode uses production security posture, requires a non-placeholder
-`JWT_SECRET`, and redacts detailed health metadata:
+Client-demo mode uses production security posture, requires non-placeholder
+`JWT_SECRET`, `SEED_ADMIN_PASSWORD`, and `DGOP_WEBHOOK_TOKEN` values, and redacts
+detailed health metadata:
 
 ```bash
 npm run build
@@ -69,15 +70,16 @@ The script will:
 
 1. Download `cloudflared` into `tools/` (first run only).
 2. Build the web + api if needed.
-3. Start the API (which serves the UI) on `PORT`.
+3. Start the API through `start:demo` so production demo safeguards are enforced.
 4. Open a public tunnel and print a URL like `https://<random>.trycloudflare.com`.
 
 Share that URL so anyone can access the app from anywhere. The URL changes every run
 (quick tunnels are ephemeral). Stop with `Ctrl+C`.
 
-> Security note: the tunnel exposes your local app to the internet. Keep only synthetic/test
-> data in `dgop_dev` while published. Application authentication (Sprint 1) gates real access.
-> A persistent named tunnel / proper hosting comes with the production move.
+> Security note: the tunnel exposes your local app to the internet. The script aborts
+> unless strict runtime checks pass, including rotated admin seed password settings and
+> a configured integration webhook token. Keep only synthetic/test data in `dgop_dev`
+> while published. A persistent named tunnel / proper hosting comes with the production move.
 
 ## Project scripts
 
@@ -88,27 +90,19 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | `npm run build` | Build web then api |
 | `npm start` | Run the API (serves built UI) on `PORT` |
 | `npm run start:demo` | Run the built API/UI with production demo safeguards |
+| `npm run db:status` | Check Prisma migration status using the root `.env` |
 | `npm run db:migrate` | Apply Prisma migrations to `dgop_dev` |
 | `npm run db:seed` | Seed lookup data |
 | `npm run publish:external` | Build, run, and expose over HTTPS |
 
 ## QA deliverables
 
-Per-sprint user stories and test cases live under `QA/Sprint-XX/`.
+Sprint 0-36 enterprise readiness is consolidated in [`QA/ENTERPRISE_READINESS_0_36.md`](QA/ENTERPRISE_READINESS_0_36.md). It includes the completion matrix, mandatory verification gate, final UAT checklist, go-live checklist, handover notes, accepted Sprint 0-36 boundaries, and production caveats.
 
-- [`QA/Sprint-00/`](QA/Sprint-00/README.md) - foundation, design system, external publishing.
-- [`QA/Sprint-01/`](QA/Sprint-01/README.md) - authentication, roles/RBAC, role-aware shell, admin users.
-- [`QA/Sprint-02/`](QA/Sprint-02/README.md) - master data: data domains, data subjects, business capabilities.
-- [`QA/Sprint-03/`](QA/Sprint-03/README.md) - master data: org units, systems, classifications, role types, RACI templates.
-- [`QA/Sprint-A/`](QA/Sprint-A/README.md) - access management: DB-backed RBAC, permission matrix, data scoping, user management.
-- [`QA/Sprint-04/`](QA/Sprint-04/README.md) - data asset governance hub: assets, subjects/relationships, Asset 360, CSV import, scope-enforced queries.
-- [`QA/Sprint-05/`](QA/Sprint-05/README.md) - ownership registry: people directory, stewardship assignments, assignment rules, recommendations, conflicts, exception queue.
-- [`QA/Sprint-06/`](QA/Sprint-06/README.md) - workflow engine: cases, tasks, decisions, SLA, timeline, assignment approval lifecycle, person-user linking, data-scope and integrity guards.
-- [`QA/Sprint-07/`](QA/Sprint-07/README.md) - NDI specification registry & compliance hub (domains, types, maturity, acceptance criteria, CSV import); workflow hardening: automated tests, segregation of duties, Asset 360 approval surfacing, inbox indicator.
-- [`QA/Sprint-08/`](QA/Sprint-08/README.md) - Release 1 hardening & UAT: global error envelope, shared CSV parser, pruned permission catalog, dashboard governance tiles, audit log viewer, list pagination, NDI deep-link, NDI service unit tests.
-- [`QA/Sprint-09/`](QA/Sprint-09/README.md) - NDI evidence repository: file upload with SHA-256, submit/review lifecycle with separation of duties, expiry tracking, audited downloads, NDI specification owner, configurable storage, evidence unit tests.
-- [`QA/Sprint-10/`](QA/Sprint-10/README.md) - NDI scoring & gap analysis: readiness by domain and overall, maturity bands, weighted spec scoring, gap queue (missing/expired/rejected/unassigned/stuck), shared evidence effective-status helper, domain short codes, scoring unit tests.
-- [`QA/Sprint-11/`](QA/Sprint-11/README.md) - dashboards MVP: adaptive role-aware dashboard (My work / Governance / NDI readiness / Reference), permission-gated `/dashboard/summary`, scoring-engine reuse, ownership & stewardship coverage, shared KPI/progress/mini-chart components, dashboard unit tests.
+Sprint 0-43 enterprise close-out is consolidated in [`QA/ENTERPRISE_READINESS_0_43.md`](QA/ENTERPRISE_READINESS_0_43.md). It adds the v5 closure evidence for operating model, workflow, NDI traceability, platform services, security/control crosswalk, production acceptance, and enterprise error experience.
+
+Detailed per-sprint QA packs are kept where deeper test stories were written:
+
 - [`QA/Sprint-16/`](QA/Sprint-16/README.md) - Release 2 hardening & UAT: evidence access hardening, JWT role refresh, safe config defaults, upload dependency patching, and Release 2 UAT scenarios.
 - [`QA/Sprint-17/`](QA/Sprint-17/README.md) - Open Data candidate registry: asset-linked candidates, ODIAO reviewer accountability, publication metadata, eligibility signals, lifecycle controls, and Asset 360 readiness surfacing.
 - [`QA/Sprint-18/`](QA/Sprint-18/README.md) - Open Data assessment and approval workflow: readiness checklist, risk scoring, approval tasks, ODIAO workflow link, and publication gate.

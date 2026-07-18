@@ -33,18 +33,45 @@ function requireEnv(name, validate = (value) => !!value) {
   }
 }
 
+function isSafeSecret(value) {
+  return (
+    !!value &&
+    value.length >= 32 &&
+    value !== 'replace-with-at-least-32-random-characters' &&
+    value !== 'dev-insecure-secret' &&
+    value !== 'change-me'
+  );
+}
+
+function isSafePassword(value) {
+  return (
+    !!value &&
+    value.length >= 12 &&
+    value !== 'Admin@12345' &&
+    value !== 'replace-with-local-demo-password' &&
+    value !== 'change-me'
+  );
+}
+
+function originsAreSafe(value) {
+  if (!value && !process.env.PUBLIC_ORIGIN) return false;
+  const origins = `${value ?? ''},${process.env.PUBLIC_ORIGIN ?? ''}`
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return origins.length > 0 && origins.every((origin) => origin !== '*' && origin.toLowerCase() !== 'true');
+}
+
 loadRootEnv();
 process.env.NODE_ENV = 'production';
+process.env.DGOP_REQUIRE_STRICT_RUNTIME = 'true';
 process.env.HEALTH_INCLUDE_DETAILS ??= 'false';
 
 requireEnv('DATABASE_URL');
-requireEnv('JWT_SECRET', (value) =>
-  !!value &&
-  value.length >= 32 &&
-  value !== 'replace-with-at-least-32-random-characters' &&
-  value !== 'dev-insecure-secret',
-);
-requireEnv('CORS_ORIGINS', (value) => !!value || !!process.env.PUBLIC_ORIGIN);
+requireEnv('JWT_SECRET', isSafeSecret);
+requireEnv('CORS_ORIGINS', originsAreSafe);
+requireEnv('SEED_ADMIN_PASSWORD', isSafePassword);
+requireEnv('DGOP_WEBHOOK_TOKEN', isSafeSecret);
 
 const apiEntry = join(root, 'apps', 'api', 'dist', 'main.js');
 if (!existsSync(apiEntry)) {

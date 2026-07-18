@@ -6,6 +6,10 @@ import { AuditService } from '../audit/audit.service';
 import { AuthUser, JwtPayload } from './auth.types';
 import { AccessService } from '../access/access.service';
 import { ScopeService } from '../access/scope.service';
+import {
+  isProductionLikeRuntime,
+  isUnsafeDefaultAdminCredential,
+} from '../common/runtime-safety';
 
 @Injectable()
 export class AuthService {
@@ -34,6 +38,17 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (isProductionLikeRuntime() && isUnsafeDefaultAdminCredential(user.email, password)) {
+      await this.audit.log({
+        actor: email,
+        action: 'auth.login.failed',
+        entityType: 'user',
+        entityId: user.id,
+        metadata: { ip, reason: 'unsafe_default_credential' },
+      });
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
     try {
       await this.users.updateLastLogin(user.id);
     } catch (error) {
@@ -41,7 +56,12 @@ export class AuthService {
       this.logger.warn(`Could not update last login for ${user.email}: ${String(error)}`);
     }
     const roles = user.userRoles.map((ur) => ur.role.code);
-    const payload: JwtPayload = { sub: user.id, email: user.email, roles };
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      roles,
+      tokenVersion: user.tokenVersion,
+    };
     const accessToken = this.jwt.sign(payload);
 
     try {
@@ -71,6 +91,7 @@ export class AuthService {
       const payload = this.jwt.verify<JwtPayload>(token);
       const user = await this.users.findByIdWithRoles(payload.sub);
       if (!user?.isActive) return null;
+      if (payload.tokenVersion !== user.tokenVersion) return null;
       return this.toProfile(user);
     } catch {
       return null;
@@ -78,6 +99,7 @@ export class AuthService {
   }
 
   async logout(user: AuthUser) {
+    await this.users.bumpTokenVersion(user.id);
     await this.audit.log({
       actor: user.email,
       action: 'auth.logout',
@@ -93,6 +115,7 @@ export class AuthService {
     displayName: string;
     isActive: boolean;
     lastLoginAt: Date | null;
+    tokenVersion: number;
     userRoles: { role: { code: string; nameEn: string; nameAr: string } }[];
   }) {
     const roleCodes = user.userRoles.map((ur) => ur.role.code);

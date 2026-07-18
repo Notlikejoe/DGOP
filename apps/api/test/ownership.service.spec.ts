@@ -4,6 +4,11 @@
  */
 import assert from 'node:assert';
 import { AssignmentsService } from '../src/ownership/assignments.service';
+import {
+  confidenceLabel,
+  recommendationConfidence,
+  recommendationReasons,
+} from '../src/ownership/assignments.logic';
 
 const PAST = new Date('2020-01-01');
 
@@ -13,26 +18,43 @@ type Over = {
   roleTypes?: any[];
   assignments?: any[];
   rules?: any[];
+  certificationAttempts?: any[];
+  auditLogs?: any[];
 };
 
 // Builds an AssignmentsService backed by canned data. Scope resolves as unrestricted,
 // so scope filtering is a no-op and we exercise the pure recommendation/conflict logic.
 function makeService(over: Over): AssignmentsService {
+  const assignmentRows = over.assignments ?? [];
   const prisma = {
     dataAsset: {
       findFirst: async () => over.asset ?? null,
       findMany: async () => over.assets ?? [],
     },
     roleType: { findMany: async () => over.roleTypes ?? [] },
-    stewardshipAssignment: { findMany: async () => over.assignments ?? [] },
+    stewardshipAssignment: {
+      findMany: async (args?: any) => {
+        const where = args?.where ?? {};
+        if (where.targetType && where.targetId) {
+          return assignmentRows.filter(
+            (assignment) =>
+              (!assignment.targetType || assignment.targetType === where.targetType) &&
+              (!assignment.targetId || assignment.targetId === where.targetId) &&
+              (!where.roleTypeId || assignment.roleTypeId === where.roleTypeId),
+          );
+        }
+        return assignmentRows;
+      },
+    },
     assignmentRule: { findMany: async () => over.rules ?? [] },
+    certificationAttempt: { findMany: async () => over.certificationAttempts ?? [] },
     dataDomain: { findMany: async () => [] },
     businessCapability: { findMany: async () => [] },
     dataSubject: { findMany: async () => [] },
     organizationUnit: { findMany: async () => [] },
     systemPlatform: { findMany: async () => [] },
   };
-  const audit = { log: async () => {} };
+  const audit = { log: async (entry: any) => { over.auditLogs?.push(entry); } };
   const scope = {
     resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
   };
@@ -109,6 +131,52 @@ test('recommend: domain scope wins over system scope regardless of priority numb
   assert.strictEqual(rec.recommended?.person.id, 'pDom');
 });
 
+test('recommend: recommendations include confidence, signals, and readable reasons', async () => {
+  const svc = makeService({
+    asset: { id: 'a1', domainId: 'd1', capabilityId: null, orgUnitId: null, systemId: null, subjects: [] },
+    roleTypes: [owner],
+    assignments: [],
+    certificationAttempts: [
+      {
+        personId: 'p2',
+        status: 'passed',
+        expiresAt: new Date('2099-01-01'),
+        renewalDueAt: null,
+      },
+    ],
+    rules: [
+      {
+        id: 'r1',
+        roleTypeId: 'rt_owner',
+        scopeType: 'domain',
+        refId: 'd1',
+        priority: 1,
+        personId: 'p2',
+        person: { id: 'p2', fullNameEn: 'Certified Owner' },
+      },
+    ],
+  });
+  const rec = (await svc.recommend(['system_admin'], 'a1'))[0];
+  assert.strictEqual(rec.status, 'recommended');
+  assert.strictEqual(rec.recommended?.confidenceLabel, 'high');
+  assert.strictEqual(rec.recommended?.signals.certificationState, 'current');
+  assert.ok(rec.recommended?.reasons.some((reason: string) => reason.includes('certification')));
+});
+
+test('recommendation scoring helpers expose explainable confidence levels', () => {
+  const score = recommendationConfidence({
+    scopeType: 'domain',
+    rulePriority: 1,
+    activeAssignments: 1,
+    approvedAssignments: 2,
+    certificationState: 'current',
+  });
+  assert.ok(score >= 85);
+  assert.strictEqual(confidenceLabel(score), 'high');
+  assert.deepStrictEqual(confidenceLabel(0), 'none');
+  assert.ok(recommendationReasons({ scopeType: 'domain', rulePriority: 1 }).length > 0);
+});
+
 test('recommend: no assignment and no rule is an exception', async () => {
   const svc = makeService({
     asset: { id: 'a1', domainId: null, capabilityId: null, orgUnitId: null, systemId: null, subjects: [] },
@@ -118,6 +186,40 @@ test('recommend: no assignment and no rule is an exception', async () => {
   });
   const rec = (await svc.recommend(['system_admin'], 'a1'))[0];
   assert.strictEqual(rec.status, 'exception');
+});
+
+test('recordRecommendationFeedback: captures accepted or override decisions in the audit trail', async () => {
+  const auditLogs: any[] = [];
+  const svc = makeService({
+    asset: { id: 'a1', domainId: 'd1', capabilityId: null, orgUnitId: null, systemId: null, subjects: [] },
+    roleTypes: [owner],
+    assignments: [],
+    rules: [
+      {
+        id: 'r1',
+        roleTypeId: 'rt_owner',
+        scopeType: 'domain',
+        refId: 'd1',
+        priority: 1,
+        personId: 'p2',
+        person: { id: 'p2', fullNameEn: 'Alice' },
+      },
+    ],
+    auditLogs,
+  });
+  const result = await svc.recordRecommendationFeedback(
+    ['system_admin'],
+    'a1',
+    'rt_owner',
+    { decision: 'accepted', comment: 'Good match' },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(result.recorded, true);
+  assert.strictEqual(auditLogs.length, 1);
+  assert.strictEqual(auditLogs[0].action, 'assignment_recommendation.feedback');
+  assert.strictEqual(auditLogs[0].metadata.recommendedPersonId, 'p2');
+  assert.strictEqual(auditLogs[0].metadata.confidenceLabel, 'high');
 });
 
 test('conflicts: two overlapping approved primaries on the same target+role conflict', async () => {

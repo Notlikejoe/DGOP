@@ -1,11 +1,18 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   CaseStatus,
+  ClassificationRequestStatus,
   ComplianceCalendarStatus,
   ComplianceCalendarType,
+  DataQualityIssueStatus,
+  DlpIncidentStatus,
   GovernanceEscalationLevel,
   GovernanceEscalationStatus,
   GovernanceNotificationStatus,
+  IntegrationBatchStatus,
+  IntegrationConnectorStatus,
+  IntegrationEventStatus,
+  NdiEvidenceStatus,
   Prisma,
   TaskStatus,
 } from '@prisma/client';
@@ -21,14 +28,33 @@ import {
   UpdateEscalationDto,
 } from './governance-operations.dto';
 import {
+  CHARTER_LIFECYCLE_STEPS,
+  ERROR_EXPERIENCE_DEFINITIONS,
+  EXECUTIVE_KPI_DEFINITIONS,
   ESCALATION_LEVEL_LABELS,
+  OPERATING_BODY_DEFINITIONS,
+  OPERATING_CEREMONY_DEFINITIONS,
+  POLICY_LIFECYCLE_STEPS,
+  PLATFORM_SERVICE_DEFINITIONS,
+  PRODUCTION_ACCEPTANCE_DEFINITIONS,
+  SECURITY_CONTROL_CROSSWALK_DEFINITIONS,
   addKsaBusinessDays,
+  backlogStatus,
   businessDaysBetween,
+  combineReadinessStatus,
   dateKey,
+  dgpoSizingGuidance,
   escalationLevel,
   escalationPenalty,
+  enterpriseClosureStatus,
+  issueRatioStatus,
+  kpiTraceabilityStatus,
   ksaSlaSignal,
+  lifecycleReadiness,
   notificationSeverity,
+  operatingDefinitionStatus,
+  platformArchitectureStatus,
+  platformServiceStatus,
 } from './governance-operations.logic';
 
 const taskInclude = {
@@ -132,6 +158,13 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     };
   }
 
+  private dataQualityIssueScopeWhere(assetIds: Set<string> | 'all'): Prisma.DataQualityIssueWhereInput {
+    if (assetIds === 'all') return {};
+    return assetIds.size
+      ? { OR: [{ assetId: null }, { assetId: { in: [...assetIds] } }] }
+      : { assetId: null };
+  }
+
   private async holidayConfig() {
     const holidays = await this.prisma.ksaHoliday.findMany({ orderBy: { date: 'asc' } });
     return {
@@ -218,6 +251,764 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       occurrences,
       holidays,
       graph: this.escalationGraph(escalations),
+    };
+  }
+
+  async productionReadiness(user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    const taskWhere: Prisma.WorkflowTaskWhereInput = {
+      status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+      case: caseWhere,
+    };
+    const dqScopeWhere = this.dataQualityIssueScopeWhere(assetIds);
+    const dqOpenStatuses = [
+      DataQualityIssueStatus.open,
+      DataQualityIssueStatus.triaged,
+      DataQualityIssueStatus.in_progress,
+      DataQualityIssueStatus.resolved,
+    ];
+    const { holidayDates, recurringHolidayDates } = await this.holidayConfig();
+    const now = new Date();
+
+    const [
+      assetCount,
+      activeCaseCount,
+      openTaskCount,
+      taskRows,
+      dqIssueCount,
+      dqOpenIssueCount,
+      auditRows,
+      integrationEvents,
+      retryEvents,
+      deadLetterEvents,
+      failedBatches,
+      troubledConnectors,
+      openEscalations,
+      auditChain,
+    ] = await Promise.all([
+      this.prisma.dataAsset.count({ where: this.assetScopeWhere(scope) }),
+      this.prisma.workflowCase.count({ where: { AND: [caseWhere, { status: { not: CaseStatus.closed } }] } }),
+      this.prisma.workflowTask.count({ where: taskWhere }),
+      this.prisma.workflowTask.findMany({
+        where: taskWhere,
+        select: { id: true, status: true, dueDate: true, completedAt: true },
+        orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
+        take: 1000,
+      }),
+      this.prisma.dataQualityIssue.count({ where: { AND: [{ deletedAt: null }, dqScopeWhere] } }),
+      this.prisma.dataQualityIssue.count({
+        where: { AND: [{ deletedAt: null }, dqScopeWhere, { status: { in: dqOpenStatuses } }] },
+      }),
+      this.prisma.auditLog.count(),
+      this.prisma.integrationEvent.count(),
+      this.prisma.integrationEvent.count({
+        where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] } },
+      }),
+      this.prisma.integrationEvent.count({ where: { status: IntegrationEventStatus.dead_letter } }),
+      this.prisma.integrationImportBatch.count({
+        where: { status: { in: [IntegrationBatchStatus.completed_with_errors, IntegrationBatchStatus.failed] } },
+      }),
+      this.prisma.integrationConnector.count({
+        where: {
+          deletedAt: null,
+          isActive: true,
+          OR: [
+            { status: IntegrationConnectorStatus.failed },
+            {
+              status: IntegrationConnectorStatus.warning,
+              OR: [{ lastError: { not: null } }, { lastRunAt: { not: null } }],
+            },
+          ],
+        },
+      }),
+      this.prisma.governanceEscalation.count({
+        where: {
+          workflowCase: caseWhere,
+          status: { in: [GovernanceEscalationStatus.open, GovernanceEscalationStatus.acknowledged] },
+        },
+      }),
+      this.audit.verifyChain(1000),
+    ]);
+
+    const taskSignals = taskRows.map((task) => ksaSlaSignal(task, now, holidayDates, recurringHolidayDates));
+    const overdueTasks = taskSignals.filter((signal) => signal === 'overdue').length;
+    const atRiskTasks = taskSignals.filter((signal) => signal === 'at_risk').length;
+    const integrationProblemCount = retryEvents + deadLetterEvents + failedBatches + troubledConnectors;
+    const auditStatus = !auditChain.valid ? 'blocked' : auditRows === 0 || auditChain.legacyRows > 0 ? 'watch' : 'ready';
+    const checks = [
+      {
+        code: 'workflow_backlog',
+        label: 'Workflow backlog',
+        status: backlogStatus(openTaskCount, overdueTasks, atRiskTasks),
+        metric: { openTasks: openTaskCount, overdueTasks, atRiskTasks, sampledTasks: taskRows.length },
+        guidance: 'Keep active workflow tasks inside SLA before client demonstrations or production handover.',
+      },
+      {
+        code: 'integration_reliability',
+        label: 'Integration reliability',
+        status: issueRatioStatus(integrationProblemCount, integrationEvents, {
+          watchPct: 0.05,
+          blockedPct: 0.2,
+          absoluteBlock: 10,
+        }),
+        metric: { integrationEvents, retryEvents, deadLetterEvents, failedBatches, troubledConnectors },
+        guidance: 'Review retries, dead letters, failed batches, and unhealthy connectors before relying on automated feeds.',
+      },
+      {
+        code: 'audit_chain',
+        label: 'Audit evidence chain',
+        status: auditStatus,
+        metric: {
+          auditRows,
+          verifiedRows: auditChain.totalRowsRead,
+          checkedRows: auditChain.checked,
+          legacyRows: auditChain.legacyRows,
+          brokenAt: auditChain.brokenAt,
+        },
+        guidance: 'The audit chain must verify cleanly because it is the evidence trail for governance decisions.',
+      },
+      {
+        code: 'data_quality_pressure',
+        label: 'Data quality pressure',
+        status: issueRatioStatus(dqOpenIssueCount, Math.max(dqIssueCount, assetCount), {
+          watchPct: 0.1,
+          blockedPct: 0.35,
+          absoluteBlock: 25,
+        }),
+        metric: { dqIssueCount, dqOpenIssueCount, governedAssets: assetCount },
+        guidance: 'Open quality issues should be triaged and linked to owners before production reporting.',
+      },
+      {
+        code: 'escalation_pressure',
+        label: 'Escalation pressure',
+        status: openEscalations >= 10 ? 'blocked' : openEscalations > 0 ? 'watch' : 'ready',
+        metric: { openEscalations, activeCaseCount },
+        guidance: 'Resolve or acknowledge escalations so executive-facing queues do not mask operational risk.',
+      },
+      {
+        code: 'governed_asset_baseline',
+        label: 'Governed asset baseline',
+        status: assetCount > 0 ? 'ready' : 'watch',
+        metric: { governedAssets: assetCount },
+        guidance: 'At least one visible governed asset is needed for meaningful ownership, quality, and security workflows.',
+      },
+    ] as const;
+
+    return {
+      status: combineReadinessStatus(checks.map((check) => check.status)),
+      generatedAt: now.toISOString(),
+      scope: {
+        assetVisibility: assetIds === 'all' ? 'all' : assetIds.size,
+        restricted: !this.isUnrestricted(scope),
+      },
+      summary: {
+        governedAssets: assetCount,
+        activeCases: activeCaseCount,
+        openTasks: openTaskCount,
+        overdueTasks,
+        atRiskTasks,
+        integrationProblems: integrationProblemCount,
+        openQualityIssues: dqOpenIssueCount,
+        activeEscalations: openEscalations,
+      },
+      checks,
+    };
+  }
+
+  async controlCrosswalk(user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    const [
+      permissions,
+      roleScopes,
+      roleDataMaps,
+      abacDecisions,
+      maskingPolicies,
+      approvedEvidence,
+      auditPacks,
+      auditRows,
+      privacyDpia,
+      privacyGates,
+      privacyDsr,
+      privacyBreaches,
+      dlpIncidents,
+      openDlpIncidents,
+      classificationRequests,
+      openClassificationRequests,
+      calendarTemplates,
+      calendarOccurrences,
+      workflowCases,
+      integrationEvents,
+      integrationProblems,
+      importErrors,
+      auditChain,
+    ] = await Promise.all([
+      this.prisma.permission.count(),
+      this.prisma.roleDataScope.count(),
+      this.prisma.roleDataAccessMap.count({ where: { isActive: true } }),
+      this.prisma.abacDecisionLog.count(),
+      this.prisma.maskingPolicy.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.ndiEvidence.count({ where: { status: NdiEvidenceStatus.approved } }),
+      this.prisma.ndiAuditPack.count(),
+      this.prisma.auditLog.count(),
+      this.prisma.privacyDpia.count({ where: { deletedAt: null } }),
+      this.prisma.privacyGate.count(),
+      this.prisma.privacyDsrRequest.count({ where: { deletedAt: null } }),
+      this.prisma.privacyBreach.count({ where: { deletedAt: null } }),
+      this.prisma.dlpIncident.count(),
+      this.prisma.dlpIncident.count({
+        where: { status: { in: [DlpIncidentStatus.new, DlpIncidentStatus.triaged, DlpIncidentStatus.under_review, DlpIncidentStatus.contained] } },
+      }),
+      this.prisma.classificationChangeRequest.count(),
+      this.prisma.classificationChangeRequest.count({
+        where: { status: ClassificationRequestStatus.pending },
+      }),
+      this.prisma.complianceCalendarTemplate.count({ where: { status: ComplianceCalendarStatus.active } }),
+      this.prisma.complianceCalendarOccurrence.count(),
+      this.prisma.workflowCase.count({ where: caseWhere }),
+      this.prisma.integrationEvent.count(),
+      this.prisma.integrationEvent.count({
+        where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled, IntegrationEventStatus.dead_letter] } },
+      }),
+      this.prisma.integrationImportError.count(),
+      this.audit.verifyChain(1000),
+    ]);
+
+    const evidenceSignals: Record<string, number> = {
+      rbac_abac_scope: permissions + roleScopes + roleDataMaps + abacDecisions,
+      secure_search: permissions + (assetIds === 'all' ? 1 : assetIds.size),
+      masking_classification: maskingPolicies + abacDecisions,
+      evidence_chain: approvedEvidence + auditPacks,
+      audit_chain_integrity: auditRows,
+      privacy_by_design: privacyDpia + privacyGates + privacyDsr + privacyBreaches,
+      incident_response: dlpIncidents + classificationRequests + workflowCases,
+      compliance_calendar: calendarTemplates + calendarOccurrences,
+      secure_error_handling: 1,
+      integration_resilience: integrationEvents + importErrors,
+      vault_secret_management: process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32 ? 1 : 0,
+      mtls_service_mesh: process.env.PUBLIC_ORIGIN ? 1 : 0,
+      siem_monitoring: auditRows + integrationEvents,
+    };
+    const openRisks: Record<string, number> = {
+      rbac_abac_scope: roleDataMaps === 0 ? 1 : 0,
+      secure_search: 0,
+      masking_classification: maskingPolicies === 0 ? 1 : 0,
+      evidence_chain: approvedEvidence === 0 ? 1 : 0,
+      audit_chain_integrity: auditChain.valid ? auditChain.legacyRows : 1,
+      privacy_by_design: privacyDpia === 0 ? 1 : 0,
+      incident_response: openDlpIncidents + openClassificationRequests,
+      compliance_calendar: calendarTemplates === 0 ? 1 : 0,
+      secure_error_handling: 0,
+      integration_resilience: integrationProblems,
+      vault_secret_management: process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32 ? 0 : 1,
+      mtls_service_mesh: process.env.NODE_ENV === 'production' && !process.env.PUBLIC_ORIGIN ? 1 : 0,
+      siem_monitoring: 0,
+    };
+
+    const controls = SECURITY_CONTROL_CROSSWALK_DEFINITIONS.map((definition) => {
+      const input = {
+        implemented: !definition.acceptedDeferral,
+        acceptedDeferral: !!definition.acceptedDeferral,
+        evidenceSignals: evidenceSignals[definition.code] ?? 0,
+        openRisks: openRisks[definition.code] ?? 0,
+      };
+      return {
+        ...definition,
+        status: enterpriseClosureStatus(input),
+        signals: input,
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      status: combineReadinessStatus(controls.map((control) => control.status)),
+      scope: {
+        restricted: !this.isUnrestricted(scope),
+        assetVisibility: assetIds === 'all' ? 'all' : assetIds.size,
+      },
+      summary: {
+        controls: controls.length,
+        ready: controls.filter((control) => control.status === 'ready').length,
+        watch: controls.filter((control) => control.status === 'watch').length,
+        blocked: controls.filter((control) => control.status === 'blocked').length,
+        acceptedDeferrals: controls.filter((control) => control.acceptedDeferral).length,
+        openRisks: controls.reduce((sum, control) => sum + control.signals.openRisks, 0),
+      },
+      controls,
+      frameworkCoverage: ['NCA ECC', 'PDPL', 'NDI', 'DSP'].map((framework) => ({
+        framework,
+        controls: controls.filter((control) => control.frameworks.includes(framework)).length,
+        ready: controls.filter((control) => control.frameworks.includes(framework) && control.status === 'ready').length,
+      })),
+    };
+  }
+
+  async productionAcceptancePackage(user: AuthUser) {
+    const readiness = await this.productionReadiness(user);
+    const readinessByCode = new Map(readiness.checks.map((check) => [check.code, check.status]));
+    const items = PRODUCTION_ACCEPTANCE_DEFINITIONS.map((definition) => {
+      const mappedStatus =
+        definition.family === 'performance'
+          ? 'watch'
+          : definition.code === 'module_acceptance'
+            ? readiness.status
+            : definition.code === 'hypercare_support'
+              ? readiness.summary.activeEscalations > 0 ? 'watch' : 'ready'
+              : definition.code === 'recovery_target'
+                ? readinessByCode.get('audit_chain') === 'blocked' ? 'blocked' : 'watch'
+                : 'ready';
+      return {
+        ...definition,
+        status: mappedStatus,
+        evidenceSignals: definition.evidence.length,
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      status: combineReadinessStatus([readiness.status, ...items.map((item) => item.status)]),
+      readiness,
+      summary: {
+        items: items.length,
+        ready: items.filter((item) => item.status === 'ready').length,
+        watch: items.filter((item) => item.status === 'watch').length,
+        blocked: items.filter((item) => item.status === 'blocked').length,
+      },
+      items,
+      environments: ['DEV', 'TEST', 'UAT', 'PRE-PROD', 'PROD', 'DR'].map((name) => ({
+        name,
+        status: name === 'DEV' || name === 'UAT' ? 'ready' : 'watch',
+        entry: name === 'DEV' ? 'Local build, tests, seed data, and health check pass.' : 'Promote only after previous environment exit criteria pass.',
+        exit: name === 'DR' ? 'Recovery runbook exercised and evidence captured.' : 'Smoke checks, access checks, workflow checks, and known issues updated.',
+      })),
+    };
+  }
+
+  async errorExperienceReadiness(user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const [
+      validationImportErrors,
+      integrationErrors,
+      failedEvents,
+      retryEvents,
+      deadLetterEvents,
+      auditRows,
+    ] = await Promise.all([
+      this.prisma.integrationImportError.count(),
+      this.prisma.integrationImportBatch.count({
+        where: { status: { in: [IntegrationBatchStatus.completed_with_errors, IntegrationBatchStatus.failed] } },
+      }),
+      this.prisma.integrationEvent.count({ where: { status: IntegrationEventStatus.failed } }),
+      this.prisma.integrationEvent.count({ where: { status: IntegrationEventStatus.retry_scheduled } }),
+      this.prisma.integrationEvent.count({ where: { status: IntegrationEventStatus.dead_letter } }),
+      this.prisma.auditLog.count(),
+    ]);
+
+    const evidenceSignals: Record<string, number> = {
+      validation_errors: 1,
+      session_errors: 1,
+      permission_errors: 1,
+      conflict_errors: 1,
+      rate_limit_errors: 1,
+      import_errors: validationImportErrors + integrationErrors + 1,
+      system_errors: auditRows + 1,
+    };
+    const openRisks: Record<string, number> = {
+      validation_errors: 0,
+      session_errors: 0,
+      permission_errors: 0,
+      conflict_errors: 0,
+      rate_limit_errors: 0,
+      import_errors: integrationErrors + deadLetterEvents,
+      system_errors: failedEvents + retryEvents + deadLetterEvents,
+    };
+
+    const categories = ERROR_EXPERIENCE_DEFINITIONS.map((definition) => {
+      const input = {
+        implemented: true,
+        evidenceSignals: evidenceSignals[definition.code] ?? 0,
+        openRisks: openRisks[definition.code] ?? 0,
+      };
+      return {
+        ...definition,
+        status: enterpriseClosureStatus(input),
+        signals: input,
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      status: combineReadinessStatus(categories.map((category) => category.status)),
+      scope: {
+        restricted: !this.isUnrestricted(scope),
+        assetVisibility: assetIds === 'all' ? 'all' : assetIds.size,
+      },
+      summary: {
+        categories: categories.length,
+        ready: categories.filter((category) => category.status === 'ready').length,
+        watch: categories.filter((category) => category.status === 'watch').length,
+        blocked: categories.filter((category) => category.status === 'blocked').length,
+        importErrors: validationImportErrors + integrationErrors,
+        systemSignals: failedEvents + retryEvents + deadLetterEvents,
+      },
+      categories,
+      envelope: {
+        requiredFields: ['statusCode', 'code', 'error', 'message', 'userMessage', 'retryable', 'method', 'path', 'timestamp', 'requestId', 'correlationId'],
+        publicCodes: ['VAL-400', 'VAL-422', 'SES-401', 'PER-403', 'BUS-404', 'BUS-409', 'RATE-429', 'INT-400', 'SYS-500'],
+      },
+    };
+  }
+
+  async operatingModel(user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const assetWhere = this.assetScopeWhere(scope);
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    const taskWhere: Prisma.WorkflowTaskWhereInput = {
+      status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+      case: caseWhere,
+    };
+    const domainWhere: Prisma.DataDomainWhereInput =
+      scope.domains === 'all'
+        ? { deletedAt: null, isActive: true }
+        : { deletedAt: null, isActive: true, id: { in: scope.domains } };
+    const systemWhere: Prisma.SystemPlatformWhereInput =
+      scope.orgUnits === 'all'
+        ? { deletedAt: null, isActive: true }
+        : { deletedAt: null, isActive: true, ownerOrgUnitId: { in: scope.orgUnits } };
+    const dqScopeWhere = this.dataQualityIssueScopeWhere(assetIds);
+    const dqOpenStatuses = [
+      DataQualityIssueStatus.open,
+      DataQualityIssueStatus.triaged,
+      DataQualityIssueStatus.in_progress,
+      DataQualityIssueStatus.resolved,
+    ];
+
+    const [
+      governedAssets,
+      assignedAssets,
+      dataDomains,
+      systemPlatforms,
+      activePeople,
+      activeCases,
+      openTasks,
+      sampledTasks,
+      openQualityIssues,
+      auditRows,
+      activeCalendarTemplates,
+      activeEscalations,
+    ] = await Promise.all([
+      this.prisma.dataAsset.count({ where: assetWhere }),
+      this.prisma.dataAsset.count({ where: { ...assetWhere, ownerStatus: 'assigned' } }),
+      this.prisma.dataDomain.count({ where: domainWhere }),
+      this.prisma.systemPlatform.count({ where: systemWhere }),
+      this.prisma.person.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.workflowCase.count({ where: { AND: [caseWhere, { status: { not: CaseStatus.closed } }] } }),
+      this.prisma.workflowTask.count({ where: taskWhere }),
+      this.prisma.workflowTask.findMany({
+        where: taskWhere,
+        select: { id: true, status: true, dueDate: true, completedAt: true },
+        take: 1000,
+      }),
+      this.prisma.dataQualityIssue.count({
+        where: { AND: [{ deletedAt: null }, dqScopeWhere, { status: { in: dqOpenStatuses } }] },
+      }),
+      this.prisma.auditLog.count(),
+      this.prisma.complianceCalendarTemplate.count({
+        where: { status: ComplianceCalendarStatus.active },
+      }),
+      this.prisma.governanceEscalation.count({
+        where: {
+          workflowCase: caseWhere,
+          status: { in: [GovernanceEscalationStatus.open, GovernanceEscalationStatus.acknowledged] },
+        },
+      }),
+    ]);
+
+    const { holidayDates, recurringHolidayDates } = await this.holidayConfig();
+    const now = new Date();
+    const overdueTasks = sampledTasks.filter((task) =>
+      ksaSlaSignal(task, now, holidayDates, recurringHolidayDates) === 'overdue',
+    ).length;
+    const ownershipCoverage = governedAssets > 0 ? Math.round((assignedAssets / governedAssets) * 100) : 0;
+    const workflowSlaHealth = openTasks > 0 ? Math.max(0, Math.round(100 - (overdueTasks / openTasks) * 100)) : 100;
+    const qualityPressurePct = governedAssets > 0 ? Math.round((openQualityIssues / governedAssets) * 100) : 0;
+    const cadenceCoverage = OPERATING_CEREMONY_DEFINITIONS.length
+      ? Math.min(100, Math.round((activeCalendarTemplates / OPERATING_CEREMONY_DEFINITIONS.length) * 100))
+      : 100;
+
+    const kpiValueByCode: Record<string, { value: number; unit: string; metricStatus: 'ready' | 'watch' | 'blocked' }> = {
+      ownership_coverage: {
+        value: ownershipCoverage,
+        unit: '%',
+        metricStatus: ownershipCoverage >= 80 ? 'ready' : 'watch',
+      },
+      workflow_sla_health: {
+        value: workflowSlaHealth,
+        unit: '%',
+        metricStatus: overdueTasks === 0 ? 'ready' : 'watch',
+      },
+      quality_pressure: {
+        value: qualityPressurePct,
+        unit: '%',
+        metricStatus: qualityPressurePct <= 10 ? 'ready' : 'watch',
+      },
+      audit_evidence_readiness: {
+        value: auditRows,
+        unit: 'records',
+        metricStatus: auditRows > 0 ? 'ready' : 'watch',
+      },
+      operating_cadence_readiness: {
+        value: cadenceCoverage,
+        unit: '%',
+        metricStatus: cadenceCoverage >= 100 ? 'ready' : 'watch',
+      },
+    };
+
+    const bodies = OPERATING_BODY_DEFINITIONS.map((body) => {
+      const definitionStatus = operatingDefinitionStatus(body);
+      const pressure =
+        body.code === 'dgsc'
+          ? activeEscalations
+          : body.code === 'data_council'
+            ? openQualityIssues
+            : body.code === 'dmo'
+              ? openTasks
+              : body.code === 'domain_council'
+                ? activeCases
+                : 0;
+      const status = combineReadinessStatus([
+        definitionStatus,
+        pressure >= 10 ? 'watch' : 'ready',
+      ]);
+      return { ...body, status, operatingPressure: pressure };
+    });
+
+    const kpiTraceability = EXECUTIVE_KPI_DEFINITIONS.map((definition) => {
+      const metric = kpiValueByCode[definition.code] ?? { value: 0, unit: 'count', metricStatus: 'watch' as const };
+      return {
+        ...definition,
+        value: metric.value,
+        unit: metric.unit,
+        status: combineReadinessStatus([kpiTraceabilityStatus(definition), metric.metricStatus]),
+      };
+    });
+
+    const charterLifecycle = {
+      code: 'charter_lifecycle',
+      status: lifecycleReadiness(CHARTER_LIFECYCLE_STEPS),
+      steps: CHARTER_LIFECYCLE_STEPS,
+    };
+    const policyLifecycle = {
+      code: 'policy_lifecycle',
+      status: lifecycleReadiness(POLICY_LIFECYCLE_STEPS),
+      steps: POLICY_LIFECYCLE_STEPS,
+    };
+    const status = combineReadinessStatus([
+      ...bodies.map((body) => body.status),
+      ...kpiTraceability.map((kpi) => kpi.status),
+      charterLifecycle.status,
+      policyLifecycle.status,
+    ]);
+
+    return {
+      generatedAt: now.toISOString(),
+      status,
+      scope: {
+        restricted: !this.isUnrestricted(scope),
+        assetVisibility: assetIds === 'all' ? 'all' : assetIds.size,
+      },
+      summary: {
+        governedAssets,
+        assignedAssets,
+        dataDomains,
+        systemPlatforms,
+        activePeople,
+        activeCases,
+        openTasks,
+        overdueTasks,
+        openQualityIssues,
+        activeEscalations,
+      },
+      bodies,
+      ceremonies: OPERATING_CEREMONY_DEFINITIONS.map((ceremony) => ({
+        ...ceremony,
+        status: ceremony.outputs.length > 0 ? 'ready' : 'watch',
+      })),
+      lifecycles: [charterLifecycle, policyLifecycle],
+      decisionFlow: [
+        { from: 'working_group', to: 'domain_council', decision: 'Prepare recommendation and domain impact' },
+        { from: 'domain_council', to: 'data_council', decision: 'Resolve cross-domain or policy-impacting decisions' },
+        { from: 'data_council', to: 'dgsc', decision: 'Escalate executive risk, funding, or exception acceptance' },
+      ],
+      dgpoSizing: dgpoSizingGuidance({
+        governedAssets,
+        dataDomains,
+        systemPlatforms,
+        activeCases,
+        openTasks,
+      }),
+      kpiTraceability,
+      gapRegister: [
+        {
+          code: 'external_minutes_repository',
+          status: 'deferred',
+          reason: 'DGOP tracks decisions and evidence internally; external board-pack repository integration remains optional.',
+        },
+        {
+          code: 'formal_hr_capacity_model',
+          status: 'deferred',
+          reason: 'DGPO sizing guidance is calculated in-platform; HR-grade capacity planning remains outside this sprint.',
+        },
+      ],
+    };
+  }
+
+  async platformArchitecture(user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    const now = new Date();
+    const [
+      workflowTemplates,
+      workflowCases,
+      workflowTasks,
+      overdueTasks,
+      evidenceRecords,
+      approvedEvidence,
+      auditPacks,
+      ndiSpecs,
+      governedAssets,
+      activePeople,
+      integrationConnectors,
+      integrationEvents,
+      integrationProblemEvents,
+      failedBatches,
+      roleDataMaps,
+      abacDecisionLogs,
+      maskingPolicies,
+      notifications,
+      escalations,
+      auditRows,
+      reconciliationReports,
+      auditChain,
+    ] = await Promise.all([
+      this.prisma.workflowTemplate.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.workflowCase.count({ where: caseWhere }),
+      this.prisma.workflowTask.count({ where: { case: caseWhere } }),
+      this.prisma.workflowTask.count({
+        where: {
+          case: caseWhere,
+          status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+          dueDate: { lt: now },
+        },
+      }),
+      this.prisma.ndiEvidence.count({ where: { deletedAt: null } }),
+      this.prisma.ndiEvidence.count({ where: { deletedAt: null, status: NdiEvidenceStatus.approved } }),
+      this.prisma.ndiAuditPack.count(),
+      this.prisma.ndiSpecification.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.dataAsset.count({ where: this.assetScopeWhere(scope) }),
+      this.prisma.person.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.integrationConnector.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.integrationEvent.count(),
+      this.prisma.integrationEvent.count({
+        where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled, IntegrationEventStatus.dead_letter] } },
+      }),
+      this.prisma.integrationImportBatch.count({
+        where: { status: { in: [IntegrationBatchStatus.completed_with_errors, IntegrationBatchStatus.failed] } },
+      }),
+      this.prisma.roleDataAccessMap.count({ where: { isActive: true } }),
+      this.prisma.abacDecisionLog.count(),
+      this.prisma.maskingPolicy.count({ where: { deletedAt: null, isActive: true } }),
+      this.prisma.governanceNotification.count(),
+      this.prisma.governanceEscalation.count({
+        where: {
+          workflowCase: caseWhere,
+          status: { in: [GovernanceEscalationStatus.open, GovernanceEscalationStatus.acknowledged] },
+        },
+      }),
+      this.prisma.auditLog.count(),
+      this.prisma.integrationReconciliationReport.count(),
+      this.audit.verifyChain(1000),
+    ]);
+
+    const dataSignals: Record<string, number> = {
+      workflow_engine: workflowTemplates + workflowCases + workflowTasks,
+      evidence_engine: evidenceRecords + approvedEvidence + auditPacks,
+      ndi_scoring_engine: ndiSpecs + evidenceRecords,
+      unified_search_service: governedAssets + activePeople + workflowCases + ndiSpecs,
+      integration_adapter_service: integrationConnectors + integrationEvents + reconciliationReports,
+      scope_abac_engine: roleDataMaps + abacDecisionLogs,
+      masking_service: maskingPolicies,
+      notification_sla_engine: notifications + escalations + workflowTasks,
+      audit_chain: auditRows,
+      reporting_service: reconciliationReports + auditPacks + ndiSpecs,
+    };
+    const openRisks: Record<string, number> = {
+      workflow_engine: overdueTasks,
+      evidence_engine: Math.max(0, evidenceRecords - approvedEvidence),
+      ndi_scoring_engine: ndiSpecs > 0 && evidenceRecords === 0 ? 1 : 0,
+      unified_search_service: 0,
+      integration_adapter_service: integrationProblemEvents + failedBatches,
+      scope_abac_engine: roleDataMaps === 0 ? 1 : 0,
+      masking_service: maskingPolicies === 0 ? 1 : 0,
+      notification_sla_engine: escalations,
+      audit_chain: auditChain.valid ? 0 : 1,
+      reporting_service: 0,
+    };
+
+    const serviceCodes = new Set(PLATFORM_SERVICE_DEFINITIONS.map((definition) => definition.code));
+    const services = PLATFORM_SERVICE_DEFINITIONS.map((definition) => {
+      const input = {
+        implemented: true,
+        dataSignals: dataSignals[definition.code] ?? 0,
+        openRisks: openRisks[definition.code] ?? 0,
+        wiredDependencies: definition.dependencies.filter((dependency) => serviceCodes.has(dependency)).length,
+        requiredDependencies: definition.dependencies.length,
+      };
+      return {
+        ...definition,
+        status: platformServiceStatus(input),
+        signals: input,
+      };
+    });
+
+    const boundedContexts = [...new Set(services.map((service) => service.boundedContext))].map((boundedContext) => ({
+      code: boundedContext,
+      services: services.filter((service) => service.boundedContext === boundedContext).length,
+      status: platformArchitectureStatus(
+        services.filter((service) => service.boundedContext === boundedContext).map((service) => service.status),
+      ),
+    }));
+
+    return {
+      generatedAt: now.toISOString(),
+      status: platformArchitectureStatus(services.map((service) => service.status)),
+      scope: {
+        restricted: !this.isUnrestricted(scope),
+        assetVisibility: assetIds === 'all' ? 'all' : assetIds.size,
+      },
+      summary: {
+        services: services.length,
+        ready: services.filter((service) => service.status === 'ready').length,
+        watch: services.filter((service) => service.status === 'watch').length,
+        blocked: services.filter((service) => service.status === 'blocked').length,
+        boundedContexts: boundedContexts.length,
+        openRisks: services.reduce((sum, service) => sum + service.signals.openRisks, 0),
+      },
+      services,
+      boundedContexts,
+      dependencyMap: services.flatMap((service) =>
+        service.dependencies.map((dependency) => ({
+          from: service.code,
+          to: dependency,
+          status: serviceCodes.has(dependency) ? 'wired' : 'missing',
+        })),
+      ),
     };
   }
 

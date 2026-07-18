@@ -11,6 +11,114 @@
 .stat__value { font-size: 1.6rem; font-weight: 700; }
 .stat__label { font-size: 0.85rem; color: var(--ds-text-muted, #64748b); }
 
+.traceability-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.traceability-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.traceability-head h2 {
+  margin: 0.1rem 0 0.25rem;
+}
+
+.traceability-head p,
+.trace-card p,
+.trace-card small {
+  margin: 0;
+  color: var(--ds-text-muted, #64748b);
+}
+
+.traceability-summary {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.traceability-summary span {
+  border: 1px solid var(--command-border, var(--ds-border, #cbd5e1));
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  padding: 0.35rem 0.65rem;
+  color: var(--ds-text-muted, #64748b);
+}
+
+.traceability-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.trace-card {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--command-border, var(--ds-border, #cbd5e1));
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  padding: 0.85rem;
+}
+
+.trace-card:hover {
+  border-color: var(--primary, #0f766e);
+  box-shadow: var(--shadow-sm, 0 4px 14px rgba(0, 0, 0, 0.08));
+}
+
+.trace-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.trace-card strong,
+.trace-card p,
+.trace-card small {
+  overflow-wrap: anywhere;
+}
+
+.trace-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.trace-metrics span {
+  min-width: 0;
+  border: 1px solid var(--command-border, var(--ds-border, #cbd5e1));
+  border-radius: 6px;
+  padding: 0.4rem;
+  color: var(--ds-text-muted, #64748b);
+  font-size: 0.78rem;
+}
+
+.trace-metrics b {
+  color: var(--text, #0f172a);
+}
+
+.trace-progress {
+  height: 0.45rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--command-border, var(--ds-border, #cbd5e1));
+}
+
+.trace-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary, #0f766e);
+}
+
 .domain-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -138,4 +246,9 @@
   .form-row { grid-template-columns: 1fr; }
   .readiness-row { grid-template-columns: 1fr auto; }
   .readiness-row .bar-cell { display: none; }
+  .traceability-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1280px) and (min-width: 721px) {
+  .traceability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

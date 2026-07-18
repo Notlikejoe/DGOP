@@ -60,6 +60,43 @@
             </article>
           </div>
 
+          @if (configuration(); as cfg) {
+            <section class="configuration-card" [attr.aria-label]="t('wf.config.title')">
+              <div class="configuration-card__head">
+                <div>
+                  <span class="section-kicker">{{ t('wf.config.eyebrow') }}</span>
+                  <h2>{{ t('wf.config.title') }}</h2>
+                  <p>{{ t('wf.config.subtitle') }}</p>
+                </div>
+                <app-status-chip [kind]="graphKind(cfg.status)" [label]="t('wf.config.status.' + cfg.status)" />
+              </div>
+              <div class="configuration-grid">
+                <article>
+                  <span>{{ t('wf.config.caseTypes') }}</span>
+                  <strong>{{ cfg.summary.activeRoutes }} / {{ cfg.summary.caseTypes }}</strong>
+                  <small>{{ t('wf.config.routesReady') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.config.rules') }}</span>
+                  <strong>{{ cfg.summary.notificationRules + cfg.summary.escalationTemplates }}</strong>
+                  <small>{{ t('wf.config.rulesHelp') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.config.unassigned') }}</span>
+                  <strong>{{ cfg.summary.unassignedTasks }}</strong>
+                  <small>{{ t('wf.config.unassignedHelp') }}</small>
+                </article>
+              </div>
+              <div class="registry-strip">
+                @for (item of cfg.caseTypeRegistry.slice(0, 8); track item.caseType) {
+                  <span [class.registry-strip__item--watch]="item.status !== 'ready'">
+                    {{ typeLabel(item.caseType) }}
+                  </span>
+                }
+              </div>
+            </section>
+          }
+
           <div class="route-workspace">
             <aside class="route-directory" [attr.aria-label]="t('wf.graph.routes')">
               <div class="route-directory__head">

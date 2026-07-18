@@ -1,0 +1,170 @@
+{
+  "input": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\DGOP_v5_Integrated_Sprint_Roadmap.docx",
+  "fonts_by_char_count": {
+    "Arial": 39
+  },
+  "direct_run_formatting_runs": 233,
+  "direct_paragraph_formatting_paragraphs": 921,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 8,
+      "text": "Integrated Sprint Roadmap",
+      "style": "Title"
+    },
+    {
+      "para_index": 54,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 62,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 68,
+      "text": "UI/UX foundation work (design system kickoff)",
+      "style": "normal"
+    },
+    {
+      "para_index": 75,
+      "text": "Database work",
+      "style": "normal"
+    },
+    {
+      "para_index": 79,
+      "text": "Publishing and remote access work",
+      "style": "normal"
+    },
+    {
+      "para_index": 86,
+      "text": "Quality work",
+      "style": "normal"
+    },
+    {
+      "para_index": 91,
+      "text": "Per-sprint QA deliverables",
+      "style": "normal"
+    },
+    {
+      "para_index": 95,
+      "text": "Acceptance",
+      "style": "normal"
+    },
+    {
+      "para_index": 109,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 119,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 127,
+      "text": "Database work",
+      "style": "normal"
+    },
+    {
+      "para_index": 129,
+      "text": "Acceptance",
+      "style": "normal"
+    },
+    {
+      "para_index": 138,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 147,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 154,
+      "text": "Database work",
+      "style": "normal"
+    },
+    {
+      "para_index": 157,
+      "text": "Acceptance",
+      "style": "normal"
+    },
+    {
+      "para_index": 166,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 175,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 183,
+      "text": "Database work",
+      "style": "normal"
+    }
+  ],
+  "examples": {
+    "direct_run_formatting": [
+      {
+        "para_index": 7,
+        "run_text": "DGOP v5",
+        "style": "Title"
+      },
+      {
+        "para_index": 8,
+        "run_text": "Integrated Sprint Roadmap",
+        "style": "Title"
+      },
+      {
+        "para_index": 9,
+        "run_text": "Updated sprint roadmap including v5/v4.1 enhanced specification gaps from all si",
+        "style": "normal"
+      },
+      {
+        "para_index": 14,
+        "run_text": "This document updates the DGOP sprint roadmap by integrating the missing details",
+        "style": "normal"
+      },
+      {
+        "para_index": 15,
+        "run_text": "The result is a roadmap that can be used by senior data governance, security, en",
+        "style": "normal"
+      }
+    ],
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 19,
+        "text": "Asset search supports Arabic and English full-text queries across 1 million assets with p95 results under 500ms.",
+        "style": "normal"
+      },
+      {
+        "para_index": 20,
+        "text": "Asset 360 page loads in under 2 seconds for assets with 50+ related workflow cases and 20+ evidence files.",
+        "style": "normal"
+      },
+      {
+        "para_index": 21,
+        "text": "Bulk asset import processes 10,000 assets in under 10 minutes with a validation error report.",
+        "style": "normal"
+      },
+      {
+        "para_index": 22,
+        "text": "Workflow engine processes 1,000 concurrent cases with task assignment latency under 1 second.",
+        "style": "normal"
+      },
+      {
+        "para_index": 23,
+        "text": "Timer jobs fire within +/-30 seconds of scheduled time and use KSA business days.",
+        "style": "normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

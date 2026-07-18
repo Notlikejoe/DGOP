@@ -19,6 +19,42 @@ export class GovernanceOperationsController {
     return this.service.workspace(user);
   }
 
+  @Get('production-readiness')
+  @RequirePermissions('governance_operations.view')
+  productionReadiness(@CurrentUser() user: AuthUser) {
+    return this.service.productionReadiness(user);
+  }
+
+  @Get('operating-model')
+  @RequirePermissions('governance_operations.view')
+  operatingModel(@CurrentUser() user: AuthUser) {
+    return this.service.operatingModel(user);
+  }
+
+  @Get('platform-architecture')
+  @RequirePermissions('governance_operations.view')
+  platformArchitecture(@CurrentUser() user: AuthUser) {
+    return this.service.platformArchitecture(user);
+  }
+
+  @Get('control-crosswalk')
+  @RequirePermissions('governance_operations.view')
+  controlCrosswalk(@CurrentUser() user: AuthUser) {
+    return this.service.controlCrosswalk(user);
+  }
+
+  @Get('production-acceptance')
+  @RequirePermissions('governance_operations.view')
+  productionAcceptance(@CurrentUser() user: AuthUser) {
+    return this.service.productionAcceptancePackage(user);
+  }
+
+  @Get('error-experience')
+  @RequirePermissions('governance_operations.view')
+  errorExperience(@CurrentUser() user: AuthUser) {
+    return this.service.errorExperienceReadiness(user);
+  }
+
   @Post('recalculate-sla')
   @RequirePermissions('governance_operations.run')
   recalculateSla(@CurrentUser() user: AuthUser) {

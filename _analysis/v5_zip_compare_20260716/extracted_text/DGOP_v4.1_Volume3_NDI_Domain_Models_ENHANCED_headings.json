@@ -1,0 +1,2002 @@
+[
+  {
+    "style": "toc 1",
+    "text": "1. Introduction to NDI Domain Operationalization 12"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.1 Purpose 12"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.2 Operational Model Structure 13"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.3 Stewardship Role Taxonomy (v4.1) 13"
+  },
+  {
+    "style": "toc 3",
+    "text": "1.3.1 Operational Data Steward (ODS) 13"
+  },
+  {
+    "style": "toc 3",
+    "text": "1.3.2 Project Data Steward (PDS) 14"
+  },
+  {
+    "style": "toc 3",
+    "text": "1.3.3 Enterprise Data Steward (EDS) 15"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.4 Maturity Progression 15"
+  },
+  {
+    "style": "toc 1",
+    "text": "2. Domain 1: DG – Data Governance 16"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.1 Domain Overview 16"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.2 NDI Specification Mapping 16"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.3 Operational Lifecycle: Governance Tower 17"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.4 v4.1: Charter Management Lifecycle 19"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.5 v4.1: Policy Lifecycle Management 20"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.6 v4.1: DGPO Sizing Guidance 21"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.7 v4.1: Domain Council Structure 22"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.8 v4.1: 4-Tier Training Curriculum 22"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.9 v4.1: 3-Level Certification Program (CDS/SDS/MDS) 23"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.10 v4.1: Community of Practice Governance 23"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.11 DGOP Module Mapping 24"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.12 Workflow: Owner Assignment Approval (BPMN 2.0) 25"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.13 v4.1: Charter Approval Workflow (BPMN 2.0) 26"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.14 Evidence Requirements 27"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.15 v4.1: Evidence Quality Dimensional Tracking 27"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.16 KPIs & Metrics 28"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.17 RACI Matrix 29"
+  },
+  {
+    "style": "toc 1",
+    "text": "3. Domain 2: MCM – Master Data Management 31"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.1 Domain Overview 31"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.2 NDI Specification Mapping 31"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.3 Operational Lifecycle: Master Data Governance 32"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.4 v4.1: MDM Implementation Styles 35"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.5 DGOP Module Mapping 36"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.6 Workflow: Golden Record Merge Approval 37"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.7 v4.1: Match Resolution Workflow (BPMN 2.0) 37"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.8 Evidence Requirements 38"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.9 v4.1: Evidence Quality Dimensional Tracking 38"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.10 KPIs & Metrics 39"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.11 RACI Matrix 40"
+  },
+  {
+    "style": "toc 1",
+    "text": "4. Domain 3: DQ – Data Quality 41"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.1 Domain Overview 41"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.2 NDI Specification Mapping 41"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.3 6-Dimension DQ Framework 43"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.4 v4.1: Data Profiling Capabilities 44"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.5 v4.1: Severity-Based SLA Framework 45"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.6 v4.1: 4-Level Governance Escalation 46"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.7 v4.1: RCA Technique Integration 47"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.8 v4.1: DQ Rule Lifecycle 48"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.9 v4.1: Hierarchical DQ Scorecards 49"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.10 Operational Lifecycle: DQ Tower 49"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.11 DGOP Module Mapping 52"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.12 Workflow: DQ Issue Remediation (Enhanced v4.1) 53"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.13 Evidence Requirements 54"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.14 v4.1: Evidence Quality Dimensional Tracking 54"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.15 KPIs & Metrics 55"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.16 RACI Matrix 56"
+  },
+  {
+    "style": "toc 1",
+    "text": "5. Domain 4: DSI – Data Sharing & Integration 57"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.1 Domain Overview 57"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.2 NDI Specification Mapping 57"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.3 Operational Lifecycle: Sharing Tower 58"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.4 DGOP Module Mapping 60"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.5 Workflow: Data Sharing Request Approval 61"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.6 Evidence Requirements 62"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.7 v4.1: Evidence Quality Dimensional Tracking 62"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.8 KPIs & Metrics 63"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.9 RACI Matrix 63"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.10 Cross-Domain Integration 64"
+  },
+  {
+    "style": "toc 1",
+    "text": "6. Domain 5: PDP – Privacy & Data Protection 65"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.1 Domain Overview 65"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.2 NDI Specification Mapping 65"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.3 Operational Lifecycle: Privacy Tower 66"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.4 v4.1: Privacy by Design SDLC Integration 69"
+  },
+  {
+    "style": "toc 3",
+    "text": "7 Privacy by Design Principles 69"
+  },
+  {
+    "style": "toc 3",
+    "text": "5 SDLC Phase Gates 69"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.5 v4.1: Data Masking Service 70"
+  },
+  {
+    "style": "toc 3",
+    "text": "6 Masking Techniques 70"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.6 DGOP Module Mapping 71"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.7 Workflow: DPIA High-Risk Processing 72"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.8 v4.1: Privacy by Design SDLC Gate (BPMN 2.0) 73"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.9 Evidence Requirements 74"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.10 v4.1: Evidence Quality Dimensional Tracking 74"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.11 KPIs & Metrics 75"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.12 RACI Matrix 75"
+  },
+  {
+    "style": "toc 1",
+    "text": "7. Domain 6: DAM – Data Architecture Management 77"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.1 Domain Overview 77"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.2 NDI Specification Mapping 77"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.3 Operational Lifecycle: Architecture Tower 78"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.4 DGOP Module Mapping 80"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.5 Workflow: Architecture Review Board Gate 81"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.6 Evidence Requirements 82"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.7 v4.1: Evidence Quality Dimensional Tracking 82"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.8 KPIs & Metrics 83"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.9 RACI Matrix 83"
+  },
+  {
+    "style": "toc 1",
+    "text": "8. Domain 7: DCM – Data Content Management 85"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.1 Domain Overview 85"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.2 NDI Specification Mapping 85"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.3 Operational Lifecycle: Content Tower 86"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.4 DGOP Module Mapping 87"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.5 Workflow: Secure Disposal with Legal Hold Check 88"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.6 Evidence Requirements 89"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.7 v4.1: Evidence Quality Dimensional Tracking 89"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.8 KPIs & Metrics 90"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.9 RACI Matrix 90"
+  },
+  {
+    "style": "toc 1",
+    "text": "9. Domain 8: RMD – Reference Master Data 92"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.1 Domain Overview 92"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.2 NDI Specification Mapping 92"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.3 Operational Lifecycle: Reference Data Tower 93"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.4 DGOP Module Mapping 94"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.5 Workflow: Reference Value Change Request 95"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.6 Evidence Requirements 96"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.7 v4.1: Evidence Quality Dimensional Tracking 96"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.8 KPIs & Metrics 97"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.9 RACI Matrix 97"
+  },
+  {
+    "style": "toc 1",
+    "text": "10. Domain 9: BIA – Business Intelligence & Analytics 99"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.1 Domain Overview 99"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.2 NDI Specification Mapping 99"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.3 Operational Lifecycle: Analytics Tower 100"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.4 DGOP Module Mapping 102"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.5 Workflow: BI Report Certification 103"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.6 Evidence Requirements 103"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.7 v4.1: Evidence Quality Dimensional Tracking 104"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.8 KPIs & Metrics 104"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.9 RACI Matrix 105"
+  },
+  {
+    "style": "toc 1",
+    "text": "11. Domain 10: DVR – Data Value Realization 106"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.1 Domain Overview 106"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.2 NDI Specification Mapping 106"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.3 Operational Lifecycle: Value Tower 107"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.4 DGOP Module Mapping 109"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.5 Workflow: Asset Value Optimization Decision 110"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.6 Evidence Requirements 110"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.7 v4.1: Evidence Quality Dimensional Tracking 111"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.8 KPIs & Metrics 111"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.9 RACI Matrix 112"
+  },
+  {
+    "style": "toc 1",
+    "text": "12. Domain 11: OD – Open Data 113"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.1 Domain Overview 113"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.2 NDI Specification Mapping 114"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.3 Operational Lifecycle: Open Data Tower 114"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.4 DGOP Module Mapping 116"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.5 Workflow: Open Data Publication Approval 117"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.6 Evidence Requirements 118"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.7 v4.1: Evidence Quality Dimensional Tracking 118"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.8 KPIs & Metrics 119"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.9 RACI Matrix 119"
+  },
+  {
+    "style": "toc 1",
+    "text": "13. Domain 12: FOI – Freedom of Information 121"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.1 Domain Overview 121"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.2 NDI Specification Mapping 121"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.3 Operational Lifecycle: Transparency Tower 122"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.4 DGOP Module Mapping 124"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.5 Workflow: FOI Request Decision 125"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.6 KSA Business Days SLA Calculation 126"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.7 Evidence Requirements 126"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.8 v4.1: Evidence Quality Dimensional Tracking 126"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.9 KPIs & Metrics 127"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.10 RACI Matrix 128"
+  },
+  {
+    "style": "toc 1",
+    "text": "14. Cross-Cutting Platform Capabilities *(NEW v4.1)* 129"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.1 Enhanced Search Across All NDI Domains 129"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.2 Error Message Handling & User Notifications 131"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.3 Business Process & Workflow Management 134"
+  },
+  {
+    "style": "toc 3",
+    "text": "13 Core Execution Patterns 138"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.4 Cross-Domain Audit Trail & Monitoring 139"
+  },
+  {
+    "style": "toc 3",
+    "text": "Compliance Reporting 140"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.5 Service Integration Matrix 141"
+  },
+  {
+    "style": "toc 1",
+    "text": "15. Appendices 142"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix A: Universal NDI Evidence State Machine (v4.1) 142"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix B: Cross-Domain Integration Matrix (v4.1) 144"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix C: NDI Compliance Scoring Algorithm (Unified v4.1) 147"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix D: DGOP Table Mapping Summary (v4.1) 147"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix E: Severity-Based DQ SLA Quick Reference (v4.1) 149"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix F: 4-Level Governance Escalation Quick Reference (v4.1) 150"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix G: 6 DQ Dimensions by Domain Coverage Matrix (v4.1) 150"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix H: DGOP Enhancement Implementation Roadmap (v4.1) 151"
+  },
+  {
+    "style": "toc 2",
+    "text": "Appendix I: Cross-Cutting Platform Capability Summary (NEW v4.1) 152"
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 3: NDI Domain Operational Models (Enhanced v4.1)"
+  },
+  {
+    "style": "List Bullet",
+    "text": "13. Cross-Cutting Platform Capabilities *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 1",
+    "text": "1. Introduction to NDI Domain Operationalization"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.1 Purpose"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.2 Operational Model Structure"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.3 Stewardship Role Taxonomy (v4.1)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "1.3.1 Operational Data Steward (ODS)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "1.3.2 Project Data Steward (PDS)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "1.3.3 Enterprise Data Steward (EDS)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.4 Maturity Progression"
+  },
+  {
+    "style": "Heading 1",
+    "text": "2. Domain 1: DG – Data Governance"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.3 Operational Lifecycle: Governance Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Identify"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Register"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Assign"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Approve"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Operate"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Optimize"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.4 v4.1: Charter Management Lifecycle"
+  },
+  {
+    "style": "Normal",
+    "text": "8 Mandatory Charter Elements: 1. Purpose and objectives of the data governance program 2. Scope of authority (enterprise-wide or domain-limited) 3. Governance body structure and composition 4. Role definitions and responsibilities (including ODS, PDS, EDS) 5. Decision rights matrix with time-boxed escalation 6. Meeting cadence and quorum requirements 7. Charter amendment process 8. Review cycle and effectiveness metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.5 v4.1: Policy Lifecycle Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.6 v4.1: DGPO Sizing Guidance"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.7 v4.1: Domain Council Structure"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.8 v4.1: 4-Tier Training Curriculum"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.9 v4.1: 3-Level Certification Program (CDS/SDS/MDS)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.10 v4.1: Community of Practice Governance"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.11 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.12 Workflow: Owner Assignment Approval (BPMN 2.0)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.13 v4.1: Charter Approval Workflow (BPMN 2.0)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.14 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.15 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.16 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.17 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "3. Domain 2: MCM – Master Data Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.3 Operational Lifecycle: Master Data Governance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Entity Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Authoritative Source Declaration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Golden Record Design"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Stewardship Assignment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: DQ Profiling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Matching & Merging"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Publication"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Consumption Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Retirement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 10: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.4 v4.1: MDM Implementation Styles"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.5 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.6 Workflow: Golden Record Merge Approval"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.7 v4.1: Match Resolution Workflow (BPMN 2.0)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.8 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.9 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.10 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.11 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "4. Domain 3: DQ – Data Quality"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.3 6-Dimension DQ Framework"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension Definitions and Measurement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension Weighting by Domain Context"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.4 v4.1: Data Profiling Capabilities"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Profiling Types"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Profiling Outputs"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.5 v4.1: Severity-Based SLA Framework"
+  },
+  {
+    "style": "Heading 3",
+    "text": "4-Tier Severity Classification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Per-Stage SLA Matrix by Severity"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.6 v4.1: 4-Level Governance Escalation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.7 v4.1: RCA Technique Integration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Technique Selection Guide"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RCA Workflow Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.8 v4.1: DQ Rule Lifecycle"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.9 v4.1: Hierarchical DQ Scorecards"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Scorecard Hierarchy"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Scorecard Components"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.10 Operational Lifecycle: DQ Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Rule Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Profiling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Detection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Root Cause Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Correction"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Validation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Evidence"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.11 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.12 Workflow: DQ Issue Remediation (Enhanced v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.13 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.14 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.15 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.16 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "5. Domain 4: DSI – Data Sharing & Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.3 Operational Lifecycle: Sharing Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Opportunity Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Sharing Request"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Multi-Dimensional Review"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Security Review: Classification compatibility, encryption requirements, cross-border restrictions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Agreement Execution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Technical Enablement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Usage Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Renewal / Retirement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.5 Workflow: Data Sharing Request Approval"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.10 Cross-Domain Integration"
+  },
+  {
+    "style": "Heading 1",
+    "text": "6. Domain 5: PDP – Privacy & Data Protection"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.3 Operational Lifecycle: Privacy Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Data Subject Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Legal Basis Mapping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Consent Capture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: RoPA Recording"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: DPIA Trigger"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Processing Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: DSR Fulfillment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Breach Detection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Retention Enforcement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 10: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.4 v4.1: Privacy by Design SDLC Integration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "7 Privacy by Design Principles"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5 SDLC Phase Gates"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.5 v4.1: Data Masking Service"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6 Masking Techniques"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Masking Selection Matrix"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.6 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.7 Workflow: DPIA High-Risk Processing"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.8 v4.1: Privacy by Design SDLC Gate (BPMN 2.0)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.9 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.10 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.11 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.12 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "7. Domain 6: DAM – Data Architecture Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.3 Operational Lifecycle: Architecture Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Strategy Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Conceptual Modeling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Logical Design"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Physical Design"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Architecture Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Implementation Gating"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Lineage Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Model Evolution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.5 Workflow: Architecture Review Board Gate"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "8. Domain 7: DCM – Data Content Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.3 Operational Lifecycle: Content Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Creation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Classification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Active Retention"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Archival"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Disposal"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Legal Hold Exception"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.5 Workflow: Secure Disposal with Legal Hold Check"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "9. Domain 8: RMD – Reference Master Data"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.3 Operational Lifecycle: Reference Data Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Standard Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Reference Set Creation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Value Governance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Approval"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Distribution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Consumption Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Versioning"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Retirement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.5 Workflow: Reference Value Change Request"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "10. Domain 9: BIA – Business Intelligence & Analytics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.3 Operational Lifecycle: Analytics Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Use Case Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Data Source Certification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Design"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Privacy & Security Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Certification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Publication"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Usage Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Evolution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Retirement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 10: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.5 Workflow: BI Report Certification"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "11. Domain 10: DVR – Data Value Realization"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.3 Operational Lifecycle: Value Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Valuation Methodology"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Baseline Assessment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Value Metric Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Attribution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Reporting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Optimization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.5 Workflow: Asset Value Optimization Decision"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "12. Domain 11: OD – Open Data"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.3 Operational Lifecycle: Open Data Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Candidate Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Eligibility Assessment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Approval Chain"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Publication"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Usage Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Periodic Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Update / Retirement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.5 Workflow: Open Data Publication Approval"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.6 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.7 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.8 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.9 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "13. Domain 12: FOI – Freedom of Information"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.1 Domain Overview"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.2 NDI Specification Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.3 Operational Lifecycle: Transparency Tower"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 1: Request Intake"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 2: Registration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 3: Eligibility Classification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 4: Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 5: Decision"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 6: Disclosure / Redaction / Rejection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 7: Appeals"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 8: Closure"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 9: Evidence Archiving"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phase 10: Search, Workflow & Notification Integration *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.4 DGOP Module Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.5 Workflow: FOI Request Decision"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.6 KSA Business Days SLA Calculation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.7 Evidence Requirements"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.8 v4.1: Evidence Quality Dimensional Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.9 KPIs & Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.10 RACI Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "14. Cross-Cutting Platform Capabilities *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.1 Enhanced Search Across All NDI Domains"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Scope per Domain"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Architecture"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Security Filtering: Results filtered by user role, domain access, and classification level"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Real-Time Indexing Events"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Analytics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.2 Error Message Handling & User Notifications"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Categories per Domain"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Code Patterns"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Bilingual Support"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Channels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Types per Domain"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Preferences"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.3 Business Process & Workflow Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Execution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Role & Responsibility Mapping"
+  },
+  {
+    "style": "Normal",
+    "text": "12 roles mapped to workflow activities across all domains:"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RACI Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SLA & Escalation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Evidence & Document Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Audit Trail"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dashboard & Reporting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "13 Core Execution Patterns"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.4 Cross-Domain Audit Trail & Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Audit Event Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Cross-Domain Workflow Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Unified Dashboard"
+  },
+  {
+    "style": "Normal",
+    "text": "Executive view across all 12 domains:"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Compliance Reporting"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.5 Service Integration Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "15. Appendices"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix A: Universal NDI Evidence State Machine (v4.1)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Evidence Quality Gate (v4.1)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Management States (NEW v4.1)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Integration (NEW v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix B: Cross-Domain Integration Matrix (v4.1)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "B.1 Original Integration Points (Preserved from v4.0)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "B.2 Enhanced Integration Points (v4.1)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "B.3 v4.1 Stewardship Role Integration Summary"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix C: NDI Compliance Scoring Algorithm (Unified v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix D: DGOP Table Mapping Summary (v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix E: Severity-Based DQ SLA Quick Reference (v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix F: 4-Level Governance Escalation Quick Reference (v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix G: 6 DQ Dimensions by Domain Coverage Matrix (v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix H: DGOP Enhancement Implementation Roadmap (v4.1)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Appendix I: Cross-Cutting Platform Capability Summary (NEW v4.1)"
+  }
+]

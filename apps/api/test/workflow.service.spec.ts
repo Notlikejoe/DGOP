@@ -7,10 +7,15 @@ import assert from 'node:assert';
 import { WorkflowService } from '../src/workflow/workflow.service';
 import {
   DEFAULT_WORKFLOW_TEMPLATES,
+  buildWorkflowCaseTypeRegistry,
+  buildWorkflowEscalationTemplates,
+  buildWorkflowNotificationRules,
+  buildWorkflowSlaTemplates,
   firstActionableWorkflowStage,
   routeGateForOpenStagePeers,
   selectWorkflowTransitionForDecision,
   selectWorkflowTemplate,
+  workflowTemplateConfigurationStatus,
   workflowHealth,
 } from '../src/workflow/workflow.logic';
 
@@ -22,8 +27,11 @@ type Over = {
   assignment?: any;
   assignmentUpdate?: any;
   template?: any;
+  templates?: any[];
   createdTasks?: any[];
   caseUpdates?: any[];
+  workflowCases?: any[];
+  caseFindManyArgs?: any;
   taskBulkUpdates?: any[];
   taskUpdates?: any[];
   tasks?: any[];
@@ -35,6 +43,7 @@ type Over = {
   scope?: any;
   scopeForRoles?: (roleCodes: string[]) => any;
   userRoleCandidates?: any[];
+  userRoleCandidatesByRole?: Record<string, any[]>;
   setCalls?: any[][];
 };
 
@@ -69,9 +78,16 @@ function makeService(over: Over): WorkflowService {
       create: async ({ data }: any) => ({ id: 'case-new', ...data, tasks: [], asset: null, assignment: null }),
       findUnique: async () => over.case ?? ({ id: 'case-new', status: 'draft', assetId: null, tasks: [], asset: null, assignment: null }),
       findFirst: async () => over.case ?? ({ id: 'case-new', status: 'submitted', assetId: null, tasks: [], asset: null, assignment: null }),
+      findMany: async (args: any) => {
+        over.caseFindManyArgs = args;
+        return over.workflowCases ?? [];
+      },
+      count: async () => over.workflowCases?.length ?? 0,
     },
     workflowTemplate: {
       findUnique: async () => over.template ?? null,
+      findFirst: async (args: any) => over.templates?.find((template) => template.id === args.where?.id) ?? over.template ?? null,
+      findMany: async () => over.templates ?? [],
     },
     workflowEvent: {
       create: async (args: any) => {
@@ -92,15 +108,18 @@ function makeService(over: Over): WorkflowService {
     },
     userRole: {
       findFirst: async () => ({ userId: 'u-next' }),
-      findMany: async () =>
-        over.userRoleCandidates ?? [
+      findMany: async (args: any) => {
+        const roleCode = args.where?.role?.code;
+        if (over.userRoleCandidatesByRole) return over.userRoleCandidatesByRole[roleCode] ?? [];
+        return over.userRoleCandidates ?? [
           {
             userId: 'u-next',
             user: {
               userRoles: [{ role: { code: 'data_owner', isActive: true, deletedAt: null } }],
             },
           },
-        ],
+        ];
+      },
     },
     user: { findFirst: async () => over.submitter ?? null },
     dataAsset: {
@@ -286,6 +305,69 @@ test('workflow templates: default routes include graphable stages and transition
   assert.ok(dq.transitions.some((transition) => transition.isHappyPath === false));
 });
 
+test('workflow templates: v5 universal case types have dedicated route templates', () => {
+  const required = [
+    'open_data_publication_approval',
+    'metadata_certification',
+    'architecture_review',
+    'business_glossary_term',
+    'asset_lifecycle_decision',
+    'business_impact_assessment',
+    'compliance_calendar',
+  ];
+  for (const caseType of required) {
+    assert.ok(DEFAULT_WORKFLOW_TEMPLATES.some((template) => template.caseType === caseType), caseType);
+  }
+});
+
+test('workflow configuration builders expose case registry, SLA, notifications, and escalations', () => {
+  const templates = DEFAULT_WORKFLOW_TEMPLATES.map((template, templateIndex) => {
+    const stageIds = new Map(template.stages.map((stage, index) => [stage.code, `stage-${templateIndex}-${index}`]));
+    return {
+      id: `template-${templateIndex}`,
+      code: template.code,
+      caseType: template.caseType,
+      nameEn: template.nameEn,
+      nameAr: template.nameAr,
+      trigger: template.trigger,
+      defaultSlaDays: template.defaultSlaDays,
+      isSystem: true,
+      isActive: true,
+      domainId: null,
+      stages: template.stages.map((stage, index) => ({
+        id: stageIds.get(stage.code)!,
+        code: stage.code,
+        kind: stage.kind,
+        taskType: stage.taskType,
+        assigneeRoleCode: stage.assigneeRoleCode ?? null,
+        dueDays: stage.dueDays,
+        sortOrder: index + 1,
+        isStart: Boolean(stage.isStart),
+        isDecision: Boolean(stage.isDecision),
+        isFinal: Boolean(stage.isFinal),
+        isActive: true,
+      })),
+      transitions: template.transitions.map((transition) => ({
+        fromStageId: stageIds.get(transition.from)!,
+        toStageId: stageIds.get(transition.to)!,
+        decision: transition.decision ?? null,
+        isHappyPath: transition.isHappyPath ?? true,
+      })),
+    };
+  });
+  const registry = buildWorkflowCaseTypeRegistry(templates);
+  const slaTemplates = buildWorkflowSlaTemplates(templates);
+  const notifications = buildWorkflowNotificationRules(templates);
+  const escalations = buildWorkflowEscalationTemplates(templates);
+
+  assert.equal(registry.every((item) => item.hasActiveRoute), true);
+  assert.equal(registry.some((item) => item.caseType === 'compliance_calendar'), true);
+  assert.equal(slaTemplates.length, templates.length);
+  assert.equal(notifications.length > templates.length, true);
+  assert.equal(escalations.length > templates.length, true);
+  assert.equal(workflowTemplateConfigurationStatus(templates[0]), 'ready');
+});
+
 test('workflow routes: first actionable stage skips passive intake nodes', () => {
   const dq = DEFAULT_WORKFLOW_TEMPLATES.find((template) => template.caseType === 'data_quality_issue');
   assert.ok(dq);
@@ -347,6 +429,134 @@ test('route gate: blocks stage advance while peer tasks are still open', () => {
   const blocked = routeGateForOpenStagePeers(2);
   assert.strictEqual(blocked.allowed, false);
   assert.ok(blocked.reason?.includes('active tasks'));
+});
+
+test('route backfill attaches legacy open cases and tasks to matching templates', async () => {
+  const template = {
+    id: 'tpl-dq',
+    code: 'WF-DQ-REMEDIATION',
+    caseType: 'data_quality_issue',
+    nameEn: 'Quality remediation route',
+    nameAr: 'Quality remediation route',
+    trigger: 'data_quality_issue',
+    defaultSlaDays: 7,
+    domainId: null,
+    isSystem: true,
+    isActive: true,
+    stages: [
+      {
+        id: 'stage-triage',
+        code: 'triage',
+        nameEn: 'Triage',
+        nameAr: 'Triage',
+        kind: 'triage',
+        taskType: 'review',
+        assigneeRoleCode: 'dq_steward',
+        dueDays: 1,
+        sortOrder: 1,
+        isStart: false,
+        isDecision: false,
+        isFinal: false,
+        isActive: true,
+      },
+    ],
+    transitions: [],
+    _count: { cases: 0, stages: 1 },
+  };
+  const over: Over = {
+    templates: [template],
+    workflowCases: [
+      {
+        id: 'case-legacy',
+        code: 'WFC-DQI-OLD',
+        type: 'data_quality_issue',
+        status: 'submitted',
+        assetId: 'asset-1',
+        createdBy: 'seed',
+        asset: { domainId: null },
+        tasks: [{ id: 'task-legacy', templateStageId: null, createdAt: new Date() }],
+      },
+    ],
+  };
+  const svc = makeService(over);
+  const count = await (svc as any).backfillUnroutedOpenCases();
+
+  assert.strictEqual(count, 1);
+  assert.strictEqual(over.caseUpdates?.[0].templateId, 'tpl-dq');
+  assert.strictEqual(over.taskBulkUpdates?.[0].templateStageId, 'stage-triage');
+  assert.ok(over.events?.some((event) => event.action === 'route.template.backfilled'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_case.route_backfill'));
+});
+
+test('assignUnownedRoutedTasks uses DMO admin as controlled fallback queue owner', async () => {
+  const currentTask = {
+    id: 'task-unassigned',
+    caseId: 'case-1',
+    status: 'pending',
+    assigneeUserId: null,
+    case: { assetId: 'asset-1', status: 'submitted' },
+    templateStage: { nameEn: 'Definition drafting', assigneeRoleCode: 'data_steward' },
+  };
+  const over: Over = {
+    task: currentTask,
+    tasks: [currentTask],
+    userRoleCandidatesByRole: {
+      data_steward: [],
+      dmo_admin: [
+        {
+          userId: 'admin-user',
+          user: {
+            userRoles: [{ role: { code: 'dmo_admin', isActive: true, deletedAt: null } }],
+          },
+        },
+      ],
+    },
+    scopeForRoles: (roleCodes) =>
+      roleCodes.includes('dmo_admin')
+        ? { orgUnits: 'all', domains: 'all', maxClassRank: null }
+        : { orgUnits: [], domains: [], maxClassRank: null },
+  };
+  const svc = makeService(over);
+  const count = await (svc as any).assignUnownedRoutedTasks();
+
+  assert.strictEqual(count, 1);
+  assert.strictEqual(over.taskUpdates?.[0].assigneeUserId, 'admin-user');
+  assert.ok(over.events?.some((event) => event.action === 'task.auto_assigned'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_task.auto_assign'));
+});
+
+test('dueDateForStage keeps zero-day urgent tasks due through the current day', () => {
+  const svc = makeService({});
+  const due = (svc as any).dueDateForStage({
+    id: 'stage-urgent',
+    sortOrder: 1,
+    dueDays: 0,
+    isStart: false,
+    isFinal: false,
+    isActive: true,
+    assigneeRoleCode: 'privacy_officer',
+  });
+
+  assert.ok(due instanceof Date);
+  assert.strictEqual(due.getHours(), 23);
+  assert.strictEqual(due.getMinutes(), 59);
+});
+
+test('openRoutedCase fails closed when no route candidate is available', async () => {
+  const svc = makeService({
+    template: { id: 'seed-already-present' },
+    templates: [],
+  });
+
+  await assert.rejects(
+    () =>
+      svc.createCase(
+        { title: 'Unrouted quality case', type: 'data_quality_issue' } as never,
+        ['system_admin'],
+        'admin@dgop.local',
+      ),
+    /No workflow route template is available/,
+  );
 });
 
 test('updateCase: hides out-of-scope asset-linked cases', async () => {

@@ -1,0 +1,170 @@
+{
+  "input": "C:\\Users\\Youss\\OneDrive\\Documents\\DGOP\\DGOP_All_Sprints_System_Design_Roadmap.docx",
+  "fonts_by_char_count": {
+    "Arial": 39
+  },
+  "direct_run_formatting_runs": 197,
+  "direct_paragraph_formatting_paragraphs": 849,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 8,
+      "text": "All Sprints System Design Roadmap",
+      "style": "Title"
+    },
+    {
+      "para_index": 30,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 38,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 44,
+      "text": "UI/UX foundation work (design system kickoff)",
+      "style": "normal"
+    },
+    {
+      "para_index": 51,
+      "text": "Database work",
+      "style": "normal"
+    },
+    {
+      "para_index": 55,
+      "text": "Publishing and remote access work",
+      "style": "normal"
+    },
+    {
+      "para_index": 62,
+      "text": "Quality work",
+      "style": "normal"
+    },
+    {
+      "para_index": 67,
+      "text": "Per-sprint QA deliverables",
+      "style": "normal"
+    },
+    {
+      "para_index": 71,
+      "text": "Acceptance",
+      "style": "normal"
+    },
+    {
+      "para_index": 85,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 95,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 103,
+      "text": "Database work",
+      "style": "normal"
+    },
+    {
+      "para_index": 105,
+      "text": "Acceptance",
+      "style": "normal"
+    },
+    {
+      "para_index": 114,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 123,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 130,
+      "text": "Database work",
+      "style": "normal"
+    },
+    {
+      "para_index": 133,
+      "text": "Acceptance",
+      "style": "normal"
+    },
+    {
+      "para_index": 142,
+      "text": "Backend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 151,
+      "text": "Frontend work",
+      "style": "normal"
+    },
+    {
+      "para_index": 159,
+      "text": "Database work",
+      "style": "normal"
+    }
+  ],
+  "examples": {
+    "direct_run_formatting": [
+      {
+        "para_index": 7,
+        "run_text": "DGOP",
+        "style": "Title"
+      },
+      {
+        "para_index": 8,
+        "run_text": "All Sprints System Design Roadmap",
+        "style": "Title"
+      },
+      {
+        "para_index": 9,
+        "run_text": "Enterprise Governance Operations Platform sprint catalog and delivery architectu",
+        "style": "normal"
+      },
+      {
+        "para_index": 14,
+        "run_text": "This document consolidates the DGOP sprint roadmap into a system-design style de",
+        "style": "normal"
+      },
+      {
+        "para_index": 15,
+        "run_text": "The roadmap is organized by release waves so senior stakeholders can understand ",
+        "style": "normal"
+      }
+    ],
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 19,
+        "text": "Scope the sprint against DGOP operating towers, personas, NDI/PDP/security obligations, and demo goals.",
+        "style": "normal"
+      },
+      {
+        "para_index": 20,
+        "text": "Implement backend APIs, database rules, authorization, audit logging, and workflow hooks before UI-only polish.",
+        "style": "normal"
+      },
+      {
+        "para_index": 21,
+        "text": "Build Angular screens with shared design-system components, bilingual copy, light/dark parity, and RTL support.",
+        "style": "normal"
+      },
+      {
+        "para_index": 22,
+        "text": "Verify with focused unit/API tests, UI checks, accessibility review, and sprint-level QA evidence.",
+        "style": "normal"
+      },
+      {
+        "para_index": 23,
+        "text": "Document delivered, deferred, and mocked capabilities before moving to the next sprint.",
+        "style": "normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

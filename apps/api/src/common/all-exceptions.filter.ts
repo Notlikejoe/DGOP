@@ -8,14 +8,28 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
+import {
+  buildErrorExperience,
+  normalizeHttpMessage,
+  prismaErrorExperience,
+  publicErrorLabel,
+  statusToErrorCode,
+} from './error-experience.logic';
 
 /** Normalized error shape returned for every failed request. */
 interface ErrorBody {
   statusCode: number;
+  code: string;
   error: string;
   message: string | string[];
+  userMessage: string;
+  retryable: boolean;
+  method: string;
   path: string;
   timestamp: string;
+  requestId: string;
+  correlationId: string;
 }
 
 /**
@@ -32,73 +46,68 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request>();
 
-    const { status, error, message } = this.resolve(exception);
+    const requestId = this.header(req, 'x-request-id') ?? randomUUID();
+    const correlationId = this.header(req, 'x-correlation-id') ?? requestId;
+    const { status, error, code, message, userMessage, retryable } = this.resolve(exception);
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `${req.method} ${req.url} -> ${status}`,
+        `${req.method} ${req.url} -> ${status} ${code} requestId=${requestId}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
+    } else if (status >= HttpStatus.BAD_REQUEST) {
+      this.logger.warn(`${req.method} ${req.url} -> ${status} ${code} requestId=${requestId}`);
     }
 
     const body: ErrorBody = {
       statusCode: status,
+      code,
       error,
       message,
+      userMessage,
+      retryable,
+      method: req.method,
       path: req.url,
       timestamp: new Date().toISOString(),
+      requestId,
+      correlationId,
     };
+    res.setHeader('x-request-id', requestId);
+    res.setHeader('x-correlation-id', correlationId);
     res.status(status).json(body);
   }
 
   private resolve(exception: unknown): {
     status: number;
     error: string;
+    code: string;
     message: string | string[];
+    userMessage: string;
+    retryable: boolean;
   } {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const response = exception.getResponse();
-      const message =
+      const message = normalizeHttpMessage(
         typeof response === 'string'
           ? response
-          : ((response as { message?: string | string[] }).message ?? exception.message);
+          : (response as { message?: string | string[] }).message,
+        exception.message || publicErrorLabel(status),
+      );
       const error =
         typeof response === 'object' && response !== null && 'error' in response
           ? String((response as { error: unknown }).error)
-          : HttpStatus[status] ?? 'Error';
-      return { status, error, message };
+          : publicErrorLabel(status);
+      const experience = buildErrorExperience(status, message, statusToErrorCode(status));
+      return { ...experience, error };
     }
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      // P2002 unique constraint, P2025 record not found.
-      if (exception.code === 'P2002') {
-        return {
-          status: HttpStatus.CONFLICT,
-          error: 'Conflict',
-          message: 'A record with the same unique value already exists',
-        };
-      }
-      if (exception.code === 'P2025') {
-        return {
-          status: HttpStatus.NOT_FOUND,
-          error: 'Not Found',
-          message: 'The requested record was not found',
-        };
-      }
-      return {
-        status: HttpStatus.BAD_REQUEST,
-        error: 'Bad Request',
-        message: 'The request could not be processed',
-      };
+      return prismaErrorExperience(exception);
     }
 
     if (exception instanceof Prisma.PrismaClientValidationError) {
-      return {
-        status: HttpStatus.BAD_REQUEST,
-        error: 'Bad Request',
-        message: 'Invalid request payload',
-      };
+      return buildErrorExperience(HttpStatus.BAD_REQUEST, 'Invalid request payload', 'VAL-400');
     }
 
     // Multer (file upload) errors, e.g. LIMIT_FILE_SIZE.
@@ -106,13 +115,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const code = (exception as { code?: string }).code;
       const message =
         code === 'LIMIT_FILE_SIZE' ? 'The uploaded file is too large' : 'File upload failed';
-      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message };
+      return buildErrorExperience(HttpStatus.BAD_REQUEST, message, 'INT-400');
     }
 
-    return {
-      status: HttpStatus.INTERNAL_SERVER_ERROR,
-      error: 'Internal Server Error',
-      message: 'An unexpected error occurred',
-    };
+    return buildErrorExperience(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      'An unexpected error occurred',
+      'SYS-500',
+    );
+  }
+
+  private header(req: Request, name: string): string | null {
+    const value = req.headers[name];
+    if (Array.isArray(value)) return value[0] ?? null;
+    if (typeof value === 'string' && value.trim()) return value;
+    return null;
   }
 }

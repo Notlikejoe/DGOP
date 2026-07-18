@@ -86,6 +86,7 @@ model User {
   passwordHash String
   displayName  String
   isActive     Boolean    @default(true)
+  tokenVersion Int        @default(0) @map("token_version")
   lastLoginAt  DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt

@@ -1,0 +1,1302 @@
+[
+  {
+    "style": "Heading 1",
+    "text": "Table of Contents"
+  },
+  {
+    "style": "List Number",
+    "text": "Executive Summary 1.1 Vision 1.2 Strategic Objectives 1.3 Positioning of DGOP 1.4 Expected Benefits"
+  },
+  {
+    "style": "Heading 1",
+    "text": "1. Executive Summary"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.1 Vision"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.2 Strategic Objectives"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.3 Positioning of DGOP"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.4 Expected Benefits"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance 100% PDPL compliance for personal data processing activities \\% RoPA entries with approved DPIA and legal basis"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance Zero NCA audit findings related to data governance controls Audit findings count by control family"
+  },
+  {
+    "style": "Heading 1",
+    "text": "2. Current-State Challenges"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.1 Fragmented Governance"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.2 Evidence-Driven Operations Gap"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.3 Lack of Accountability"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.4 NDI Pain Points"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.5 Manual Compliance Burden"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance with PDPL, NCA ECC, and internal policies is overwhelmingly manual:"
+  },
+  {
+    "style": "Heading 1",
+    "text": "3. Target Operating Model"
+  },
+  {
+    "style": "List Number",
+    "text": "Compliance Operations Tower -- How NDI, PDPL, and NCA requirements are operationalized, evidenced, and scored."
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.1 Governance Operations Tower"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.2 Compliance Operations Tower"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Compliance Scoring: Automated calculation of domain readiness scores based on evidence status, maturity bonuses, and specification weights."
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.3 Data Operations Tower"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.4 Transparency Operations Tower"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.5 Value Operations Tower"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.6 Awareness Operations Tower"
+  },
+  {
+    "style": "Heading 1",
+    "text": "4. Governance Structure"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.1 Data Governance Steering Committee (DGSC)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.2 Data Council"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.3 Working Groups"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.4 Data Management Office (DMO)"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Compliance Operations Team (NDI, PDPL, NCA, evidence management)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.5 Open Data & Information Access Officer (ODIAO)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.6 Data Protection Officer (DPO)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.7 Information Security Function"
+  },
+  {
+    "style": "Normal",
+    "text": "Security Responsibilities:"
+  },
+  {
+    "style": "Heading 1",
+    "text": "5. Stewardship Roles Enhancement *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.1 Operational Data Steward (ODS)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "ODS Responsibilities"
+  },
+  {
+    "style": "Heading 3",
+    "text": "ODS Assignment Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "ODS Key Performance Indicators"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.2 Project Data Steward (PDS)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "PDS Responsibilities"
+  },
+  {
+    "style": "Heading 3",
+    "text": "PDS Assignment Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "PDS Lifecycle Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.3 Enterprise Data Steward (EDS)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "EDS Responsibilities"
+  },
+  {
+    "style": "Heading 3",
+    "text": "EDS Assignment Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "EDS Key Performance Indicators"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.4 Updated Ownership & Stewardship Registry Model"
+  },
+  {
+    "style": "Heading 1",
+    "text": "6. Charter Management Framework *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.1 Charter Purpose & Authority"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.2 8 Mandatory Charter Elements"
+  },
+  {
+    "style": "Normal",
+    "text": "1 Purpose Statement of why the data governance program exists, its strategic alignment, and expected outcomes Charter document section 1"
+  },
+  {
+    "style": "Normal",
+    "text": "2 Scope Definition of what data, systems, departments, and activities are in scope vs. out of scope Charter document section 2 + scope boundary registry"
+  },
+  {
+    "style": "Normal",
+    "text": "3 Roles Enumeration of governance roles (owner, 5 steward types, DMO, DPO, ODIAO) with high-level responsibilities Charter document section 3 + RACI reference"
+  },
+  {
+    "style": "Normal",
+    "text": "4 Governance Structure Definition of governance bodies (DGSC, Data Council, Domain Councils, Working Groups), composition, and authority levels Charter document section 4 + org chart"
+  },
+  {
+    "style": "Normal",
+    "text": "5 Decision-Making Process Description of how governance decisions are made, including decision types, approval authorities, and escalation paths Charter document section 5 + Decision Rights Matrix"
+  },
+  {
+    "style": "Normal",
+    "text": "6 Resource Requirements Budget, staffing (DGPO sizing), technology, and training resources allocated to the program Charter document section 6 + budget registry"
+  },
+  {
+    "style": "Normal",
+    "text": "7 Success Criteria Measurable objectives for the governance program including KPIs, maturity targets, and compliance goals Charter document section 7 + KPI dashboard"
+  },
+  {
+    "style": "Normal",
+    "text": "8 Review Cycle Mandatory review frequency (minimum: annually) and trigger conditions for extraordinary review Charter document section 8 + review schedule"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.3 Charter Lifecycle Workflow"
+  },
+  {
+    "style": "Heading 3",
+    "text": "State Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Stages"
+  },
+  {
+    "style": "Normal",
+    "text": "1. Draft Creation DMO Governance Ops Create charter document using DGOP template with all 8 mandatory elements; populate from entity profile 5 business days"
+  },
+  {
+    "style": "Normal",
+    "text": "2. Working Group Review DG Working Group Review charter draft for completeness, accuracy, and alignment with entity structure 5 business days"
+  },
+  {
+    "style": "Normal",
+    "text": "3. Data Council Review Data Council Review and approve charter content; recommend amendments 5 business days"
+  },
+  {
+    "style": "Normal",
+    "text": "4. DGSC Approval DGSC Chair Final approval and ratification; CEO endorsement 5 business days"
+  },
+  {
+    "style": "Normal",
+    "text": "5. Publication DMO Publish active charter to DGOP; notify all governance role holders; store as governance evidence 1 business day"
+  },
+  {
+    "style": "Normal",
+    "text": "6. Annual Review Trigger DGOP System Auto-generate review case 60 days before annual review due date Automatic"
+  },
+  {
+    "style": "Normal",
+    "text": "7. Amendment Workflow Any governance body Amendment requests follow stages 2-4; version control maintains history Per standard SLA"
+  },
+  {
+    "style": "Normal",
+    "text": "8. Archival DMO Superseded versions archived with full audit trail; evidence chain maintained Automatic on new version approval"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Charter Version Control"
+  },
+  {
+    "style": "Normal",
+    "text": "1.0 ARCHIVED 2024-01-15 DGSC 2025-01-15 2.0"
+  },
+  {
+    "style": "Normal",
+    "text": "2.0 ACTIVE 2025-01-10 DGSC 2026-01-10 ---"
+  },
+  {
+    "style": "Heading 1",
+    "text": "7. Policy Lifecycle Management *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.1 5-Level Policy Hierarchy"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Policy Hierarchy Rules"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.2 Policy Lifecycle Stages"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stage 1: Policy Creation"
+  },
+  {
+    "style": "Normal",
+    "text": "1 Purpose Why this policy exists"
+  },
+  {
+    "style": "Normal",
+    "text": "2 Scope What data, systems, people are covered"
+  },
+  {
+    "style": "Normal",
+    "text": "3 Definitions Key terms and acronyms"
+  },
+  {
+    "style": "Normal",
+    "text": "4 Policy Statement The actual policy content"
+  },
+  {
+    "style": "Normal",
+    "text": "5 Roles & Responsibilities Who does what under this policy"
+  },
+  {
+    "style": "Normal",
+    "text": "6 Compliance & Measurement How compliance is measured and monitored"
+  },
+  {
+    "style": "Normal",
+    "text": "7 Related Documents Links to parent policies, standards, procedures"
+  },
+  {
+    "style": "Normal",
+    "text": "8 Revision History Version, date, author, changes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stage 2: Policy Review"
+  },
+  {
+    "style": "Normal",
+    "text": "Security review CISO representative (if applicable) 5 business days"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stage 3: Policy Approval"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stage 4: Policy Deployment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stage 5: Policy Monitoring"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance assessment Evidence collection against policy controls Per policy-defined frequency"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stage 6: Policy Retirement"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.3 Policy-to-Compliance Linkage"
+  },
+  {
+    "style": "Heading 1",
+    "text": "8. Decision Rights & Timeframes *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.1 Decision Rights Matrix"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.2 Default Escalation Timeframes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Escalation Notification Chain"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.3 DGOP Workflow Integration"
+  },
+  {
+    "style": "Heading 1",
+    "text": "9. DGPO Sizing Guidance *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.1 Entity Sizing Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sizing Calculator Formula"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.2 Role Breakdown by Size"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Small Entity (2-3 FTEs)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Medium Entity (4-6 FTEs)"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance Operations Lead 1 NDI coordination, evidence management, PDPL compliance, audit packs"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Large Entity (8-12 FTEs)"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance Operations Manager 1 Team lead for compliance; NDI, PDPL, NCA, evidence"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance Analyst 1-2 Evidence lifecycle, NDI specification mapping, audit pack generation"
+  },
+  {
+    "style": "Heading 1",
+    "text": "10. Data Domain Councils *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.1 Council Mandate & Composition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain Council Mandate"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.2 Lead Steward Role"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Lead Steward Responsibilities"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.3 Operating Procedures & Metrics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Meeting Cadence"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain Council Effectiveness Metrics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "DGOP Domain Council Workspace"
+  },
+  {
+    "style": "Heading 1",
+    "text": "11. RACI Matrices"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.1 Governance Activity RACI"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.2 NDI Domain RACI"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.3 Operational Process RACI"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.4 New Roles RACI Supplement"
+  },
+  {
+    "style": "Heading 1",
+    "text": "12. 4-Tier Training Curriculum *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.1 Tier 1: Fundamentals (8 hours)"
+  },
+  {
+    "style": "Normal",
+    "text": "Module Duration Delivery Topics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.2 Tier 2: Core Skills (16 hours)"
+  },
+  {
+    "style": "Normal",
+    "text": "Module Duration Delivery Topics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.3 Tier 3: Advanced (24 hours)"
+  },
+  {
+    "style": "Normal",
+    "text": "Module Duration Delivery Topics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.4 Tier 4: Leadership (16 hours)"
+  },
+  {
+    "style": "Normal",
+    "text": "Module Duration Delivery Topics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.5 Delivery Methods & Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Training KPIs"
+  },
+  {
+    "style": "Heading 1",
+    "text": "13. 3-Level Certification Program *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.1 CDS -- Certified Data Steward"
+  },
+  {
+    "style": "Heading 3",
+    "text": "CDS Requirements"
+  },
+  {
+    "style": "Heading 3",
+    "text": "CDS Exam Domains"
+  },
+  {
+    "style": "Heading 3",
+    "text": "CDS Privileges"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.2 SDS -- Senior Data Steward"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SDS Requirements"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SDS Exam Domains"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SDS Privileges"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.3 MDS -- Master Data Steward"
+  },
+  {
+    "style": "Heading 3",
+    "text": "MDS Requirements"
+  },
+  {
+    "style": "Heading 3",
+    "text": "MDS Certification Activities"
+  },
+  {
+    "style": "Heading 3",
+    "text": "MDS Privileges"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.4 Continuing Education & Renewal"
+  },
+  {
+    "style": "Heading 3",
+    "text": "CE Activity Credit Values"
+  },
+  {
+    "style": "Heading 1",
+    "text": "14. Community of Practice Platform *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.1 Forums & Discussion Boards"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Forum Features"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.2 Knowledge Base & Best Practice Library"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Knowledge Base Article Template"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.3 Mentorship Program"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Program Structure"
+  },
+  {
+    "style": "Normal",
+    "text": "1. Matching Week 1 Mentor-mentee matching based on domain, role, location, language preference; approved by EDS"
+  },
+  {
+    "style": "Normal",
+    "text": "2. Orientation Weeks 1-2 Joint orientation session; goal setting; communication schedule establishment"
+  },
+  {
+    "style": "Normal",
+    "text": "3. Core Development Months 1-3 Weekly 1-hour sessions; guided DGOP exercises; shadowing on real cases; Tier 1+2 training support"
+  },
+  {
+    "style": "Normal",
+    "text": "4. Practice & Application Months 3-5 Mentee leads cases with mentor review; independent evidence submission; first DQ issue resolution"
+  },
+  {
+    "style": "Normal",
+    "text": "5. Assessment & Graduation Month 6 Final assessment; CDS exam preparation; graduation ceremony; feedback collection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mentor Requirements"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mentee Eligibility"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mentorship Tracking"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.4 Expert Directory & Contribution Incentives"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Expert Directory"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Contribution Incentives"
+  },
+  {
+    "style": "Heading 1",
+    "text": "15. Expanded Maturity Model *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.1 4-Dimension Assessment Framework"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension Weights"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.2 Maturity Level Definitions per Dimension"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension 1: Organizational Awareness"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension 2: Roles & Structures"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension 3: Standards & Processes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension 4: Value Creation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.3 Heat Map Visualization"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.4 6-Month Assessment Cycle"
+  },
+  {
+    "style": "Heading 1",
+    "text": "16. Business Results Metrics *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.1 Business Impact Metric Framework"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance Regulatory audit finding reduction Reduction in audit findings related to data governance (Previous findings - Current findings) / Previous Per audit"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance cost avoidance Estimated cost avoided through proactive compliance Industry benchmark penalty \\* risk reduction factor Annually"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Business Impact Dashboard"
+  },
+  {
+    "style": "Normal",
+    "text": "Compliance Posture Audit findings, evidence readiness, penalty risk DPO, DGSC"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.2 Data User Surveys (9 Dimensions)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Annual Comprehensive Survey"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Quarterly Pulse Survey"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Survey Administration in DGOP"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.3 ROI Attribution Model"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Compliance Value: Penalty avoidance + audit cost reduction"
+  },
+  {
+    "style": "Heading 1",
+    "text": "17. Continuous Improvement Process *(NEW --- Gap Closure)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.1 7-Step Structured Assessment Process"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 1: Assessment Planning"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 2: Evidence Collection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 3: Scoring & Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 4: Gap Prioritization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 5: Improvement Planning"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 6: Improvement Execution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 7: Results Evaluation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.2 Gap Heat Maps"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.3 Improvement Planning & Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Improvement Action Template"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Improvement Tracking Dashboard"
+  },
+  {
+    "style": "Heading 1",
+    "text": "18. Enhanced Search Capabilities *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.1 Search Purpose & Vision"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Security-Aware: Users only see search results for objects they have permission to view."
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.2 Search Scope & Object Types"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.3 Search Features"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.1 Full-Text Search"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.2 Faceted and Filtered Search"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.3 Fuzzy Search"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.4 Auto-Complete and Search Suggestions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.5 Saved Searches"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.6 Advanced Search"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.7 Search Within Search (Drill-Down)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.8 Sort and Presentation Options"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.9 Result Grouping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.3.10 Quick Actions from Search Results"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.4 Search Result Presentation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.4.1 Unified Results Page"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.4.2 Rich Preview Cards"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.4.3 Contextual Actions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.4.4 Export and Share"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.4.5 Search Result Highlighting"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.5 Search Administration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.5.1 Search Index Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.5.2 Search Relevance Tuning"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.5.3 Search Analytics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.5.4 Custom Searchable Fields"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.5.5 Search Result Ranking Rules"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.6 Search Integration Points"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.7 Search Security & Permissions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.7.1 Role-Based Search Scope"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.7.2 Classification-Aware Results"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.7.3 Personal Data Search Restrictions (PDPL Compliance)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "18.7.4 Search Audit Logging"
+  },
+  {
+    "style": "Heading 1",
+    "text": "19. Error Message Handling & User Notification Framework *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.1 Purpose"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.2 Error Message Design Principles"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.2.1 Error Message Severity Levels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.2.2 Error Message Layout Standard"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.3 Error Message Categories"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.3.1 Category-Specific Error Templates"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.4 Error Message Template"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.4.1 Error Code Taxonomy"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.5 Notification Framework"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.5.1 Notification Channels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.5.2 Notification Types"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.5.3 Notification Preferences"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.5.4 Notification Templates"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.5.5 Batching and Digesting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.5.6 Read/Unread Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.6 Error Logging & Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.6.1 Client-Side Error Capture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.6.2 Server-Side Error Logging"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Module and function"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.6.3 Error Analytics Dashboard"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.6.4 Automated Error Alerting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.6.5 Error Categorization and Severity Classification"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.7 Error Message Localization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.7.1 Bilingual Error Messages"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.7.2 Hijri Date Support"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.7.3 Arabic Error Message Standards"
+  },
+  {
+    "style": "Heading 3",
+    "text": "19.7.4 Localization Management"
+  },
+  {
+    "style": "Heading 1",
+    "text": "20. Business Process & Workflow Management *(NEW v4.1)*"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.1 Workflow Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.1.1 Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.1.2 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.1.3 Workflow Modeling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.1.4 Workflow Template Attributes"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.2 Workflow Execution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.2.1 Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.2.2 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.2.3 Workflow Instance State Model"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.3 Task Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.3.1 Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.3.2 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.3.3 Task Attributes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.3.4 Task Lifecycle State Model"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.4 Role & Responsibility Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.4.1 Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.4.2 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.4.3 Supported Roles & Workflow Activity Mapping"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.5 RACI Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.5.1 Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.5.2 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.5.3 RACI Configuration Rules"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.6 Approval Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.6.1 Purpose"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.6.2 Approval Patterns"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.6.3 Approval Actions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.6.4 Approval Comments"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.7 Notification & Reminder Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.7.1 Notification Types in Workflows"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.7.2 Notification Channels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.7.3 Reminder Schedule"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.8 SLA & Escalation Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.8.1 SLA Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.8.2 SLA Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.8.3 Automatic Reminders"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.8.4 Automatic Escalation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.8.5 Overdue Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.8.6 Escalation to Manager"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.9 Evidence & Document Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.9.1 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.9.2 Evidence Attachment Rules"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.10 Workflow Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.10.1 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.10.2 Monitoring Dashboard Widgets"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.11 Audit Trail"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.11.1 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.11.2 Audit Trail Record Format"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.11.3 Audit Trail Integrity"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.12 Dashboard & Reporting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.12.1 Functions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.12.2 Workflow KPI Definitions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "20.12.3 Standard Reports"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.13 Core Workflow Capabilities Summary"
+  },
+  {
+    "style": "Heading 1",
+    "text": "End of Volume 1 (Enhanced)"
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 1 -- Executive & Business Design (Enhanced) concludes here. This volume established:"
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 2 -- Functional Design will detail the core modules, universal case management layer, workflow engine BPMN diagrams, and functional specifications for each DGOP capability."
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 3 -- NDI Domain Operational Models will provide detailed operational lifecycles for all 12 NDI domains."
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 4 -- Technical Design will cover architecture, technology stack, integration patterns, API specifications, event architecture, and database design."
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 5 -- Security & Compliance will map NCA ECC controls and PDPL requirements to DGOP capabilities."
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 6 -- Procurement & Delivery will define non-functional requirements, environment strategy, acceptance criteria, UAT scenarios, support model, and implementation roadmap."
+  }
+]

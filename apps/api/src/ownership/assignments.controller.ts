@@ -12,6 +12,7 @@ import { AssignmentsService } from './assignments.service';
 import {
   ApplyRecommendationDto,
   CreateAssignmentDto,
+  RecommendationFeedbackDto,
   CreateRuleDto,
   UpdateAssignmentDto,
   UpdateRuleDto,
@@ -59,6 +60,17 @@ export class AssignmentsController {
   @RequirePermissions('assignments.create')
   apply(@Body() dto: ApplyRecommendationDto, @CurrentUser() user: AuthUser) {
     return this.service.applyRecommendation(user.roles, dto, user.email);
+  }
+
+  @Post('assets/:id/recommendations/:roleTypeId/feedback')
+  @RequirePermissions('assignments.create')
+  recommendationFeedback(
+    @Param('id') id: string,
+    @Param('roleTypeId') roleTypeId: string,
+    @Body() dto: RecommendationFeedbackDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.recordRecommendationFeedback(user.roles, id, roleTypeId, dto, user.email);
   }
 
   @Get('assignments/conflicts')

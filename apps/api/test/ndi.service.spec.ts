@@ -4,6 +4,11 @@
  */
 import assert from 'node:assert';
 import { NdiSpecificationsService } from '../src/ndi/ndi.service';
+import {
+  domainModelGapCount,
+  domainModelStatus,
+  evidenceQualityScore,
+} from '../src/ndi/ndi.logic';
 
 type Over = {
   specFindMany?: (args: any) => Promise<any[]>;
@@ -13,9 +18,12 @@ type Over = {
   specUpdate?: (args: any) => Promise<any>;
   domainFindUnique?: (args: any) => Promise<any>;
   domainFindMany?: () => Promise<any[]>;
+  workflowGroupBy?: () => Promise<any[]>;
+  counts?: Record<string, number>;
 };
 
 function makeService(over: Over): NdiSpecificationsService {
+  const count = (name: string) => async () => over.counts?.[name] ?? 0;
   const prisma = {
     ndiSpecification: {
       findMany: over.specFindMany ?? (async () => []),
@@ -29,6 +37,17 @@ function makeService(over: Over): NdiSpecificationsService {
       findUnique: over.domainFindUnique ?? (async () => ({ id: 'd1', code: 'data_quality' })),
       findMany: over.domainFindMany ?? (async () => []),
     },
+    workflowCase: { groupBy: over.workflowGroupBy ?? (async () => []) },
+    ndiAuditPack: { count: count('ndiAuditPack') },
+    mdmMatchCandidate: { count: count('mdmMatchCandidate') },
+    referenceDataVersion: { count: count('referenceDataVersion') },
+    metadataCertification: { count: count('metadataCertification') },
+    architectureReview: { count: count('architectureReview') },
+    businessGlossaryTerm: { count: count('businessGlossaryTerm') },
+    businessLineageMap: { count: count('businessLineageMap') },
+    businessImpactAssessment: { count: count('businessImpactAssessment') },
+    dataAssetValuation: { count: count('dataAssetValuation') },
+    dataValueKpi: { count: count('dataValueKpi') },
   };
   const audit = { log: async () => {} };
   return new NdiSpecificationsService(prisma as never, audit as never);
@@ -36,6 +55,29 @@ function makeService(over: Over): NdiSpecificationsService {
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
+
+test('domain model logic: evidence quality and status are derived from operating proof', () => {
+  const readyInput = {
+    specCount: 3,
+    approvedEvidenceCount: 3,
+    evidenceCount: 3,
+    expiredEvidenceCount: 0,
+    rejectedEvidenceCount: 0,
+    pendingEvidenceCount: 0,
+    operationalRecordCount: 2,
+    workflowCaseCount: 1,
+  };
+  assert.strictEqual(evidenceQualityScore(readyInput), 100);
+  assert.strictEqual(domainModelStatus(readyInput), 'ready');
+  assert.strictEqual(domainModelGapCount(readyInput), 0);
+
+  const weakInput = { ...readyInput, approvedEvidenceCount: 0, evidenceCount: 0 };
+  assert.strictEqual(domainModelStatus(weakInput), 'watch');
+  assert.ok(domainModelGapCount(weakInput) > 0);
+
+  const blockedInput = { ...weakInput, specCount: 0, operationalRecordCount: 0, workflowCaseCount: 0 };
+  assert.strictEqual(domainModelStatus(blockedInput), 'blocked');
+});
 
 test('list: composes filters into the AND where-clause', async () => {
   let captured: any = null;
@@ -141,6 +183,47 @@ test('importCsv: reports an error row for an unknown domainCode', async () => {
   assert.strictEqual(res.updated, 0);
   assert.strictEqual(res.errors.length, 1);
   assert.match(res.errors[0].message, /unknown domaincode/i);
+});
+
+test('domainTraceability: maps v5 operating models to live specs, evidence, records, and workflow cases', async () => {
+  const now = new Date();
+  const svc = makeService({
+    specFindMany: async () => [
+      {
+        id: 'spec-dg',
+        domain: { id: 'ndi-dg', code: 'data_strategy', shortCode: 'DG', nameEn: 'Data Strategy', nameAr: 'Data Strategy' },
+        evidence: [{ status: 'approved', expiryDate: new Date(now.getTime() + 86_400_000) }],
+      },
+      {
+        id: 'spec-rmd',
+        domain: { id: 'ndi-rmd', code: 'reference_master_data', shortCode: 'RMD', nameEn: 'Reference Data', nameAr: 'Reference Data' },
+        evidence: [{ status: 'submitted', expiryDate: null }],
+      },
+    ],
+    workflowGroupBy: async () => [{ type: 'policy_lifecycle', _count: { _all: 1 } }],
+    counts: {
+      ndiAuditPack: 1,
+      mdmMatchCandidate: 1,
+      referenceDataVersion: 1,
+      metadataCertification: 0,
+      architectureReview: 0,
+      businessGlossaryTerm: 0,
+      businessLineageMap: 0,
+      businessImpactAssessment: 0,
+      dataAssetValuation: 0,
+      dataValueKpi: 0,
+    },
+  });
+
+  const result = await svc.domainTraceability();
+  assert.strictEqual(result.summary.models, 7);
+  assert.strictEqual(result.summary.specifications, 2);
+  const dg = result.models.find((row) => row.code === 'DG')!;
+  const rmd = result.models.find((row) => row.code === 'RMD')!;
+  assert.strictEqual(dg.status, 'ready');
+  assert.strictEqual(dg.metrics.workflowCaseCount, 1);
+  assert.strictEqual(rmd.status, 'watch');
+  assert.strictEqual(rmd.metrics.pendingEvidenceCount, 1);
 });
 
 (async () => {

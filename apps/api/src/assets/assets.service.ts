@@ -13,6 +13,7 @@ import {
   UpdateAssetDto,
 } from './assets.dto';
 import { parseCsv } from '../common/csv';
+import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
 
 export interface AssetFilters {
   search?: string;
@@ -112,16 +113,65 @@ export class AssetsService {
     return and;
   }
 
-  async list(roleCodes: string[], filters: AssetFilters) {
+  private async assertWritableScope(
+    roleCodes: string[],
+    target: {
+      domainId?: string | null;
+      orgUnitId?: string | null;
+      classificationId?: string | null;
+    },
+  ): Promise<void> {
+    const scope = await this.scope.resolve(roleCodes);
+    const unrestricted =
+      scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank == null;
+    if (unrestricted) return;
+
+    if (scope.domains !== 'all') {
+      if (!target.domainId || !scope.domains.includes(target.domainId)) {
+        throw new BadRequestException('Data asset domain is outside your data scope');
+      }
+    }
+    if (scope.orgUnits !== 'all') {
+      if (!target.orgUnitId || !scope.orgUnits.includes(target.orgUnitId)) {
+        throw new BadRequestException('Data asset organization unit is outside your data scope');
+      }
+    }
+    if (scope.maxClassRank != null && target.classificationId) {
+      const classification = await this.prisma.classification.findFirst({
+        where: { id: target.classificationId, deletedAt: null },
+        select: { rank: true },
+      });
+      if (!classification || classification.rank > scope.maxClassRank) {
+        throw new BadRequestException('Data asset classification is outside your clearance');
+      }
+    }
+  }
+
+  async list(
+    roleCodes: string[],
+    filters: AssetFilters,
+    page?: string | number,
+    pageSize?: string | number,
+  ) {
     const scope = await this.scope.resolve(roleCodes);
     const where = {
       AND: [{ deletedAt: null }, this.scopeWhere(scope), ...this.filterWhere(filters)],
     };
-    return this.prisma.dataAsset.findMany({
+    const query = {
       where,
       include: listInclude,
-      orderBy: { code: 'asc' },
-    });
+      orderBy: { code: 'asc' as const },
+    };
+    const params = parsePageParams(page, pageSize);
+    if (!params) {
+      const bounded = boundedFirstPageParams(pageSize);
+      return this.prisma.dataAsset.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
+    const [rows, total] = await Promise.all([
+      this.prisma.dataAsset.findMany({ ...query, skip: params.skip, take: params.take }),
+      this.prisma.dataAsset.count({ where }),
+    ]);
+    return toPaged(rows, total, params);
   }
 
   async get(roleCodes: string[], id: string) {
@@ -138,7 +188,8 @@ export class AssetsService {
     return ownerName && ownerName.trim() ? 'assigned' : 'unassigned';
   }
 
-  async create(dto: CreateAssetDto, actor: string) {
+  async create(roleCodes: string[], dto: CreateAssetDto, actor: string) {
+    await this.assertWritableScope(roleCodes, dto);
     const { subjectIds, ...rest } = dto;
     const asset = await this.prisma.dataAsset.create({
       data: {
@@ -162,9 +213,15 @@ export class AssetsService {
     return asset;
   }
 
-  async update(id: string, dto: UpdateAssetDto, actor: string) {
-    const existing = await this.prisma.dataAsset.findFirst({ where: { id, deletedAt: null } });
-    if (!existing) throw new NotFoundException('data_asset not found');
+  async update(id: string, roleCodes: string[], dto: UpdateAssetDto, actor: string) {
+    const existing = await this.get(roleCodes, id);
+    await this.assertWritableScope(roleCodes, {
+      domainId: dto.domainId !== undefined ? dto.domainId : existing.domainId,
+      orgUnitId: dto.orgUnitId !== undefined ? dto.orgUnitId : existing.orgUnitId,
+      classificationId: dto.classificationId !== undefined ? dto.classificationId : existing.classificationId,
+    });
+    const persisted = await this.prisma.dataAsset.findFirst({ where: { id, deletedAt: null } });
+    if (!persisted) throw new NotFoundException('data_asset not found');
     const { subjectIds, ...rest } = dto;
 
     const data: Record<string, unknown> = { ...rest };
@@ -195,9 +252,8 @@ export class AssetsService {
     return asset;
   }
 
-  async remove(id: string, actor: string) {
-    const existing = await this.prisma.dataAsset.findFirst({ where: { id, deletedAt: null } });
-    if (!existing) throw new NotFoundException('data_asset not found');
+  async remove(id: string, roleCodes: string[], actor: string) {
+    await this.get(roleCodes, id);
     await this.prisma.dataAsset.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },
@@ -212,16 +268,12 @@ export class AssetsService {
   }
 
   // ---------- Relationships ----------
-  async addRelationship(assetId: string, dto: CreateAssetRelationshipDto, actor: string) {
-    const source = await this.prisma.dataAsset.findFirst({ where: { id: assetId, deletedAt: null } });
-    if (!source) throw new NotFoundException('data_asset not found');
+  async addRelationship(assetId: string, roleCodes: string[], dto: CreateAssetRelationshipDto, actor: string) {
+    await this.get(roleCodes, assetId);
     if (dto.targetAssetId === assetId) {
       throw new BadRequestException('An asset cannot relate to itself');
     }
-    const target = await this.prisma.dataAsset.findFirst({
-      where: { id: dto.targetAssetId, deletedAt: null },
-    });
-    if (!target) throw new BadRequestException('Target asset not found');
+    await this.get(roleCodes, dto.targetAssetId);
 
     const existing = await this.prisma.assetRelationship.findUnique({
       where: {
@@ -253,7 +305,8 @@ export class AssetsService {
     return rel;
   }
 
-  async removeRelationship(assetId: string, relId: string, actor: string) {
+  async removeRelationship(assetId: string, roleCodes: string[], relId: string, actor: string) {
+    await this.get(roleCodes, assetId);
     const rel = await this.prisma.assetRelationship.findFirst({
       where: { id: relId, sourceAssetId: assetId },
     });
@@ -270,7 +323,7 @@ export class AssetsService {
   }
 
   // ---------- CSV Import ----------
-  async importCsv(csv: string, actor: string) {
+  async importCsv(roleCodes: string[], csv: string, actor: string) {
     const rows = parseCsv(csv);
     if (rows.length === 0) throw new BadRequestException('CSV has no data rows');
 
@@ -328,6 +381,12 @@ export class AssetsService {
       const classificationId = resolve(classMap, 'classificationcode');
       if ([domainId, orgUnitId, systemId, capabilityId, classificationId].includes(undefined)) {
         continue; // unknown reference reported above
+      }
+      try {
+        await this.assertWritableScope(roleCodes, { domainId, orgUnitId, classificationId });
+      } catch (e) {
+        errors.push({ row: line, message: (e as Error).message });
+        continue;
       }
 
       const subjectCodes = (row['subjectcodes'] ?? '')

@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { config as loadEnv } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger, ValidationPipe } from '@nestjs/common';
@@ -9,6 +10,13 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import {
+  assertSafeRuntimeConfig,
+  configuredCorsOrigins,
+  isProductionLikeRuntime,
+} from './common/runtime-safety';
+
+loadEnv({ path: join(__dirname, '..', '..', '..', '.env') });
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -27,17 +35,9 @@ async function bootstrap(): Promise<void> {
   // Required so rate limiting and client IPs work behind the tunnel/proxy.
   instance.set('trust proxy', 1);
 
-  const origins = (process.env.CORS_ORIGINS ?? '')
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
-  if (process.env.PUBLIC_ORIGIN) origins.push(process.env.PUBLIC_ORIGIN);
-  const environment = process.env.NODE_ENV ?? 'development';
-  const strictConfig = !['development', 'test'].includes(environment);
-  const allowedOrigins = [...new Set(origins)];
-  if (strictConfig && allowedOrigins.length === 0) {
-    throw new Error('CORS_ORIGINS or PUBLIC_ORIGIN must be set outside development');
-  }
+  assertSafeRuntimeConfig();
+  const strictConfig = isProductionLikeRuntime();
+  const allowedOrigins = configuredCorsOrigins();
 
   app.use(
     helmet({

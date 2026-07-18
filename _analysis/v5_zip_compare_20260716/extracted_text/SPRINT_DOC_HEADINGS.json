@@ -1,0 +1,262 @@
+[
+  {
+    "style": "Heading 1",
+    "text": "1. Abstract"
+  },
+  {
+    "style": "Heading 1",
+    "text": "2. Goals and Non-Goals"
+  },
+  {
+    "style": "Heading 1",
+    "text": "3. Roadmap Architecture"
+  },
+  {
+    "style": "Heading 1",
+    "text": "4. Sprint Delivery Lifecycle"
+  },
+  {
+    "style": "Heading 1",
+    "text": "5. Sprint Catalog Overview"
+  },
+  {
+    "style": "Heading 1",
+    "text": "6. Detailed Sprint Catalog"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Release 1: Foundation And Core Governance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 0: Project Setup And Delivery Foundation"
+  },
+  {
+    "style": "normal",
+    "text": "Sprint 0 user stories and test cases are delivered, and the remote-access test cases pass."
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 1: Authentication, Users, Roles, And App Shell"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 2: Administration Master Data Part 1"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 3: Administration Master Data Part 2"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 4: Data Asset Governance Hub MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 5: Ownership Registry And Assignment Rules MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 6: Workflow Engine MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 7: NDI Specification Registry MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 8: Release 1 Hardening And UAT"
+  },
+  {
+    "style": "normal",
+    "text": "Release 1 proves the operating-model foundation before deeper evidence, DQ, and security modules are added."
+  },
+  {
+    "style": "normal",
+    "text": "Release 1 demo is end-to-end usable."
+  },
+  {
+    "style": "normal",
+    "text": "Release 2: Operationalization, Evidence, KPIs, Training, And Integrations"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Release 2: Operationalization, Evidence, KPIs, Training, And Integrations"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 9: Evidence Repository MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 10: NDI Scoring And Gap Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 11: Dashboards MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 12: Training And Awareness Module"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 13: Data Quality Operations MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 14: Classification, DLP, And Access Review MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 15: Catalog Integration MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 16: Release 2 Hardening And UAT"
+  },
+  {
+    "style": "normal",
+    "text": "Release 2 demonstrates operational awareness, DQ remediation, security review, and evidence readiness as one connected flow."
+  },
+  {
+    "style": "normal",
+    "text": "Release 2 demo shows operational governance from asset import to evidence and dashboards."
+  },
+  {
+    "style": "normal",
+    "text": "Release 3: Transparency, PDP, DSI, Open Data, And FOI"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Release 3: Transparency, PDP, DSI, Open Data, And FOI"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 17: Open Data Candidate Registry"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 18: Open Data Assessment And Approval Workflow"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 19: Open Data Publication, Review, And Usage Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 20: FOI Request Registry And Intake"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 21: FOI Review, Decision, Disclosure, And Appeals"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 22: PDP Privacy Operations MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 23: Data Sharing And Integration Governance MVP"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 24: ODIAO Cockpit And Release 3 UAT"
+  },
+  {
+    "style": "normal",
+    "text": "Release 3 workflows are traceable end to end."
+  },
+  {
+    "style": "normal",
+    "text": "Release 4: Advanced Domains, Reports, Audit Packs, And Production Readiness"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Release 4: Advanced Domains, Reports, Audit Packs, And Production Readiness"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 25: Reporting And Export Framework"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 26: NDI Audit Pack Generation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 27: Extended Domains Part 1: MCM, RMD, DAM"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 28: Extended Domains Part 2: DCM, BIA, DVR"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 29: Notifications, Escalations, And KSA Business Days"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 30: Integration Hub Hardening"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 31: Security And Audit Hardening"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 32: Performance, Search, And Production Readiness"
+  },
+  {
+    "style": "normal",
+    "text": "Release 5: Intelligence, Automation, And Final Go-Live Readiness"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Release 5: Intelligence, Automation, And Final Go-Live Readiness"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 33: Owner Recommendation Improvements"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 34: Predictive SLA And Arabic FOI Classification Prototype"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 35: Final UAT, Security Review, And Documentation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Sprint 36: Go-Live, Stabilization, And Handover"
+  },
+  {
+    "style": "normal",
+    "text": "Release notes."
+  },
+  {
+    "style": "Heading 1",
+    "text": "7. Roadmap-Wide Standards and Appendices"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Definition Of Done For Every Sprint"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Cross-Cutting Engineering Standards"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Suggested First Backlog Epics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Immediate Implementation Sequence After Plan Approval"
+  },
+  {
+    "style": "Heading 2",
+    "text": "Key Risks And Mitigations"
+  }
+]

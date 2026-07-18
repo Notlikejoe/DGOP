@@ -9,6 +9,13 @@ import {
 } from './ndi.dto';
 import { parseCsv } from '../common/csv';
 import { parsePageParams, toPaged, type Paged } from '../common/pagination';
+import {
+  V5_DOMAIN_MODEL_DEFINITIONS,
+  domainModelGapCount,
+  domainModelStatus,
+  evidenceQualityScore,
+  type V5DomainModelInput,
+} from './ndi.logic';
 
 export interface SpecFilters {
   search?: string;
@@ -41,6 +48,120 @@ export class NdiSpecificationsService {
     ]);
     const counts = new Map(grouped.map((g) => [g.domainId, g._count._all]));
     return domains.map((d) => ({ ...d, specCount: counts.get(d.id) ?? 0 }));
+  }
+
+  async domainTraceability() {
+    const [
+      specs,
+      workflowCases,
+      ndiAuditPacks,
+      mdmMatches,
+      referenceVersions,
+      metadataCertifications,
+      architectureReviews,
+      glossaryTerms,
+      lineageMaps,
+      businessImpactAssessments,
+      dataAssetValuations,
+      dataValueKpis,
+    ] = await Promise.all([
+      this.prisma.ndiSpecification.findMany({
+        where: { deletedAt: null, isActive: true },
+        select: {
+          id: true,
+          domain: { select: { id: true, code: true, shortCode: true, nameEn: true, nameAr: true } },
+          evidence: {
+            where: { deletedAt: null },
+            select: { status: true, expiryDate: true },
+          },
+        },
+      }),
+      this.prisma.workflowCase.groupBy({
+        by: ['type'],
+        _count: { _all: true },
+      }),
+      this.prisma.ndiAuditPack.count(),
+      this.prisma.mdmMatchCandidate.count(),
+      this.prisma.referenceDataVersion.count(),
+      this.prisma.metadataCertification.count(),
+      this.prisma.architectureReview.count(),
+      this.prisma.businessGlossaryTerm.count(),
+      this.prisma.businessLineageMap.count(),
+      this.prisma.businessImpactAssessment.count(),
+      this.prisma.dataAssetValuation.count(),
+      this.prisma.dataValueKpi.count(),
+    ]);
+
+    const now = new Date();
+    const workflowCountByType = new Map(workflowCases.map((row) => [row.type, row._count._all]));
+    const operationalCountByModel: Record<string, number> = {
+      DG: ndiAuditPacks,
+      MCM: mdmMatches,
+      RMD: referenceVersions,
+      DAM: architectureReviews,
+      DCM: metadataCertifications + glossaryTerms + lineageMaps,
+      BIA: businessImpactAssessments,
+      DVR: dataAssetValuations + dataValueKpis,
+    };
+
+    const models = V5_DOMAIN_MODEL_DEFINITIONS.map((definition) => {
+      const modelSpecs = specs.filter((spec) => definition.ndiDomainCodes.includes(spec.domain.code));
+      const evidence = modelSpecs.flatMap((spec) => spec.evidence);
+      const approvedEvidenceCount = evidence.filter(
+        (row) => row.status === 'approved' && (!row.expiryDate || row.expiryDate.getTime() > now.getTime()),
+      ).length;
+      const expiredEvidenceCount = evidence.filter(
+        (row) => row.status === 'expired' || (row.expiryDate && row.expiryDate.getTime() <= now.getTime()),
+      ).length;
+      const rejectedEvidenceCount = evidence.filter((row) => row.status === 'rejected' || row.status === 'revoked').length;
+      const pendingEvidenceCount = evidence.filter((row) => row.status === 'submitted' || row.status === 'under_review').length;
+      const workflowCaseCount = definition.workflowTypes.reduce(
+        (sum, type) => sum + (workflowCountByType.get(type) ?? 0),
+        0,
+      );
+      const input: V5DomainModelInput = {
+        specCount: modelSpecs.length,
+        approvedEvidenceCount,
+        evidenceCount: evidence.length,
+        expiredEvidenceCount,
+        rejectedEvidenceCount,
+        pendingEvidenceCount,
+        operationalRecordCount: operationalCountByModel[definition.code] ?? 0,
+        workflowCaseCount,
+      };
+      return {
+        ...definition,
+        status: domainModelStatus(input),
+        evidenceQualityScore: evidenceQualityScore(input),
+        openGapCount: domainModelGapCount(input),
+        metrics: input,
+        ndiDomains: [...new Map(modelSpecs.map((spec) => [spec.domain.id, spec.domain])).values()],
+        nextAction: this.domainModelNextAction(input),
+      };
+    });
+
+    return {
+      generatedAt: now.toISOString(),
+      summary: {
+        models: models.length,
+        ready: models.filter((row) => row.status === 'ready').length,
+        watch: models.filter((row) => row.status === 'watch').length,
+        blocked: models.filter((row) => row.status === 'blocked').length,
+        specifications: specs.length,
+        approvedEvidence: models.reduce((sum, row) => sum + row.metrics.approvedEvidenceCount, 0),
+        openGaps: models.reduce((sum, row) => sum + row.openGapCount, 0),
+      },
+      models,
+    };
+  }
+
+  private domainModelNextAction(input: V5DomainModelInput): string {
+    if (input.specCount <= 0) return 'Add or map NDI specifications for this operating model.';
+    if (input.operationalRecordCount <= 0) return 'Create at least one live operating record in the related DGOP workspace.';
+    if (input.approvedEvidenceCount <= 0) return 'Attach and approve evidence so the model is audit-ready.';
+    if (input.pendingEvidenceCount > 0) return 'Review pending evidence and clear the evidence queue.';
+    if (input.expiredEvidenceCount > 0 || input.rejectedEvidenceCount > 0) return 'Replace rejected or expired evidence with current approved proof.';
+    return 'Keep evidence current and refresh the operating record during the next governance cycle.';
   }
 
   private filterWhere(filters: SpecFilters): Record<string, unknown>[] {

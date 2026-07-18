@@ -144,6 +144,38 @@ export interface WorkflowGraph {
   edges: WorkflowGraphEdge[];
 }
 
+export interface WorkflowConfiguration {
+  status: string;
+  generatedAt: string;
+  summary: {
+    templates: number;
+    caseTypes: number;
+    activeRoutes: number;
+    totalCases: number;
+    activeCases: number;
+    activeTasks: number;
+    overdueTasks: number;
+    unassignedTasks: number;
+    notificationRules: number;
+    escalationTemplates: number;
+  };
+  caseTypeRegistry: Array<{
+    caseType: string;
+    templateCount: number;
+    routeCodes: string[];
+    stageCount: number;
+    defaultSlaDays: number | null;
+    hasDecisionPoint: boolean;
+    hasClosurePoint: boolean;
+    hasActiveRoute: boolean;
+    status: string;
+  }>;
+  universalCaseManagement: {
+    controls: Array<{ code: string; status: string; evidence: string }>;
+    pageContracts: Array<{ route: string; api: string; roleAction: string }>;
+  };
+}
+
 export interface WorkflowRoutePreview {
   caseType: string;
   domainId?: string | null;

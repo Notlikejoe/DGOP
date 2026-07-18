@@ -1,0 +1,1139 @@
+DGOP
+All Sprints System Design Roadmap
+Enterprise Governance Operations Platform sprint catalog and delivery architecture.
+1. Abstract
+This document consolidates the DGOP sprint roadmap into a system-design style delivery artifact. It covers the governance platform foundation, operational modules, transparency and privacy workflows, integration hardening, production readiness, intelligence improvements, and go-live handover.
+The roadmap is organized by release waves so senior stakeholders can understand what is delivered, why it matters, and how the work connects to backend services, Angular workspaces, compliance controls, and user-facing operating flows.
+2. Goals and Non-Goals
+3. Roadmap Architecture
+4. Sprint Delivery Lifecycle
+Scope the sprint against DGOP operating towers, personas, NDI/PDP/security obligations, and demo goals.
+Implement backend APIs, database rules, authorization, audit logging, and workflow hooks before UI-only polish.
+Build Angular screens with shared design-system components, bilingual copy, light/dark parity, and RTL support.
+Verify with focused unit/API tests, UI checks, accessibility review, and sprint-level QA evidence.
+Document delivered, deferred, and mocked capabilities before moving to the next sprint.
+5. Sprint Catalog Overview
+6. Detailed Sprint Catalog
+Release 1: Foundation And Core Governance
+Sprint 0: Project Setup And Delivery Foundation
+Goal: prepare the codebase, local development environment, and working conventions.
+Backend work
+Define v4.0 bounded contexts and module names so later enterprise services map cleanly to the target architecture.
+Create placeholder contracts for profiling, masking, ABAC, LMS, SIEM, catalog, DQ, DLP, Open Data portal, and FOI adapters.
+Create the Node.js/NestJS API project.
+Configure TypeScript, linting, formatting, environment validation, and app bootstrap.
+Connect to local PostgreSQL using .env values without exposing the password.
+Add health check endpoint and basic API version prefix.
+Add Prisma or TypeORM setup and first migration pipeline.
+Frontend work
+Add route placeholders for governance operating model, awareness operations, DQ operations, security/compliance, and business value workspaces.
+Create Angular app.
+Add Angular Material or chosen UI kit.
+Configure routing, layout shell, theming, global styles, HTTP interceptor, and environment files.
+Add placeholder routes for dashboard, admin, assets, workflows, NDI, Open Data, FOI, and reports.
+UI/UX foundation work (design system kickoff)
+Define design tokens: color (including semantic and governance status colors), typography scale, spacing, radius, elevation, motion durations, and easing.
+Configure Angular Material theming from tokens, with light and dark themes and a theme toggle.
+Set up RTL/LTR direction switching and i18n resource files for Arabic and English.
+Scaffold the shared component library (packages/ui or shared/ui) and a "Design System" showcase route (or Storybook).
+Build first base components: page header, data table shell, form field set, buttons, status chip, loading/skeleton, empty state, error state, toast, dialog, drawer.
+Add accessibility tooling (axe) and configure linting for templates.
+Database work
+Create development database.
+Add migration scripts.
+Add seed structure for roles, statuses, classifications, and NDI domain codes.
+Publishing and remote access work
+Serve the app and API behind one public hostname (API under an /api prefix).
+Set up a secure HTTPS tunnel from the laptop (Cloudflare Tunnel by default, ngrok as fallback) to get a public URL reachable from anywhere.
+Enforce HTTPS only, strict CORS to the public origin, security headers, and rate limiting on auth endpoints.
+Add an optional access gate (Cloudflare Access, tunnel basic auth, or allowlist) for invited testers.
+Ensure the database port is never exposed through the tunnel.
+Add start scripts/runbook steps to launch API, web, and tunnel.
+Quality work
+Add unit test runner for backend and frontend.
+Add basic e2e test setup.
+Add component/visual regression and accessibility checks in CI (for example Storybook + axe + screenshot diffing).
+Add scripts for dev, build, test, lint, migrate, and seed.
+Per-sprint QA deliverables
+Create the QA/ folder and template.
+Write QA/Sprint-00/user-stories.md and QA/Sprint-00/test-cases.md covering remote HTTPS access, app shell load, theme/language toggle, and health check.
+Publish the access note with the public URL and test instructions.
+Acceptance
+v4.0 scope is traceable to modules, routes, and future service boundaries without forcing microservices in Sprint 0.
+Angular app runs locally.
+Node.js API runs locally on the configured port.
+API connects to local PostgreSQL.
+Health endpoint passes.
+First migration and seed run successfully.
+.env.example can be produced later without secret values.
+Design tokens, theming (light/dark), RTL/LTR, and i18n scaffolding work end to end.
+The Design System showcase renders the first base components and passes accessibility checks.
+The app is reachable from a remote device over HTTPS via the public URL; plain HTTP is not served; the database is not exposed.
+Sprint 0 user stories and test cases are delivered, and the remote-access test cases pass.
+Sprint 1: Authentication, Users, Roles, And App Shell
+Goal: allow users to access the application shell with controlled roles.
+Backend work
+Seed the v4.0 role taxonomy: System Admin, DMO Admin, Data Owner, Business Steward, Technical Steward, Operational Data Steward, Project Data Steward, Enterprise Data Steward, DQ Steward, Privacy Steward/DPO, Security Reviewer, OD Officer, FOI Officer, Auditor, and Executive.
+Prepare permission namespaces for role-data mapping, certification, community, masking, ABAC, and recurring compliance.
+Implement local user model for development.
+Add password hashing or local dev login strategy.
+Add JWT authentication.
+Add role model and permission constants.
+Add guards for RBAC.
+Add current-user endpoint.
+Seed initial roles: System Admin, DMO Admin, Data Owner, Business Steward, Technical Steward, DQ Steward, Privacy Officer, Security Reviewer, OD Officer, FOI Officer, NDI Evidence Owner, Auditor, Executive.
+Frontend work
+Expose role-aware navigation groups for Governance Operations, Data Operations, Transparency Operations, Awareness Operations, and Security/Compliance.
+Build login page.
+Build protected route guard.
+Build main shell with sidebar, top bar, breadcrumbs, and user profile.
+Build role-aware navigation.
+Build unauthorized page.
+UI/UX: build login, shell, and navigation from the shared design system with polished interactions, theme/language toggles, full keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout. No one-off styling.
+Database work
+Create users, roles, user_roles, permissions if needed, people, and audit basics.
+Acceptance
+Access behavior proves that v4.0 roles can be introduced gradually without weakening existing route guards.
+User can login locally.
+Navigation changes by role.
+Protected pages reject unauthenticated users.
+Initial seeded admin user can access admin routes.
+Login, logout, failed login, and role checks are audited.
+Sprint 2: Administration Master Data Part 1
+Goal: implement foundational governance configuration.
+Backend work
+Add configuration foundations for policy hierarchy, charter categories, decision-right levels, and domain council metadata.
+Add bilingual administrative fields needed by v4.0 operating-model configuration.
+Build CRUD APIs for data domains.
+Build CRUD APIs for data subjects.
+Build CRUD APIs for business capabilities.
+Build status handling and soft delete pattern.
+Add validation for Arabic and English names.
+Add hierarchy support for domains and capabilities.
+Frontend work
+Add nontechnical configuration views for policy hierarchy, charter metadata, and decision-right lookup values.
+Build domain list, create, edit, detail, and hierarchy views.
+Build subject list, create, edit, detail views.
+Build capability list, create, edit, detail, and hierarchy views.
+Add search, filtering, pagination, and status badges.
+UI/UX: use the shared data table, form, and dialog components with consistent loading/empty/error states, validation patterns, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add domain, subject, and capability tables.
+Add hierarchy constraints and indexes.
+Acceptance
+Administrators can configure governance values that later drive charters, policies, RACI, and workflow escalation.
+DMO Admin can configure domains, subjects, and capabilities.
+Hierarchies display correctly.
+Required fields are validated.
+Soft-deleted records do not appear in normal lists.
+Changes are audited.
+Sprint 3: Administration Master Data Part 2
+Goal: complete the core governance configuration model.
+Backend work
+Add RACI template, DGPO sizing, domain council, and decision matrix APIs.
+Add stewardship role categories for Business, Technical, Operational, Project, and Enterprise stewards.
+Build organization unit APIs.
+Build system/platform APIs.
+Build classification APIs.
+Build role type APIs.
+Build RACI template APIs.
+Build status value configuration where appropriate.
+Frontend work
+Build RACI template, decision matrix, DGPO sizing, and domain council configuration screens.
+Build organization hierarchy screens.
+Build systems/platforms screens.
+Build classification management screen.
+Build role type and RACI template screens.
+Add reusable tree, lookup, and form components.
+UI/UX: contribute the tree, lookup, and form components to the shared design system (documented in the showcase) so they are reused consistently with keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive behavior.
+Database work
+Add organization units, systems, classifications, role types, RACI templates.
+Seed classification values: Public, Internal, Restricted, Secret, Top Secret.
+Acceptance
+DMO Admin can model the entity operating structure required by the v4.0 governance design.
+Admin can configure organization hierarchy.
+Admin can configure systems and role types.
+Classification list is seeded and usable.
+RACI templates can be created and assigned to process types.
+Sprint 4: Data Asset Governance Hub MVP
+Goal: create and manage governed data assets.
+Backend work
+Prepare Asset 360 extension points for DQ, DLP, PDP, NDI, risk, lineage, glossary, training, masking, and catalog write-back signals.
+Build data asset CRUD APIs.
+Add asset subject mapping.
+Add asset relationship model.
+Add basic CSV import for asset inventory.
+Add filtering by domain, subject, classification, system, owner status, and lifecycle status.
+Frontend work
+Design Asset 360 sections so v4.0 signals appear as readable business panels, not disconnected technical tabs.
+Build asset list and search page.
+Build asset create/edit form.
+Build Asset 360 MVP view with overview, classification, domain, subject, capability, system, and status.
+Add CSV import UI for local development.
+UI/UX: build the asset list, form, Asset 360, and import flow from the shared design system with consistent tables, tabs/drawers, progress feedback, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add data assets, asset subjects, and asset relationships.
+Add indexes for common filters.
+Acceptance
+Asset 360 can display current MVP data while clearly reserving places for v4.0 integration signals.
+User can create and update assets.
+User can link an asset to domain, subject, capability, organization unit, system, and classification.
+User can import sample assets from CSV.
+Asset 360 MVP displays all core fields.
+Sprint 5: Ownership Registry And Assignment Rules MVP
+Goal: assign owners and stewards to assets and governance dimensions.
+Backend work
+Extend ownership logic for Operational Data Steward, Project Data Steward, Enterprise Data Steward, delegation, backup, workload, effective dates, and steward scorecard inputs.
+Build stewardship assignment APIs.
+Build assignment rule APIs.
+Implement assignment recommendation priority: asset, domain, capability, subject, organization unit, system, DMO exception queue.
+Add primary and backup steward support.
+Add effective date and expiry date support.
+Add conflict detection for overlapping assignments.
+Frontend work
+Show stewardship responsibilities, workload, backup/delegation, and role-specific accountability in the registry and Asset 360.
+Build ownership registry screens.
+Build assignment rule builder MVP using structured conditions.
+Build recommended owner/steward panel on Asset 360.
+Build conflict display and DMO exception queue screen.
+UI/UX: build the registry, rule builder, and queues from the shared design system with consistent interactive patterns, clear empty/error states, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add stewardship assignment and assignment rule tables.
+Add constraints for active assignment windows.
+Acceptance
+The registry supports the five-role stewardship model and captures why a person is accountable.
+System recommends an owner/steward based on rule priority.
+DMO Admin can override with justification.
+Conflicts are visible and traceable.
+Unassigned assets appear in exception queue.
+Sprint 6: Workflow Engine MVP
+Goal: support controlled governance cases and tasks.
+Backend work
+Add universal case-type structure, decision recording, SLA template hooks, escalation levels, and BPMN-ready workflow metadata.
+Prepare case links for assignment, DQ remediation, PDP review, sharing, open data, FOI, evidence review, appeals, and access certification.
+Build workflow case APIs.
+Build workflow task APIs.
+Add case lifecycle states: Draft, Submitted, Under Review, Awaiting Information, Decision Made, Approved, Rejected, Implemented, Closed.
+Add task assignment, due date, decision, comments, and completion.
+Add basic SLA status: On Track, At Risk, Overdue.
+Add owner assignment approval workflow.
+Add steward assignment approval workflow.
+Frontend work
+Add case timeline, decision panel, SLA indicator, escalation state, and clear next-action guidance.
+Build workflow inbox.
+Build case detail page.
+Build task detail and decision forms.
+Add SLA badges and workflow timeline.
+Add approval actions to ownership screens.
+UI/UX: build the workflow inbox, case detail, decision forms, SLA badges, and timeline from the shared design system with consistent interactive patterns, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add workflow cases and workflow tasks.
+Link cases to assets and assignments.
+Acceptance
+Every case records owner, decision, SLA, escalation state, and audit trail consistently.
+User can submit assignment for approval.
+Assigned user can approve or reject task.
+Workflow timeline shows history.
+SLA status updates from due date.
+Decisions are audited.
+Sprint 7: NDI Specification Registry MVP
+Goal: establish the NDI Compliance Hub foundation.
+Backend work
+Support all 12 NDI domains: DG, MCM, DQ, DSI, PDP, DAM, DCM, RMD, BIA, DVR, OD, and FOI.
+Add operational lifecycle metadata, evidence requirement type, maturity level, and acceptance criteria for each specification.
+Build NDI domain and specification APIs.
+Add spec fields: domain code, criterion, spec code, type, maturity level, name, acceptance criteria, active flag.
+Seed core NDI domains DG, MCM, DQ, DSI, PDP, OD, FOI.
+Add CSV import for NDI specifications from spreadsheet-export format.
+Frontend work
+Make the NDI registry browsable by domain, lifecycle phase, evidence type, maturity level, and responsible steward role.
+Build NDI Compliance Hub shell.
+Build specification registry browse and search.
+Build spec detail page with acceptance criteria.
+Add filters by domain, type, maturity, status.
+UI/UX: build the NDI hub, registry browse, and spec detail from the shared design system with consistent tables, filters, detail panels, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add NDI specifications.
+Add indexes on domain, code, type, maturity.
+Acceptance
+The registry can represent the v4.0 NDI domain operating models, not only the first seven domains.
+DMO Admin can import or create NDI specifications.
+Users can browse and filter specs.
+Specification detail clearly displays acceptance criteria.
+Sprint 8: Release 1 Hardening And UAT
+Goal: stabilize Foundation release.
+Backend work
+Add API validation hardening.
+Add consistent error responses.
+Add audit coverage for admin, asset, ownership, workflow, and NDI changes.
+Add API documentation generation.
+Frontend work
+Improve empty states, loading states, error states, and form validation messages.
+Add basic bilingual field support where data has Arabic and English names.
+Polish navigation and route guards.
+UI/UX: run a Release 1 design-system consistency and accessibility audit across all built screens; fix inconsistent patterns, contrast, focus, keyboard traps, RTL issues, and responsive breakpoints; confirm every screen uses shared components only.
+Testing work
+Add UAT scenarios for RACI, decision rights, domain councils, stewardship roles, NDI domain coverage, and v4.0 navigation.
+UAT scenario: configure domain, subject, org unit, system, classification.
+UAT scenario: create asset and assign owner.
+UAT scenario: approve owner assignment.
+UAT scenario: browse NDI specifications.
+Acceptance
+Release 1 proves the operating-model foundation before deeper evidence, DQ, and security modules are added.
+Release 1 demo is end-to-end usable.
+Critical user journeys pass.
+Build, lint, and tests pass.
+Known issues are logged and prioritized.
+Release 2: Operationalization, Evidence, KPIs, Training, And Integrations
+Release 2: Operationalization, Evidence, KPIs, Training, And Integrations
+Sprint 9: Evidence Repository MVP
+Goal: allow evidence to be submitted and reviewed.
+Backend work
+Add evidence chain-of-custody metadata, expiry warnings, evidence owner, reviewer, hash verification, and compliance mapping hooks.
+Build NDI evidence APIs.
+Add evidence lifecycle: Draft, Submitted, Under Review, Approved, Rejected, Expired, Revoked.
+Add local file upload storage.
+Add file metadata and SHA-256 hash.
+Add reviewer comments.
+Add expiry date.
+Frontend work
+Show evidence provenance, expiry risk, reviewer decision, and linked NDI/control requirement in one evidence detail view.
+Build evidence upload form.
+Build evidence list by specification.
+Build evidence review page.
+Add evidence status badges.
+Add expiry date display.
+UI/UX: build evidence upload (drag-and-drop with progress), list, and review from the shared design system with consistent status chips, feedback, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add evidence table and file metadata fields.
+Add evidence status history if needed.
+Acceptance
+Evidence can support NDI, PDPL, NCA ECC, masking, ABAC, and audit-pack needs later without schema rework.
+Evidence owner can upload evidence.
+Reviewer can approve or reject evidence.
+File hash is stored.
+Expired evidence is detected by date.
+Evidence access is audited.
+Sprint 10: NDI Scoring And Gap Analysis
+Goal: calculate readiness and show gaps.
+Backend work
+Add v4.0 expanded maturity dimensions: organizational awareness, roles and structures, standards and processes, and value creation.
+Add improvement-plan records linked to gap heat maps and 6-month assessment cycles.
+Implement scoring formula using specification type, evidence status, and maturity bonus.
+Implement domain readiness percentage.
+Implement maturity result thresholds: Initial, Defined, Activated, Enabled, Leading.
+Implement gap detection for missing, expired, rejected, unassigned, and stuck evidence.
+Add score recalculation service.
+Frontend work
+Build maturity heat maps and improvement-plan views that explain gap priority to executives and stewards.
+Build NDI readiness dashboard.
+Build domain readiness drill-down.
+Build gap analysis queue.
+Add score explanation panel.
+UI/UX: build readiness dashboard, drill-down, and gap queue from the shared design system with consistent charts, KPI cards, status colors paired with icon/text, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add calculated score records or materialized score views.
+Add gap records if persisted.
+Acceptance
+Readiness and maturity scores are explainable by evidence, role structure, process adoption, and value outcomes.
+Approved evidence increases readiness.
+Expired or rejected evidence gives zero evidence credit.
+Domain readiness matches the documented thresholds.
+Gap queue shows actionable items.
+Sprint 11: Dashboards MVP
+Goal: create useful dashboards for primary personas.
+Backend work
+Add KPI groups for the six towers: Governance, Compliance, Data, Transparency, Value, and Awareness operations.
+Add dashboard summary APIs.
+Add counts for assets, ownership coverage, stewardship coverage, workflows, overdue tasks, evidence statuses, and NDI readiness.
+Add simple KPI calculation jobs.
+Frontend work
+Show executive-readable cards for stewardship performance, evidence readiness, DQ trends, training/certification, transparency workload, and value outcomes.
+Build Executive dashboard MVP.
+Build DMO dashboard MVP.
+Build Data Owner dashboard MVP.
+Build Steward dashboard MVP.
+Add reusable cards, charts, and status indicators.
+UI/UX: contribute KPI cards, charts, and status indicators to the shared design system; ensure all four dashboards share one consistent layout grid, interactions, status colors with icon/text, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive behavior.
+Database work
+Add KPI definitions and KPI results.
+Seed core KPIs: ownership coverage, stewardship coverage, overdue tasks, evidence readiness, NDI domain readiness.
+Acceptance
+Dashboards reflect the v4.0 operating model and remain role-filtered for each persona.
+Each role has a meaningful dashboard.
+Dashboard data respects user role and access.
+Status colors match AppDocs: Green, Amber, Red, Grey, Blue.
+Sprint 12: Training And Awareness Module
+Goal: operationalize the v4.0 Awareness Operations Tower through training, certification, continuing education, community support, and mentorship.
+Backend work
+Model the 4-tier training curriculum: Tier 1 Fundamentals, Tier 2 Core Skills, Tier 3 Advanced, and Tier 4 Leadership.
+Build certification APIs for CDS, SDS, and MDS with prerequisites, exam results, privileges, renewal, and continuing education hours.
+Add community-of-practice foundations: forums, knowledge base articles, expert directory, contribution points, and mentorship tracking.
+Connect training and certification status to steward performance scorecards.
+Build training course APIs.
+Build training assignment and record APIs.
+Add mandatory flag and validity period.
+Add expiry calculation.
+Add training completion metrics.
+Frontend work
+Build training pathway view by role and tier.
+Build certification progress view for CDS, SDS, and MDS.
+Build community MVP with knowledge-base browsing, expert directory, and mentorship status.
+Show training, certification, and CE status in steward and manager dashboards.
+Build training catalog.
+Build assigned training view.
+Build training admin screens.
+Add training status to Steward dashboard.
+UI/UX: build training catalog, assigned view, and admin screens from the shared design system with consistent tables, cards, status chips, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add certification tracks, certification attempts, CE activities, community posts/articles, expert profiles, and mentorship pairs.
+Add training courses and training records.
+Link courses to role types.
+Acceptance
+Users can see mandatory training, certification progress, expiry/renewal needs, and recommended community support.
+DMO Admin can configure training and certification requirements by stewardship role.
+Training and certification status affects steward readiness metrics without blocking normal governance work.
+DMO Admin can define mandatory courses by role.
+Users can see assigned training.
+Completed and expired training are visible.
+Training completion contributes to dashboard metrics.
+Sprint 13: Data Quality Operations MVP
+Goal: operationalize the v4.0 Data Quality framework with six dimensions, profiling, severity SLAs, RCA, remediation, and rule lifecycle controls.
+Backend work
+Implement six DQ dimensions: Accuracy, Completeness, Consistency, Timeliness, Validity, and Uniqueness.
+Add DQ scorecards at enterprise, domain, asset, data element, rule, and issue level.
+Add profiling result import for column statistics, patterns, relationships, cross-column/cross-table analysis, distributions, anomalies, and rule recommendations.
+Add severity tiers P1-P4 with per-stage SLA timers, breach recording, and escalation triggers.
+Add RCA templates for 5 Whys, Fishbone, process mapping, and lineage analysis.
+Add DQ rule lifecycle: definition, review, approval, deployment, monitoring, versioning, impact analysis, and retirement.
+Add DQ issue model.
+Add DQ issue import API or mock integration endpoint.
+Add DQ remediation workflow.
+Auto-assign issue owner using ownership rules.
+Add root cause, remediation plan, validation result, and closure decision.
+Frontend work
+Build DQ scorecard views by dimension, domain, asset, and rule.
+Build profiling summary and suggested-rule review screens.
+Build RCA-guided remediation forms with severity, SLA, breach, validation, and closure panels.
+Build DQ rule registry and approval workflow screens.
+Build DQ issue list.
+Build DQ issue detail and remediation form.
+Add DQ status to Asset 360.
+Add DQ metrics to dashboards.
+UI/UX: build DQ list, detail, and remediation forms from the shared design system with consistent workflow patterns, status chips, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add DQ dimensions, rules, rule versions, score results, profiling summaries, RCA records, SLA timers, breaches, and remediation evidence links.
+Add DQ issues, DQ rules, and DQ remediation fields.
+Acceptance
+DQ issues can be created/imported, scored by dimension, assigned by ownership rules, remediated through workflow, and closed with evidence.
+Severity, SLA, escalation, RCA, and rule lifecycle decisions are visible and audited.
+DQ metrics appear on Asset 360 and dashboards.
+DQ issue can be imported or created.
+DQ issue becomes a workflow case.
+Responsible steward is recommended.
+DQ issue closure creates evidence/audit history.
+Sprint 14: Classification, DLP, And Access Review MVP
+Goal: support security governance workflows.
+Backend work
+Add role-data mapping foundations for role-to-domain access, classification limits, personal-data flags, masking requirements, and policy generation.
+Add masking policy model for static, dynamic, tokenization, anonymization, pseudonymization, and redaction techniques.
+Prepare ABAC decision logging and access certification case links.
+Add DLP incident model and mock adapter endpoint.
+Add DLP incident review workflow.
+Add classification approval workflow.
+Add access review workflow.
+Add stronger authorization checks for classified assets.
+Frontend work
+Build role-data mapping designer MVP and masking policy preview inside the security governance workspace.
+Show access risk using business-readable language and status cues.
+Build DLP incident list and detail.
+Build classification approval UI.
+Build access review list and owner certification UI.
+Add security indicators to Asset 360.
+UI/UX: build DLP, classification, and access review screens from the shared design system with consistent interactive patterns, clear risk/status cues (color plus icon/text), keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add DLP incidents.
+Add access review records.
+Add classification change history.
+Acceptance
+Access review can explain who has access, to which domain/classification, why, and which masking or approval rule applies.
+DLP incident can be received and assigned.
+Classification changes require approval.
+Access reviews can be completed and audited.
+Sensitive records are protected by role checks.
+Sprint 15: Catalog Integration MVP
+Goal: make asset synchronization realistic.
+Backend work
+Add connector contracts for catalog, lineage, DQ, DLP, PDP, NDI, risk, profiling, and training signals.
+Add canonical mapping fields to support external IDs, source trust, synchronization status, and write-back outcomes.
+Build Integration module with adapter interface.
+Implement catalog CSV adapter.
+Implement catalog mock REST adapter.
+Implement catalog write-back simulation for certified owner/steward and governance status.
+Add import batch logging and reconciliation.
+Frontend work
+Show integration health and source-of-truth status in the integration admin screen and Asset 360.
+Build integration admin screen for catalog sync.
+Build import batch history.
+Build field mapping preview.
+Show catalog sync status on Asset 360.
+UI/UX: build integration admin, batch history, and mapping preview from the shared design system with consistent tables, progress/feedback states, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add integration jobs, import batches, import errors, external IDs.
+Acceptance
+Catalog sync remains safe for MVP while supporting v4.0 connector expansion.
+Catalog import creates or updates assets.
+Import errors are visible and actionable.
+Certified owner/steward write-back can be simulated.
+Import activity is audited.
+Sprint 16: Release 2 Hardening And UAT
+Goal: stabilize operational governance release.
+Testing work
+UAT scenario: certification progress and renewal warning.
+UAT scenario: community knowledge-base lookup and mentorship assignment.
+UAT scenario: DQ profiling result produces a suggested rule.
+UAT scenario: severity SLA breach triggers escalation.
+UAT scenario: role-data mapping supports access-review explanation.
+UAT scenario: evidence upload, review, expiry, and scoring.
+UAT scenario: DQ issue remediation.
+UAT scenario: DLP incident review.
+UAT scenario: training assignment and completion.
+UAT scenario: dashboard readiness and gap queue.
+UAT scenario: catalog CSV sync.
+UI/UX work
+Run a Release 2 design-system consistency and accessibility audit across evidence, scoring, dashboards, training, DQ/DLP, and integration screens.
+Verify shared components only, consistent interaction patterns, status colors paired with icon/text, RTL/EN parity, responsive behavior, and WCAG 2.1 AA.
+Security work
+Review authorization rules.
+Review evidence file access controls.
+Check audit coverage.
+Check .env handling and secret protection.
+Acceptance
+Release 2 demonstrates operational awareness, DQ remediation, security review, and evidence readiness as one connected flow.
+Release 2 demo shows operational governance from asset import to evidence and dashboards.
+Scores and gaps are explainable.
+No critical security issue remains open.
+Release 3: Transparency, PDP, DSI, Open Data, And FOI
+Release 3: Transparency, PDP, DSI, Open Data, And FOI
+Sprint 17: Open Data Candidate Registry
+Goal: create the Open Data Management Center foundation.
+Backend work
+Add candidate linkage to classification, DQ readiness, personal-data assessment, ownership, and publication-value indicators.
+Build Open Data candidate APIs.
+Link candidates to data assets.
+Add publication frequency, format, portal URL, status, owner, steward, ODIAO reviewer, published date, next review date.
+Add candidate status lifecycle.
+Frontend work
+Show publication eligibility signals in language usable by ODIAO and data owners.
+Build Open Data candidate list.
+Build candidate detail page.
+Build create/edit candidate form.
+Add Open Data status to Asset 360.
+UI/UX: build Open Data candidate screens from the shared design system with consistent tables, forms, status chips, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add Open Data candidates.
+Acceptance
+Open Data candidates are governed by ownership, classification, DQ, and ODIAO accountability.
+User can register Open Data candidate from an asset.
+Candidate has owner, steward, ODIAO reviewer, frequency, and status.
+Candidate appears in Asset 360 and ODIAO cockpit placeholder.
+Sprint 18: Open Data Assessment And Approval Workflow
+Goal: implement assessment wizard and approval chain.
+Backend work
+Add anonymization, aggregation, DQ acceptability, metadata completeness, and privacy/legal review checkpoints.
+Add Open Data assessment model.
+Add checks for public classification, personal data, restricted information, aggregation, anonymization, DQ acceptability, metadata completeness, publication readiness.
+Add Open Data publication approval workflow.
+Add ODIAO approval task.
+Frontend work
+Build a risk-led assessment wizard that explains blockers and required approvals clearly.
+Build assessment wizard.
+Build approval workflow panel.
+Build assessment result and risk summary.
+UI/UX: build the assessment wizard using the shared stepper pattern with per-step validation, visible progress, save/draft, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add assessment answers and scores.
+Add workflow links to candidates.
+Acceptance
+Open Data approvals produce traceable evidence for NDI and transparency compliance.
+User can complete Open Data assessment.
+Assessment creates approval tasks.
+Candidate cannot move to publication without required approvals.
+Evidence is created or linked to OD NDI requirements.
+Sprint 19: Open Data Publication, Review, And Usage Monitoring
+Goal: complete Open Data lifecycle MVP.
+Backend work
+Add review cadence, usage signal, retirement/update decision, and value-measurement hooks.
+Add publication record and portal sync mock.
+Add periodic review scheduler fields.
+Add usage metrics model for downloads and API calls.
+Add retire/update decision support.
+Frontend work
+Build publication tracker.
+Build periodic review screen.
+Build usage metrics panel.
+Add Open Data dashboard cards.
+UI/UX: build publication tracker, review, and usage panels from the shared design system with consistent charts, KPI cards, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add Open Data reviews and usage metrics.
+Acceptance
+Published data remains reviewed, measured, and governed after publication.
+Candidate can move to Published.
+Portal publication can be simulated.
+Review due dates are visible.
+Usage metrics appear in dashboards.
+Sprint 20: FOI Request Registry And Intake
+Goal: create FOI Management Center foundation.
+Backend work
+Prepare FOI channels for web, email, CRM, call center, and manual entry with consistent SLA start dates and identity/contact validation.
+Build FOI request APIs.
+Add request number generation.
+Add requester type, request channel, request category, received date, due date, assigned officer, status.
+Add manual intake and mock channel intake.
+Add KSA business-day due date utility placeholder.
+Frontend work
+Make intake simple for officers while retaining enough structure for legal, privacy, and disclosure decisions.
+Build FOI request list.
+Build FOI intake form.
+Build FOI request detail page.
+Add SLA countdown.
+UI/UX: build FOI list, intake, and detail from the shared design system with a clear, accessible SLA countdown (color plus text), consistent forms, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add FOI requests.
+Add request channels and statuses.
+Acceptance
+FOI requests enter one governed queue regardless of intake channel.
+FOI Officer can register request.
+Due date is calculated.
+Request appears in FOI dashboard and workflow inbox.
+Sprint 21: FOI Review, Decision, Disclosure, And Appeals
+Goal: complete FOI lifecycle MVP.
+Backend work
+Add classification/exemption evidence, decision templates, partial-disclosure handling, appeal workflow, and disclosure audit trail.
+Add FOI classification and exemption model.
+Add legal and privacy review tasks.
+Add decision model: approved, partially approved, rejected, extended.
+Add disclosure records.
+Add appeal records and appeal workflow.
+Add response template model.
+Frontend work
+Build classification/exemption screen.
+Build decision form.
+Build response template selector.
+Build disclosure and appeal screens.
+UI/UX: build classification, decision, disclosure, and appeal screens from the shared design system with consistent decision patterns, confirmations, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add FOI disclosures, appeals, templates, decision history.
+Acceptance
+FOI decisions are defensible, evidenced, time-bound, and appeal-ready.
+FOI request can be reviewed, decided, disclosed, rejected, or appealed.
+Appeal has independent status and closure.
+Decision and justification are audited.
+FOI evidence is available for reporting.
+Sprint 22: PDP Privacy Operations MVP
+Goal: support privacy workflows required by PDP.
+Backend work
+Add Privacy by Design phase gates across requirements, design, development, testing, and deployment.
+Add lawful-basis mapping, RoPA review, DPIA review, cross-border transfer monitoring, DSR queue, breach escalation, and consent/retention links.
+Add legal basis registry.
+Add RoPA records.
+Add DPIA workflow.
+Add DSR request model and workflow.
+Add breach register and 72-hour notification tracking.
+Add consent record model if needed.
+Add retention rule references.
+Frontend work
+Build Privacy by Design gate review screens and a compliance calendar view for quarterly/annual PDP obligations.
+Build privacy dashboard section.
+Build legal basis screen.
+Build RoPA screen.
+Build DPIA form and workflow view.
+Build DSR and breach registers.
+UI/UX: build privacy, legal basis, RoPA, DPIA, DSR, and breach screens from the shared design system with consistent forms, registers, timelines, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add legal basis, RoPA, DPIA, DSR, breach, consent, retention tables.
+Acceptance
+Privacy work is managed as operational cases with evidence, gates, reviewers, and regulatory due dates.
+Privacy Officer can register and review DPIA.
+DSR can be tracked to closure.
+Breach notification timeline is visible.
+PDP status appears on Asset 360 where applicable.
+Sprint 23: Data Sharing And Integration Governance MVP
+Goal: implement DSI workflows and agreements.
+Backend work
+Link sharing decisions to role-data mapping, classification, masking, consent/legal basis, and agreement renewal.
+Add data sharing request model.
+Add agreement model.
+Add privacy, security, technical, and owner review workflow.
+Add renewal and retirement status.
+Add usage monitoring placeholder.
+Frontend work
+Build data sharing request form.
+Build review workflow screen.
+Build agreement repository view.
+Add DSI dashboard cards.
+UI/UX: build sharing request, review, and agreement screens from the shared design system with consistent multi-review patterns, status chips, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Database work
+Add sharing requests, sharing agreements, review decisions, usage records.
+Acceptance
+Data sharing requests can show access purpose, legal basis, classification risk, and required controls.
+User can submit sharing request.
+Required reviews are assigned.
+Agreement is stored and linked to assets.
+Renewal status is visible.
+Sprint 24: ODIAO Cockpit And Release 3 UAT
+Goal: give ODIAO one operational view and stabilize transparency release.
+Backend work
+Add ODIAO summary APIs.
+Add Open Data backlog metrics.
+Add FOI SLA metrics.
+Add risk indicators for PDP concerns, classification conflicts, overdue cases, and high-profile requests.
+Frontend work
+Build ODIAO cockpit.
+Add Open Data and FOI trend widgets.
+Add overdue and risk queues.
+UI/UX: build the ODIAO cockpit from the shared design system with consistent dashboard layout, trend widgets, risk cues (color plus icon/text), keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout; run a Release 3 consistency and accessibility audit.
+Testing work
+UAT scenario: ODIAO views open data and FOI backlog, SLA risk, required evidence, and unresolved privacy/security blockers.
+UAT scenario: Open Data candidate assessment to publication.
+UAT scenario: FOI intake to disclosure and appeal.
+UAT scenario: DPIA and DSR workflow.
+UAT scenario: data sharing request approval.
+Acceptance
+The ODIAO cockpit gives one operational view of transparency workload, risks, and evidence readiness.
+ODIAO can see Open Data and FOI workload in one dashboard.
+Release 3 workflows are traceable end to end.
+Transparency evidence can be reviewed.
+Release 4: Advanced Domains, Reports, Audit Packs, And Production Readiness
+Release 4: Advanced Domains, Reports, Audit Packs, And Production Readiness
+Sprint 25: Reporting And Export Framework
+Goal: build reusable reporting and export capabilities.
+Backend work
+Add report models for six-tower operations, maturity heat maps, business impact metrics, user surveys, ROI attribution, DQ scorecards, training/certification, and recurring compliance.
+Build report catalogue APIs.
+Add report filters.
+Add CSV and PDF export foundation.
+Add scheduled report placeholder.
+Add report access control.
+Frontend work
+Build report filters that executives and stewards can understand without knowing database fields.
+Build reports catalogue.
+Build report filter pages.
+Build export actions.
+Add report result views.
+UI/UX: build the reports catalogue, filters, and results from the shared design system with consistent tables, export affordances, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+Reports can explain governance performance, compliance posture, operational workload, and business value.
+Users can generate operational, NDI, Open Data, and FOI reports.
+Reports respect permissions.
+Export works for CSV and initial PDF.
+Sprint 26: NDI Audit Pack Generation
+Goal: generate assessment-ready NDI packages.
+Backend work
+Include NCA ECC, PDPL, masking, ABAC, recurring compliance, DQ, training/certification, and stewardship evidence hooks in the audit-pack model.
+Build audit pack job model.
+Bundle specifications, approved evidence, scores, workflow decisions, gap status, and audit metadata.
+Add ZIP export.
+Add hash manifest for evidence files.
+Add audit pack status tracking.
+Frontend work
+Show audit-pack readiness by domain, control family, evidence status, owner, expiry, and unresolved blocker.
+Build audit pack generation screen.
+Build audit pack history.
+Build download and status UI.
+UI/UX: build audit pack generation, history, and status from the shared design system with consistent progress/feedback states, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+Audit packs are traceable enough for NDI, PDPL, NCA ECC, and internal governance review.
+DMO Admin can generate NDI audit pack by domain or full scope.
+Pack includes specs, evidence, scores, and decisions.
+Pack generation status is visible.
+File access is audited.
+Sprint 27: Extended Domains Part 1: MCM, RMD, DAM
+Goal: add deeper support for metadata, reference data, and architecture governance.
+Backend work
+Add MDM matching candidates, match scoring, 5-step match resolution, survivorship rules, source-trust ranking, and golden-record lifecycle.
+Add DAM review fields for architecture decisions and lineage impact.
+Add metadata certification workflow enhancements.
+Add reference data versioning model.
+Add data model/architecture review model for DAM.
+Link these records to assets and NDI evidence.
+Frontend work
+Build nontechnical match-resolution and survivorship review views.
+Build metadata certification screens.
+Build reference data version screens.
+Build architecture review screens.
+UI/UX: build metadata certification, reference data version, and architecture review screens from the shared design system with consistent patterns, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+MCM, RMD, and DAM flows support matching, survivorship, architecture review, and evidence generation.
+Metadata certification is workflow-driven.
+Reference data changes are versioned and approved.
+Architecture review decisions are recorded and evidenced.
+Sprint 28: Extended Domains Part 2: DCM, BIA, DVR
+Goal: add data lifecycle, impact, and value capabilities.
+Backend work
+Add business glossary governance with BDE definition, approval workflow, versioning, review/recertification, and health metrics.
+Add business lineage with process mapping, business-to-technical lineage bridge, visualization, and impact analysis.
+Add data asset valuation, use-case governance, ROI attribution, and data-user survey support.
+Add classification/lifecycle management enhancements.
+Add retention/disposal workflow placeholder.
+Add business impact assessment model.
+Add data value realization KPI model.
+Frontend work
+Build glossary, business lineage, value dashboard, survey, and data asset valuation views.
+Build lifecycle and retention screens.
+Build BIA screens.
+Build data value dashboard section.
+UI/UX: build lifecycle, retention, BIA, and data value screens from the shared design system with consistent forms, dashboards, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+DCM, BIA, and DVR flows connect governance to business meaning, lineage, and measurable value.
+Asset lifecycle and retention decisions are tracked.
+BIA record can be linked to assets.
+Data value KPIs can be recorded and reported.
+Sprint 29: Notifications, Escalations, And KSA Business Days
+Goal: improve workflow operations and SLA accuracy.
+Backend work
+Implement four-level governance escalation: Domain Council, Data Stewardship Council, Data Governance Board, and Executive Steering Committee.
+Add recurring compliance calendar templates for processing activity review, cross-border transfer monitoring, annual DPIA review, and monthly DQ scorecard review.
+Add KSA business-day and holiday-aware SLA calculations with reminders and escalation penalties.
+Build notification service.
+Add in-app notifications.
+Add email adapter placeholder.
+Add escalation rules.
+Add KSA business-day and holiday configuration.
+Add SLA recalculation jobs.
+Frontend work
+Build escalation dashboard and recurring compliance calendar with overdue, at-risk, and completed states.
+Build notification center.
+Add notification badges.
+Add escalation indicators.
+Build holiday configuration admin screen.
+UI/UX: build the notification center, badges, and escalation cues from the shared design system with accessible live-region updates, consistent patterns, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+Escalation, reminders, and compliance calendar tasks behave consistently across governance, DQ, privacy, and access workflows.
+Users receive task and escalation notifications.
+SLA calculations use configured business days and holidays.
+Overdue tasks escalate based on rules.
+Sprint 30: Integration Hub Hardening
+Goal: standardize adapters and import/export reliability.
+Backend work
+Formalize adapters for Catalog, DQ, DLP, ITSM, Open Data portal, FOI channels, LMS, SIEM, IAM/SSO, data profiling, masking, and ABAC decision logging.
+Add canonical data model mapping, webhook receiver, retry, dead-letter queue, reconciliation, and integration health metrics.
+Formalize adapter interface.
+Add webhook receiver pattern.
+Add retry and dead-letter records.
+Add import reconciliation reports.
+Add mock adapters for DQ, DLP, Open Data portal, FOI channel, LMS, and SIEM.
+Frontend work
+Build integration monitor with failed events, retries, source mapping, connector health, and reconciliation summary.
+Build integration monitoring dashboard.
+Build failed event queue view.
+Build retry action where safe.
+UI/UX: build the integration monitoring dashboard and failed event queue from the shared design system with consistent tables, status cues, confirmations, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+Failed integrations are visible, recoverable, auditable, and do not compromise core governance data.
+Failed integrations are visible and recoverable.
+Adapter behavior is consistent.
+Integration events are audited.
+Sprint 31: Security And Audit Hardening
+Goal: prepare for production-grade security review.
+Backend work
+Add ABAC policy preview/logging, OPA-ready decision records, Vault-ready secret patterns, mTLS deployment guidance, masking audit logs, and hash-chain audit verification.
+Harden sensitive evidence, masking, classification, DSR, FOI, and access-review authorization rules.
+Review all guards and authorization policies.
+Add ABAC-style checks for classification, ownership, workflow assignment, and auditor read-only access.
+Add audit logging for sensitive reads.
+Add evidence access logging.
+Add rate limiting if not already present.
+Add secure headers and request validation.
+Frontend work
+Build audit views for ABAC decisions, masking operations, sensitive data access, and evidence chain-of-custody.
+Hide unauthorized controls.
+Improve access denied messages.
+Add audit viewer for authorized users.
+UI/UX: ensure hidden/disabled controls remain consistent and accessible; build the audit viewer from the shared design system with consistent tables and detail panels, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Testing work
+Authorization matrix tests.
+Evidence access tests.
+Admin change audit tests.
+Acceptance
+Security and audit behavior aligns with v4.0 NCA ECC, PDPL, Zero Trust, masking, and ABAC requirements.
+Users cannot access records outside their role/context.
+Sensitive reads are logged.
+Auditor role is read-only.
+No obvious critical security gaps remain.
+Sprint 32: Performance, Search, And Production Readiness
+Goal: make the application reliable under realistic local/UAT load.
+Backend work
+Add readiness for search indexing, cache, message bus, scheduled jobs, partitioning strategy, object storage, observability, backup/restore, and DR runbook alignment.
+Add pagination to all list endpoints.
+Add database indexes for high-use filters.
+Optimize dashboard summary queries.
+Add caching where needed.
+Add API performance tests for key endpoints.
+Frontend work
+Add virtual scrolling or pagination where needed.
+Optimize heavy dashboards.
+Improve lazy loading of feature areas.
+UI/UX: tune perceived performance with skeleton loaders, optimistic UI where safe, and smooth transitions; verify Core Web Vitals targets and that responsiveness/accessibility hold under large data.
+Operations work
+Load-test high-volume areas: assets, DQ issues, evidence, audit logs, workflow cases, notifications, profiling results, and recurring compliance tasks.
+Add deployment notes.
+Add backup/restore notes for PostgreSQL.
+Add runbook for local development and UAT.
+Acceptance
+The platform is ready for realistic UAT volume, production-like monitoring, and controlled deployment planning.
+Asset search and dashboard endpoints perform acceptably with seeded large data.
+All high-volume lists are paginated.
+Build and tests pass.
+UAT readiness checklist is complete.
+Release 5: Intelligence, Automation, And Final Go-Live Readiness
+Release 5: Intelligence, Automation, And Final Go-Live Readiness
+Sprint 33: Owner Recommendation Improvements
+Goal: improve owner and steward recommendations.
+Backend work
+Add profiling-driven DQ rule recommendations and ownership recommendation explanations based on domain, asset, workload, certification, historical performance, and conflict patterns.
+Add recommendation score explanation.
+Add historical assignment success metrics.
+Add configurable weighted rules.
+Add future ML-ready recommendation interface.
+Frontend work
+Show recommendation reasons, confidence, steward readiness, and DMO feedback without making the screen feel algorithmic or opaque.
+Show recommendation reasons.
+Show confidence indicators.
+Allow DMO feedback on recommendations.
+UI/UX: present recommendation reasons and confidence using shared, accessible explanation/indicator components with consistent patterns, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+Recommendations are explainable and remain overrideable with justification.
+Users can understand why an owner/steward was recommended.
+Recommendation logic remains configurable and auditable.
+Sprint 34: Predictive SLA And Arabic FOI Classification Prototype
+Goal: prototype intelligence features without blocking core release.
+Backend work
+Prototype predictive SLA risk across workflow, DQ, FOI, privacy, and recurring compliance tasks.
+Prototype Arabic/English classification support for FOI and sensitive-data review with mandatory human override.
+Add SLA risk prediction using rules first.
+Add FOI classification prototype using keyword/rule-based matching.
+Add extension points for future NLP model.
+Frontend work
+Show SLA risk indicators.
+Show FOI classification suggestion with manual override.
+UI/UX: present SLA risk and AI suggestions using shared, accessible indicator and override components (color plus icon/text), consistent patterns, keyboard access, WCAG 2.1 AA, RTL/EN parity, and responsive layout.
+Acceptance
+Predictive outputs support decisions but never replace accountable human approval.
+SLA risk appears before overdue state.
+FOI officer can accept or override classification suggestion.
+Overrides are audited.
+Sprint 35: Final UAT, Security Review, And Documentation
+Goal: complete full product validation.
+Testing work
+Run v4.0 UAT regression across six towers, 12 NDI domains, training/certification, DQ profiling/RCA, role-data mapping, masking, ABAC, recurring compliance, glossary, lineage, MDM, PDP, OD, FOI, DSI, audit packs, and reports.
+Full UAT regression across releases.
+Security test pass.
+Role/permission matrix validation.
+Evidence lifecycle validation.
+NDI scoring validation.
+Export and audit pack validation.
+Backup/restore rehearsal.
+Full UI/UX consistency and accessibility regression: every screen uses shared components, WCAG 2.1 AA passes, RTL/EN parity holds, responsive layouts work, and visual regression baselines are green.
+Documentation work
+Update runbooks, support model, acceptance evidence, tool-selection notes, environment strategy, deployment checklist, and user guides.
+Update technical runbook.
+Update user guide links to AppDocs.
+Update API documentation.
+Update database ERD.
+Update the design system documentation/showcase so it reflects all final components and patterns.
+Update UAT sign-off package.
+Acceptance
+All v4.0 critical capabilities are either delivered, deferred with rationale, or documented as production-phase dependencies.
+UAT sign-off package is ready.
+Critical and high defects are closed or formally accepted.
+Documentation is aligned with implemented behavior.
+Sprint 36: Go-Live, Stabilization, And Handover
+Goal: release the application and hand over operations.
+Delivery work
+Execute production-readiness checklist for environments, backups, monitoring, DR, support tiers, incident response, access review, data retention, and hypercare.
+Final production configuration review.
+Final migration execution plan.
+Final seed data review.
+Go-live checklist.
+Hypercare plan.
+Support handover.
+Known issues list.
+Release notes.
+Acceptance
+The handover package includes v4.0 operating model, architecture, security, compliance, UAT, support, and roadmap traceability.
+Application is ready for controlled go-live.
+Support team has runbooks.
+Admin users are trained.
+Hypercare process is active.
+7. Roadmap-Wide Standards and Appendices
+Definition Of Done For Every Sprint
+Every sprint maps delivered capabilities to the relevant v4.0 volume, operating tower, NDI domain, security/compliance requirement, and user persona.
+Every sprint includes a short traceability note showing which v4.0 requirements are delivered, deferred, or intentionally mocked.
+Every sprint preserves nontechnical usability: executive summaries, operator queues, steward tasks, and admin configuration must be readable without engineering context.
+Every sprint should finish with:
+Backend APIs implemented and documented.
+Angular screens implemented with validation and role-aware behavior.
+PostgreSQL migrations committed.
+Seed data updated where needed.
+Unit tests for critical services.
+API tests for main endpoints.
+Frontend tests for key components or flows.
+Audit logging added for important changes.
+Access rules checked.
+UAT notes or demo script written.
+Known issues logged.
+No secret values committed.
+The sprint increment is deployed to the laptop server and verified reachable from a remote device over the public HTTPS URL.
+User stories for the sprint are delivered under QA/Sprint-XX/user-stories.md.
+Test cases for the sprint are delivered under QA/Sprint-XX/test-cases.md, with a public URL and per-role test accounts so the user can execute them remotely.
+UI/UX Definition of Done (mandatory for every screen in every sprint):
+Built only from the shared design system and component library; no one-off components or ad hoc styling.
+All visuals use design tokens; light and dark themes both correct.
+Consistent patterns for lists, detail pages, forms, wizards, dialogs, and dashboards.
+Loading, empty, success, warning, and error states implemented for every async view.
+Full keyboard operability, visible focus, and accessible labels/roles; WCAG 2.1 AA met (verified with axe).
+Status conveyed by color plus icon/text, mapped to AppDocs status colors.
+RTL (Arabic) and LTR (English) parity verified; all strings from i18n files, no hardcoded text.
+Responsive across phone, tablet, and desktop.
+New or changed components documented in the design system showcase.
+Visual regression and accessibility checks pass in CI.
+Cross-Cutting Engineering Standards
+Keep v4.0 enterprise integrations behind stable adapter interfaces so the MVP can use mock/CSV flows without blocking future production connectors.
+Treat masking, ABAC, audit, evidence chain-of-custody, and recurring compliance as cross-cutting controls; do not implement them as isolated screens only.
+Use event-friendly design for workflow, evidence, DQ, profiling, masking, audit, certification, and notification changes even while the first implementation remains a modular monolith.
+Backend standards:
+Use DTO validation for all input.
+Use consistent error responses.
+Use transactions for multi-step state changes.
+Use soft deletes for governance records.
+Use UUID identifiers.
+Add created/updated/deleted audit fields.
+Keep business rules in services, not controllers.
+Keep integration logic behind adapters.
+Frontend standards:
+Use route guards for protected features.
+Use reactive forms for complex forms.
+Use shared components for lookup fields, status badges, tables, and timelines.
+Use lazy-loaded feature areas.
+Use role-aware navigation and action visibility.
+Support Arabic and English labels where the data model requires bilingual fields.
+Keep API calls in feature services.
+UI/UX standards (consistency is mandatory):
+One design system is the single source of truth; all screens consume shared tokens and components. One-off styling and duplicate components are not allowed.
+Drive all visuals from design tokens (color, type, spacing, radius, elevation, motion); never hardcode colors or sizes in components.
+Reuse the standardized data table, forms, dialogs, drawers, steppers, KPI cards, charts, status chips, toasts, and loaders everywhere.
+Implement loading, empty, success, warning, and error states for every async view.
+Meet WCAG 2.1 AA: keyboard operability, visible focus, semantic roles/labels, sufficient contrast, and no color-only meaning (pair with icon/text).
+Support light/dark themes and full RTL/LTR with i18n; no hardcoded strings.
+Use subtle, purposeful motion (150-250ms) and respect prefers-reduced-motion.
+Be responsive and mobile-friendly; provide non-hover equivalents for all hover interactions.
+Document every component/pattern in the design system showcase and protect consistency with visual regression and accessibility checks in CI.
+Database standards:
+Use migrations for every schema change.
+Add indexes for filters used by dashboards and search.
+Use foreign keys for core relationships.
+Use JSON fields only when flexible metadata is required.
+Keep evidence file metadata in the database, not only the file system.
+Add audit records for important state changes.
+Security standards:
+Never commit .env secrets.
+Add .env.example with placeholders.
+Hash passwords for local users.
+Restrict evidence access by role and context.
+Log evidence upload, download, approval, rejection, and deletion attempts.
+Use server-side authorization even when frontend hides controls.
+Validate file uploads by type, size, and ownership.
+Suggested First Backlog Epics
+Epic 1: Project foundation and local development setup.
+Epic 2: Authentication, users, roles, and app shell.
+Epic 2b: UI/UX design system and interactive component library (foundation, then maintained every sprint).
+Epic 2c: External publishing and remote access (HTTPS tunnel to the laptop, security gate), maintained every sprint.
+Epic 2d: Per-sprint QA packages (user stories and test cases under QA/).
+Epic 3: Administration master data.
+Epic 4: Asset Governance Hub.
+Epic 5: Ownership and stewardship registry.
+Epic 6: Workflow and task management.
+Epic 7: NDI Compliance Hub and evidence.
+Epic 8: Dashboards and KPIs.
+Epic 9: Training and awareness.
+Epic 10: DQ, DLP, and catalog integrations.
+Epic 11: Open Data Management Center.
+Epic 12: FOI Management Center.
+Epic 13: PDP and DSI workflows.
+Epic 14: Reports, audit packs, and audit trail.
+Epic 15: Security hardening, performance, and operations.
+Immediate Implementation Sequence After Plan Approval
+Create the monorepo and initial Angular/NestJS projects.
+Add safe .env.example and environment validation.
+Configure local PostgreSQL connection using existing .env values without exposing the password.
+Add Prisma/TypeORM schema for users, roles, people, audit basics, and seed data.
+Establish the design system foundation: tokens, theming (light/dark), RTL/LTR, i18n, base components, and the showcase route.
+Set up external publishing: single public hostname, HTTPS tunnel from the laptop, strict CORS, security headers, and an optional access gate; verify remote access.
+Create the QA/ folder and template, and write the Sprint 0 user stories and test cases.
+Build authentication and app shell on top of the design system.
+Start Release 1 sprints in order, applying the UI/UX Definition of Done to every screen and delivering user stories plus test cases after each sprint.
+Key Risks And Mitigations
+Scope is large: deliver by releases and avoid building advanced modules before foundation workflows and evidence are stable.
+NDI spreadsheet is broad: import specs early, but automate seven core domains first.
+External systems may not be ready: use adapter interfaces, CSV import, and mock REST endpoints first.
+Security requirements are significant: add audit and authorization from Sprint 1 rather than after features are built.
+Evidence files are compliance-critical: store metadata, hashes, access logs, and status history from the first evidence sprint.
+Local PostgreSQL is fine for development: production planning should later include backups, migration strategy, retention, and secure storage.
+UI/UX consistency can drift across a large app: mitigate by building the design system first, consuming shared components only, enforcing the UI/UX Definition of Done, and running visual regression plus accessibility checks in CI every sprint.
+Publishing a laptop to the internet is a security and availability risk: mitigate with HTTPS-only tunneling (never expose the database), authentication and an optional access gate, strict CORS, security headers, rate limiting, synthetic/anonymized data only, auditable access logs, and the ability to revoke the public URL quickly. Laptop hosting is temporary and best-effort; production hosting and uptime come later in the roadmap.
+Per-sprint QA load is real: mitigate by using a fixed user-story and test-case template under QA/, seeding per-role test accounts, and keeping the test package scoped to the sprint increment.
+STATUS Draft / Working Roadmap | OWNER DGOP Team | LAST UPDATED July 16, 2026
+Authors | Codex with DGOP source sprint plan
+Reviewers | DGOP senior stakeholders
+Related docs | _analysis/v4_sprint_update_text.txt; DGOP v4/v5 planning material
+Scope | Sprints 0 through 36 with release-level delivery standards.
+Goals | Non-goals
+Keep all planned DGOP sprints in one readable Word artifact. | This document does not replace detailed QA test cases or source code tickets.
+Show each sprint goal, work areas, acceptance criteria, and release wave. | This document does not claim every planned future sprint is fully implemented.
+Use a system-design format that connects roadmap work to architecture and operations. | This document does not expose secrets, credentials, or local environment values.
+Preserve the shared DGOP definition of done and cross-cutting standards. | This document does not change the current product scope without senior approval.
+Release | Sprint Range | Theme | Outcome
+Release 1 | 0-8 | Foundation And Core Governance | stabilize Foundation release.
+Release 2 | 9-16 | Operationalization, Evidence, KPIs, Training, And Integrations | stabilize operational governance release.
+Release 3 | 17-24 | Transparency, PDP, DSI, Open Data, And FOI | give ODIAO one operational view and stabilize transparency release.
+Release 4 | 25-32 | Advanced Domains, Reports, Audit Packs, And Production Readiness | make the application reliable under realistic local/UAT load.
+Release 5 | 33-36 | Intelligence, Automation, And Final Go-Live Readiness | release the application and hand over operations.
+Sprint | Release | Title | Goal
+0 | Release 1 | Project Setup And Delivery Foundation | prepare the codebase, local development environment, and working conventions.
+1 | Release 1 | Authentication, Users, Roles, And App Shell | allow users to access the application shell with controlled roles.
+2 | Release 1 | Administration Master Data Part 1 | implement foundational governance configuration.
+3 | Release 1 | Administration Master Data Part 2 | complete the core governance configuration model.
+4 | Release 1 | Data Asset Governance Hub MVP | create and manage governed data assets.
+5 | Release 1 | Ownership Registry And Assignment Rules MVP | assign owners and stewards to assets and governance dimensions.
+6 | Release 1 | Workflow Engine MVP | support controlled governance cases and tasks.
+7 | Release 1 | NDI Specification Registry MVP | establish the NDI Compliance Hub foundation.
+8 | Release 1 | Release 1 Hardening And UAT | stabilize Foundation release.
+9 | Release 2 | Evidence Repository MVP | allow evidence to be submitted and reviewed.
+10 | Release 2 | NDI Scoring And Gap Analysis | calculate readiness and show gaps.
+11 | Release 2 | Dashboards MVP | create useful dashboards for primary personas.
+12 | Release 2 | Training And Awareness Module | operationalize the v4.0 Awareness Operations Tower through training, certification, continuing education, community support, and mentorship.
+13 | Release 2 | Data Quality Operations MVP | operationalize the v4.0 Data Quality framework with six dimensions, profiling, severity SLAs, RCA, remediation, and rule lifecycle controls.
+14 | Release 2 | Classification, DLP, And Access Review MVP | support security governance workflows.
+15 | Release 2 | Catalog Integration MVP | make asset synchronization realistic.
+16 | Release 2 | Release 2 Hardening And UAT | stabilize operational governance release.
+17 | Release 3 | Open Data Candidate Registry | create the Open Data Management Center foundation.
+18 | Release 3 | Open Data Assessment And Approval Workflow | implement assessment wizard and approval chain.
+19 | Release 3 | Open Data Publication, Review, And Usage Monitoring | complete Open Data lifecycle MVP.
+20 | Release 3 | FOI Request Registry And Intake | create FOI Management Center foundation.
+21 | Release 3 | FOI Review, Decision, Disclosure, And Appeals | complete FOI lifecycle MVP.
+22 | Release 3 | PDP Privacy Operations MVP | support privacy workflows required by PDP.
+23 | Release 3 | Data Sharing And Integration Governance MVP | implement DSI workflows and agreements.
+24 | Release 3 | ODIAO Cockpit And Release 3 UAT | give ODIAO one operational view and stabilize transparency release.
+25 | Release 4 | Reporting And Export Framework | build reusable reporting and export capabilities.
+26 | Release 4 | NDI Audit Pack Generation | generate assessment-ready NDI packages.
+27 | Release 4 | Extended Domains Part 1: MCM, RMD, DAM | add deeper support for metadata, reference data, and architecture governance.
+28 | Release 4 | Extended Domains Part 2: DCM, BIA, DVR | add data lifecycle, impact, and value capabilities.
+29 | Release 4 | Notifications, Escalations, And KSA Business Days | improve workflow operations and SLA accuracy.
+30 | Release 4 | Integration Hub Hardening | standardize adapters and import/export reliability.
+31 | Release 4 | Security And Audit Hardening | prepare for production-grade security review.
+32 | Release 4 | Performance, Search, And Production Readiness | make the application reliable under realistic local/UAT load.
+33 | Release 5 | Owner Recommendation Improvements | improve owner and steward recommendations.
+34 | Release 5 | Predictive SLA And Arabic FOI Classification Prototype | prototype intelligence features without blocking core release.
+35 | Release 5 | Final UAT, Security Review, And Documentation | complete full product validation.
+36 | Release 5 | Go-Live, Stabilization, And Handover | release the application and hand over operations.

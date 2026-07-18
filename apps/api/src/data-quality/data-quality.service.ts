@@ -21,7 +21,7 @@ import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { parseCsv } from '../common/csv';
-import { parsePageParams, toPaged } from '../common/pagination';
+import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
 import {
   CloseDataQualityIssueDto,
   CreateDataQualityIssueDto,
@@ -342,7 +342,10 @@ export class DataQualityService {
       include: issueInclude,
       orderBy: [{ dueDate: 'asc' as const }, { createdAt: 'desc' as const }],
     };
-    if (!params) return this.prisma.dataQualityIssue.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams(pageSize);
+      return this.prisma.dataQualityIssue.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.dataQualityIssue.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.dataQualityIssue.count({ where }),
@@ -750,7 +753,10 @@ export class DataQualityService {
     const where = { AND: and };
     const params = parsePageParams(page, pageSize);
     const query = { where, include: ruleInclude, orderBy: [{ status: 'asc' as const }, { updatedAt: 'desc' as const }] };
-    if (!params) return this.prisma.dataQualityRule.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams(pageSize);
+      return this.prisma.dataQualityRule.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.dataQualityRule.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.dataQualityRule.count({ where }),
@@ -910,7 +916,10 @@ export class DataQualityService {
     const where = this.qualityRecordScopeWhere<Prisma.DataQualityProfileWhereInput>(scope, assetIds);
     const params = parsePageParams(page, pageSize);
     const query = { where, include: profileInclude, orderBy: { createdAt: 'desc' as const } };
-    if (!params) return this.prisma.dataQualityProfile.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams(pageSize);
+      return this.prisma.dataQualityProfile.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.dataQualityProfile.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.dataQualityProfile.count({ where }),

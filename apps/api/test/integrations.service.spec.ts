@@ -32,6 +32,7 @@ const connector = {
   sourceTrust: IntegrationSourceTrust.authoritative,
   lastSuccessAt: null,
 };
+const TEST_WEBHOOK_TOKEN = 'test-webhook-token-32-characters-ok';
 
 function serviceWith(
   prisma: Record<string, any>,
@@ -43,6 +44,18 @@ function serviceWith(
     { log: async (entry: unknown) => auditLog.push(entry) } as never,
     { resolve: async () => scope } as never,
   );
+}
+
+async function withEnv<T>(name: string, value: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const previous = process.env[name];
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env[name];
+    else process.env[name] = previous;
+  }
 }
 
 function prismaBase(tx: Record<string, any>) {
@@ -63,6 +76,7 @@ function prismaBase(tx: Record<string, any>) {
     integrationConnector: {
       findFirst: async () => connector,
       count: async () => 1,
+      update: async (args: any) => ({ ...connector, ...args.data }),
     },
     integrationImportBatch: {
       count: async () => 0,
@@ -297,6 +311,128 @@ test('normalizeIntegrationEventPayload rejects adapter payloads that are not rea
   assert.ok(result.issues.some((issue) => issue.field === 'payload'));
 });
 
+test('receiveWebhook rejects requests when no webhook token is configured', async () => {
+  const service = serviceWith({} as never);
+
+  await withEnv('DGOP_WEBHOOK_TOKEN', undefined, async () => {
+    await assert.rejects(
+      () =>
+        service.receiveWebhook('DQ-MOCK', {
+          externalEventId: 'DQ-1',
+          eventType: 'dq.issue.detected',
+          payload: { assetCode: 'AST-1', severity: 'low' },
+        }),
+      ForbiddenException,
+    );
+  });
+});
+
+test('receiveWebhook rejects requests with a missing or invalid webhook token', async () => {
+  const service = serviceWith({} as never);
+
+  await withEnv('DGOP_WEBHOOK_TOKEN', TEST_WEBHOOK_TOKEN, async () => {
+    await assert.rejects(
+      () =>
+        service.receiveWebhook('DQ-MOCK', {
+          externalEventId: 'DQ-1',
+          eventType: 'dq.issue.detected',
+          payload: { assetCode: 'AST-1', severity: 'low' },
+        }),
+      ForbiddenException,
+    );
+    await assert.rejects(
+      () =>
+        service.receiveWebhook(
+          'DQ-MOCK',
+          {
+            externalEventId: 'DQ-1',
+            eventType: 'dq.issue.detected',
+            payload: { assetCode: 'AST-1', severity: 'low' },
+          },
+          'wrong-token',
+        ),
+      ForbiddenException,
+    );
+  });
+});
+
+test('batches scope restricted users to visible asset write-back history and omit raw batch payloads', async () => {
+  let findManyArgs: any;
+  const service = serviceWith(
+    {
+      dataAsset: { findMany: async () => [{ id: 'asset-visible' }] },
+      integrationImportBatch: {
+        findMany: async (args: any) => {
+          findManyArgs = args;
+          return [];
+        },
+      },
+    },
+    [],
+    { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+  );
+
+  await service.batches(['catalog_operator'], 10);
+
+  assert.deepStrictEqual(findManyArgs.where, {
+    writebackLogs: { some: { assetId: { in: ['asset-visible'] } } },
+  });
+  assert.strictEqual(findManyArgs.select.mappingPreviewJson, undefined);
+  assert.strictEqual(findManyArgs.select.reconciliationJson, undefined);
+});
+
+test('events scope restricted users to visible asset-linked events and omit raw event payloads', async () => {
+  let findManyArgs: any;
+  const service = serviceWith(
+    {
+      dataAsset: { findMany: async () => [{ id: 'asset-visible' }] },
+      integrationEvent: {
+        findMany: async (args: any) => {
+          findManyArgs = args;
+          return [];
+        },
+      },
+    },
+    [],
+    { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+  );
+
+  await service.events(['integration_viewer'], 'failed,retry_scheduled', 10);
+
+  assert.strictEqual(findManyArgs.where.entityType, 'data_asset');
+  assert.deepStrictEqual(findManyArgs.where.entityId, { in: ['asset-visible'] });
+  assert.strictEqual(findManyArgs.select.payloadJson, undefined);
+  assert.strictEqual(findManyArgs.select.normalizedJson, undefined);
+  assert.strictEqual(findManyArgs.select.resultJson, undefined);
+});
+
+test('retryEvent hides out-of-scope integration events from scoped users', async () => {
+  let findFirstArgs: any;
+  const service = serviceWith(
+    {
+      dataAsset: { findMany: async () => [{ id: 'asset-visible' }] },
+      integrationEvent: {
+        findFirst: async (args: any) => {
+          findFirstArgs = args;
+          return null;
+        },
+      },
+    },
+    [],
+    { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+  );
+
+  await assert.rejects(
+    () => service.retryEvent(['integration_operator'], 'event-hidden', { reason: 'try hidden event' }, 'operator@dgop.local'),
+    /integration event not found/,
+  );
+  assert.deepStrictEqual(findFirstArgs.where, {
+    id: 'event-hidden',
+    entityType: 'data_asset',
+    entityId: { in: ['asset-visible'] },
+  });
+});
+
 test('receiveWebhook persists, processes, reconciles, and audits integration events', async () => {
   const auditLog: unknown[] = [];
   const reports: any[] = [];
@@ -345,11 +481,17 @@ test('receiveWebhook persists, processes, reconciles, and audits integration eve
   };
   const service = serviceWith(prisma, auditLog);
 
-  const result = await service.receiveWebhook('DQ-MOCK', {
-    externalEventId: 'DQ-1',
-    eventType: 'dq.issue.detected',
-    payload: { assetCode: 'AST-1', severity: 'low' },
-  }) as any;
+  const result = await withEnv('DGOP_WEBHOOK_TOKEN', TEST_WEBHOOK_TOKEN, () =>
+    service.receiveWebhook(
+      'DQ-MOCK',
+      {
+        externalEventId: 'DQ-1',
+        eventType: 'dq.issue.detected',
+        payload: { assetCode: 'AST-1', severity: 'low' },
+      },
+      TEST_WEBHOOK_TOKEN,
+    ),
+  ) as any;
 
   assert.strictEqual(result.status, IntegrationEventStatus.succeeded);
   assert.strictEqual(result.attempts, 1);
@@ -375,6 +517,7 @@ test('retryEvent reprocesses retry-scheduled events through the same engine', as
   };
   const prisma = {
     integrationEvent: {
+      findFirst: async () => eventRow,
       findUnique: async () => eventRow,
     },
     $transaction: async (fn: (client: unknown) => unknown) =>

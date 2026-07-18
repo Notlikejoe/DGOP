@@ -31,6 +31,10 @@ import {
 } from './workflow.dto';
 import {
   DEFAULT_WORKFLOW_TEMPLATES,
+  buildWorkflowCaseTypeRegistry,
+  buildWorkflowEscalationTemplates,
+  buildWorkflowNotificationRules,
+  buildWorkflowSlaTemplates,
   firstActionableWorkflowStage,
   isActionableWorkflowStage,
   routeGateForOpenStagePeers,
@@ -47,7 +51,8 @@ import {
 export type SlaStatus = 'none' | 'on_track' | 'at_risk' | 'overdue' | 'done';
 
 const AT_RISK_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // within 2 days of due date
-const ADMIN_ROLES = ['system_admin', 'dmo_admin'];
+const DMO_ADMIN_CODE = 'dmo_admin';
+const ADMIN_ROLES = ['system_admin', DMO_ADMIN_CODE];
 const DATA_OWNER_CODE = 'data_owner';
 type PrismaWriter = PrismaService | Prisma.TransactionClient;
 const FINAL_CASE_STATUSES: readonly CaseStatus[] = [
@@ -152,6 +157,18 @@ export class WorkflowService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     try {
       await this.ensureDefaultTemplates();
+      const backfilled = await this.backfillUnroutedOpenCases();
+      const reassigned = await this.assignUnownedRoutedTasks();
+      const normalizedSla = await this.normalizeImmediateSlaDueDates();
+      if (backfilled > 0) {
+        this.logger.log(`Backfilled ${backfilled} unrouted workflow cases into route templates`);
+      }
+      if (reassigned > 0) {
+        this.logger.log(`Assigned ${reassigned} routed workflow tasks to eligible role holders`);
+      }
+      if (normalizedSla > 0) {
+        this.logger.log(`Normalized ${normalizedSla} immediate workflow task due dates`);
+      }
     } catch (err) {
       this.logger.error('Failed to initialize default workflow templates', err as Error);
     }
@@ -249,6 +266,207 @@ export class WorkflowService implements OnModuleInit {
         });
       }
     });
+  }
+
+  private async backfillUnroutedOpenCases(limit = 250): Promise<number> {
+    const templates = await this.listTemplates(['system_admin']);
+    const candidates = templates.map((template) => ({
+      id: template.id,
+      code: template.code,
+      caseType: template.caseType,
+      domainId: template.domainId,
+      isActive: template.isActive,
+    }));
+    const cases = await this.prisma.workflowCase.findMany({
+      where: {
+        templateId: null,
+        status: { notIn: [...FINAL_CASE_STATUSES] },
+        type: { in: [...WORKFLOW_CASE_TYPES] },
+      },
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        status: true,
+        assetId: true,
+        createdBy: true,
+        asset: { select: { domainId: true } },
+        tasks: {
+          where: { status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
+          select: { id: true, templateStageId: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: Math.min(Math.max(limit, 1), 1000),
+    });
+    let backfilled = 0;
+    for (const wfCase of cases) {
+      const selected = selectWorkflowTemplate(
+        { caseType: wfCase.type, domainId: wfCase.asset?.domainId ?? null },
+        candidates,
+      );
+      const template = selected ? templates.find((row) => row.id === selected.id) : null;
+      if (!template) continue;
+      const firstStage = firstActionableWorkflowStage(template.stages);
+      await this.prisma.$transaction(async (tx) => {
+        await tx.workflowCase.update({
+          where: { id: wfCase.id },
+          data: { templateId: template.id, type: template.caseType },
+        });
+        const openUnroutedTaskIds = wfCase.tasks
+          .filter((task) => !task.templateStageId)
+          .map((task) => task.id);
+        if (firstStage && openUnroutedTaskIds.length) {
+          await tx.workflowTask.updateMany({
+            where: { id: { in: openUnroutedTaskIds }, templateStageId: null },
+            data: { templateStageId: firstStage.id },
+          });
+        } else if (firstStage && wfCase.tasks.length === 0) {
+          await this.createStageTask(tx, wfCase.id, firstStage, 'system', { assetId: wfCase.assetId });
+        }
+        await tx.workflowEvent.create({
+          data: {
+            caseId: wfCase.id,
+            actor: 'system',
+            action: 'route.template.backfilled',
+            comment: template.nameEn,
+          },
+        });
+        await this.audit.log(
+          {
+            actor: 'system',
+            action: 'workflow_case.route_backfill',
+            entityType: 'workflow_case',
+            entityId: wfCase.id,
+            metadata: { code: wfCase.code, templateId: template.id, templateCode: template.code },
+          },
+          tx,
+        );
+      });
+      backfilled++;
+    }
+    return backfilled;
+  }
+
+  private async assignUnownedRoutedTasks(limit = 250): Promise<number> {
+    const tasks = await this.prisma.workflowTask.findMany({
+      where: {
+        assigneeUserId: null,
+        status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+        templateStage: { is: { assigneeRoleCode: { not: null }, isActive: true } },
+        case: { templateId: { not: null }, status: { notIn: [...FINAL_CASE_STATUSES] } },
+      },
+      select: {
+        id: true,
+        caseId: true,
+        title: true,
+        case: { select: { assetId: true } },
+        templateStage: { select: { nameEn: true, assigneeRoleCode: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: Math.min(Math.max(limit, 1), 1000),
+    });
+    let assigned = 0;
+    for (const task of tasks) {
+      const roleCode = task.templateStage?.assigneeRoleCode;
+      if (!roleCode) continue;
+      const didAssign = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.workflowTask.findUnique({
+          where: { id: task.id },
+          select: {
+            id: true,
+            caseId: true,
+            assigneeUserId: true,
+            status: true,
+            case: { select: { assetId: true, status: true } },
+            templateStage: { select: { nameEn: true, assigneeRoleCode: true } },
+          },
+        });
+        if (
+          !current ||
+          current.assigneeUserId ||
+          (current.status !== TaskStatus.pending && current.status !== TaskStatus.in_progress) ||
+          FINAL_CASE_STATUSES.includes(current.case.status) ||
+          !current.templateStage?.assigneeRoleCode
+        ) {
+          return false;
+        }
+        const assigneeUserId = await this.assigneeForRole(
+          tx,
+          current.templateStage.assigneeRoleCode,
+          current.case.assetId,
+        );
+        if (!assigneeUserId) return false;
+        await tx.workflowTask.update({
+          where: { id: current.id },
+          data: { assigneeUserId },
+        });
+        await tx.workflowEvent.create({
+          data: {
+            caseId: current.caseId,
+            taskId: current.id,
+            actor: 'system',
+            action: 'task.auto_assigned',
+            comment: `${current.templateStage.assigneeRoleCode} -> ${assigneeUserId}`,
+          },
+        });
+        await this.audit.log(
+          {
+            actor: 'system',
+            action: 'workflow_task.auto_assign',
+            entityType: 'workflow_task',
+            entityId: current.id,
+            metadata: {
+              roleCode: current.templateStage.assigneeRoleCode,
+              assigneeUserId,
+              fallbackQueue: roleCode !== current.templateStage.assigneeRoleCode ? roleCode : null,
+            },
+          },
+          tx,
+        );
+        return true;
+      });
+      if (didAssign) assigned++;
+    }
+    return assigned;
+  }
+
+  private async normalizeImmediateSlaDueDates(limit = 250): Promise<number> {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
+    const tasks = await this.prisma.workflowTask.findMany({
+      where: {
+        status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+        dueDate: { gte: startOfToday, lt: now },
+        templateStage: { is: { dueDays: 0, isActive: true } },
+        case: { status: { notIn: [...FINAL_CASE_STATUSES] } },
+      },
+      select: { id: true, caseId: true },
+      orderBy: { dueDate: 'asc' },
+      take: Math.min(Math.max(limit, 1), 1000),
+    });
+    for (const task of tasks) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.workflowTask.update({
+          where: { id: task.id },
+          data: { dueDate: endOfToday },
+        });
+        await tx.workflowEvent.create({
+          data: {
+            caseId: task.caseId,
+            taskId: task.id,
+            actor: 'system',
+            action: 'task.sla.normalized',
+            comment: 'Immediate task remains due today.',
+          },
+        });
+      });
+    }
+    return tasks.length;
   }
 
   private templateScopeWhere(roleCodes: string[]): Promise<Prisma.WorkflowTemplateWhereInput> {
@@ -477,6 +695,106 @@ export class WorkflowService implements OnModuleInit {
       templates,
       nodes,
       edges,
+    };
+  }
+
+  async configuration(roleCodes: string[], viewer?: AuthUser) {
+    await this.ensureDefaultTemplates();
+    const [templates, casesResult] = await Promise.all([
+      this.listTemplates(roleCodes),
+      this.listCases(roleCodes, { page: 1, pageSize: 500 }, viewer),
+    ]);
+    const cases = Array.isArray(casesResult) ? casesResult : casesResult.data;
+    const totalCases = Array.isArray(casesResult) ? cases.length : casesResult.total;
+    const openStatuses = new Set<CaseStatus>([
+      CaseStatus.draft,
+      CaseStatus.submitted,
+      CaseStatus.under_review,
+      CaseStatus.awaiting_information,
+      CaseStatus.decision_made,
+      CaseStatus.approved,
+    ]);
+    const activeCases = cases.filter((row) => openStatuses.has(row.status as CaseStatus));
+    const activeTasks = activeCases.flatMap((row) =>
+      row.tasks.filter((task) => task.status === TaskStatus.pending || task.status === TaskStatus.in_progress),
+    );
+    const overdueTasks = activeTasks.filter((task) => task.slaStatus === 'overdue').length;
+    const unassignedTasks = activeTasks.filter((task) => !task.assigneeUserId).length;
+    const caseTypeRegistry = buildWorkflowCaseTypeRegistry(templates);
+    const slaTemplates = buildWorkflowSlaTemplates(templates);
+    const notificationRules = buildWorkflowNotificationRules(templates);
+    const escalationTemplates = buildWorkflowEscalationTemplates(templates);
+    const blockedRoutes = caseTypeRegistry.filter((row) => row.status === 'blocked').length;
+    const watchRoutes = caseTypeRegistry.filter((row) => row.status === 'watch').length;
+    const status =
+      blockedRoutes > 0
+        ? 'blocked'
+        : overdueTasks > 0 || unassignedTasks > 0 || watchRoutes > 0
+          ? 'watch'
+          : 'ready';
+
+    return {
+      generatedAt: new Date().toISOString(),
+      status,
+      summary: {
+        templates: templates.length,
+        caseTypes: caseTypeRegistry.length,
+        activeRoutes: caseTypeRegistry.filter((row) => row.hasActiveRoute).length,
+        totalCases,
+        sampledCases: cases.length,
+        activeCases: activeCases.length,
+        activeTasks: activeTasks.length,
+        overdueTasks,
+        unassignedTasks,
+        notificationRules: notificationRules.length,
+        escalationTemplates: escalationTemplates.length,
+      },
+      caseTypeRegistry,
+      slaTemplates,
+      notificationRules,
+      escalationTemplates,
+      universalCaseManagement: {
+        statusModel: Object.values(CaseStatus).map((statusValue) => ({
+          status: statusValue,
+          final: FINAL_CASE_STATUSES.includes(statusValue),
+          allowedNext: CASE_TRANSITIONS[statusValue],
+        })),
+        taskStatusModel: Object.values(TaskStatus),
+        controls: [
+          { code: 'delegation', status: 'ready', evidence: 'Tasks can be reassigned and auto-assigned by role scope.' },
+          { code: 'backup_steward_assignment', status: unassignedTasks > 0 ? 'watch' : 'ready', evidence: 'Unassigned tasks are surfaced as operator risk.' },
+          { code: 'approval_history', status: 'ready', evidence: 'Workflow events record decisions, transitions, and comments.' },
+          { code: 'effective_dates', status: 'ready', evidence: 'Assignment approvals preserve effective ownership dates.' },
+          { code: 'segregation_of_duties', status: 'ready', evidence: 'Submitters cannot decide their own assignment approval cases.' },
+        ],
+        pageContracts: [
+          { route: '/governance/workflow', api: '/api/workflow/tasks/mine', roleAction: 'workflow_tasks.view' },
+          { route: '/governance/workflow', api: '/api/workflow/cases', roleAction: 'workflow_cases.view' },
+          { route: '/governance/workflow', api: '/api/workflow/route-preview', roleAction: 'workflow_cases.view' },
+          { route: '/governance/workflow/cases/:id', api: '/api/workflow/cases/:id', roleAction: 'workflow_cases.view' },
+          { route: '/governance/workflow/cases/:id', api: '/api/workflow/tasks/:id/decision', roleAction: 'workflow_tasks.edit' },
+        ],
+      },
+    };
+  }
+
+  async caseManagement(roleCodes: string[], viewer?: AuthUser) {
+    const configuration = await this.configuration(roleCodes, viewer);
+    return {
+      generatedAt: configuration.generatedAt,
+      status: configuration.status,
+      summary: configuration.summary,
+      caseTypeRegistry: configuration.caseTypeRegistry,
+      universalCaseManagement: configuration.universalCaseManagement,
+      backlogCoverage: configuration.caseTypeRegistry.map((row) => ({
+        caseType: row.caseType,
+        status: row.status,
+        activeRoute: row.hasActiveRoute,
+        routeCodes: row.routeCodes,
+        acceptance: row.hasActiveRoute
+          ? 'Implemented as a configurable routed case type.'
+          : 'Mapped to backlog; no active route configured yet.',
+      })),
     };
   }
 
@@ -723,7 +1041,9 @@ export class WorkflowService implements OnModuleInit {
   private dueDateForStage(stage: WorkflowStageRouteNode, override?: Date | null): Date | null {
     if (override !== undefined) return override;
     const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + Math.max(stage.dueDays ?? 0, 0));
+    const dueDays = Math.max(stage.dueDays ?? 0, 0);
+    dueDate.setDate(dueDate.getDate() + dueDays);
+    if (dueDays === 0) dueDate.setHours(23, 59, 59, 999);
     return dueDate;
   }
 
@@ -818,8 +1138,9 @@ export class WorkflowService implements OnModuleInit {
         { seedIfMissing: true },
       );
     } catch (err) {
-      if (input.templateId) throw err;
+      throw err;
     }
+    if (!route) throw new BadRequestException('No workflow route template is available for this request');
     const code = await this.nextCaseCodeForClient(client, input.preferredCode);
     const wfCase = await client.workflowCase.create({
       data: {
@@ -1542,6 +1863,19 @@ export class WorkflowService implements OnModuleInit {
     assetId?: string | null,
   ): Promise<string | null> {
     if (!roleCode) return null;
+    const directAssignee = await this.firstAssigneeForRole(client, roleCode, assetId);
+    if (directAssignee) return directAssignee;
+    if (roleCode !== DMO_ADMIN_CODE) {
+      return this.firstAssigneeForRole(client, DMO_ADMIN_CODE, assetId);
+    }
+    return null;
+  }
+
+  private async firstAssigneeForRole(
+    client: Prisma.TransactionClient,
+    roleCode: string,
+    assetId?: string | null,
+  ): Promise<string | null> {
     const matches = await client.userRole.findMany({
       where: {
         role: { code: roleCode, deletedAt: null, isActive: true },

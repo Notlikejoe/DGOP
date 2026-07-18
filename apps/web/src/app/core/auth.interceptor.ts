@@ -9,7 +9,19 @@ import { AuthService } from './auth.service';
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  const authed = req.url.startsWith('/api') ? req.clone({ withCredentials: true }) : req;
+  const requestId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const authed = req.url.startsWith('/api')
+    ? req.clone({
+        withCredentials: true,
+        setHeaders: {
+          'x-request-id': requestId,
+          'x-correlation-id': requestId,
+        },
+      })
+    : req;
 
   return next(authed).pipe(
     catchError((err: HttpErrorResponse) => {

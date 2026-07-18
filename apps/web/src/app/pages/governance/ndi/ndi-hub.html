@@ -32,6 +32,46 @@
       </div>
     </div>
 
+    @if (traceability(); as trace) {
+      <section class="ds-card traceability-panel">
+        <div class="traceability-head">
+          <div>
+            <span class="eyebrow">{{ t('ndi.trace.eyebrow') }}</span>
+            <h2>{{ t('ndi.trace.title') }}</h2>
+            <p>{{ t('ndi.trace.subtitle') }}</p>
+          </div>
+          <div class="traceability-summary">
+            <span><strong>{{ trace.summary.ready }}</strong> {{ t('ndi.trace.ready') }}</span>
+            <span><strong>{{ trace.summary.watch }}</strong> {{ t('ndi.trace.watch') }}</span>
+            <span><strong>{{ trace.summary.blocked }}</strong> {{ t('ndi.trace.blocked') }}</span>
+          </div>
+        </div>
+
+        <div class="traceability-grid">
+          @for (model of trace.models; track model.code) {
+            <a class="trace-card" [routerLink]="model.route">
+              <div class="trace-card__top">
+                <span class="badge-code">{{ model.code }}</span>
+                <app-status-chip [kind]="statusKind(model.status)" [label]="t('operations.status.' + model.status)" />
+              </div>
+              <strong>{{ model.name }}</strong>
+              <p>{{ model.purpose }}</p>
+              <div class="trace-metrics">
+                <span><b>{{ model.metrics.specCount }}</b> {{ t('ndi.trace.specs') }}</span>
+                <span><b>{{ model.metrics.operationalRecordCount }}</b> {{ t('ndi.trace.records') }}</span>
+                <span><b>{{ model.metrics.approvedEvidenceCount }}/{{ model.metrics.evidenceCount }}</b> {{ t('ndi.trace.evidence') }}</span>
+                <span><b>{{ model.metrics.workflowCaseCount }}</b> {{ t('ndi.trace.cases') }}</span>
+              </div>
+              <div class="trace-progress" [attr.aria-label]="model.evidenceQualityScore + '%'">
+                <span [style.width.%]="model.evidenceQualityScore"></span>
+              </div>
+              <small>{{ model.nextAction }}</small>
+            </a>
+          }
+        </div>
+      </section>
+    }
+
     <div class="domain-grid">
       @for (d of domains(); track d.id) {
         <a

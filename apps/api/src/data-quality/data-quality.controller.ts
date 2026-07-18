@@ -55,6 +55,12 @@ export class DataQualityController {
     return this.service.scorecard(user.roles);
   }
 
+  @Post('sla/refresh')
+  @RequirePermissions('data_quality_issues.edit')
+  refreshSla(@CurrentUser() user: AuthUser) {
+    return this.service.refreshSlaBreachMarkers(user.roles);
+  }
+
   @Get('rules')
   @RequirePermissions('data_quality_rules.view')
   rules(

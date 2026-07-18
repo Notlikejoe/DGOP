@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -15,8 +15,8 @@ export class UsersController {
 
   @Get()
   @RequirePermissions('users.view')
-  list() {
-    return this.users.listUsers();
+  list(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.users.listUsers(page, pageSize);
   }
 
   @Get('roles')

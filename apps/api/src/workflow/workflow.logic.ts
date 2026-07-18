@@ -67,6 +67,63 @@ export type WorkflowTransitionRouteEdge = {
   toStage?: { id: string; code?: string | null } | null;
 };
 
+export type WorkflowConfigurationStatus = 'ready' | 'watch' | 'blocked';
+
+export type WorkflowConfigurationTemplate = {
+  id: string;
+  code: string;
+  caseType: string;
+  nameEn: string;
+  nameAr: string;
+  trigger: string;
+  defaultSlaDays: number;
+  isSystem: boolean;
+  isActive: boolean;
+  domainId?: string | null;
+  stages: Array<{
+    id: string;
+    code: string;
+    kind: string;
+    taskType: string;
+    assigneeRoleCode?: string | null;
+    dueDays: number;
+    sortOrder: number;
+    isStart: boolean;
+    isDecision: boolean;
+    isFinal: boolean;
+    isActive: boolean;
+  }>;
+  transitions: Array<{
+    id?: string;
+    fromStageId: string;
+    toStageId: string;
+    decision?: string | null;
+    isHappyPath: boolean;
+  }>;
+  _count?: { cases?: number; stages?: number };
+};
+
+export type WorkflowCaseTypeRegistryItem = {
+  caseType: string;
+  templateCount: number;
+  routeCodes: string[];
+  stageCount: number;
+  defaultSlaDays: number | null;
+  hasDecisionPoint: boolean;
+  hasClosurePoint: boolean;
+  hasActiveRoute: boolean;
+  status: WorkflowConfigurationStatus;
+};
+
+export type WorkflowSlaTemplateItem = {
+  code: string;
+  caseType: string;
+  defaultSlaDays: number;
+  stageSlaDays: number;
+  escalationAfterDays: number;
+  status: WorkflowConfigurationStatus;
+};
+
 export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplateSeed[] = [
   {
     code: 'WF-GEN-GOV-REVIEW',
@@ -332,6 +389,153 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplateSeed[] = [
       link('agreement', 'privacy-security-review', 'Needs revision', 'يحتاج تعديل', 'rejected', false),
     ],
   },
+  {
+    code: 'WF-OPEN-DATA-APPROVAL',
+    caseType: 'open_data_publication_approval',
+    trigger: 'open_data_candidate',
+    nameEn: 'Open data publication approval route',
+    nameAr: 'Open data publication approval route',
+    description: 'Routes open data candidates through readiness, privacy/security review, and publication approval.',
+    defaultSlaDays: 8,
+    stages: [
+      stage('readiness', 'Readiness review', 'Readiness review', 'Confirm metadata, owner, license, quality, and publication channel.', 'review', 'review', 'open_data_reviewer', 2, { isStart: true }),
+      stage('risk-review', 'Privacy and security check', 'Privacy and security check', 'Check classification, personal data, exemptions, and masking requirements.', 'review', 'review', 'security_reviewer', 2),
+      stage('approval', 'Publication decision', 'Publication decision', 'Approve, reject, or request changes before publication.', 'decision', 'approval', 'dmo_admin', 2, { isDecision: true }),
+      stage('publish', 'Publication evidence', 'Publication evidence', 'Record publication evidence, review date, and operational owner.', 'implementation', 'review', 'open_data_reviewer', 2, { isFinal: true }),
+    ],
+    transitions: [
+      link('readiness', 'risk-review', 'Ready for risk review', 'Ready for risk review'),
+      link('risk-review', 'approval', 'Ready for decision', 'Ready for decision'),
+      link('approval', 'publish', 'Approved to publish', 'Approved to publish', 'approved'),
+      link('approval', 'readiness', 'Needs changes', 'Needs changes', 'rejected', false),
+    ],
+  },
+  {
+    code: 'WF-META-CERTIFICATION',
+    caseType: 'metadata_certification',
+    trigger: 'metadata_certification',
+    nameEn: 'Metadata certification route',
+    nameAr: 'Metadata certification route',
+    description: 'Routes metadata certification through steward completion, owner review, and certification evidence.',
+    defaultSlaDays: 6,
+    stages: [
+      stage('completion-check', 'Metadata completion check', 'Metadata completion check', 'Confirm mandatory metadata fields and business definitions.', 'review', 'review', 'data_steward', 2, { isStart: true }),
+      stage('owner-review', 'Owner review', 'Owner review', 'Confirm business meaning, classification, and usage context.', 'review', 'review', 'data_owner', 2),
+      stage('certify', 'Certification decision', 'Certification decision', 'Approve or reject metadata certification.', 'decision', 'approval', 'dmo_admin', 1, { isDecision: true }),
+      stage('evidence', 'Certification evidence', 'Certification evidence', 'Publish certification status and evidence trail.', 'closure', 'review', 'data_steward', 1, { isFinal: true }),
+    ],
+    transitions: [
+      link('completion-check', 'owner-review', 'Ready for owner review', 'Ready for owner review'),
+      link('owner-review', 'certify', 'Ready to certify', 'Ready to certify'),
+      link('certify', 'evidence', 'Certified', 'Certified', 'approved'),
+      link('certify', 'completion-check', 'Needs metadata fixes', 'Needs metadata fixes', 'rejected', false),
+    ],
+  },
+  {
+    code: 'WF-ARCH-REVIEW',
+    caseType: 'architecture_review',
+    trigger: 'architecture_review',
+    nameEn: 'Architecture review route',
+    nameAr: 'Architecture review route',
+    description: 'Routes data architecture changes through impact, controls, and technical approval.',
+    defaultSlaDays: 7,
+    stages: [
+      stage('impact', 'Architecture impact review', 'Architecture impact review', 'Assess lineage, integration, platform, and operational impact.', 'analysis', 'review', 'technical_steward', 2, { isStart: true }),
+      stage('controls', 'Governance controls review', 'Governance controls review', 'Validate ownership, quality, security, and retention controls.', 'review', 'review', 'data_steward', 2),
+      stage('decision', 'Architecture decision', 'Architecture decision', 'Approve implementation or request remediation.', 'decision', 'approval', 'dmo_admin', 2, { isDecision: true }),
+      stage('implementation-note', 'Implementation evidence', 'Implementation evidence', 'Capture change evidence and post-implementation checks.', 'implementation', 'review', 'technical_steward', 1, { isFinal: true }),
+    ],
+    transitions: [
+      link('impact', 'controls', 'Controls review', 'Controls review'),
+      link('controls', 'decision', 'Ready for decision', 'Ready for decision'),
+      link('decision', 'implementation-note', 'Approved', 'Approved', 'approved'),
+      link('decision', 'impact', 'Reassess design', 'Reassess design', 'rejected', false),
+    ],
+  },
+  {
+    code: 'WF-GLOSSARY-TERM',
+    caseType: 'business_glossary_term',
+    trigger: 'business_glossary_term',
+    nameEn: 'Business glossary term route',
+    nameAr: 'Business glossary term route',
+    description: 'Routes glossary terms through definition, domain review, and publication.',
+    defaultSlaDays: 5,
+    stages: [
+      stage('definition', 'Definition drafting', 'Definition drafting', 'Prepare term, synonyms, examples, and linked assets.', 'intake', 'information', 'data_steward', 1, { isStart: true }),
+      stage('domain-review', 'Domain meaning review', 'Domain meaning review', 'Confirm business meaning and avoid duplicate terms.', 'review', 'review', 'data_owner', 2),
+      stage('approval', 'Glossary approval', 'Glossary approval', 'Approve or reject term publication.', 'decision', 'approval', 'dmo_admin', 1, { isDecision: true }),
+      stage('publish', 'Publish term', 'Publish term', 'Publish approved term and keep the decision trail.', 'closure', 'review', 'data_steward', 1, { isFinal: true }),
+    ],
+    transitions: [
+      link('definition', 'domain-review', 'Review meaning', 'Review meaning'),
+      link('domain-review', 'approval', 'Ready for approval', 'Ready for approval'),
+      link('approval', 'publish', 'Approved', 'Approved', 'approved'),
+      link('approval', 'definition', 'Needs revision', 'Needs revision', 'rejected', false),
+    ],
+  },
+  {
+    code: 'WF-ASSET-LIFECYCLE',
+    caseType: 'asset_lifecycle_decision',
+    trigger: 'asset_lifecycle_decision',
+    nameEn: 'Asset lifecycle decision route',
+    nameAr: 'Asset lifecycle decision route',
+    description: 'Routes lifecycle decisions through owner review, risk check, and controlled implementation.',
+    defaultSlaDays: 6,
+    stages: [
+      stage('owner-review', 'Owner lifecycle review', 'Owner lifecycle review', 'Confirm requested lifecycle state and business impact.', 'review', 'review', 'data_owner', 2, { isStart: true }),
+      stage('risk-check', 'Risk and dependency check', 'Risk and dependency check', 'Review downstream dependencies, evidence, and compliance impact.', 'analysis', 'review', 'data_steward', 2),
+      stage('decision', 'Lifecycle decision', 'Lifecycle decision', 'Approve retirement, activation, or change request.', 'decision', 'approval', 'dmo_admin', 1, { isDecision: true }),
+      stage('apply', 'Apply lifecycle change', 'Apply lifecycle change', 'Apply approved state and record evidence.', 'implementation', 'review', 'data_steward', 1, { isFinal: true }),
+    ],
+    transitions: [
+      link('owner-review', 'risk-check', 'Check dependencies', 'Check dependencies'),
+      link('risk-check', 'decision', 'Ready for decision', 'Ready for decision'),
+      link('decision', 'apply', 'Approved', 'Approved', 'approved'),
+      link('decision', 'owner-review', 'Needs reassessment', 'Needs reassessment', 'rejected', false),
+    ],
+  },
+  {
+    code: 'WF-BIA',
+    caseType: 'business_impact_assessment',
+    trigger: 'business_impact_assessment',
+    nameEn: 'Business impact assessment route',
+    nameAr: 'Business impact assessment route',
+    description: 'Routes value, dependency, risk, and prioritization assessment for governed assets.',
+    defaultSlaDays: 7,
+    stages: [
+      stage('impact-capture', 'Impact capture', 'Impact capture', 'Capture criticality, users, dependency, and value indicators.', 'intake', 'information', 'data_steward', 2, { isStart: true }),
+      stage('owner-validation', 'Owner validation', 'Owner validation', 'Validate impact scoring and business context.', 'review', 'review', 'data_owner', 2),
+      stage('priority-decision', 'Priority decision', 'Priority decision', 'Approve value tier and governance priority.', 'decision', 'approval', 'dmo_admin', 2, { isDecision: true }),
+      stage('publish-score', 'Publish impact score', 'Publish impact score', 'Publish accepted impact score and evidence.', 'closure', 'review', 'data_steward', 1, { isFinal: true }),
+    ],
+    transitions: [
+      link('impact-capture', 'owner-validation', 'Validate impact', 'Validate impact'),
+      link('owner-validation', 'priority-decision', 'Ready for priority decision', 'Ready for priority decision'),
+      link('priority-decision', 'publish-score', 'Approved', 'Approved', 'approved'),
+      link('priority-decision', 'impact-capture', 'Needs more evidence', 'Needs more evidence', 'rejected', false),
+    ],
+  },
+  {
+    code: 'WF-COMPLIANCE-CALENDAR',
+    caseType: 'compliance_calendar',
+    trigger: 'compliance_calendar',
+    nameEn: 'Compliance calendar route',
+    nameAr: 'Compliance calendar route',
+    description: 'Routes recurring compliance work through assignment, evidence collection, review, and closure.',
+    defaultSlaDays: 5,
+    stages: [
+      stage('assignment', 'Assign compliance work', 'Assign compliance work', 'Confirm owner, due date, and compliance scope.', 'intake', 'information', 'dmo_admin', 1, { isStart: true }),
+      stage('evidence', 'Collect evidence', 'Collect evidence', 'Collect required evidence and supporting links.', 'implementation', 'review', 'data_steward', 2),
+      stage('review', 'Evidence review', 'Evidence review', 'Review completeness and readiness for audit.', 'review', 'approval', 'auditor', 1, { isDecision: true }),
+      stage('closure', 'Calendar closure', 'Calendar closure', 'Close recurring work and keep audit trail.', 'closure', 'review', 'dmo_admin', 1, { isFinal: true }),
+    ],
+    transitions: [
+      link('assignment', 'evidence', 'Start evidence collection', 'Start evidence collection'),
+      link('evidence', 'review', 'Ready for review', 'Ready for review'),
+      link('review', 'closure', 'Accepted', 'Accepted', 'approved'),
+      link('review', 'evidence', 'Evidence incomplete', 'Evidence incomplete', 'rejected', false),
+    ],
+  },
 ];
 
 export const WORKFLOW_CASE_TYPES = Array.from(
@@ -453,4 +657,102 @@ export function selectWorkflowTransitionForDecision<TEdge extends WorkflowTransi
     outgoing.find((transition) => transition.isHappyPath) ??
     outgoing[0] ??
     null;
+}
+
+export function workflowTemplateConfigurationStatus(template: WorkflowConfigurationTemplate): WorkflowConfigurationStatus {
+  if (!template.isActive) return 'blocked';
+  if (!template.stages.length) return 'blocked';
+  const activeStages = template.stages.filter((stage) => stage.isActive);
+  if (!activeStages.length) return 'blocked';
+  if (!activeStages.some((stage) => stage.isStart) && !activeStages.some((stage) => isActionableWorkflowStage(stage))) {
+    return 'blocked';
+  }
+  if (!activeStages.some((stage) => stage.isFinal)) return 'watch';
+  if (!activeStages.some((stage) => stage.isDecision)) return 'watch';
+  if (!template.transitions.length && activeStages.length > 1) return 'watch';
+  return 'ready';
+}
+
+export function buildWorkflowCaseTypeRegistry(
+  templates: WorkflowConfigurationTemplate[],
+  knownCaseTypes: readonly string[] = WORKFLOW_CASE_TYPES,
+): WorkflowCaseTypeRegistryItem[] {
+  return [...knownCaseTypes].sort().map((caseType) => {
+    const matches = templates.filter((template) => template.caseType === caseType);
+    const active = matches.filter((template) => template.isActive);
+    const stageCount = active.reduce((sum, template) => sum + template.stages.filter((stage) => stage.isActive).length, 0);
+    const statuses = active.map(workflowTemplateConfigurationStatus);
+    const status: WorkflowConfigurationStatus =
+      active.length === 0 ? 'blocked' : statuses.includes('blocked') ? 'blocked' : statuses.includes('watch') ? 'watch' : 'ready';
+    const defaultSlaDays =
+      active.length > 0
+        ? Math.max(1, Math.round(active.reduce((sum, template) => sum + template.defaultSlaDays, 0) / active.length))
+        : null;
+    return {
+      caseType,
+      templateCount: matches.length,
+      routeCodes: active.map((template) => template.code),
+      stageCount,
+      defaultSlaDays,
+      hasDecisionPoint: active.some((template) => template.stages.some((stage) => stage.isActive && stage.isDecision)),
+      hasClosurePoint: active.some((template) => template.stages.some((stage) => stage.isActive && stage.isFinal)),
+      hasActiveRoute: active.length > 0,
+      status,
+    };
+  });
+}
+
+export function buildWorkflowSlaTemplates(templates: WorkflowConfigurationTemplate[]): WorkflowSlaTemplateItem[] {
+  return templates
+    .filter((template) => template.isActive)
+    .map((template) => {
+      const activeStages = template.stages.filter((stage) => stage.isActive);
+      const stageSlaDays = activeStages.reduce((sum, stage) => sum + Math.max(stage.dueDays, 0), 0);
+      const defaultSlaDays = Math.max(template.defaultSlaDays, stageSlaDays, 1);
+      const hasAssignedReviewStep = activeStages.some((stage) => stage.assigneeRoleCode && !stage.isFinal);
+      return {
+        code: template.code,
+        caseType: template.caseType,
+        defaultSlaDays,
+        stageSlaDays,
+        escalationAfterDays: Math.max(defaultSlaDays + 2, 3),
+        status: activeStages.length && hasAssignedReviewStep ? 'ready' : 'watch',
+      };
+    });
+}
+
+export function buildWorkflowNotificationRules(templates: WorkflowConfigurationTemplate[]) {
+  return templates
+    .filter((template) => template.isActive)
+    .flatMap((template) =>
+      template.stages
+        .filter((stage) => stage.isActive && stage.assigneeRoleCode)
+        .map((stage) => ({
+          code: `${template.code}:${stage.code}:notify`,
+          templateCode: template.code,
+          caseType: template.caseType,
+          stageCode: stage.code,
+          targetRoleCode: stage.assigneeRoleCode,
+          trigger: stage.dueDays <= 1 ? 'on_assignment_and_due_soon' : 'on_assignment_and_at_risk',
+          status: 'ready' as WorkflowConfigurationStatus,
+        })),
+    );
+}
+
+export function buildWorkflowEscalationTemplates(templates: WorkflowConfigurationTemplate[]) {
+  return templates
+    .filter((template) => template.isActive)
+    .flatMap((template) =>
+      template.stages
+        .filter((stage) => stage.isActive && !stage.isFinal)
+        .map((stage) => ({
+          code: `${template.code}:${stage.code}:escalate`,
+          templateCode: template.code,
+          caseType: template.caseType,
+          stageCode: stage.code,
+          triggerAfterBusinessDays: Math.max(stage.dueDays + 2, 2),
+          targetRoleCode: stage.assigneeRoleCode ?? 'dmo_admin',
+          status: stage.assigneeRoleCode ? 'ready' : 'watch' as WorkflowConfigurationStatus,
+        })),
+    );
 }

@@ -5,7 +5,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: join(__dirname, '..', '..', '..', '.env') });
 
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TaskStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -1942,6 +1942,8 @@ async function main() {
       });
     }
     const existingCase = await prisma.workflowCase.findUnique({ where: { code: 'WFC-SEED-1' } });
+    const due = new Date();
+    due.setDate(due.getDate() + 3);
     if (!existingCase) {
       const wfCase = await prisma.workflowCase.create({
         data: {
@@ -1955,8 +1957,6 @@ async function main() {
           createdBy: adminEmail,
         },
       });
-      const due = new Date();
-      due.setDate(due.getDate() + 3);
       const task = await prisma.workflowTask.create({
         data: {
           caseId: wfCase.id,
@@ -1972,6 +1972,15 @@ async function main() {
           { caseId: wfCase.id, actor: adminEmail, action: 'case.created', toStatus: 'submitted' },
           { caseId: wfCase.id, taskId: task.id, actor: adminEmail, action: 'task.assigned', comment: 'Assigned to Sara Al-Amri' },
         ],
+      });
+    } else {
+      await prisma.workflowTask.updateMany({
+        where: {
+          caseId: existingCase.id,
+          status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+          title: 'Approve or reject the proposed data owner',
+        },
+        data: { dueDate: due },
       });
     }
   }

@@ -50,7 +50,7 @@ test('summary applies data-scope asset filtering to every count', async () => {
   assert.ok(countWhere.every((where) => includesScopedAsset(where, 'visible-asset')));
 });
 
-test('list returns a paged envelope only when pagination is requested', async () => {
+test('list keeps legacy array shape but applies a bounded default when pagination is omitted', async () => {
   const findManyCalls: any[] = [];
   const service = new DataQualityService(
     {
@@ -70,6 +70,8 @@ test('list returns a paged envelope only when pagination is requested', async ()
 
   const plain = await service.list(['system_admin'], {});
   assert.ok(Array.isArray(plain));
+  assert.strictEqual(findManyCalls[0].skip, 0);
+  assert.strictEqual(findManyCalls[0].take, 200);
 
   const paged = await service.list(['system_admin'], {}, '1', '2') as any;
   assert.deepStrictEqual(
@@ -84,6 +86,40 @@ test('list returns a paged envelope only when pagination is requested', async ()
   );
   assert.strictEqual(findManyCalls[1].skip, 0);
   assert.strictEqual(findManyCalls[1].take, 2);
+});
+
+test('refreshSlaBreachMarkers is the explicit write path for SLA breach markers', async () => {
+  let breachCreated = false;
+  const past = new Date(Date.now() - 60_000);
+  const service = new DataQualityService(
+    {
+      dataQualityIssue: {
+        findMany: async () => [{
+          id: 'dq-overdue',
+          status: 'open',
+          triageDueAt: past,
+          remediationDueAt: past,
+          validationDueAt: past,
+          dueDate: past,
+        }],
+      },
+      dataQualitySlaBreach: {
+        findFirst: async () => null,
+        create: async () => {
+          breachCreated = true;
+          return {};
+        },
+      },
+    } as never,
+    {} as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  const result = await service.refreshSlaBreachMarkers(['system_admin']);
+  assert.deepStrictEqual(result, { created: 1 });
+  assert.strictEqual(breachCreated, true);
 });
 
 test('listRules applies data-scope filtering to rule registry reads', async () => {

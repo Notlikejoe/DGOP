@@ -48,6 +48,9 @@ switch (command) {
   case 'generate':
     run(npxCmd, ['prisma', 'generate']);
     break;
+  case 'status':
+    run(npxCmd, ['prisma', 'migrate', 'status']);
+    break;
   case 'migrate':
     run(npxCmd, ['prisma', 'migrate', 'dev', '--name', migrationName]);
     break;
@@ -58,6 +61,6 @@ switch (command) {
     run(npmCmd, ['run', 'seed']);
     break;
   default:
-    console.error('usage: node scripts/db.mjs {generate|migrate [name]|deploy|seed}');
+    console.error('usage: node scripts/db.mjs {generate|status|migrate [name]|deploy|seed}');
     process.exit(1);
 }

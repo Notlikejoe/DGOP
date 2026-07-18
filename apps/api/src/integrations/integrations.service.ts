@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DataAssetCatalogSyncStatus,
@@ -67,8 +67,59 @@ const connectorInclude = {
   },
 };
 
+const connectorSafeSelect = {
+  id: true,
+  code: true,
+  nameEn: true,
+  nameAr: true,
+  description: true,
+  type: true,
+  direction: true,
+  status: true,
+  sourceTrust: true,
+  lastRunAt: true,
+  lastSuccessAt: true,
+  lastError: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+const connectorRefSelect = {
+  id: true,
+  code: true,
+  nameEn: true,
+  nameAr: true,
+  status: true,
+};
+
 const batchInclude = {
   connector: { select: { id: true, code: true, nameEn: true, nameAr: true, status: true } },
+  errors: {
+    select: { id: true, rowNumber: true, externalId: true, field: true, message: true, severity: true, createdAt: true },
+    orderBy: { rowNumber: 'asc' as const },
+    take: 8,
+  },
+};
+
+const batchSafeSelect = {
+  id: true,
+  code: true,
+  connectorId: true,
+  jobId: true,
+  sourceName: true,
+  adapterType: true,
+  status: true,
+  startedAt: true,
+  completedAt: true,
+  triggeredBy: true,
+  totalRows: true,
+  createdRows: true,
+  updatedRows: true,
+  unchangedRows: true,
+  errorRows: true,
+  warningRows: true,
+  connector: { select: connectorRefSelect },
   errors: {
     select: { id: true, rowNumber: true, externalId: true, field: true, message: true, severity: true, createdAt: true },
     orderBy: { rowNumber: 'asc' as const },
@@ -81,12 +132,48 @@ const writebackInclude = {
   asset: { select: { id: true, code: true, nameEn: true, nameAr: true } },
 };
 
-const eventInclude = {
-  connector: { select: { id: true, code: true, nameEn: true, nameAr: true, status: true, type: true } },
+const eventSafeSelect = {
+  id: true,
+  code: true,
+  connectorId: true,
+  adapterType: true,
+  eventType: true,
+  sourceName: true,
+  externalEventId: true,
+  entityType: true,
+  entityId: true,
+  status: true,
+  severity: true,
+  attempts: true,
+  maxAttempts: true,
+  nextRetryAt: true,
+  lastError: true,
+  receivedAt: true,
+  processedAt: true,
+  deadLetteredAt: true,
+  actor: true,
+  createdAt: true,
+  updatedAt: true,
+  connector: { select: { ...connectorRefSelect, type: true } },
 };
 
-const reconciliationInclude = {
-  connector: { select: { id: true, code: true, nameEn: true, nameAr: true, status: true, type: true } },
+const reconciliationSafeSelect = {
+  id: true,
+  code: true,
+  connectorId: true,
+  batchId: true,
+  eventId: true,
+  status: true,
+  totalRecords: true,
+  matchedRecords: true,
+  createdRecords: true,
+  updatedRecords: true,
+  failedRecords: true,
+  orphanedRecords: true,
+  missingRecords: true,
+  createdBy: true,
+  createdAt: true,
+  connector: { select: { ...connectorRefSelect, type: true } },
   batch: { select: { id: true, code: true, status: true, totalRows: true, errorRows: true } },
   event: { select: { id: true, code: true, status: true, eventType: true, entityType: true, entityId: true } },
 };
@@ -116,7 +203,15 @@ export class IntegrationsService {
   private async ensureDefaultMockConnectors(actor = 'system'): Promise<void> {
     for (const definition of DEFAULT_INTEGRATION_CONNECTORS) {
       const existing = await this.prisma.integrationConnector.findUnique({ where: { code: definition.code } });
-      if (existing) continue;
+      if (existing) {
+        if (existing.status === IntegrationConnectorStatus.warning && !existing.lastError) {
+          await this.prisma.integrationConnector.update({
+            where: { id: existing.id },
+            data: { status: IntegrationConnectorStatus.healthy },
+          });
+        }
+        continue;
+      }
       await this.prisma.integrationConnector.create({
         data: {
           code: definition.code,
@@ -125,7 +220,7 @@ export class IntegrationsService {
           description: definition.description,
           type: definition.type as IntegrationConnectorType,
           direction: IntegrationDirection.inbound,
-          status: IntegrationConnectorStatus.warning,
+          status: IntegrationConnectorStatus.healthy,
           sourceTrust: IntegrationSourceTrust.simulated,
           configJson: {
             adapterType: definition.adapterType,
@@ -181,8 +276,11 @@ export class IntegrationsService {
 
   private webhookTokenIsValid(token?: string | null): boolean {
     const expected = process.env.DGOP_WEBHOOK_TOKEN?.trim();
-    if (!expected) return process.env.NODE_ENV !== 'production';
-    return token === expected;
+    const received = token?.trim();
+    if (!expected || !received) return false;
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+    const receivedBuffer = Buffer.from(received, 'utf8');
+    return expectedBuffer.length === receivedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
   }
 
   private dedupeKey(connectorId: string, externalEventId: string | null | undefined, eventType: string, payload: unknown): string {
@@ -216,6 +314,69 @@ export class IntegrationsService {
     return assetIds === 'all' ? {} : { assetId: { in: [...assetIds] } };
   }
 
+  private noVisibleWhere() {
+    return { id: { equals: '__no_visible_integration_records__' } };
+  }
+
+  private integrationEventScopeWhere(assetIds: Set<string> | 'all'): Prisma.IntegrationEventWhereInput {
+    if (assetIds === 'all') return {};
+    const ids = [...assetIds];
+    if (!ids.length) return this.noVisibleWhere();
+    return { entityType: IntegrationEntityType.data_asset, entityId: { in: ids } };
+  }
+
+  private integrationBatchScopeWhere(assetIds: Set<string> | 'all'): Prisma.IntegrationImportBatchWhereInput {
+    if (assetIds === 'all') return {};
+    const ids = [...assetIds];
+    if (!ids.length) return this.noVisibleWhere();
+    return { writebackLogs: { some: { assetId: { in: ids } } } };
+  }
+
+  private integrationErrorScopeWhere(assetIds: Set<string> | 'all'): Prisma.IntegrationImportErrorWhereInput {
+    if (assetIds === 'all') return {};
+    return { batch: this.integrationBatchScopeWhere(assetIds) };
+  }
+
+  private integrationReconciliationScopeWhere(assetIds: Set<string> | 'all'): Prisma.IntegrationReconciliationReportWhereInput {
+    if (assetIds === 'all') return {};
+    return {
+      OR: [
+        { event: { is: this.integrationEventScopeWhere(assetIds) } },
+        { batch: { is: this.integrationBatchScopeWhere(assetIds) } },
+      ],
+    };
+  }
+
+  private async connectorCounts(
+    connectorId: string,
+    assetIds: Set<string> | 'all',
+  ): Promise<{
+    importBatches: number;
+    externalReferences: number;
+    writebackLogs: number;
+    events: number;
+    reconciliationReports: number;
+  }> {
+    const [importBatches, externalReferences, writebackLogs, events, reconciliationReports] = await Promise.all([
+      this.prisma.integrationImportBatch.count({
+        where: { connectorId, ...this.integrationBatchScopeWhere(assetIds) },
+      }),
+      this.prisma.integrationExternalReference.count({
+        where: { connectorId, ...this.assetRelationWhere(assetIds) },
+      }),
+      this.prisma.integrationWritebackLog.count({
+        where: { connectorId, ...this.assetRelationWhere(assetIds) },
+      }),
+      this.prisma.integrationEvent.count({
+        where: { connectorId, ...this.integrationEventScopeWhere(assetIds) },
+      }),
+      this.prisma.integrationReconciliationReport.count({
+        where: { connectorId, ...this.integrationReconciliationScopeWhere(assetIds) },
+      }),
+    ]);
+    return { importBatches, externalReferences, writebackLogs, events, reconciliationReports };
+  }
+
   private async assertCatalogSyncScope(roleCodes: string[]): Promise<void> {
     if (roleCodes.includes('system_admin') || roleCodes.includes('dmo_admin')) return;
     const scope = await this.scope.resolve(roleCodes);
@@ -235,7 +396,11 @@ export class IntegrationsService {
 
   async summary(roleCodes: string[]) {
     await this.ensureDefaultMockConnectors();
+    await this.resolveCatalogConnector(null, 'system');
     const assetIds = await this.visibleAssetIds(roleCodes);
+    const batchWhere = this.integrationBatchScopeWhere(assetIds);
+    const eventWhere = this.integrationEventScopeWhere(assetIds);
+    const reconciliationWhere = this.integrationReconciliationScopeWhere(assetIds);
     const [
       connectors,
       healthyConnectors,
@@ -266,32 +431,37 @@ export class IntegrationsService {
         this.prisma.dataAsset.count({
           where: { deletedAt: null, externalCatalogId: { not: null }, ...this.assetIdWhere(assetIds) },
         }),
-        this.prisma.integrationImportBatch.count(),
+        this.prisma.integrationImportBatch.count({ where: batchWhere }),
         this.prisma.integrationImportBatch.count({
-          where: { status: { in: [IntegrationBatchStatus.completed_with_errors, IntegrationBatchStatus.failed] } },
+          where: { status: { in: [IntegrationBatchStatus.completed_with_errors, IntegrationBatchStatus.failed] }, ...batchWhere },
         }),
         this.prisma.integrationImportError.count({
-          where: { severity: IntegrationImportErrorSeverity.error },
+          where: { severity: IntegrationImportErrorSeverity.error, ...this.integrationErrorScopeWhere(assetIds) },
         }),
         this.prisma.integrationWritebackLog.count({
           where: { status: IntegrationWritebackStatus.simulated, ...this.assetRelationWhere(assetIds) },
         }),
         this.prisma.integrationEvent.count({
-          where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] } },
+          where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] }, ...eventWhere },
         }),
         this.prisma.integrationEvent.count({
-          where: { status: IntegrationEventStatus.dead_letter },
+          where: { status: IntegrationEventStatus.dead_letter, ...eventWhere },
         }),
         this.prisma.integrationEvent.count({
           where: {
             status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] },
             OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: new Date() } }],
+            ...eventWhere,
           },
         }),
         this.prisma.integrationReconciliationReport.count({
-          where: { status: { in: [IntegrationReconciliationStatus.review, IntegrationReconciliationStatus.failed] } },
+          where: {
+            status: { in: [IntegrationReconciliationStatus.review, IntegrationReconciliationStatus.failed] },
+            ...reconciliationWhere,
+          },
         }),
         this.prisma.integrationImportBatch.findFirst({
+          where: batchWhere,
           orderBy: { startedAt: 'desc' },
           select: { startedAt: true, completedAt: true, status: true },
         }),
@@ -314,49 +484,66 @@ export class IntegrationsService {
     };
   }
 
-  async connectors(_roleCodes: string[]) {
+  async connectors(roleCodes: string[]) {
     await this.ensureDefaultMockConnectors();
-    return this.prisma.integrationConnector.findMany({
+    await this.resolveCatalogConnector(null, 'system');
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    const connectors = await this.prisma.integrationConnector.findMany({
       where: { deletedAt: null },
-      include: connectorInclude,
+      select: connectorSafeSelect,
       orderBy: [{ type: 'asc' }, { code: 'asc' }],
     });
+    return Promise.all(
+      connectors.map(async (connector) => ({
+        ...connector,
+        _count: await this.connectorCounts(connector.id, assetIds),
+      })),
+    );
   }
 
-  async batches(_roleCodes: string[], limit = 25) {
+  async batches(roleCodes: string[], limit = 25) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
     return this.prisma.integrationImportBatch.findMany({
-      include: batchInclude,
+      where: this.integrationBatchScopeWhere(assetIds),
+      select: batchSafeSelect,
       orderBy: { startedAt: 'desc' },
       take: Math.min(Math.max(limit, 1), 100),
     });
   }
 
-  async batchErrors(_roleCodes: string[], batchId: string) {
-    const batch = await this.prisma.integrationImportBatch.findUnique({ where: { id: batchId } });
+  async batchErrors(roleCodes: string[], batchId: string) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    const batch = await this.prisma.integrationImportBatch.findFirst({
+      where: { id: batchId, ...this.integrationBatchScopeWhere(assetIds) },
+      select: { id: true },
+    });
     if (!batch) throw new NotFoundException('integration import batch not found');
     return this.prisma.integrationImportError.findMany({
-      where: { batchId },
+      where: { batchId, ...this.integrationErrorScopeWhere(assetIds) },
       select: { id: true, batchId: true, rowNumber: true, externalId: true, field: true, message: true, severity: true, createdAt: true },
       orderBy: [{ rowNumber: 'asc' }, { createdAt: 'asc' }],
     });
   }
 
-  async events(_roleCodes: string[], status?: string, limit = 25) {
+  async events(roleCodes: string[], status?: string, limit = 25) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
     const statuses = (status ?? '')
       .split(',')
       .map((value) => value.trim())
       .filter((value): value is IntegrationEventStatus => EVENT_STATUSES.has(value as IntegrationEventStatus));
     return this.prisma.integrationEvent.findMany({
-      where: statuses.length ? { status: { in: statuses } } : {},
-      include: eventInclude,
+      where: { ...(statuses.length ? { status: { in: statuses } } : {}), ...this.integrationEventScopeWhere(assetIds) },
+      select: eventSafeSelect,
       orderBy: [{ status: 'asc' }, { receivedAt: 'desc' }],
       take: Math.min(Math.max(limit, 1), 100),
     });
   }
 
-  async reconciliationReports(_roleCodes: string[], limit = 20) {
+  async reconciliationReports(roleCodes: string[], limit = 20) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
     return this.prisma.integrationReconciliationReport.findMany({
-      include: reconciliationInclude,
+      where: this.integrationReconciliationScopeWhere(assetIds),
+      select: reconciliationSafeSelect,
       orderBy: { createdAt: 'desc' },
       take: Math.min(Math.max(limit, 1), 100),
     });
@@ -385,7 +572,7 @@ export class IntegrationsService {
     );
     const existing = await this.prisma.integrationEvent.findUnique({
       where: { dedupeKey },
-      include: eventInclude,
+      select: eventSafeSelect,
     });
     if (existing) return existing;
 
@@ -416,8 +603,11 @@ export class IntegrationsService {
     return this.processIntegrationEvent(event.id, 'webhook');
   }
 
-  async retryEvent(_roleCodes: string[], id: string, dto: RetryIntegrationEventDto, actor: string) {
-    const event = await this.prisma.integrationEvent.findUnique({ where: { id } });
+  async retryEvent(roleCodes: string[], id: string, dto: RetryIntegrationEventDto, actor: string) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    const event = await this.prisma.integrationEvent.findFirst({
+      where: { id, ...this.integrationEventScopeWhere(assetIds) },
+    });
     if (!event) throw new NotFoundException('integration event not found');
     const retryableStatuses: IntegrationEventStatus[] = [
       IntegrationEventStatus.failed,
@@ -726,7 +916,7 @@ export class IntegrationsService {
           processedAt: next.status === IntegrationEventStatus.succeeded ? now : null,
           deadLetteredAt: next.status === IntegrationEventStatus.dead_letter ? now : null,
         },
-        include: eventInclude,
+        select: eventSafeSelect,
       });
       const reconciliation = reconciliationForIntegrationEvent({
         accepted: normalization.accepted,
@@ -828,7 +1018,15 @@ export class IntegrationsService {
     const existing = await this.prisma.integrationConnector.findFirst({
       where: { code: DEFAULT_CATALOG_CONNECTOR_CODE, deletedAt: null },
     });
-    if (existing) return existing;
+    if (existing) {
+      if (existing.status === IntegrationConnectorStatus.warning && !existing.lastError) {
+        return this.prisma.integrationConnector.update({
+          where: { id: existing.id },
+          data: { status: IntegrationConnectorStatus.healthy },
+        });
+      }
+      return existing;
+    }
     return this.prisma.integrationConnector.create({
       data: {
         code: DEFAULT_CATALOG_CONNECTOR_CODE,
@@ -837,7 +1035,7 @@ export class IntegrationsService {
         description: 'Default Sprint 15 catalog connector for CSV and mock REST synchronization.',
         type: IntegrationConnectorType.catalog,
         direction: IntegrationDirection.bidirectional,
-        status: IntegrationConnectorStatus.warning,
+        status: IntegrationConnectorStatus.healthy,
         sourceTrust: IntegrationSourceTrust.authoritative,
         createdBy: actor,
         jobs: {

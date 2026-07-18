@@ -6,6 +6,7 @@
   "scripts": {
     "install:all": "npm --prefix apps/api install && npm --prefix apps/web install",
     "db:generate": "node scripts/db.mjs generate",
+    "db:status": "node scripts/db.mjs status",
     "db:migrate": "node scripts/db.mjs migrate",
     "db:deploy": "node scripts/db.mjs deploy",
     "db:seed": "node scripts/db.mjs seed",

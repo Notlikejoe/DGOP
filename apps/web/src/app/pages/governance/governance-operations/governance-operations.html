@@ -20,7 +20,20 @@
   @if (state() === 'loading') {
     <section class="ds-card"><p>{{ t('assets.loading') }}</p></section>
   } @else if (state() === 'error') {
-    <section class="ds-card"><p class="error">{{ t('operations.error') }}</p></section>
+    <section class="ds-card error-state">
+      <div>
+        <span class="eyebrow">{{ pageError()?.code || 'SYS-500' }}</span>
+        <h2>{{ pageError()?.title || t('operations.error') }}</h2>
+        <p>{{ pageError()?.message || t('operations.error') }}</p>
+        @if (pageError()?.requestId) {
+          <small>{{ t('error.requestId') }} {{ pageError()?.requestId }}</small>
+        }
+      </div>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="loadWorkspace()">
+        <app-icon name="refresh" />
+        {{ t('error.retry') }}
+      </button>
+    </section>
   } @else if (workspace(); as w) {
     <section class="metric-strip" [attr.aria-label]="t('operations.kpis')">
       <article class="metric">
@@ -43,6 +56,178 @@
         <strong>{{ w.summary.calendarItems }}</strong>
         <small>{{ w.summary.holidaysConfigured }} {{ t('operations.kpi.holidays') }}</small>
       </article>
+    </section>
+
+    @if (operatingModel(); as model) {
+      <section class="operating-model-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.model.eyebrow') }}</span>
+            <h2>{{ t('operations.model.title') }}</h2>
+            <p>{{ t('operations.model.subtitle') }}</p>
+          </div>
+          <app-status-chip [kind]="statusKind(model.status)" [label]="t('operations.status.' + model.status)" />
+        </div>
+        <div class="model-layout">
+          <div class="body-list">
+            @for (body of model.bodies.slice(0, 6); track body.code) {
+              <article>
+                <div>
+                  <strong>{{ body.name }}</strong>
+                  <span>{{ body.cadence }} &middot; {{ body.operatingPressure }} {{ t('operations.model.pressure') }}</span>
+                </div>
+                <app-status-chip [kind]="statusKind(body.status)" [label]="t('operations.status.' + body.status)" />
+              </article>
+            }
+          </div>
+          <aside class="sizing-panel">
+            <span>{{ t('operations.model.dgpoSizing') }}</span>
+            <strong>{{ model.dgpoSizing.recommendedFte }}</strong>
+            <small>{{ t('operations.model.fte') }}</small>
+            <dl>
+              <div><dt>{{ t('operations.model.assets') }}</dt><dd>{{ model.summary.governedAssets }}</dd></div>
+              <div><dt>{{ t('operations.model.domains') }}</dt><dd>{{ model.summary.dataDomains }}</dd></div>
+              <div><dt>{{ t('operations.model.systems') }}</dt><dd>{{ model.summary.systemPlatforms }}</dd></div>
+            </dl>
+          </aside>
+        </div>
+        <div class="kpi-trace">
+          @for (kpi of model.kpiTraceability.slice(0, 5); track kpi.code) {
+            <article>
+              <span>{{ kpi.label }}</span>
+              <strong>{{ kpi.value }}{{ kpi.unit === '%' ? '%' : '' }}</strong>
+              <small>{{ kpi.formula }}</small>
+            </article>
+          }
+        </div>
+      </section>
+    }
+
+    @if (platformArchitecture(); as arch) {
+      <section class="platform-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.platform.eyebrow') }}</span>
+            <h2>{{ t('operations.platform.title') }}</h2>
+            <p>{{ t('operations.platform.subtitle') }}</p>
+          </div>
+          <app-status-chip [kind]="statusKind(arch.status)" [label]="t('operations.status.' + arch.status)" />
+        </div>
+        <div class="platform-summary">
+          <article><span>{{ t('operations.platform.services') }}</span><strong>{{ arch.summary.services }}</strong></article>
+          <article><span>{{ t('operations.platform.contexts') }}</span><strong>{{ arch.summary.boundedContexts }}</strong></article>
+          <article><span>{{ t('operations.platform.openRisks') }}</span><strong>{{ arch.summary.openRisks }}</strong></article>
+          <article><span>{{ t('operations.platform.ready') }}</span><strong>{{ arch.summary.ready }}</strong></article>
+        </div>
+        <div class="platform-grid">
+          @for (service of arch.services; track service.code) {
+            <a class="platform-service" [routerLink]="service.route">
+              <div class="platform-service__top">
+                <span class="badge-code">{{ service.boundedContext }}</span>
+                <app-status-chip [kind]="statusKind(service.status)" [label]="t('operations.status.' + service.status)" />
+              </div>
+              <strong>{{ service.name }}</strong>
+              <span>{{ service.ownerRoleCode }} &middot; {{ service.serviceType }}</span>
+              <div class="platform-service__signals">
+                <small><b>{{ service.signals.dataSignals }}</b> {{ t('operations.platform.signals') }}</small>
+                <small><b>{{ service.signals.wiredDependencies }}/{{ service.signals.requiredDependencies }}</b> {{ t('operations.platform.dependencies') }}</small>
+                <small><b>{{ service.signals.openRisks }}</b> {{ t('operations.platform.risks') }}</small>
+              </div>
+              <p>{{ service.acceptanceSignals.join(', ') }}</p>
+            </a>
+          }
+        </div>
+      </section>
+    }
+
+    @if (controlCrosswalk(); as crosswalk) {
+      <section class="closure-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('operations.controls.eyebrow') }}</span>
+            <h2>{{ t('operations.controls.title') }}</h2>
+            <p>{{ t('operations.controls.subtitle') }}</p>
+          </div>
+          <app-status-chip [kind]="statusKind(crosswalk.status)" [label]="t('operations.status.' + crosswalk.status)" />
+        </div>
+        <div class="closure-summary">
+          <article><span>{{ t('operations.controls.total') }}</span><strong>{{ crosswalk.summary.controls }}</strong></article>
+          <article><span>{{ t('operations.controls.deferrals') }}</span><strong>{{ crosswalk.summary.acceptedDeferrals }}</strong></article>
+          <article><span>{{ t('operations.controls.openRisks') }}</span><strong>{{ crosswalk.summary.openRisks }}</strong></article>
+          <article><span>{{ t('operations.controls.ready') }}</span><strong>{{ crosswalk.summary.ready }}</strong></article>
+        </div>
+        <div class="control-grid">
+          @for (control of crosswalk.controls; track control.code) {
+            <article class="control-item">
+              <div class="control-item__top">
+                <span class="badge-code">{{ control.family }}</span>
+                <app-status-chip [kind]="statusKind(control.status)" [label]="t('operations.status.' + control.status)" />
+              </div>
+              <strong>{{ control.name }}</strong>
+              <span>{{ evidenceText(control.frameworks) }} &middot; {{ control.ownerRoleCode }}</span>
+              <p>{{ control.implementation }}</p>
+              @if (control.acceptedDeferral) {
+                <small class="deferral">{{ control.acceptedDeferral }}</small>
+              }
+            </article>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="readiness-row">
+      @if (productionAcceptance(); as acceptance) {
+        <article class="closure-card compact-closure">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">{{ t('operations.acceptance.eyebrow') }}</span>
+              <h2>{{ t('operations.acceptance.title') }}</h2>
+              <p>{{ t('operations.acceptance.subtitle') }}</p>
+            </div>
+            <app-status-chip [kind]="statusKind(acceptance.status)" [label]="t('operations.status.' + acceptance.status)" />
+          </div>
+          <div class="acceptance-list">
+            @for (item of acceptance.items; track item.code) {
+              <article>
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <span>{{ item.target }}</span>
+                </div>
+                <app-status-chip [kind]="statusKind(item.status)" [label]="t('operations.status.' + item.status)" />
+              </article>
+            }
+          </div>
+        </article>
+      }
+
+      @if (errorExperience(); as errors) {
+        <article class="closure-card compact-closure">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">{{ t('operations.errors.eyebrow') }}</span>
+              <h2>{{ t('operations.errors.title') }}</h2>
+              <p>{{ t('operations.errors.subtitle') }}</p>
+            </div>
+            <app-status-chip [kind]="statusKind(errors.status)" [label]="t('operations.status.' + errors.status)" />
+          </div>
+          <div class="error-envelope">
+            <span>{{ t('operations.errors.envelope') }}</span>
+            <strong>{{ errors.envelope.publicCodes.length }}</strong>
+            <small>{{ t('operations.errors.codes') }}</small>
+          </div>
+          <div class="acceptance-list">
+            @for (category of errors.categories; track category.code) {
+              <article>
+                <div>
+                  <strong>{{ category.name }}</strong>
+                  <span>{{ category.implementation }}</span>
+                </div>
+                <app-status-chip [kind]="statusKind(category.status)" [label]="t('operations.status.' + category.status)" />
+              </article>
+            }
+          </div>
+        </article>
+      }
     </section>
 
     <section class="ops-grid">

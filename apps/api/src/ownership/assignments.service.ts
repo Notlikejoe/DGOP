@@ -1,16 +1,22 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ApprovalStatus, AssignmentTargetType } from '@prisma/client';
+import { ApprovalStatus, AssignmentTargetType, CertificationAttemptStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
 import {
   ApplyRecommendationDto,
   CreateAssignmentDto,
+  RecommendationFeedbackDto,
   CreateRuleDto,
   RULE_SCOPES,
   UpdateAssignmentDto,
   UpdateRuleDto,
 } from './assignments.dto';
+import {
+  confidenceLabel,
+  recommendationConfidence,
+  recommendationReasons,
+} from './assignments.logic';
 
 const DATA_OWNER_CODE = 'data_owner';
 
@@ -489,14 +495,21 @@ export class AssignmentsService {
     if (!asset) throw new NotFoundException('data_asset not found');
 
     const now = new Date();
-    const [roleTypes, assignments, rules] = await Promise.all([
+    const [roleTypes, assignments, rules, allAssignments] = await Promise.all([
       this.prisma.roleType.findMany({ where: { deletedAt: null, isActive: true }, orderBy: { nameEn: 'asc' } }),
       this.prisma.stewardshipAssignment.findMany({
         where: { targetType: AssignmentTargetType.asset, targetId: assetId, deletedAt: null, isActive: true },
         include: { person: true },
       }),
       this.prisma.assignmentRule.findMany({ where: { deletedAt: null, isActive: true }, include: { person: true } }),
+      this.prisma.stewardshipAssignment.findMany({
+        where: { deletedAt: null, isActive: true },
+        include: { person: true, roleType: true },
+      }),
     ]);
+    const certificationByPerson = await this.certificationSignals(
+      [...new Set(rules.map((rule) => rule.personId).filter((personId): personId is string => Boolean(personId)))],
+    );
 
     // Asset dimension values keyed by rule scope type.
     const dimValues: Record<string, string[]> = {
@@ -528,15 +541,117 @@ export class AssignmentsService {
         }
       }
       const status = current ? 'assigned' : recommended ? 'recommended' : 'exception';
+      const recommendedPersonId = recommended?.rule.personId ?? null;
+      const personAssignments = recommendedPersonId
+        ? allAssignments.filter((assignment) => assignment.personId === recommendedPersonId)
+        : [];
+      const activeAssignments = personAssignments.filter(
+        (assignment) =>
+          assignment.approvalStatus === ApprovalStatus.approved &&
+          this.windowActive(assignment, now),
+      ).length;
+      const approvedAssignments = personAssignments.filter(
+        (assignment) => assignment.approvalStatus === ApprovalStatus.approved,
+      ).length;
+      const conflictCount = this.assignmentConflictCount(personAssignments);
+      const certificationState = recommendedPersonId ? certificationByPerson.get(recommendedPersonId) ?? null : null;
+      const score = current
+        ? 100
+        : recommendationConfidence({
+            scopeType: recommended?.scopeType,
+            rulePriority: recommended?.rule.priority,
+            activeAssignments,
+            approvedAssignments,
+            conflictCount,
+            certificationState,
+          });
+      const reasons = recommendationReasons({
+        assigned: Boolean(current),
+        scopeType: recommended?.scopeType,
+        rulePriority: recommended?.rule.priority,
+        activeAssignments,
+        approvedAssignments,
+        conflictCount,
+        certificationState,
+      });
       return {
         roleType: rt,
         current: current ? { id: current.id, person: current.person, source: current.source } : null,
         recommended: recommended
-          ? { scopeType: recommended.scopeType, ruleId: recommended.rule.id, person: recommended.rule.person }
+          ? {
+              scopeType: recommended.scopeType,
+              ruleId: recommended.rule.id,
+              person: recommended.rule.person,
+              confidence: score,
+              confidenceLabel: confidenceLabel(score),
+              signals: {
+                rulePriority: recommended.rule.priority,
+                activeAssignments,
+                approvedAssignments,
+                conflictCount,
+                certificationState,
+              },
+              reasons,
+            }
           : null,
+        confidence: score,
+        confidenceLabel: confidenceLabel(score, Boolean(current)),
+        reasons,
         status,
       };
     });
+  }
+
+  private assignmentConflictCount(assignments: Array<{
+    id: string;
+    targetType: AssignmentTargetType;
+    targetId: string;
+    roleTypeId: string;
+    isPrimary: boolean;
+    approvalStatus: ApprovalStatus;
+    effectiveDate: Date;
+    expiryDate: Date | null;
+  }>): number {
+    return assignments.filter((assignment) =>
+      assignment.isPrimary &&
+      assignment.approvalStatus === ApprovalStatus.approved &&
+      assignments.some(
+        (other) =>
+          other.id !== assignment.id &&
+          other.isPrimary &&
+          other.approvalStatus === ApprovalStatus.approved &&
+          other.targetType === assignment.targetType &&
+          other.targetId === assignment.targetId &&
+          other.roleTypeId === assignment.roleTypeId &&
+          this.windowsOverlap(assignment, other),
+      ),
+    ).length;
+  }
+
+  private async certificationSignals(personIds: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (!personIds.length) return result;
+    const delegate = (this.prisma as unknown as { certificationAttempt?: unknown }).certificationAttempt as
+      | { findMany?: (args: unknown) => Promise<Array<{ personId: string | null; status: CertificationAttemptStatus; expiresAt: Date | null; renewalDueAt: Date | null }>> }
+      | undefined;
+    if (!delegate?.findMany) return result;
+    const attempts = await delegate.findMany({
+      where: { personId: { in: personIds } },
+      select: { personId: true, status: true, expiresAt: true, renewalDueAt: true },
+      orderBy: [{ expiresAt: 'desc' }, { updatedAt: 'desc' }],
+    });
+    const now = new Date();
+    for (const attempt of attempts) {
+      if (!attempt.personId || result.has(attempt.personId)) continue;
+      if (attempt.status !== CertificationAttemptStatus.passed) {
+        result.set(attempt.personId, attempt.status);
+        continue;
+      }
+      if (attempt.expiresAt && attempt.expiresAt < now) result.set(attempt.personId, 'expired');
+      else if (attempt.renewalDueAt && attempt.renewalDueAt <= now) result.set(attempt.personId, 'renewal_due');
+      else result.set(attempt.personId, 'current');
+    }
+    return result;
   }
 
   async applyRecommendation(roleCodes: string[], dto: ApplyRecommendationDto, actor: string) {
@@ -557,6 +672,34 @@ export class AssignmentsService {
       actor,
       dto.justification ? 'override' : 'rule',
     );
+  }
+
+  async recordRecommendationFeedback(
+    roleCodes: string[],
+    assetId: string,
+    roleTypeId: string,
+    dto: RecommendationFeedbackDto,
+    actor: string,
+  ) {
+    const recs = await this.recommend(roleCodes, assetId);
+    const rec = recs.find((row) => row.roleType.id === roleTypeId);
+    if (!rec) throw new NotFoundException('recommendation not found');
+    await this.audit.log({
+      actor,
+      action: 'assignment_recommendation.feedback',
+      entityType: 'data_asset',
+      entityId: assetId,
+      metadata: {
+        roleTypeId,
+        decision: dto.decision,
+        selectedPersonId: dto.selectedPersonId ?? null,
+        recommendedPersonId: rec.recommended?.person.id ?? null,
+        confidence: rec.confidence,
+        confidenceLabel: rec.confidenceLabel,
+        comment: dto.comment ?? null,
+      },
+    });
+    return { recorded: true, recommendation: rec };
   }
 
   // ---------- conflicts ----------

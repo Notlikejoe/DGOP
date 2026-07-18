@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { AccessModule } from '../access/access.module';
+import { isProductionLikeRuntime, isUnsafeJwtSecret } from '../common/runtime-safety';
 
 @Module({
   imports: [
@@ -14,11 +15,10 @@ import { AccessModule } from '../access/access.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const environment = config.get<string>('NODE_ENV') ?? 'development';
-        const strictConfig = !['development', 'test'].includes(environment);
+        const strictConfig = isProductionLikeRuntime();
         const secret = config.get<string>('JWT_SECRET');
-        if (strictConfig && (!secret || secret.length < 32)) {
-          throw new Error('JWT_SECRET must be set to at least 32 characters outside development');
+        if (strictConfig && isUnsafeJwtSecret(secret)) {
+          throw new Error('JWT_SECRET must be at least 32 characters and not use a known placeholder outside development');
         }
         return {
           secret: secret ?? 'dev-insecure-secret',

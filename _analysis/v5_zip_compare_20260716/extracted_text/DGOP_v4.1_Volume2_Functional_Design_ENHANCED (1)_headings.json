@@ -1,0 +1,2574 @@
+[
+  {
+    "style": "toc 1",
+    "text": "1. DGOP Administration Module 17"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.1 Domain Management 17"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.2 Subject Management 18"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.3 Capability Management 19"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.4 System Management 19"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.5 Organization Unit Management 19"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.6 Role & RACI Management 19"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.7 Assignment Rule Engine 21"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.8 Workflow Template Management 21"
+  },
+  {
+    "style": "toc 2",
+    "text": "1.9 SLA Template Management 21"
+  },
+  {
+    "style": "toc 1",
+    "text": "2. Ownership & Stewardship Registry 22"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.1 Assignment & Approval 22"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.2 Delegation & Backup 23"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.3 Approval History 23"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.4 Steward Workload Management 23"
+  },
+  {
+    "style": "toc 2",
+    "text": "2.5 Effective Date Management 23"
+  },
+  {
+    "style": "toc 1",
+    "text": "3. Data Asset Governance Hub 24"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.1 Asset 360 View 24"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.2 Catalog Integration 24"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.3 Lineage Integration 24"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.4 DQ Integration 25"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.5 DLP Integration 25"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.6 PDP Integration 25"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.7 NDI Integration 25"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.8 Risk Integration 25"
+  },
+  {
+    "style": "toc 2",
+    "text": "3.9 Training Integration 25"
+  },
+  {
+    "style": "toc 1",
+    "text": "4. Universal Case Management Layer 26"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.1 Case Types 26"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.2 Case Lifecycle 26"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.3 Task Management 27"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.4 SLA & Escalation 28"
+  },
+  {
+    "style": "toc 2",
+    "text": "4.5 Decision Recording 28"
+  },
+  {
+    "style": "toc 1",
+    "text": "5. Workflow Engine 28"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.1 BPMN Process Models 29"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.2 Assignment Workflow 29"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.3 DQ Remediation Workflow 29"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.4 PDP Review Workflow 29"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.5 Data Sharing Workflow 29"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.6 Open Data Workflow 30"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.7 FOI Workflow 30"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.8 Evidence Review Workflow 30"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.9 Appeals Workflow 31"
+  },
+  {
+    "style": "toc 2",
+    "text": "5.10 Access Certification Workflow 31"
+  },
+  {
+    "style": "toc 1",
+    "text": "6. DQ Dimensional Framework [NEW v3.1] 31"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.1 Six Quality Dimensions 31"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.2 Dimension Scoring Model 32"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.3 Hierarchical Scorecards 33"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.4 DQ Rule Type Library 35"
+  },
+  {
+    "style": "toc 2",
+    "text": "6.5 Exception Management 36"
+  },
+  {
+    "style": "toc 1",
+    "text": "7. Data Profiling Integration [NEW v3.1] 36"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.1 Column Statistics & Analysis 36"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.2 Pattern Analysis & Discovery 37"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.3 Relationship Discovery 38"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.4 Cross-Column & Cross-Table Analysis 39"
+  },
+  {
+    "style": "toc 2",
+    "text": "7.5 Distribution Analysis & Anomaly Detection 40"
+  },
+  {
+    "style": "toc 1",
+    "text": "8. Severity-Based SLA Framework [NEW v3.1] 41"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.1 Four Severity Tiers 41"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.2 Per-Stage SLA Timers 42"
+  },
+  {
+    "style": "toc 2",
+    "text": "8.3 Breach Management & Reporting 44"
+  },
+  {
+    "style": "toc 1",
+    "text": "9. 4-Level Governance Escalation [NEW v3.1] 45"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.1 Escalation Hierarchy 45"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.2 Time-Boxed Escalation Protocol 47"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.3 Escalation Triggers & Automation 48"
+  },
+  {
+    "style": "toc 2",
+    "text": "9.4 Escalation Dashboard & Analytics 49"
+  },
+  {
+    "style": "toc 1",
+    "text": "10. RCA Technique Integration [NEW v3.1] 50"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.1 5 Whys Analysis 50"
+  },
+  {
+    "style": "toc 3",
+    "text": "5 Whys Template 51"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.2 Fishbone (Ishikawa) Diagram 51"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.3 Process Mapping 52"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.4 Data Lineage Analysis 53"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.5 RCA Selection Guidance 54"
+  },
+  {
+    "style": "toc 2",
+    "text": "10.6 RCA Evidence Capture 55"
+  },
+  {
+    "style": "toc 1",
+    "text": "11. Rule Lifecycle Management [NEW v3.1] 56"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.1 Rule Definition 56"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.2 Rule Review & Approval 58"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.3 Rule Deployment 60"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.4 Rule Monitoring & Retirement 61"
+  },
+  {
+    "style": "toc 2",
+    "text": "11.5 Rule Versioning & Impact Analysis 62"
+  },
+  {
+    "style": "toc 1",
+    "text": "12. MDM Matching & Survivorship Engine [NEW v3.1] 63"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.1 Matching Algorithms 63"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.2 5-Step Match Resolution 64"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.3 Survivorship Rules 65"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.4 Master Data Domain Templates 67"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.5 MDM Implementation Styles 70"
+  },
+  {
+    "style": "toc 2",
+    "text": "12.6 Golden Record Management 71"
+  },
+  {
+    "style": "toc 1",
+    "text": "13. Business Glossary Governance [NEW v3.1] 72"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.1 Term Definition & BDE Model 72"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.2 Approval Workflow 74"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.3 Version Control & Change Management 76"
+  },
+  {
+    "style": "toc 2",
+    "text": "13.4 Periodic Review & Recertification 77"
+  },
+  {
+    "style": "toc 1",
+    "text": "14. Business Lineage [NEW v3.1] 79"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.1 Business Lineage Model 79"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.2 Business Process Mapping 80"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.3 Business-to-Technical Lineage Bridge 81"
+  },
+  {
+    "style": "toc 2",
+    "text": "14.4 Business Lineage Visualization 83"
+  },
+  {
+    "style": "toc 1",
+    "text": "15. Data Masking Service [NEW v3.1] 84"
+  },
+  {
+    "style": "toc 2",
+    "text": "15.1 Six Masking Techniques 84"
+  },
+  {
+    "style": "toc 3",
+    "text": "1. Static Masking 84"
+  },
+  {
+    "style": "toc 3",
+    "text": "2. Dynamic Masking 84"
+  },
+  {
+    "style": "toc 3",
+    "text": "3. Tokenization 85"
+  },
+  {
+    "style": "toc 3",
+    "text": "4. Anonymization 85"
+  },
+  {
+    "style": "toc 3",
+    "text": "5. Pseudonymization 85"
+  },
+  {
+    "style": "toc 3",
+    "text": "6. Redaction 86"
+  },
+  {
+    "style": "toc 2",
+    "text": "15.2 Classification-Driven Technique Selection 86"
+  },
+  {
+    "style": "toc 2",
+    "text": "15.3 Environment-Based Masking Policies 87"
+  },
+  {
+    "style": "toc 2",
+    "text": "15.4 Masking Audit & Compliance 88"
+  },
+  {
+    "style": "toc 3",
+    "text": "Compliance Reports 88"
+  },
+  {
+    "style": "toc 1",
+    "text": "16. Recurring Compliance Calendar [NEW v3.1] 88"
+  },
+  {
+    "style": "toc 2",
+    "text": "16.1 Recurring Task Templates 89"
+  },
+  {
+    "style": "toc 2",
+    "text": "16.2 Automatic Assignment Engine 90"
+  },
+  {
+    "style": "toc 2",
+    "text": "16.3 Compliance Task Types 91"
+  },
+  {
+    "style": "toc 2",
+    "text": "16.4 Calendar Dashboard & Overdue Tracking 93"
+  },
+  {
+    "style": "toc 3",
+    "text": "Compliance Calendar KPIs 94"
+  },
+  {
+    "style": "toc 1",
+    "text": "17. Role-Data Mapping Designer [NEW v3.1] 94"
+  },
+  {
+    "style": "toc 2",
+    "text": "17.1 RBAC Role-to-Domain Mapping 94"
+  },
+  {
+    "style": "toc 2",
+    "text": "17.2 Visual Mapping Designer 97"
+  },
+  {
+    "style": "toc 2",
+    "text": "17.3 Mapping Validation & Simulation 98"
+  },
+  {
+    "style": "toc 2",
+    "text": "17.4 Access Policy Generation 99"
+  },
+  {
+    "style": "toc 1",
+    "text": "18. Enhanced Search Capabilities [NEW v4.1] 100"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.1 Search Architecture 100"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.2 Searchable Object Registry 102"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.3 Search API & Query Language 105"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.4 Faceted Search & Filtering 107"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.5 Auto-Complete & Search Suggestions 109"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.6 Advanced Search 110"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.7 Search Result Presentation 112"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.8 Search Administration 114"
+  },
+  {
+    "style": "toc 2",
+    "text": "18.9 Search Security 116"
+  },
+  {
+    "style": "toc 1",
+    "text": "19. Error Message Handling & User Notification Framework [NEW v4.1] 118"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.1 Error Handling Framework 118"
+  },
+  {
+    "style": "toc 3",
+    "text": "Architecture Layers 118"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.2 Error Classification & Severity 119"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.3 Error Message Structure 121"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.4 Error Message Catalog 123"
+  },
+  {
+    "style": "toc 3",
+    "text": "Security Error Messages (SEC-001 to SEC-099) 126"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.5 Client-Side Validation 126"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.6 Server-Side Error Handling 128"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.7 Notification Framework Architecture 130"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.8 Notification Types & Templates 131"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.9 Notification Preferences 135"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.10 Notification Inbox 136"
+  },
+  {
+    "style": "toc 2",
+    "text": "19.11 Error Analytics & Monitoring 138"
+  },
+  {
+    "style": "toc 1",
+    "text": "20. Business Process & Workflow Management [NEW v4.1] 140"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.1 Workflow Configuration 140"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.2 Workflow Execution Engine 144"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.3 Task Management 146"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.4 Role & Responsibility Management 150"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.5 RACI Management 153"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.6 Approval Management 155"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.7 Notification & Reminder Management 157"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.8 SLA & Escalation Management 158"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.9 Evidence & Document Management 161"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.10 Workflow Monitoring 163"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.11 Audit Trail 166"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.12 Dashboard & Reporting 169"
+  },
+  {
+    "style": "toc 2",
+    "text": "20.13 Core Workflow Capabilities Summary Table 172"
+  },
+  {
+    "style": "Heading 1",
+    "text": "Table of Contents"
+  },
+  {
+    "style": "Heading 1",
+    "text": "1. DGOP Administration Module"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.1 Domain Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.2 Subject Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.3 Capability Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.4 System Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.5 Organization Unit Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.6 Role & RACI Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.7 Assignment Rule Engine"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.8 Workflow Template Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "1.9 SLA Template Management"
+  },
+  {
+    "style": "Heading 1",
+    "text": "2. Ownership & Stewardship Registry"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.1 Assignment & Approval"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.2 Delegation & Backup"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.3 Approval History"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.4 Steward Workload Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "2.5 Effective Date Management"
+  },
+  {
+    "style": "Heading 1",
+    "text": "3. Data Asset Governance Hub"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.1 Asset 360 View"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.2 Catalog Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.3 Lineage Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.4 DQ Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.5 DLP Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.6 PDP Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.7 NDI Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.8 Risk Integration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "3.9 Training Integration"
+  },
+  {
+    "style": "Heading 1",
+    "text": "4. Universal Case Management Layer"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.1 Case Types"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.2 Case Lifecycle"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.3 Task Management"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.4 SLA & Escalation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "4.5 Decision Recording"
+  },
+  {
+    "style": "Heading 1",
+    "text": "5. Workflow Engine"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.1 BPMN Process Models"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.2 Assignment Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.3 DQ Remediation Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.4 PDP Review Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.5 Data Sharing Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.6 Open Data Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.7 FOI Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.8 Evidence Review Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.9 Appeals Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "5.10 Access Certification Workflow"
+  },
+  {
+    "style": "Heading 1",
+    "text": "6. DQ Dimensional Framework [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.1 Six Quality Dimensions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dimension Weights"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.2 Dimension Scoring Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Score Calculation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Threshold Levels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Per-Dimension Threshold Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.3 Hierarchical Scorecards"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Scorecard Hierarchy"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Aggregation Formulas"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Scorecard Views"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.4 DQ Rule Type Library"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Rule-Dimension Mapping Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "6.5 Exception Management"
+  },
+  {
+    "style": "Heading 1",
+    "text": "7. Data Profiling Integration [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.1 Column Statistics & Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Statistical Measures"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Data Type Inference"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.2 Pattern Analysis & Discovery"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pattern Profiling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pattern Examples"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.3 Relationship Discovery"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Relationship Types"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Relationship Profile Output"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.4 Cross-Column & Cross-Table Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Cross-Column Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Cross-Table Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Cross-Table Profile Report"
+  },
+  {
+    "style": "Heading 2",
+    "text": "7.5 Distribution Analysis & Anomaly Detection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Distribution Types"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Anomaly Detection Methods"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Profiling-Driven DQ Rule Recommendation"
+  },
+  {
+    "style": "Heading 1",
+    "text": "8. Severity-Based SLA Framework [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.1 Four Severity Tiers"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Severity Assignment Rules"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.2 Per-Stage SLA Timers"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Critical (P1) SLA"
+  },
+  {
+    "style": "Heading 3",
+    "text": "High (P2) SLA"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Medium (P3) SLA"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Low (P4) SLA"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SLA Calculation Rules"
+  },
+  {
+    "style": "Heading 2",
+    "text": "8.3 Breach Management & Reporting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Breach Recording"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Breach Categories"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Breach Metrics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Breach Escalation Matrix"
+  },
+  {
+    "style": "Heading 1",
+    "text": "9. 4-Level Governance Escalation [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.1 Escalation Hierarchy"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Level 1: Domain Council"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Level 2: Data Stewardship Council (DSC)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Level 3: Data Governance Board (DG Board)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Level 4: Executive Steering Committee (ESC)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.2 Time-Boxed Escalation Protocol"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Escalation Timeframes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Escalation Process Flow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.3 Escalation Triggers & Automation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Automatic Triggers"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Manual Escalation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Escalation Case"
+  },
+  {
+    "style": "Heading 2",
+    "text": "9.4 Escalation Dashboard & Analytics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dashboard Widgets"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Key Performance Indicators"
+  },
+  {
+    "style": "Heading 1",
+    "text": "10. RCA Technique Integration [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.1 5 Whys Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Methodology"
+  },
+  {
+    "style": "Heading 3",
+    "text": "DGOP Implementation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5 Whys Template"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.2 Fishbone (Ishikawa) Diagram"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Methodology"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Standard Categories for Data Quality"
+  },
+  {
+    "style": "Heading 3",
+    "text": "DGOP Implementation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.3 Process Mapping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Methodology"
+  },
+  {
+    "style": "Heading 3",
+    "text": "DGOP Implementation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Process Map Template"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.4 Data Lineage Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Methodology"
+  },
+  {
+    "style": "Heading 3",
+    "text": "DGOP Integration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Lineage RCA Report"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.5 RCA Selection Guidance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Selection Decision Tree"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Combined RCA Approach"
+  },
+  {
+    "style": "Heading 2",
+    "text": "10.6 RCA Evidence Capture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RCA Case Content"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Root Cause Classification Taxonomy"
+  },
+  {
+    "style": "Heading 1",
+    "text": "11. Rule Lifecycle Management [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.1 Rule Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Rule Definition Form"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Rule Logic Types"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.2 Rule Review & Approval"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Review Stages"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Workflow (BPMN)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Review Checklist"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.3 Rule Deployment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Deployment Modes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Deployment Workflow"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Deployment Window Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.4 Rule Monitoring & Retirement"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Monitoring Metrics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Rule Status Transitions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Retirement Workflow"
+  },
+  {
+    "style": "Heading 2",
+    "text": "11.5 Rule Versioning & Impact Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Versioning Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Impact Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Impact Analysis Report"
+  },
+  {
+    "style": "Heading 1",
+    "text": "12. MDM Matching & Survivorship Engine [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.1 Matching Algorithms"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Deterministic Matching"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Probabilistic Matching"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Match Score Calculation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.2 5-Step Match Resolution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 1: Candidate Identification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 2: Scoring & Classification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 3: Auto-Resolution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 4: Manual Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Step 5: Merge & Survivorship Application"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Match Resolution Dashboard"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.3 Survivorship Rules"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Standard Survivorship Rules"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Source Trust Ranking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Field-Level Survivorship Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.4 Master Data Domain Templates"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 1: Customer"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 2: Product"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 3: Supplier"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 4: Location"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 5: Asset"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 6: Employee"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Domain 7: Chart of Accounts"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.5 MDM Implementation Styles"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Style Configuration per Domain"
+  },
+  {
+    "style": "Heading 2",
+    "text": "12.6 Golden Record Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Golden Record Lifecycle"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Golden Record Attributes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Golden Record APIs"
+  },
+  {
+    "style": "Heading 1",
+    "text": "13. Business Glossary Governance [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.1 Term Definition & BDE Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "BDE Definition Attributes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "BDE Classification Levels"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.2 Approval Workflow"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Workflow by Criticality"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval RACI"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.3 Version Control & Change Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Versioning Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Change Types & Approval Requirements"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Change Impact Analysis"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Subscriber Notification"
+  },
+  {
+    "style": "Heading 2",
+    "text": "13.4 Periodic Review & Recertification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Review Cycle"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Review Workflow"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Review Overdue Handling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Glossary Health Metrics"
+  },
+  {
+    "style": "Heading 1",
+    "text": "14. Business Lineage [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.1 Business Lineage Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Business Lineage Concepts"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Business Lineage vs. Technical Lineage"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.2 Business Process Mapping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Process Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Process Step Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Business Process Library (Pre-Configured Templates)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.3 Business-to-Technical Lineage Bridge"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Bridge Mapping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Bridge Maintenance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Drill-Down Path"
+  },
+  {
+    "style": "Heading 2",
+    "text": "14.4 Business Lineage Visualization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Visualization Types"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Interactive Features"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Business Lineage Impact Analysis"
+  },
+  {
+    "style": "Heading 1",
+    "text": "15. Data Masking Service [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.1 Six Masking Techniques"
+  },
+  {
+    "style": "Heading 3",
+    "text": "1. Static Masking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "2. Dynamic Masking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "3. Tokenization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "4. Anonymization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "5. Pseudonymization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "6. Redaction"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.2 Classification-Driven Technique Selection"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Technique Selection Matrix"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.3 Environment-Based Masking Policies"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Policy Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "15.4 Masking Audit & Compliance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Audit Records"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Compliance Reports"
+  },
+  {
+    "style": "Heading 1",
+    "text": "16. Recurring Compliance Calendar [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.1 Recurring Task Templates"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Template Definition"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Standard Recurring Task Templates"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.2 Automatic Assignment Engine"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Assignment Logic"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Availability Check"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.3 Compliance Task Types"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Type 1: Quarterly Processing Activities Review (PDPL Art. 25)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Type 2: Quarterly Cross-Border Transfer Monitoring (PDPL Art. 29)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Type 3: Annual DPIA Review"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Type 4: Monthly DQ Scorecard Review"
+  },
+  {
+    "style": "Heading 2",
+    "text": "16.4 Calendar Dashboard & Overdue Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Calendar Views"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Executive View: Summary metrics across all tasks for DG Board reporting."
+  },
+  {
+    "style": "Heading 3",
+    "text": "Status Colors"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Overdue Tracking & Escalation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Compliance Calendar KPIs"
+  },
+  {
+    "style": "Heading 1",
+    "text": "17. Role-Data Mapping Designer [NEW v3.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.1 RBAC Role-to-Domain Mapping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mapping Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Standard Access Levels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pre-Configured Role Mappings (Templates)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.2 Visual Mapping Designer"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Designer Interface"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Designer Operations"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mapping Visualization"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.3 Mapping Validation & Simulation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Validation Rules"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Simulation Mode"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Simulation Report"
+  },
+  {
+    "style": "Heading 2",
+    "text": "17.4 Access Policy Generation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Policy Generation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Policy Types Generated"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Policy Lifecycle Integration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Access Certification Integration"
+  },
+  {
+    "style": "Heading 1",
+    "text": "18. Enhanced Search Capabilities [NEW v4.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.1 Search Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Unified Search Index Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Real-Time Indexing"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Incremental Index Updates"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Index Versioning and Reindexing"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Index Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.2 Searchable Object Registry"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Master Object Types Table"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Data Asset Detail Attribute Table"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Case Detail Attribute Table"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.3 Search API & Query Language"
+  },
+  {
+    "style": "Heading 3",
+    "text": "API Endpoints"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Query Syntax"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Request Payload"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Response Payload"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pagination and Cursor Navigation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Highlighting Configuration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.4 Faceted Search & Filtering"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pre-Defined Facets per Object Type"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Dynamic Facet Generation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Multi-Select Faceting with AND/OR Logic"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Facet Counts and Drill-Down"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Saved Filters and Filter Sharing"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.5 Auto-Complete & Search Suggestions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Prefix-Based Suggestions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Fuzzy Matching for Typo Tolerance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Phonetic Matching for Arabic Names"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Recent Searches"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Popular Searches"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Context-Aware Suggestions"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.6 Advanced Search"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Boolean Query Builder"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Field-Specific Search"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Range Queries"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Nested Queries Across Related Objects"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Saved Searches and Search Folders"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Sharing and Collaboration"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.7 Search Result Presentation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Grouped Results by Object Type"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Rich Result Cards"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Contextual Quick Actions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Result Preview Panel"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Bulk Actions on Selected Results"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Export to CSV/PDF"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.8 Search Administration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Index Management Dashboard"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Index Refresh Scheduling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Relevance Tuning"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Synonym Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Stop Words Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Custom Field Mapping"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Analytics Dashboard"
+  },
+  {
+    "style": "Heading 2",
+    "text": "18.9 Search Security"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RBAC-Filtered Results"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Classification-Aware Filtering"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Personal Data Search Restrictions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Search Audit Logging"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Query Timeout and Resource Limits"
+  },
+  {
+    "style": "Heading 1",
+    "text": "19. Error Message Handling & User Notification Framework [NEW v4.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.1 Error Handling Framework"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Architecture Layers"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Processing Pipeline"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Message Template Engine"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.2 Error Classification & Severity"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Classification Taxonomy"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Severity Definitions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Code Ranges per Module"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.3 Error Message Structure"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Standard Error Message JSON Schema"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Message Schema Fields"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.4 Error Message Catalog"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Catalog Management Features"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Administration Module Error Messages (VAL-001 to VAL-099)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Case Management Error Messages (VAL-200 to VAL-299)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "System Error Messages (SYS-001 to SYS-099)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Security Error Messages (SEC-001 to SEC-099)"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.5 Client-Side Validation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Field-Level Validation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Form-Level Validation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Real-Time Validation Feedback"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Validation Rule Configuration per Field"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.6 Server-Side Error Handling"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Global Exception Handler"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Logging with Correlation IDs"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Categorization and Routing"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Retry Logic for Transient Errors"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Graceful Degradation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.7 Notification Framework Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Service Architecture"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Channel Adapters"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Queue and Delivery Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Template Engine"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Batching and Digesting"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.8 Notification Types & Templates"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Type Registry"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Template: Assignment Notification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Template: Approval Required Notification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Template: Escalation Notification"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Template: Certification Expiry Notification"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.9 Notification Preferences"
+  },
+  {
+    "style": "Heading 3",
+    "text": "User Preference Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Default Preferences per Role"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Quiet Hours Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Digest Frequency"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Opt-Out"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.10 Notification Inbox"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Inbox UI"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Categorization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Archive and Delete"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mark All as Read"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Search and Filter"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Mobile-Responsive Notification Panel"
+  },
+  {
+    "style": "Heading 2",
+    "text": "19.11 Error Analytics & Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Frequency Dashboard"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Trends Over Time"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Top Errors by Module"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Error Resolution Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Automated Alerts for Error Spikes"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Zero-Result Search Tracking"
+  },
+  {
+    "style": "Heading 1",
+    "text": "20. Business Process & Workflow Management [NEW v4.1]"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.1 Workflow Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Template Registry"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Activity Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Sequence Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Path Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Version Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Activate/Deactivate Workflows"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.2 Workflow Execution Engine"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Instance Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "State Machine Transitions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Routing and Execution"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Suspension and Resume"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Cancellation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Progress Tracking"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow History"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.3 Task Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Automatic Task Assignment Algorithms"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Manual Task Reassignment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Delegation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Due Date Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Priority"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Comments and Threaded Discussions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Attachments"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Checklist"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Task Reminders and Escalation"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.4 Role & Responsibility Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Role-to-Workflow-Activity Mapping Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Supported Roles and Default Workflow Permissions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Backup/Delegate Assignment"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Authorization Validation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Role Conflict Detection"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.5 RACI Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RACI Configuration Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RACI Validation Rules"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RACI Matrix Visualization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RACI Template Library"
+  },
+  {
+    "style": "Heading 3",
+    "text": "RACI Import/Export"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.6 Approval Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Actions"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Parallel Approval with Quorum"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Multi-Level Approval with Sequential Routing"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Delegation Chain"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Deadline and Auto-Escalation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval History and Audit Trail"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.7 Notification & Reminder Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Trigger Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Notification Templates per Event Type"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Channels"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Reminder Frequency Configuration"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Overdue Notification Escalation Chain"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.8 SLA & Escalation Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SLA Configuration Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SLA Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Automatic Reminders at Configured Thresholds"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Automatic Escalation Rules"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Escalation Matrix"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Overdue Monitoring Dashboard"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SLA Override with Approval and Audit"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.9 Evidence & Document Management"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Document Attachment Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Upload Supporting Documents"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Document Versioning"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Document Download with Access Control"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Document Preview"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Document Categorization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Document Retention per Policy"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.10 Workflow Monitoring"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Status Dashboard"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Current Workflow Stage Visualization"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pending Activities Queue"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Completed Activities History"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Timeline View (Gantt-Style)"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Search and Filter"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Real-Time Workflow Activity Feed"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Performance Metrics"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.11 Audit Trail"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Audit Event Model"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Recorded Events"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Approval Audit"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Comment Audit"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Assignment Change Audit"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Timestamp and Timezone Support"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Audit Trail Export"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Audit Trail Integrity"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.12 Dashboard & Reporting"
+  },
+  {
+    "style": "Heading 3",
+    "text": "My Tasks Widget"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Pending Approvals Widget"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Overdue Tasks Widget"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow Statistics"
+  },
+  {
+    "style": "Heading 3",
+    "text": "SLA Compliance"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Workflow KPIs"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Report Templates"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Scheduled Report Generation"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Report Export"
+  },
+  {
+    "style": "Heading 2",
+    "text": "20.13 Core Workflow Capabilities Summary Table"
+  },
+  {
+    "style": "Heading 1",
+    "text": "End of Volume 2"
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 2 – Functional Design concludes here. This Enhanced Edition (v4.1) contains:"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Module 1 (Administration): Cross-references to Module 20.4 (Role & Responsibility Management), Module 20.5 (RACI Management), and Module 20.1 (Workflow Configuration)"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Module 4 (Universal Case Management): Cross-references to Module 20.2 (Workflow Execution Engine), Module 20.3 (Task Management), and Module 20.8 (SLA & Escalation Management)"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Module 5 (Workflow Engine): Introductory note clarifying the relationship between Module 5 (BPMN process models) and Module 20 (workflow platform infrastructure)"
+  },
+  {
+    "style": "Normal",
+    "text": "Volume 3 – NDI Domain Operational Models will provide detailed operational lifecycles for all 12 NDI domains including DG, MCM, DQ, DSI, PDP, OD, FOI, DCM, DAM, RMD, BIA, and DVR."
+  }
+]

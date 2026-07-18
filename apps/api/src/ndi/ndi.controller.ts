@@ -23,6 +23,12 @@ export class NdiController {
     return this.service.listDomains();
   }
 
+  @Get('domain-traceability')
+  @RequirePermissions('ndi_specifications.view')
+  domainTraceability() {
+    return this.service.domainTraceability();
+  }
+
   @Get('specifications')
   @RequirePermissions('ndi_specifications.view')
   list(

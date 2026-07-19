@@ -1,6 +1,6 @@
 .open-data-page {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .od-hero {
@@ -17,7 +17,7 @@
 
 .od-strip {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -28,8 +28,8 @@
 .strip-card {
   display: grid;
   gap: var(--space-1);
-  min-height: 104px;
-  padding: var(--space-4);
+  min-height: 84px;
+  padding: var(--space-3);
   border-inline-start: 1px solid var(--border);
 }
 
@@ -47,7 +47,7 @@
 
 .strip-card strong {
   color: var(--on-surface);
-  font-size: clamp(1.7rem, 2.4vw, 2.4rem);
+  font-size: var(--font-size-xl);
   line-height: 1;
 }
 
@@ -63,9 +63,56 @@
   border-inline-start: 4px solid var(--danger);
 }
 
+.publication-flow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+  position: relative;
+  padding: var(--space-2);
+  color: var(--on-surface);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.publication-flow::before {
+  content: "";
+  position: absolute;
+  inset-inline: 9%;
+  top: 50%;
+  height: 2px;
+  background: color-mix(in srgb, var(--primary) 36%, var(--border));
+  transform: translateY(-50%);
+}
+
+.publication-flow span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-1);
+  place-items: center;
+  min-height: 58px;
+  padding: var(--space-2);
+  color: var(--on-surface-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 850;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.publication-flow strong {
+  color: var(--on-surface);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
 .od-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(160px, 0.7fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(220px, 1.35fr) minmax(160px, 0.65fr) minmax(220px, 1fr) auto;
   gap: var(--space-3);
   align-items: end;
 }
@@ -102,9 +149,13 @@
 
 .od-workspace {
   display: grid;
-  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.35fr);
-  gap: var(--space-5);
+  grid-template-columns: minmax(320px, 0.68fr) minmax(0, 1.32fr);
+  gap: var(--space-4);
   align-items: start;
+}
+
+.od-queue {
+  align-self: start;
 }
 
 .panel-head,
@@ -151,7 +202,7 @@
 .mini-queue {
   display: grid;
   gap: var(--space-2);
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
 }
 
 .candidate-row,
@@ -168,7 +219,7 @@
 }
 
 .candidate-row {
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3);
@@ -190,8 +241,8 @@
 .candidate-row__score {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 46px;
+  height: 46px;
   color: var(--primary);
   background: var(--primary-soft);
   border-radius: var(--radius-sm);
@@ -221,8 +272,8 @@
 }
 
 .eligibility-card {
-  margin: var(--space-4) 0;
-  padding: var(--space-4);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, transparent), transparent 54%),
     var(--surface-2);
@@ -239,7 +290,7 @@
 .eligibility-card strong {
   display: block;
   margin-top: var(--space-1);
-  font-size: 2rem;
+  font-size: var(--font-size-2xl);
 }
 
 .signal-grid {
@@ -252,7 +303,7 @@
   display: grid;
   gap: var(--space-2);
   align-content: start;
-  min-height: 86px;
+  min-height: 72px;
   padding: var(--space-3);
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -261,15 +312,15 @@
 
 .lifecycle-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
   gap: var(--space-3);
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
 }
 
 .lifecycle-panel {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: var(--space-3);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -405,7 +456,7 @@
 .od-lower-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .mini-row {
@@ -419,7 +470,7 @@
   display: grid;
   gap: var(--space-3);
   place-items: center;
-  min-height: 160px;
+  min-height: 96px;
   color: var(--on-surface-muted);
   text-align: center;
 }
@@ -437,6 +488,7 @@
 
 @media (max-width: 1180px) {
   .od-strip,
+  .publication-flow,
   .signal-grid,
   .usage-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -460,8 +512,17 @@
   }
 
   .od-strip,
+  .publication-flow,
   .signal-grid {
     grid-template-columns: 1fr;
+  }
+
+  .publication-flow::before {
+    inset-inline: 50%;
+    inset-block: var(--space-4);
+    width: 2px;
+    height: auto;
+    transform: translateX(-50%);
   }
 
   .candidate-row {

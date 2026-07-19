@@ -30,6 +30,14 @@
       <div class="strip-card"><span>{{ t('openData.metric.usage') }}</span><strong>{{ s.downloads + s.apiCalls }}</strong><small>{{ t('openData.metric.usageHelp') }}</small></div>
       <div class="strip-card" [class.strip-card--danger]="s.overdueReview > 0"><span>{{ t('openData.metric.overdue') }}</span><strong>{{ s.overdueReview }}</strong><small>{{ t('openData.metric.overdueHelp') }}</small></div>
     </div>
+
+    <div class="publication-flow" aria-label="Open Data publication flow">
+      <span><strong>{{ s.total }}</strong>{{ t('openData.metric.total') }}</span>
+      <span><strong>{{ s.assessment }}</strong>{{ t('openData.status.assessment') }}</span>
+      <span><strong>{{ s.underReview }}</strong>{{ t('openData.metric.review') }}</span>
+      <span><strong>{{ s.pendingApprovals }}</strong>{{ t('openData.metric.approvals') }}</span>
+      <span><strong>{{ s.published }}</strong>{{ t('openData.metric.published') }}</span>
+    </div>
   }
 
   <section class="ds-card od-filters" aria-label="Open Data filters">

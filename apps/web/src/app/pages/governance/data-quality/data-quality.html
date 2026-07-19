@@ -31,9 +31,33 @@
   } @else if (state() === 'error') {
     <div class="ds-card"><p class="error">{{ t('dq.error') }}</p></div>
   } @else {
+    <div class="filters">
+      <input
+        type="search"
+        class="filter-search"
+        [ngModel]="search()"
+        (ngModelChange)="setFilter('search', $event)"
+        [placeholder]="t('dq.search')"
+        [attr.aria-label]="t('dq.search')"
+      />
+      <select class="inline-select" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('dq.col.status')">
+        <option value="">{{ t('dq.allStatuses') }}</option>
+        @for (s of statuses(); track s) { <option [value]="s">{{ t('dq.status.' + s) }}</option> }
+      </select>
+      <select class="inline-select" [ngModel]="severity()" (ngModelChange)="setFilter('severity', $event)" [attr.aria-label]="t('dq.field.severity')">
+        <option value="">{{ t('dq.allSeverities') }}</option>
+        @for (s of severities(); track s) { <option [value]="s">{{ t('dq.severity.' + s) }}</option> }
+      </select>
+      <select class="inline-select" [ngModel]="dimension()" (ngModelChange)="setFilter('dimension', $event)" [attr.aria-label]="t('dq.field.dimension')">
+        <option value="">{{ t('dq.allDimensions') }}</option>
+        @for (d of dimensions(); track d) { <option [value]="d">{{ t('dq.dimension.' + d) }}</option> }
+      </select>
+      <span class="toolbar__count">{{ issues().length }} {{ t('assets.records') }}</span>
+    </div>
+
     @if (scorecard(); as sc) {
       <section class="ds-card scorecard-panel">
-        <div class="panel-head">
+        <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('dq.scorecard.eyebrow') }}</span>
             <h2>{{ t('dq.scorecard.title') }}</h2>
@@ -54,6 +78,134 @@
           }
         </div>
       </section>
+    }
+
+    @if (issues().length === 0) {
+      <div class="ds-card"><div class="empty"><p>{{ t('dq.noIssues') }}</p></div></div>
+    } @else {
+      <div class="dq-workspace">
+        <section class="ds-card issue-list-panel">
+          <div class="panel-head compact">
+            <div>
+              <span class="eyebrow">{{ t('dq.col.issue') }}</span>
+              <h2>{{ t('dq.title') }}</h2>
+              <p>{{ issues().length }} {{ t('assets.records') }}</p>
+            </div>
+            @if (summary(); as s) {
+              <div class="queue-vitals" aria-label="Data quality queue summary">
+                <span><strong>{{ s.open }}</strong>{{ t('dq.metric.open') }}</span>
+                <span><strong>{{ s.critical }}</strong>{{ t('dq.metric.critical') }}</span>
+                <span><strong>{{ s.breachedSla ?? 0 }}</strong>{{ t('dq.metric.sla') }}</span>
+              </div>
+            }
+          </div>
+          <div class="issue-list">
+            @for (issue of issues(); track issue.id) {
+              <button
+                type="button"
+                class="issue-row"
+                [class.issue-row--active]="selected()?.id === issue.id"
+                (click)="selectedId.set(issue.id)"
+              >
+                <span class="issue-row__code">{{ issue.code }}</span>
+                <span class="issue-row__main">
+                  <strong>{{ issue.title }}</strong>
+                  <small>{{ name(issue.asset) }} - {{ t('dq.dimension.' + issue.dimension) }}</small>
+                </span>
+                <span class="issue-row__due">{{ date(issue.dueDate || issue.remediationDueAt) }}</span>
+                <span class="issue-row__badges">
+                  <app-status-chip [kind]="priorityKind(issue.priority)" [label]="issue.priority || 'P3'" />
+                  <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
+                  <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
+                </span>
+              </button>
+            }
+          </div>
+        </section>
+
+        @if (selected(); as issue) {
+          <aside class="ds-card detail-panel">
+            <div class="detail-head">
+              <div>
+                <span class="badge-code">{{ issue.code }}</span>
+                <h2>{{ issue.title }}</h2>
+              </div>
+              <div class="detail-actions">
+                @if (canEdit) {
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRca(issue)">{{ t('dq.rca.open') }}</button>
+                }
+                @if (canEdit && issue.status !== 'closed') {
+                  <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openClose(issue)">{{ t('dq.close') }}</button>
+                }
+              </div>
+            </div>
+
+            <div class="status-line">
+              <app-status-chip [kind]="priorityKind(issue.priority)" [label]="issue.priority || 'P3'" />
+              <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
+              <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
+            </div>
+
+            @if (issue.description) {
+              <p class="description">{{ issue.description }}</p>
+            }
+
+            <div class="quality-route" aria-label="Data quality resolution path">
+              <span>{{ t('dq.field.asset') }}</span>
+              <span>{{ t('dq.rca.open') }}</span>
+              <span>{{ t('dq.close') }}</span>
+            </div>
+
+            <dl class="facts">
+              <div><dt>{{ t('dq.field.asset') }}</dt><dd>{{ name(issue.asset) }}</dd></div>
+              <div><dt>{{ t('dq.field.dimension') }}</dt><dd>{{ t('dq.dimension.' + issue.dimension) }}</dd></div>
+              <div><dt>{{ t('dq.col.owner') }}</dt><dd>{{ name(issue.responsiblePerson) }}</dd></div>
+              <div><dt>{{ t('dq.col.due') }}</dt><dd>{{ date(issue.dueDate) }}</dd></div>
+              <div><dt>{{ t('dq.sla.remediation') }}</dt><dd>{{ date(issue.remediationDueAt) }}</dd></div>
+              <div>
+                <dt>{{ t('dq.workflow') }}</dt>
+                <dd>
+                  @if (issue.workflowCase) {
+                    <a [routerLink]="['/governance/workflow/cases', issue.workflowCase.id]">{{ issue.workflowCase.code }}</a>
+                  } @else { - }
+                </dd>
+              </div>
+            </dl>
+
+            @if ((issue.slaBreaches?.length ?? 0) > 0) {
+              <section class="alert-box">
+                <strong>{{ t('dq.sla.breached') }}</strong>
+                <p>{{ issue.slaBreaches?.[0]?.stage }} - {{ date(issue.slaBreaches?.[0]?.dueAt) }}</p>
+              </section>
+            }
+
+            @if ((issue.rcaRecords?.length ?? 0) > 0) {
+              <section class="rca-summary">
+                <h3>{{ t('dq.rca.latest') }}</h3>
+                <p><strong>{{ t('dq.rca.rootCause') }}:</strong> {{ issue.rcaRecords?.[0]?.rootCause || '-' }}</p>
+                <p><strong>{{ t('dq.rca.plan') }}:</strong> {{ issue.rcaRecords?.[0]?.remediationPlan || '-' }}</p>
+              </section>
+            }
+
+            <section class="evidence">
+              <h3>{{ t('dq.evidence') }}</h3>
+              @if (issue.evidence.length === 0) {
+                <p class="muted">-</p>
+              } @else {
+                <div class="timeline">
+                  @for (e of issue.evidence; track e.id) {
+                    <div class="timeline__item">
+                      <strong>{{ evidenceLabel(e.action) }}</strong>
+                      <span>{{ date(e.createdAt) }} - {{ e.actor }}</span>
+                      @if (e.note) { <p>{{ e.note }}</p> }
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+          </aside>
+        }
+      </div>
     }
 
     <div class="ops-grid">
@@ -123,135 +275,6 @@
         </div>
       </section>
     </div>
-
-    <div class="filters">
-      <input
-        type="search"
-        class="filter-search"
-        [ngModel]="search()"
-        (ngModelChange)="setFilter('search', $event)"
-        [placeholder]="t('dq.search')"
-        [attr.aria-label]="t('dq.search')"
-      />
-      <select class="inline-select" [ngModel]="status()" (ngModelChange)="setFilter('status', $event)" [attr.aria-label]="t('dq.col.status')">
-        <option value="">{{ t('dq.allStatuses') }}</option>
-        @for (s of statuses(); track s) { <option [value]="s">{{ t('dq.status.' + s) }}</option> }
-      </select>
-      <select class="inline-select" [ngModel]="severity()" (ngModelChange)="setFilter('severity', $event)" [attr.aria-label]="t('dq.field.severity')">
-        <option value="">{{ t('dq.allSeverities') }}</option>
-        @for (s of severities(); track s) { <option [value]="s">{{ t('dq.severity.' + s) }}</option> }
-      </select>
-      <select class="inline-select" [ngModel]="dimension()" (ngModelChange)="setFilter('dimension', $event)" [attr.aria-label]="t('dq.field.dimension')">
-        <option value="">{{ t('dq.allDimensions') }}</option>
-        @for (d of dimensions(); track d) { <option [value]="d">{{ t('dq.dimension.' + d) }}</option> }
-      </select>
-      <span class="toolbar__count">{{ issues().length }} {{ t('assets.records') }}</span>
-    </div>
-
-    @if (issues().length === 0) {
-      <div class="ds-card"><div class="empty"><p>{{ t('dq.noIssues') }}</p></div></div>
-    } @else {
-      <div class="dq-workspace">
-        <section class="ds-card issue-list">
-          @for (issue of issues(); track issue.id) {
-            <button
-              type="button"
-              class="issue-row"
-              [class.issue-row--active]="selected()?.id === issue.id"
-              (click)="selectedId.set(issue.id)"
-            >
-              <span class="issue-row__code">{{ issue.code }}</span>
-              <span class="issue-row__main">
-                <strong>{{ issue.title }}</strong>
-                <small>{{ name(issue.asset) }} - {{ t('dq.dimension.' + issue.dimension) }}</small>
-              </span>
-              <span class="issue-row__badges">
-                <app-status-chip [kind]="priorityKind(issue.priority)" [label]="issue.priority || 'P3'" />
-                <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
-                <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
-              </span>
-            </button>
-          }
-        </section>
-
-        @if (selected(); as issue) {
-          <aside class="ds-card detail-panel">
-            <div class="detail-head">
-              <div>
-                <span class="badge-code">{{ issue.code }}</span>
-                <h2>{{ issue.title }}</h2>
-              </div>
-              <div class="detail-actions">
-                @if (canEdit) {
-                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRca(issue)">{{ t('dq.rca.open') }}</button>
-                }
-                @if (canEdit && issue.status !== 'closed') {
-                  <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openClose(issue)">{{ t('dq.close') }}</button>
-                }
-              </div>
-            </div>
-
-            <div class="status-line">
-              <app-status-chip [kind]="priorityKind(issue.priority)" [label]="issue.priority || 'P3'" />
-              <app-status-chip [kind]="severityKind(issue.severity)" [label]="t('dq.severity.' + issue.severity)" />
-              <app-status-chip [kind]="statusKind(issue.status)" [label]="t('dq.status.' + issue.status)" />
-            </div>
-
-            @if (issue.description) {
-              <p class="description">{{ issue.description }}</p>
-            }
-
-            <dl class="facts">
-              <div><dt>{{ t('dq.field.asset') }}</dt><dd>{{ name(issue.asset) }}</dd></div>
-              <div><dt>{{ t('dq.field.dimension') }}</dt><dd>{{ t('dq.dimension.' + issue.dimension) }}</dd></div>
-              <div><dt>{{ t('dq.col.owner') }}</dt><dd>{{ name(issue.responsiblePerson) }}</dd></div>
-              <div><dt>{{ t('dq.col.due') }}</dt><dd>{{ date(issue.dueDate) }}</dd></div>
-              <div><dt>{{ t('dq.sla.remediation') }}</dt><dd>{{ date(issue.remediationDueAt) }}</dd></div>
-              <div>
-                <dt>{{ t('dq.workflow') }}</dt>
-                <dd>
-                  @if (issue.workflowCase) {
-                    <a [routerLink]="['/governance/workflow/cases', issue.workflowCase.id]">{{ issue.workflowCase.code }}</a>
-                  } @else { - }
-                </dd>
-              </div>
-            </dl>
-
-            @if ((issue.slaBreaches?.length ?? 0) > 0) {
-              <section class="alert-box">
-                <strong>{{ t('dq.sla.breached') }}</strong>
-                <p>{{ issue.slaBreaches?.[0]?.stage }} - {{ date(issue.slaBreaches?.[0]?.dueAt) }}</p>
-              </section>
-            }
-
-            @if ((issue.rcaRecords?.length ?? 0) > 0) {
-              <section class="rca-summary">
-                <h3>{{ t('dq.rca.latest') }}</h3>
-                <p><strong>{{ t('dq.rca.rootCause') }}:</strong> {{ issue.rcaRecords?.[0]?.rootCause || '-' }}</p>
-                <p><strong>{{ t('dq.rca.plan') }}:</strong> {{ issue.rcaRecords?.[0]?.remediationPlan || '-' }}</p>
-              </section>
-            }
-
-            <section class="evidence">
-              <h3>{{ t('dq.evidence') }}</h3>
-              @if (issue.evidence.length === 0) {
-                <p class="muted">-</p>
-              } @else {
-                <div class="timeline">
-                  @for (e of issue.evidence; track e.id) {
-                    <div class="timeline__item">
-                      <strong>{{ evidenceLabel(e.action) }}</strong>
-                      <span>{{ date(e.createdAt) }} - {{ e.actor }}</span>
-                      @if (e.note) { <p>{{ e.note }}</p> }
-                    </div>
-                  }
-                </div>
-              }
-            </section>
-          </aside>
-        }
-      </div>
-    }
   }
 
   @if (createOpen()) {

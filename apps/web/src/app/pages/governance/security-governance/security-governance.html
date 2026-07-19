@@ -23,6 +23,14 @@
       <div class="strip-card"><span>{{ t('sec.metric.reviews') }}</span><strong>{{ s.pendingAccessReviews }}</strong><small>{{ t('sec.metric.reviewsHelp') }}</small></div>
       <div class="strip-card"><span>{{ t('sec.metric.dlp') }}</span><strong>{{ s.openDlpIncidents }}</strong><small>{{ t('sec.metric.dlpHelp') }}</small></div>
     </div>
+
+    <div class="security-flow" aria-label="Security operating flow">
+      <span><strong>{{ s.mappings }}</strong>{{ t('sec.metric.mappings') }}</span>
+      <span><strong>{{ s.maskingPolicies }}</strong>{{ t('sec.metric.masking') }}</span>
+      <span><strong>{{ s.pendingAccessReviews }}</strong>{{ t('sec.metric.reviews') }}</span>
+      <span><strong>{{ s.openDlpIncidents }}</strong>{{ t('sec.metric.dlp') }}</span>
+      <span><strong>{{ s.pendingClassificationRequests }}</strong>{{ t('sec.queue.type.classification') }}</span>
+    </div>
   }
 
   @if (state() === 'loading') {

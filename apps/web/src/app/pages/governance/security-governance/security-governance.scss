@@ -1,5 +1,7 @@
 .security-page {
   --risk-panel-gap: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
 }
 
 .eyebrow {
@@ -13,8 +15,9 @@
 }
 
 .security-strip {
+  order: 1;
   display: grid;
-  grid-template-columns: 1.15fr repeat(4, minmax(150px, 1fr));
+  grid-template-columns: 1.05fr repeat(4, minmax(140px, 1fr));
   gap: var(--space-3);
 }
 
@@ -22,8 +25,8 @@
   display: grid;
   align-content: start;
   gap: var(--space-1);
-  min-height: 104px;
-  padding: var(--space-4);
+  min-height: 88px;
+  padding: var(--space-3);
   color: var(--command-on);
   background: var(--command-surface);
   border: 1px solid var(--command-border);
@@ -41,7 +44,7 @@
 
 .strip-card strong {
   color: var(--command-on);
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
   font-weight: 850;
   overflow-wrap: anywhere;
 }
@@ -50,10 +53,58 @@
   border-inline-start: 4px solid var(--warning);
 }
 
-.risk-workspace {
+.security-flow {
+  order: 2;
   display: grid;
-  grid-template-columns: minmax(420px, 0.95fr) minmax(360px, 1.05fr);
-  gap: var(--space-5);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+  position: relative;
+  padding: var(--space-2);
+  background: var(--command-surface);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.security-flow::before {
+  content: "";
+  position: absolute;
+  inset-inline: 8%;
+  top: 50%;
+  height: 2px;
+  background: color-mix(in srgb, var(--primary) 36%, var(--command-border));
+  transform: translateY(-50%);
+}
+
+.security-flow span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-1);
+  place-items: center;
+  min-height: 58px;
+  padding: var(--space-2);
+  color: var(--command-muted);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.security-flow strong {
+  color: var(--command-on);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.risk-workspace {
+  order: 4;
+  display: grid;
+  grid-template-columns: minmax(340px, 0.78fr) minmax(420px, 1.22fr);
+  gap: var(--space-4);
   align-items: start;
 }
 
@@ -66,7 +117,7 @@
 
 .queue-panel,
 .detail-panel {
-  min-height: 420px;
+  min-height: 0;
 }
 
 .panel-head {
@@ -124,14 +175,14 @@
 }
 
 .queue-list {
-  max-height: min(620px, calc(100vh - 280px));
+  max-height: min(420px, calc(100vh - 390px));
   overflow: auto;
   padding-inline-end: var(--space-1);
 }
 
 .queue-row {
   display: grid;
-  grid-template-columns: minmax(104px, auto) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
   width: 100%;
@@ -185,7 +236,7 @@
   position: sticky;
   top: var(--space-5);
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .detail-head {
@@ -245,15 +296,16 @@
 }
 
 .insight-grid {
+  order: 3;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: var(--space-5);
+  gap: var(--space-4);
   align-items: start;
 }
 
 .access-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(140px, 0.42fr) minmax(140px, 0.42fr);
+  grid-template-columns: minmax(240px, 1fr) minmax(130px, 0.38fr) minmax(130px, 0.38fr);
   gap: var(--space-3);
   align-items: center;
   padding: var(--space-3);
@@ -366,13 +418,18 @@
   margin: 0;
 }
 
+.decision-panel {
+  order: 5;
+}
+
 .empty--small {
-  min-height: 96px;
-  padding: var(--space-4);
+  min-height: 70px;
+  padding: var(--space-3);
 }
 
 @media (max-width: 1280px) {
   .security-strip,
+  .security-flow,
   .insight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -388,9 +445,18 @@
 
 @media (max-width: 860px) {
   .security-strip,
+  .security-flow,
   .insight-grid,
   .facts {
     grid-template-columns: 1fr;
+  }
+
+  .security-flow::before {
+    inset-inline: 50%;
+    inset-block: var(--space-4);
+    width: 2px;
+    height: auto;
+    transform: translateX(-50%);
   }
 
   .queue-panel,

@@ -455,8 +455,7 @@ export class AssetsPage implements OnInit {
         this.load();
         if (id && this.view() === 'detail') this.openDetail(id);
       },
-      error: () => {
-        this.toast.error(this.t('assets.saveError'));
+      error: (err) => { this.toast.errorFrom(err, this.t('assets.saveError'));
         this.saving.set(false);
       },
     });
@@ -475,7 +474,7 @@ export class AssetsPage implements OnInit {
         if (this.view() === 'detail') this.backToList();
         this.load();
       },
-      error: () => this.toast.error(this.t('assets.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('assets.saveError')),
     });
   }
 
@@ -490,7 +489,7 @@ export class AssetsPage implements OnInit {
         this.loadRecommendations(id);
         this.loadAssetAssignments(id);
       },
-      error: () => this.toast.error(this.t('assets.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('assets.error')),
     });
   }
 
@@ -550,7 +549,7 @@ export class AssetsPage implements OnInit {
           if (d) this.loadAssetAssignments(d.id);
         },
         error: (e) => {
-          this.toast.error(e?.error?.message || this.t('assets.saveError'));
+          this.toast.errorFrom(e, this.t('assets.saveError'));
           this.submitting.set(false);
         },
       });
@@ -594,8 +593,7 @@ export class AssetsPage implements OnInit {
           this.openDetail(d.id);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.t('assets.saveError'));
+        error: (err) => { this.toast.errorFrom(err, this.t('assets.saveError'));
           this.applyingRole.set(null);
         },
       });
@@ -628,8 +626,7 @@ export class AssetsPage implements OnInit {
           this.relTargetId.set('');
           this.openDetail(d.id);
         },
-        error: () => {
-          this.toast.error(this.t('assets.saveError'));
+        error: (err) => { this.toast.errorFrom(err, this.t('assets.saveError'));
           this.relSaving.set(false);
         },
       });
@@ -643,7 +640,7 @@ export class AssetsPage implements OnInit {
         this.openDetail(asset.id);
         this.view.set('detail');
       },
-      error: (err) => this.toast.error(err?.error?.message || this.t('openData.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('openData.error')),
     });
   }
 
@@ -657,7 +654,7 @@ export class AssetsPage implements OnInit {
         this.toast.success(this.t('assets.relRemoved'));
         this.openDetail(d.id);
       },
-      error: () => this.toast.error(this.t('assets.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('assets.saveError')),
     });
   }
 
@@ -688,8 +685,7 @@ export class AssetsPage implements OnInit {
           this.importing.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.t('assets.saveError'));
+        error: (err) => { this.toast.errorFrom(err, this.t('assets.saveError'));
           this.importing.set(false);
         },
       });

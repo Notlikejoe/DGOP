@@ -17,6 +17,7 @@ const UNSAFE_DEMO_PASSWORDS = new Set([
   'changeme',
   'replace-with-local-demo-password',
 ]);
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -53,6 +54,18 @@ export function isUnsafeDefaultAdminCredential(
   return email.toLowerCase() === configuredAdminEmail && UNSAFE_DEMO_PASSWORDS.has(password);
 }
 
+function isUnsafeStrictOrigin(origin: string): boolean {
+  const value = origin.trim();
+  if (!value || value === '*' || value.toLowerCase() === 'true') return true;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === 'https:') return false;
+    return !(parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()));
+  } catch {
+    return true;
+  }
+}
+
 export function collectRuntimeSafetyIssues(env: RuntimeEnv = process.env): string[] {
   if (!isProductionLikeRuntime(env)) return [];
 
@@ -72,8 +85,14 @@ export function collectRuntimeSafetyIssues(env: RuntimeEnv = process.env): strin
   if (origins.some((origin) => origin === '*' || origin.toLowerCase() === 'true')) {
     issues.push('CORS_ORIGINS/PUBLIC_ORIGIN cannot be wildcard or permissive in strict runtime');
   }
+  if (origins.some(isUnsafeStrictOrigin)) {
+    issues.push('CORS_ORIGINS/PUBLIC_ORIGIN must use HTTPS in strict runtime except for localhost loopback');
+  }
   if (isUnsafeDemoPassword(env.SEED_ADMIN_PASSWORD)) {
     issues.push('SEED_ADMIN_PASSWORD must be configured with a rotated non-default password');
+  }
+  if (isUnsafeDemoPassword(env.SEED_PERSON_PASSWORD)) {
+    issues.push('SEED_PERSON_PASSWORD must be configured with a rotated non-default password');
   }
   if (!webhookToken || webhookToken.length < 32 || webhookToken.startsWith('replace-with')) {
     issues.push('DGOP_WEBHOOK_TOKEN must be configured with at least 32 random characters');

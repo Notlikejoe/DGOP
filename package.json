@@ -11,13 +11,18 @@
     "db:deploy": "node scripts/db.mjs deploy",
     "db:seed": "node scripts/db.mjs seed",
     "demo:prepare": "node scripts/prepare-demo-env.mjs",
+    "qa:api": "node scripts/api-quality.mjs",
     "qa:web": "node scripts/web-quality.mjs",
+    "qa:ui": "node scripts/ui-smoke.mjs",
+    "qa": "npm run qa:api && npm run qa:web",
+    "qa:release": "node scripts/qa-release.mjs",
     "build:web": "npm --prefix apps/web run build",
     "build:api": "npm --prefix apps/api run build",
     "build": "npm run build:web && npm run build:api",
     "start": "node apps/api/dist/main.js",
     "start:demo": "node scripts/start-demo.mjs",
     "dev": "node scripts/dev.mjs",
-    "publish:external": "bash scripts/publish.sh"
+    "publish:external": "node scripts/publish.mjs",
+    "publish:external:dry-run": "node scripts/publish.mjs --dry-run"
   }
 }

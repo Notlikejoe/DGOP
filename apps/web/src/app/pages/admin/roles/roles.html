@@ -206,18 +206,20 @@
 
           <div class="detail-actions">
             @if (auth.hasPermission('roles.edit')) {
-              <button type="button" class="ds-btn ds-btn--primary" (click)="openPerms(role)">
-                <app-icon name="shield" />
-                {{ t('roles.action.permissions') }}
-              </button>
-              <button type="button" class="ds-btn ds-btn--ghost" (click)="openScope(role)">
-                <app-icon name="network" />
-                {{ t('roles.action.scope') }}
-              </button>
-              <button type="button" class="ds-btn ds-btn--ghost" (click)="openEdit(role)">
-                <app-icon name="edit" />
-                {{ t('crud.edit') }}
-              </button>
+              @if (!isSysAdmin(role)) {
+                <button type="button" class="ds-btn ds-btn--primary" (click)="openPerms(role)">
+                  <app-icon name="shield" />
+                  {{ t('roles.action.permissions') }}
+                </button>
+                <button type="button" class="ds-btn ds-btn--ghost" (click)="openScope(role)">
+                  <app-icon name="network" />
+                  {{ t('roles.action.scope') }}
+                </button>
+                <button type="button" class="ds-btn ds-btn--ghost" (click)="openEdit(role)">
+                  <app-icon name="edit" />
+                  {{ t('crud.edit') }}
+                </button>
+              }
             }
             @if (auth.hasPermission('roles.delete') && !role.isSystem) {
               <button type="button" class="ds-btn ds-btn--danger" (click)="remove(role)">

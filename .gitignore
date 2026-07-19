@@ -19,3 +19,5 @@ __MACOSX/
 Thumbs.db
 storage/
 tools/cloudflared
+tools/cloudflared.exe
+tools/cf.tgz

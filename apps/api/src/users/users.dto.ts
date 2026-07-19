@@ -8,10 +8,12 @@ import {
   MinLength,
 } from 'class-validator';
 
+export const USER_PASSWORD_MIN_LENGTH = 12;
+
 export class CreateUserDto {
   @IsEmail() email!: string;
   @IsString() @IsNotEmpty() displayName!: string;
-  @IsString() @MinLength(8) password!: string;
+  @IsString() @MinLength(USER_PASSWORD_MIN_LENGTH) password!: string;
 
   @IsOptional()
   @IsArray()
@@ -31,5 +33,5 @@ export class SetUserRolesDto {
 }
 
 export class ResetPasswordDto {
-  @IsString() @MinLength(8) password!: string;
+  @IsString() @MinLength(USER_PASSWORD_MIN_LENGTH) password!: string;
 }

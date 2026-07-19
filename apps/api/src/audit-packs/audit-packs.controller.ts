@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
+import { contentDispositionAttachment } from '../common/download';
 import { AuditPacksService } from './audit-packs.service';
 import { CreateNdiAuditPackDto } from './audit-packs.dto';
 
@@ -11,14 +12,14 @@ export class AuditPacksController {
 
   @Get()
   @RequirePermissions('ndi_audit_packs.view')
-  list() {
-    return this.service.list();
+  list(@CurrentUser() user: AuthUser) {
+    return this.service.list(user);
   }
 
   @Post('readiness')
   @RequirePermissions('ndi_audit_packs.view')
-  readiness(@Body() dto: CreateNdiAuditPackDto) {
-    return this.service.readiness(dto.domainId);
+  readiness(@Body() dto: CreateNdiAuditPackDto, @CurrentUser() user: AuthUser) {
+    return this.service.readiness(user, dto.domainId);
   }
 
   @Post()
@@ -32,7 +33,7 @@ export class AuditPacksController {
   async export(@Param('id') id: string, @CurrentUser() user: AuthUser, @Res() res: Response) {
     const file = await this.service.exportZip(id, user);
     res.setHeader('Content-Type', file.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Disposition', contentDispositionAttachment(file.filename));
     res.send(file.body);
   }
 }

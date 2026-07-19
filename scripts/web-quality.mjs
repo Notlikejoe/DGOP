@@ -34,6 +34,29 @@ for (const file of files) {
 
 const i18nPath = join(appDir, 'core', 'i18n.service.ts');
 const i18n = read(i18nPath);
+const sourceIndex = read(join(root, 'apps', 'web', 'src', 'index.html'));
+if (/https:\/\/fonts\.(?:googleapis|gstatic)\.com/iu.test(sourceIndex)) {
+  fail('Web index must not load externally hosted fonts; use bundled assets or the system font stack.');
+}
+if (/\son[a-z]+\s*=/iu.test(sourceIndex)) {
+  fail('Web index must not contain inline event handlers because strict CSP blocks script attributes.');
+}
+const mojibakeArabicPattern = /[ØÙ][^\s'"}),.;:!?<>]*/u;
+const mojibakeFiles = files
+  .filter((file) => /\.(ts|html)$/u.test(file))
+  .flatMap((file) => {
+    const text = read(file);
+    const match = text.match(mojibakeArabicPattern);
+    if (!match) return [];
+    const line = text.slice(0, match.index).split(/\r?\n/u).length;
+    return [`${relative(root, file)}:${line} (${match[0]})`];
+  });
+if (mojibakeFiles.length) {
+  fail(
+    `Arabic UI copy appears to contain mojibake/corrupted encoding:\n${mojibakeFiles.map((item) => `- ${item}`).join('\n')}`,
+  );
+}
+
 const dictKeys = new Set();
 for (const match of i18n.matchAll(/['"]([A-Za-z0-9_.-]+)['"]\s*:/gu)) dictKeys.add(match[1]);
 const missing = [...refs].filter((key) => !dictKeys.has(key)).sort();
@@ -64,9 +87,98 @@ if (!existsSync(themePath) || !read(themePath).includes("document.documentElemen
   fail('Theme switching must update the document data-theme attribute.');
 }
 
+const apiServiceText = read(join(appDir, 'core', 'api.service.ts'));
+const authInterceptorText = read(join(appDir, 'core', 'auth.interceptor.ts'));
+const dashboardTs = read(join(appDir, 'pages', 'dashboard', 'dashboard.ts'));
+const dashboardHtml = read(join(appDir, 'pages', 'dashboard', 'dashboard.html'));
+if (
+  !authInterceptorText.includes('withCredentials: true') ||
+  !authInterceptorText.includes("'x-request-id': requestId") ||
+  !authInterceptorText.includes("'x-correlation-id': requestId") ||
+  !authInterceptorText.includes("'x-dgop-csrf': 'same-origin'")
+) {
+  fail('Auth interceptor must send cookie credentials, request correlation IDs, and the same-origin CSRF marker on API calls.');
+}
+if (
+  !authInterceptorText.includes('isAlreadyOnLogin') ||
+  !authInterceptorText.includes("router.navigate(['/login'], { queryParams: { returnUrl: currentUrl } })")
+) {
+  fail('Auth interceptor must preserve returnUrl on 401 redirects without redirect loops on the login page.');
+}
+if (!apiServiceText.includes('environment?:') || !apiServiceText.includes('uptimeSeconds?:') || !apiServiceText.includes('name?:')) {
+  fail('HealthResponse must model production-redacted health fields as optional.');
+}
+if (
+  !dashboardTs.includes('platformSignalKind') ||
+  !dashboardTs.includes("h?.status === 'ok' && h.database?.status === 'up'")
+) {
+  fail('Dashboard platform signal must treat degraded API or database health as a danger state.');
+}
+if (!dashboardHtml.includes('databaseStatusLabel()') || !dashboardHtml.includes('environmentLabel()')) {
+  fail('Dashboard system readiness must use explicit health labels instead of rendering blank redacted fields.');
+}
+
+const genericHttpErrors = files
+  .filter((file) => file.endsWith('.ts'))
+  .flatMap((file) => {
+    const text = read(file);
+    const matches = [
+      ...text.matchAll(/error:\s*\([^)]*\)\s*=>[\s\S]{0,250}?this\.toast\.error\(/gu),
+    ];
+    return matches.map((match) => {
+      const line = text.slice(0, match.index).split(/\r?\n/u).length;
+      return `${relative(root, file)}:${line}`;
+    });
+  });
+if (genericHttpErrors.length) {
+  fail(
+    `HTTP subscribe errors must use toast.errorFrom(error, fallback) so request IDs and safe API messages are preserved:\n${genericHttpErrors.map((item) => `- ${item}`).join('\n')}`,
+  );
+}
+
+const unsafeTemplatePatterns = files.flatMap((file) => {
+  const text = read(file);
+  const findings = [];
+  const rel = relative(root, file);
+  for (const pattern of [
+    { name: 'raw innerHTML binding', regex: /\[(?:innerHTML|innerHtml)\]|innerHTML\s*=/gu },
+    { name: 'Angular sanitizer bypass', regex: /bypassSecurityTrust\w+/gu },
+    { name: 'javascript: link', regex: /href\s*=\s*['"]javascript:/giu },
+  ]) {
+    for (const match of text.matchAll(pattern.regex)) {
+      const line = text.slice(0, match.index).split(/\r?\n/u).length;
+      findings.push(`${rel}:${line} ${pattern.name}`);
+    }
+  }
+  if (/target\s*=\s*['"]_blank['"]/iu.test(text) && !/rel\s*=\s*['"][^'"]*noopener[^'"]*noreferrer[^'"]*['"]/iu.test(text)) {
+    const match = text.match(/target\s*=\s*['"]_blank['"]/iu);
+    const line = match?.index == null ? 1 : text.slice(0, match.index).split(/\r?\n/u).length;
+    findings.push(`${rel}:${line} target="_blank" must include rel="noopener noreferrer"`);
+  }
+  return findings;
+});
+if (unsafeTemplatePatterns.length) {
+  fail(
+    `Frontend templates must avoid unsafe HTML/link patterns:\n${unsafeTemplatePatterns.map((item) => `- ${item}`).join('\n')}`,
+  );
+}
+
+const uiSmokePath = join(root, 'scripts', 'ui-smoke.mjs');
+const uiSmokeText = existsSync(uiSmokePath) ? read(uiSmokePath) : '';
+if (
+  !uiSmokeText.includes('consoleWarnings') ||
+  !uiSmokeText.includes('accessibilityWarningPattern') ||
+  !uiSmokeText.includes('authSessionCheck') ||
+  !uiSmokeText.includes('/api/auth/me') ||
+  !uiSmokeText.includes('DGOP_SMOKE_MOBILE_ROUTES') ||
+  !uiSmokeText.includes('setViewportSize')
+) {
+  fail('UI smoke must cover authenticated session health, mobile viewports, and warning-level accessibility regressions.');
+}
+
 if (!process.exitCode) {
   console.log(
-    `Web quality checks passed: ${refs.size} static i18n refs, ${dictKeys.size} dictionary keys, route/theme/RTL/accessibility wiring OK.`,
+    `Web quality checks passed: ${refs.size} static i18n refs, ${dictKeys.size} dictionary keys, route/theme/RTL/accessibility/error wiring OK.`,
   );
 } else {
   console.error(`Web quality checks failed under ${relative(root, appDir)}.`);

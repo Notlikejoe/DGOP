@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { BadRequestException } from '@nestjs/common';
 import { FoiDecisionOutcome, FoiRequestStatus } from '@prisma/client';
 import { FoiService } from '../src/foi/foi.service';
 import { addKsaBusinessDays, foiSlaStatus, statusForFoiDecision } from '../src/foi/foi.logic';
@@ -209,6 +210,109 @@ test('create FOI request generates number, workflow task, and starter reviews', 
   assert.strictEqual(data.workflowTasks.length, 1);
   assert.strictEqual(data.reviews.length, 3);
   assert.strictEqual(created.workflowCaseId, 'case-1');
+});
+
+test('list rejects invalid FOI status and channel filters before Prisma receives them', async () => {
+  let requestFinds = 0;
+  const service = new FoiService(
+    {
+      foiRequest: {
+        findMany: async () => {
+          requestFinds++;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await assert.rejects(
+    () => service.list(['foi_officer'], { status: 'almost_done', page: '1', pageSize: '10' }),
+    BadRequestException,
+  );
+  await assert.rejects(
+    () => service.list(['foi_officer'], { channel: 'fax_machine', page: '1', pageSize: '10' }),
+    BadRequestException,
+  );
+  assert.strictEqual(requestFinds, 0);
+});
+
+test('FOI scoped lists do not expose unanchored records to restricted users', async () => {
+  let requestWhere: unknown;
+  const service = new FoiService(
+    {
+      dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+      foiRequest: {
+        findMany: async (args: any) => {
+          requestWhere = args.where;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
+    } as never,
+  );
+
+  await service.list(['foi_officer'], { page: '1', pageSize: '10' });
+  const whereText = JSON.stringify(requestWhere);
+  assert.ok(whereText.includes('visible-asset'));
+  assert.ok(!whereText.includes('"assetId":null'));
+  assert.ok(!whereText.includes('"dataDomainId"'));
+});
+
+test('FOI domain-only requests are visible only for matching domain-scoped users', async () => {
+  let requestWhere: unknown;
+  const service = new FoiService(
+    {
+      dataAsset: { findMany: async () => [] },
+      foiRequest: {
+        findMany: async (args: any) => {
+          requestWhere = args.where;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: 2 }),
+    } as never,
+  );
+
+  await service.list(['foi_officer'], { page: '1', pageSize: '10' });
+  const whereText = JSON.stringify(requestWhere);
+  assert.ok(whereText.includes('"assetId":null'));
+  assert.ok(whereText.includes('"dataDomainId":{"in":["domain-1"]}'));
+});
+
+test('FOI summary reuses one scoped SLA row query for overdue and due-soon counts', async () => {
+  let requestFinds = 0;
+  const service = new FoiService(
+    {
+      dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+      foiRequest: {
+        count: async () => 0,
+        findMany: async () => {
+          requestFinds++;
+          return [];
+        },
+      },
+      foiAppeal: { count: async () => 0 },
+      foiDisclosure: { count: async () => 0 },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
+    } as never,
+  );
+
+  await service.summary(['foi_officer']);
+  assert.strictEqual(requestFinds, 1);
 });
 
 test('saveDecision delegates workflow progress to the engine', async () => {

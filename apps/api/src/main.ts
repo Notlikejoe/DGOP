@@ -16,6 +16,8 @@ import {
   isProductionLikeRuntime,
 } from './common/runtime-safety';
 
+const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 loadEnv({ path: join(__dirname, '..', '..', '..', '.env') });
 
 async function bootstrap(): Promise<void> {
@@ -70,6 +72,17 @@ async function bootstrap(): Promise<void> {
       standardHeaders: true,
       legacyHeaders: false,
       skipSuccessfulRequests: true,
+    }),
+  );
+
+  app.use(
+    '/api',
+    rateLimit({
+      windowMs: 60_000,
+      max: 120,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => READ_ONLY_METHODS.has(req.method.toUpperCase()),
     }),
   );
 

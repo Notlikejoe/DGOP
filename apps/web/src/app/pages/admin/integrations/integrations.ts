@@ -279,8 +279,7 @@ export class IntegrationsPage implements OnInit {
         this.preview.set(preview);
         this.previewing.set(false);
       },
-      error: () => {
-        this.toast.error(this.t('integrations.error'));
+      error: (err) => { this.toast.errorFrom(err, this.t('integrations.error'));
         this.previewing.set(false);
       },
     });
@@ -297,8 +296,7 @@ export class IntegrationsPage implements OnInit {
         this.preview.set(null);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.t('integrations.error'));
+      error: (err) => { this.toast.errorFrom(err, this.t('integrations.error'));
         this.running.set(false);
       },
     });
@@ -319,8 +317,7 @@ export class IntegrationsPage implements OnInit {
           this.writingBack.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.t('integrations.error'));
+        error: (err) => { this.toast.errorFrom(err, this.t('integrations.error'));
           this.writingBack.set(false);
         },
       });
@@ -335,8 +332,7 @@ export class IntegrationsPage implements OnInit {
         this.retryingEventId.set('');
         this.load();
       },
-      error: () => {
-        this.toast.error(this.t('integrations.error'));
+      error: (err) => { this.toast.errorFrom(err, this.t('integrations.error'));
         this.retryingEventId.set('');
       },
     });

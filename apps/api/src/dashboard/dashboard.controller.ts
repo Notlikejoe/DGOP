@@ -10,7 +10,7 @@ export class DashboardController {
   @Get('stats')
   @RequirePermissions('dashboard.view')
   stats(@CurrentUser() user: AuthUser) {
-    return this.service.stats(user.roles, user.id);
+    return this.service.stats(user);
   }
 
   @Get('summary')

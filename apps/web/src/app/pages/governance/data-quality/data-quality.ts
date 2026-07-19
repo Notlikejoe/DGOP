@@ -294,7 +294,7 @@ export class DataQualityPage implements OnInit {
   private loadIssuesOnly(): void {
     this.http.get<DqIssue[]>('/api/data-quality/issues', { params: this.issueParams() }).subscribe({
       next: (rows) => this.applyIssues(rows),
-      error: () => this.toast.error(this.t('dq.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('dq.error')),
     });
   }
 
@@ -316,7 +316,7 @@ export class DataQualityPage implements OnInit {
   private loadConfig(): void {
     this.http.get<DqPageConfig>('/api/data-quality/config').subscribe({
       next: (config) => this.config.set(config),
-      error: () => this.toast.error(this.t('dq.config.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('dq.config.error')),
     });
   }
 
@@ -378,7 +378,7 @@ export class DataQualityPage implements OnInit {
         this.createOpen.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('dq.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('dq.error')); this.saving.set(false); },
     });
   }
 
@@ -399,7 +399,7 @@ export class DataQualityPage implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('dq.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('dq.error')); this.saving.set(false); },
     });
   }
 
@@ -481,7 +481,7 @@ export class DataQualityPage implements OnInit {
         this.importing.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('dq.error')); this.importing.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('dq.error')); this.importing.set(false); },
     });
   }
 
@@ -531,7 +531,7 @@ export class DataQualityPage implements OnInit {
         this.rcaTarget.set(null);
         this.load();
       },
-      error: () => { this.toast.error(this.t('dq.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('dq.error')); this.saving.set(false); },
     });
   }
 
@@ -553,7 +553,7 @@ export class DataQualityPage implements OnInit {
         this.closeTarget.set(null);
         this.load();
       },
-      error: () => { this.toast.error(this.t('dq.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('dq.error')); this.saving.set(false); },
     });
   }
 

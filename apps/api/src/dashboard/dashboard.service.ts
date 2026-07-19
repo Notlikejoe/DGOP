@@ -97,8 +97,11 @@ export class DashboardService {
     return ownership;
   }
 
-  async stats(roleCodes: string[], userId: string): Promise<DashboardStats> {
+  async stats(user: AuthUser): Promise<DashboardStats> {
+    const roleCodes = user.roles;
     const scope = await this.scope.resolve(roleCodes);
+    const perms = await this.access.permissionsForRoleCodes(roleCodes);
+    const canNdiScoring = this.access.hasPermission(perms, 'ndi_scoring.view');
     const assetWhere = { AND: [{ deletedAt: null }, this.assetScopeWhere(scope)] };
     const ownedWhere = {
       AND: [{ deletedAt: null }, { ownerStatus: 'assigned' }, this.assetScopeWhere(scope)],
@@ -110,9 +113,7 @@ export class DashboardService {
       pendingApprovals,
       myOpenTasks,
       people,
-      ndiSpecs,
-      ndiDomains,
-      ndiCovered,
+      ndiReadiness,
     ] = await Promise.all([
       this.prisma.dataAsset.count({ where: assetWhere }),
       this.prisma.dataAsset.count({ where: ownedWhere }),
@@ -120,19 +121,16 @@ export class DashboardService {
         where: { deletedAt: null, approvalStatus: 'pending' },
       }),
       this.prisma.workflowTask.count({
-        where: { OR: this.workflowTaskOwnershipWhere(userId, roleCodes), status: { in: ['pending', 'in_progress'] } },
+        where: { OR: this.workflowTaskOwnershipWhere(user.id, roleCodes), status: { in: ['pending', 'in_progress'] } },
       }),
       this.prisma.person.count({ where: { deletedAt: null } }),
-      this.prisma.ndiSpecification.count({ where: { deletedAt: null, isActive: true } }),
-      this.prisma.ndiDomain.count(),
-      this.prisma.ndiSpecification.groupBy({
-        by: ['domainId'],
-        where: { deletedAt: null, isActive: true },
-      }),
+      canNdiScoring ? this.scoring.readiness(user) : Promise.resolve(null),
     ]);
 
     const coveragePct = totalAssets ? Math.round((ownedAssets / totalAssets) * 100) : 0;
-    const domainsCovered = ndiCovered.length;
+    const ndiSpecs = ndiReadiness?.overall.specCount ?? 0;
+    const ndiDomains = ndiReadiness?.domains.length ?? 0;
+    const domainsCovered = ndiReadiness?.domains.filter((domain) => domain.specCount > 0).length ?? 0;
     const ndiCoveragePct = ndiDomains ? Math.round((domainsCovered / ndiDomains) * 100) : 0;
 
     return {
@@ -214,7 +212,7 @@ export class DashboardService {
 
     // ----- NDI readiness (reuse the scoring engine, no re-derivation) -----
     if (can('ndi_scoring.view')) {
-      const r = await this.scoring.readiness();
+      const r = await this.scoring.readiness(user);
       summary.ndi = {
         readinessPct: r.overall.score,
         maturity: r.overall.maturity,

@@ -192,6 +192,9 @@
                 <div>
                   <strong>{{ item.name }}</strong>
                   <span>{{ item.target }}</span>
+                  @if (item.acceptedDeferral) {
+                    <small class="deferral">{{ item.acceptedDeferral }}</small>
+                  }
                 </div>
                 <app-status-chip [kind]="statusKind(item.status)" [label]="t('operations.status.' + item.status)" />
               </article>

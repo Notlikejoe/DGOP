@@ -106,10 +106,19 @@ export class TransparencyService {
     return (branches.length ? { ...base, OR: branches } : { ...base, id: '__no_visible_sharing_records__' }) as unknown as T;
   }
 
-  private foiScoped(assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput {
-    if (assetIds === 'all') return { deletedAt: null };
-    if (assetIds.size === 0) return { deletedAt: null, assetId: null };
-    return { deletedAt: null, OR: [{ assetId: { in: [...assetIds] } }, { assetId: null }] };
+  private foiBranches(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput[] {
+    const branches: Prisma.FoiRequestWhereInput[] = [];
+    if (assetIds !== 'all' && assetIds.size > 0) branches.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all' && scope.domains !== 'all' && scope.domains.length > 0) {
+      branches.push({ AND: [{ assetId: null }, { dataDomainId: { in: scope.domains } }] });
+    }
+    return branches;
+  }
+
+  private foiScoped(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput {
+    if (this.isUnrestricted(scope)) return { deletedAt: null };
+    const branches = this.foiBranches(scope, assetIds);
+    return branches.length ? { deletedAt: null, OR: branches } : { deletedAt: null, id: '__no_visible_foi_records__' };
   }
 
   private can(granted: string[], permission: string): boolean {
@@ -118,6 +127,31 @@ export class TransparencyService {
 
   private hasAny(granted: string[], permissions: string[]): boolean {
     return permissions.some((permission) => this.can(granted, permission));
+  }
+
+  private workflowTaskOwnershipWhere(user: AuthUser): Prisma.WorkflowTaskWhereInput[] {
+    const ownership: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: user.id }];
+    if (user.roles.length) {
+      ownership.push({
+        assigneeUserId: null,
+        OR: [
+          { assigneeRoleCode: { in: user.roles } },
+          { templateStage: { assigneeRoleCode: { in: user.roles } } },
+        ],
+      });
+    }
+    return ownership;
+  }
+
+  private workflowCaseScopeWhere(assetIds: Set<string> | 'all', user: AuthUser): Prisma.WorkflowCaseWhereInput {
+    if (assetIds === 'all') return {};
+    const visible: Prisma.WorkflowCaseWhereInput[] = [];
+    if (assetIds.size > 0) visible.push({ assetId: { in: [...assetIds] } });
+    visible.push(
+      { AND: [{ assetId: null }, { createdBy: user.email }] },
+      { AND: [{ assetId: null }, { tasks: { some: { OR: this.workflowTaskOwnershipWhere(user) } } }] },
+    );
+    return visible.length ? { OR: visible } : { id: '__no_visible_transparency_workflow_cases__' };
   }
 
   async cockpit(user: AuthUser) {
@@ -136,10 +170,10 @@ export class TransparencyService {
     const trends = emptyTrendBuckets(now);
     const [openData, foi, privacy, sharing, workflow] = await Promise.all([
       canOpenData ? this.openDataSection(assetIds, trends, now) : Promise.resolve(null),
-      canFoi ? this.foiSection(assetIds, trends, now) : Promise.resolve(null),
+      canFoi ? this.foiSection(scope, assetIds, trends, now) : Promise.resolve(null),
       canPrivacy ? this.privacySection(scope, assetIds, now) : Promise.resolve(null),
       canSharing ? this.sharingSection(scope, assetIds, now) : Promise.resolve(null),
-      canWorkflow ? this.workflowSection(now) : Promise.resolve(null),
+      canWorkflow ? this.workflowSection(assetIds, user, now) : Promise.resolve(null),
     ]);
 
     const risks = sortRisks([
@@ -246,8 +280,8 @@ export class TransparencyService {
     };
   }
 
-  private async foiSection(assetIds: Set<string> | 'all', trends: ReturnType<typeof emptyTrendBuckets>, now: Date) {
-    const where = this.foiScoped(assetIds);
+  private async foiSection(scope: EffectiveScope, assetIds: Set<string> | 'all', trends: ReturnType<typeof emptyTrendBuckets>, now: Date) {
+    const where = this.foiScoped(scope, assetIds);
     const openStatuses: FoiRequestStatus[] = [
       FoiRequestStatus.registered,
       FoiRequestStatus.under_review,
@@ -439,9 +473,10 @@ export class TransparencyService {
     };
   }
 
-  private async workflowSection(now: Date) {
+  private async workflowSection(assetIds: Set<string> | 'all', user: AuthUser, now: Date) {
+    const caseScope = this.workflowCaseScopeWhere(assetIds, user);
     const cases = await this.prisma.workflowCase.findMany({
-      where: { type: { in: TRANSPARENCY_CASE_TYPES } },
+      where: { AND: [{ type: { in: TRANSPARENCY_CASE_TYPES } }, caseScope] },
       select: {
         id: true,
         code: true,

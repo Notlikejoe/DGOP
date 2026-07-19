@@ -19,6 +19,8 @@ interface RoleOption {
   nameAr: string;
 }
 
+const USER_PASSWORD_MIN_LENGTH = 12;
+
 type State = 'loading' | 'ok' | 'error';
 type Mode = 'none' | 'create' | 'edit' | 'roles' | 'reset';
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -174,7 +176,7 @@ export class UsersPage implements OnInit {
     if (
       !this.form.email.trim() ||
       !this.form.displayName.trim() ||
-      this.form.password.length < 8
+      this.form.password.length < USER_PASSWORD_MIN_LENGTH
     ) {
       this.formError.set(true);
       return;
@@ -194,10 +196,10 @@ export class UsersPage implements OnInit {
           this.close();
           this.load();
         },
-        error: () => {
+        error: (err) => {
           this.saving.set(false);
           this.formError.set(true);
-          this.toast.error(this.t('users.saveError'));
+          this.toast.errorFrom(err, this.t('users.saveError'));
         },
       });
   }
@@ -232,10 +234,10 @@ export class UsersPage implements OnInit {
           this.close();
           this.load();
         },
-        error: () => {
+        error: (err) => {
           this.saving.set(false);
           this.formError.set(true);
-          this.toast.error(this.t('users.saveError'));
+          this.toast.errorFrom(err, this.t('users.saveError'));
         },
       });
   }
@@ -250,7 +252,7 @@ export class UsersPage implements OnInit {
         this.toast.success(this.t('users.updated'));
         this.load();
       },
-      error: () => this.toast.error(this.t('users.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('users.saveError')),
     });
   }
 
@@ -282,9 +284,9 @@ export class UsersPage implements OnInit {
           this.close();
           this.load();
         },
-        error: () => {
+        error: (err) => {
           this.saving.set(false);
-          this.toast.error(this.t('users.saveError'));
+          this.toast.errorFrom(err, this.t('users.saveError'));
         },
       });
   }
@@ -297,7 +299,7 @@ export class UsersPage implements OnInit {
   }
 
   protected saveReset(): void {
-    if (this.resetPwd.length < 8) {
+    if (this.resetPwd.length < USER_PASSWORD_MIN_LENGTH) {
       this.formError.set(true);
       return;
     }
@@ -310,10 +312,10 @@ export class UsersPage implements OnInit {
           this.toast.success(this.t('users.passwordReset'));
           this.close();
         },
-        error: () => {
+        error: (err) => {
           this.saving.set(false);
           this.formError.set(true);
-          this.toast.error(this.t('users.saveError'));
+          this.toast.errorFrom(err, this.t('users.saveError'));
         },
       });
   }

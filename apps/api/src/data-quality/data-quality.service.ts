@@ -27,7 +27,17 @@ import {
   CloseDataQualityIssueDto,
   CreateDataQualityIssueDto,
   CreateDataQualityRuleDto,
+  DQ_DIMENSIONS,
+  DQ_PRIORITIES,
+  DQ_RULE_STATUSES,
+  DQ_SEVERITIES,
+  DQ_STATUSES,
   DataQualityRuleTransitionDto,
+  DqDimension,
+  DqPriority,
+  DqRuleStatus,
+  DqSeverity,
+  DqStatus,
   ImportDataQualityProfileDto,
   UpdateDataQualityIssueDto,
   UpdateDataQualityRuleDto,
@@ -52,6 +62,29 @@ import {
 const DQ_STEWARD_CODE = 'dq_steward';
 const RULE_PRIORITY = ['domain', 'capability', 'subject', 'org_unit', 'system'] as const;
 type PrismaWriter = PrismaService | Prisma.TransactionClient;
+
+function parseImportEnum<T extends string>(
+  raw: string | undefined,
+  fallback: T,
+  allowed: readonly T[],
+  normalize: (value: string) => string = (value) => value,
+): T | null {
+  const value = normalize((raw ?? fallback).trim() || fallback);
+  return (allowed as readonly string[]).includes(value) ? (value as T) : null;
+}
+
+function parseFilterEnum<T extends string>(
+  raw: string | undefined,
+  allowed: readonly T[],
+  label: string,
+  normalize: (value: string) => string = (value) => value,
+): T | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  const value = normalize(trimmed);
+  if ((allowed as readonly string[]).includes(value)) return value as T;
+  throw new BadRequestException(`Invalid ${label}: ${trimmed}`);
+}
 
 const issueInclude = {
   asset: {
@@ -120,9 +153,14 @@ export class DataQualityService {
     return new Set(assets.map((a) => a.id));
   }
 
-  private issueScopeWhere(assetIds: Set<string> | 'all'): Record<string, unknown> {
+  private issueScopeWhere(assetIds: Set<string> | 'all', actorEmail?: string): Record<string, unknown> {
     if (assetIds === 'all') return {};
-    return { OR: [{ assetId: null }, { assetId: { in: [...assetIds] } }] };
+    const or: Record<string, unknown>[] = [];
+    if (assetIds.size > 0) or.push({ assetId: { in: [...assetIds] } });
+    if (actorEmail) {
+      or.push({ AND: [{ assetId: null }, { createdBy: actorEmail }] });
+    }
+    return or.length ? { OR: or } : { id: { equals: '__no_visible_dq_issues__' } };
   }
 
   private isUnrestricted(scope: EffectiveScope): boolean {
@@ -206,14 +244,14 @@ export class DataQualityService {
     if (!person) throw new BadRequestException('Responsible person not found');
   }
 
-  private issueSlaWhere(assetIds: Set<string> | 'all') {
-    return { AND: [{ deletedAt: null }, this.issueScopeWhere(assetIds)] };
+  private issueSlaWhere(assetIds: Set<string> | 'all', actorEmail?: string) {
+    return { AND: [{ deletedAt: null }, this.issueScopeWhere(assetIds, actorEmail)] };
   }
 
-  private async refreshSlaBreaches(roleCodes: string[]): Promise<number> {
+  private async refreshSlaBreaches(roleCodes: string[], actorEmail?: string): Promise<number> {
     const assetIds = await this.visibleAssetIds(roleCodes);
     const issues = await this.prisma.dataQualityIssue.findMany({
-      where: this.issueSlaWhere(assetIds),
+      where: this.issueSlaWhere(assetIds, actorEmail),
       select: {
         id: true,
         status: true,
@@ -249,13 +287,13 @@ export class DataQualityService {
     return created;
   }
 
-  async refreshSlaBreachMarkers(roleCodes: string[]): Promise<{ created: number }> {
-    return { created: await this.refreshSlaBreaches(roleCodes) };
+  async refreshSlaBreachMarkers(roleCodes: string[], actorEmail?: string): Promise<{ created: number }> {
+    return { created: await this.refreshSlaBreaches(roleCodes, actorEmail) };
   }
 
-  async summary(roleCodes: string[]) {
+  async summary(roleCodes: string[], actorEmail?: string) {
     const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
-    const scoped = this.issueScopeWhere(assetIds);
+    const scoped = this.issueScopeWhere(assetIds, actorEmail);
     const base = { AND: [{ deletedAt: null }, scoped] };
     const recordScope = this.qualityRecordScopeWhere<Prisma.DataQualityRuleWhereInput>(scope, assetIds);
     const scoreWhere =
@@ -319,12 +357,16 @@ export class DataQualityService {
     filters: { search?: string; status?: string; severity?: string; dimension?: string; assetId?: string },
     page?: string | number,
     pageSize?: string | number,
+    actorEmail?: string,
   ) {
     const assetIds = await this.visibleAssetIds(roleCodes);
-    const and: Record<string, unknown>[] = [{ deletedAt: null }, this.issueScopeWhere(assetIds)];
-    if (filters.status) and.push({ status: filters.status });
-    if (filters.severity) and.push({ severity: filters.severity });
-    if (filters.dimension) and.push({ dimension: filters.dimension });
+    const and: Record<string, unknown>[] = [{ deletedAt: null }, this.issueScopeWhere(assetIds, actorEmail)];
+    const status = parseFilterEnum<DqStatus>(filters.status, DQ_STATUSES, 'data quality status', (value) => value.toLowerCase());
+    const severity = parseFilterEnum<DqSeverity>(filters.severity, DQ_SEVERITIES, 'data quality severity', (value) => value.toLowerCase());
+    const dimension = parseFilterEnum<DqDimension>(filters.dimension, DQ_DIMENSIONS, 'data quality dimension', (value) => value.toLowerCase());
+    if (status) and.push({ status });
+    if (severity) and.push({ severity });
+    if (dimension) and.push({ dimension });
     if (filters.assetId) and.push({ assetId: filters.assetId });
     if (filters.search) {
       const term = filters.search.trim();
@@ -354,10 +396,10 @@ export class DataQualityService {
     return toPaged(rows, total, params);
   }
 
-  async get(roleCodes: string[], id: string) {
+  async get(roleCodes: string[], id: string, actorEmail?: string) {
     const assetIds = await this.visibleAssetIds(roleCodes);
     const issue = await this.prisma.dataQualityIssue.findFirst({
-      where: { AND: [{ id, deletedAt: null }, this.issueScopeWhere(assetIds)] },
+      where: { AND: [{ id, deletedAt: null }, this.issueScopeWhere(assetIds, actorEmail)] },
       include: issueInclude,
     });
     if (!issue) throw new NotFoundException('data quality issue not found');
@@ -474,7 +516,7 @@ export class DataQualityService {
   }
 
   async update(id: string, roleCodes: string[], dto: UpdateDataQualityIssueDto, actor: string) {
-    const existing = await this.get(roleCodes, id);
+    const existing = await this.get(roleCodes, id, actor);
     if (dto.status === DataQualityIssueStatus.closed) {
       throw new BadRequestException('Use the close action to close a data quality issue');
     }
@@ -513,7 +555,7 @@ export class DataQualityService {
   }
 
   async close(id: string, roleCodes: string[], dto: CloseDataQualityIssueDto, actor: string) {
-    const existing = await this.get(roleCodes, id);
+    const existing = await this.get(roleCodes, id, actor);
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
       const issue = await tx.dataQualityIssue.update({
@@ -552,7 +594,7 @@ export class DataQualityService {
   }
 
   async remove(id: string, roleCodes: string[], actor: string) {
-    await this.get(roleCodes, id);
+    await this.get(roleCodes, id, actor);
     await this.prisma.$transaction(async (tx) => {
       await tx.dataQualityIssue.update({ where: { id }, data: { deletedAt: new Date(), status: 'cancelled' } });
       await this.writeAudit(tx, actor, 'data_quality_issue.delete', 'data_quality_issue', id);
@@ -739,8 +781,10 @@ export class DataQualityService {
       { deletedAt: null },
       this.qualityRecordScopeWhere<Prisma.DataQualityRuleWhereInput>(scope, assetIds),
     ];
-    if (filters.status) and.push({ status: filters.status });
-    if (filters.dimension) and.push({ dimension: filters.dimension });
+    const status = parseFilterEnum<DqRuleStatus>(filters.status, DQ_RULE_STATUSES, 'data quality rule status', (value) => value.toLowerCase());
+    const dimension = parseFilterEnum<DqDimension>(filters.dimension, DQ_DIMENSIONS, 'data quality rule dimension', (value) => value.toLowerCase());
+    if (status) and.push({ status });
+    if (dimension) and.push({ dimension });
     if (filters.search) {
       const term = filters.search.trim();
       and.push({
@@ -983,7 +1027,7 @@ export class DataQualityService {
   }
 
   async upsertRca(issueId: string, roleCodes: string[], dto: UpsertDataQualityRcaDto, actor: string) {
-    const existing = await this.get(roleCodes, issueId);
+    const existing = await this.get(roleCodes, issueId, actor);
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.dataQualityRcaRecord.create({
         data: {
@@ -1047,6 +1091,36 @@ export class DataQualityService {
         errors.push({ row: line, code: 'asset_unavailable', params: { assetCode: rawAssetCode } });
         continue;
       }
+      const severity = parseImportEnum<DqSeverity>(
+        row[DATA_QUALITY_IMPORT_ROW_KEYS.severity],
+        DATA_QUALITY_IMPORT_DEFAULTS.severity,
+        DQ_SEVERITIES,
+        (value) => value.toLowerCase(),
+      );
+      if (!severity) {
+        errors.push({ row: line, code: 'row_rejected', params: { reason: `Invalid severity: ${row[DATA_QUALITY_IMPORT_ROW_KEYS.severity]}` } });
+        continue;
+      }
+      const priority = parseImportEnum<DqPriority>(
+        row[DATA_QUALITY_IMPORT_ROW_KEYS.priority],
+        DATA_QUALITY_IMPORT_DEFAULTS.priority,
+        DQ_PRIORITIES,
+        (value) => value.toUpperCase(),
+      );
+      if (!priority) {
+        errors.push({ row: line, code: 'row_rejected', params: { reason: `Invalid priority: ${row[DATA_QUALITY_IMPORT_ROW_KEYS.priority]}` } });
+        continue;
+      }
+      const dimension = parseImportEnum<DqDimension>(
+        row[DATA_QUALITY_IMPORT_ROW_KEYS.dimension],
+        DATA_QUALITY_IMPORT_DEFAULTS.dimension,
+        DQ_DIMENSIONS,
+        (value) => value.toLowerCase(),
+      );
+      if (!dimension) {
+        errors.push({ row: line, code: 'row_rejected', params: { reason: `Invalid dimension: ${row[DATA_QUALITY_IMPORT_ROW_KEYS.dimension]}` } });
+        continue;
+      }
       try {
         const issue = await this.create(
           roleCodes,
@@ -1054,9 +1128,9 @@ export class DataQualityService {
             code: (row[DATA_QUALITY_IMPORT_ROW_KEYS.code] ?? '').trim() || undefined,
             title,
             description: (row[DATA_QUALITY_IMPORT_ROW_KEYS.description] ?? '').trim() || null,
-            severity: ((row[DATA_QUALITY_IMPORT_ROW_KEYS.severity] ?? DATA_QUALITY_IMPORT_DEFAULTS.severity).trim() || DATA_QUALITY_IMPORT_DEFAULTS.severity) as never,
-            priority: ((row[DATA_QUALITY_IMPORT_ROW_KEYS.priority] ?? DATA_QUALITY_IMPORT_DEFAULTS.priority).trim() || DATA_QUALITY_IMPORT_DEFAULTS.priority) as never,
-            dimension: ((row[DATA_QUALITY_IMPORT_ROW_KEYS.dimension] ?? DATA_QUALITY_IMPORT_DEFAULTS.dimension).trim() || DATA_QUALITY_IMPORT_DEFAULTS.dimension) as never,
+            severity,
+            priority,
+            dimension,
             assetId: assetId ?? null,
             dueDate: (row[DATA_QUALITY_IMPORT_ROW_KEYS.dueDate] ?? '').trim() || null,
             source: DATA_QUALITY_IMPORT_DEFAULTS.source,

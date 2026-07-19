@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { BaseCrudService } from '../master-data/base-crud.service';
-import { parsePageParams, toPaged, type Paged } from '../common/pagination';
+import { boundedFirstPageParams, parsePageParams, toPaged, type Paged } from '../common/pagination';
 
 const userInclude = {
   user: { select: { id: true, email: true, displayName: true, isActive: true } },
@@ -74,10 +74,13 @@ export class PeopleService extends BaseCrudService {
     }
     const params = parsePageParams(page, pageSize);
     if (!params) {
+      const bounded = boundedFirstPageParams(pageSize);
       return this.prisma.person.findMany({
         where,
         include: userInclude,
         orderBy: { fullNameEn: 'asc' },
+        skip: bounded.skip,
+        take: bounded.take,
       });
     }
     const [rows, total] = await Promise.all([

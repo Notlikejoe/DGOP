@@ -14,7 +14,7 @@
 
 ## Frontend
 
-1. `/governance/open-data` loads candidate KPIs, list, detail panel, and ODIAO review placeholder.
+1. `/governance/open-data` loads candidate KPIs, list, detail panel, and ODIAO review cockpit.
 2. Create/edit form validates required asset and bilingual title fields.
 3. Candidate lifecycle actions appear only for valid next statuses.
 4. Asset 360 shows Open Data readiness for assets with candidates.

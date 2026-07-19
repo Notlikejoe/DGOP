@@ -393,10 +393,10 @@ export class RolesPage implements OnInit {
         this.close();
         this.load();
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
         this.formError.set(true);
-        this.toast.error(this.t('crud.saveError'));
+        this.toast.errorFrom(err, this.t('crud.saveError'));
       },
     });
   }
@@ -448,9 +448,9 @@ export class RolesPage implements OnInit {
           this.close();
           this.load();
         },
-        error: () => {
+        error: (err) => {
           this.saving.set(false);
-          this.toast.error(this.t('crud.saveError'));
+          this.toast.errorFrom(err, this.t('crud.saveError'));
         },
       });
   }
@@ -532,9 +532,9 @@ export class RolesPage implements OnInit {
           this.refreshSelectedPreview(id);
           this.load();
         },
-        error: () => {
+        error: (err) => {
           this.saving.set(false);
-          this.toast.error(this.t('crud.saveError'));
+          this.toast.errorFrom(err, this.t('crud.saveError'));
         },
       });
   }
@@ -547,7 +547,7 @@ export class RolesPage implements OnInit {
         this.toast.success(this.t('crud.deleted'));
         this.load();
       },
-      error: () => this.toast.error(this.t('crud.deleteError')),
+      error: (err) => this.toast.errorFrom(err, this.t('crud.deleteError')),
     });
   }
 
@@ -577,7 +577,7 @@ export class RolesPage implements OnInit {
         this.active.set(detail);
         then(detail);
       },
-      error: () => this.toast.error(this.t('crud.loadError')),
+      error: (err) => this.toast.errorFrom(err, this.t('crud.loadError')),
     });
   }
 }

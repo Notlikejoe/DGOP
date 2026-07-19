@@ -13,6 +13,7 @@ export const DATA_QUALITY_IMPORT_MIME_TYPES = [
   'application/csv',
   'application/vnd.ms-excel',
 ] as const;
+const GENERIC_UPLOAD_MIME_TYPES = new Set(['', 'application/octet-stream']);
 export const DATA_QUALITY_IMPORT_COLUMNS = [
   'code',
   'title',
@@ -43,6 +44,7 @@ export const DATA_QUALITY_IMPORT_ROW_KEYS = {
 export const DATA_QUALITY_IMPORT_API_MESSAGES = {
   fileRequired: 'CSV file is required',
   unsupportedFile: 'Only CSV files are supported',
+  invalidText: 'CSV file must be UTF-8 text',
   emptyCsv: 'CSV has no data rows',
 } as const;
 export const DATA_QUALITY_IMPORT_SAMPLE_CSV = `title,description,severity,priority,dimension,assetCode,dueDate
@@ -89,8 +91,16 @@ export function dataQualityPageConfig() {
 
 export function isAcceptedDataQualityImportFile(originalName = '', mimeType = ''): boolean {
   const lowerName = originalName.toLowerCase();
-  return (
-    DATA_QUALITY_IMPORT_EXTENSIONS.some((extension) => lowerName.endsWith(extension)) ||
-    DATA_QUALITY_IMPORT_MIME_TYPES.includes(mimeType as (typeof DATA_QUALITY_IMPORT_MIME_TYPES)[number])
-  );
+  const hasCsvExtension = DATA_QUALITY_IMPORT_EXTENSIONS.some((extension) => lowerName.endsWith(extension));
+  const normalizedMime = mimeType.toLowerCase().trim();
+  const hasAcceptedMime =
+    DATA_QUALITY_IMPORT_MIME_TYPES.includes(normalizedMime as (typeof DATA_QUALITY_IMPORT_MIME_TYPES)[number]) ||
+    GENERIC_UPLOAD_MIME_TYPES.has(normalizedMime);
+  return hasCsvExtension && hasAcceptedMime;
+}
+
+export function isSafeDataQualityImportContent(buffer: Buffer): boolean {
+  if (!buffer.length) return true;
+  if (buffer.includes(0)) return false;
+  return !buffer.toString('utf8').includes('\uFFFD');
 }

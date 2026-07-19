@@ -6,12 +6,12 @@ export interface HealthResponse {
   status: string;
   service: string;
   version: string;
-  environment: string;
   timestamp: string;
-  uptimeSeconds: number;
+  environment?: string;
+  uptimeSeconds?: number;
   database: {
     status: string;
-    name: string;
+    name?: string;
   };
 }
 

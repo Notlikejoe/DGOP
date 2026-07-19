@@ -32,6 +32,8 @@ type Over = {
   caseUpdates?: any[];
   workflowCases?: any[];
   caseFindManyArgs?: any;
+  caseFindFirstArgs?: any[];
+  caseFindFirstResult?: any;
   taskBulkUpdates?: any[];
   taskUpdates?: any[];
   tasks?: any[];
@@ -77,7 +79,11 @@ function makeService(over: Over): WorkflowService {
       },
       create: async ({ data }: any) => ({ id: 'case-new', ...data, tasks: [], asset: null, assignment: null }),
       findUnique: async () => over.case ?? ({ id: 'case-new', status: 'draft', assetId: null, tasks: [], asset: null, assignment: null }),
-      findFirst: async () => over.case ?? ({ id: 'case-new', status: 'submitted', assetId: null, tasks: [], asset: null, assignment: null }),
+      findFirst: async (args: any) => {
+        (over.caseFindFirstArgs ??= []).push(args);
+        if ('caseFindFirstResult' in over) return over.caseFindFirstResult;
+        return over.case ?? ({ id: 'case-new', status: 'submitted', assetId: null, tasks: [], asset: null, assignment: null });
+      },
       findMany: async (args: any) => {
         over.caseFindManyArgs = args;
         return over.workflowCases ?? [];
@@ -169,6 +175,20 @@ const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name
 test('slaOf: completed task is done', () => {
   const svc = makeService({});
   assert.strictEqual(svc.slaOf({ status: 'completed' as never, dueDate: null, completedAt: new Date() }), 'done');
+});
+
+test('configuration is read-only and does not seed default templates', async () => {
+  const svc = makeService({ templates: [], workflowCases: [] });
+  const result = await svc.configuration(['system_admin'], {
+    id: 'admin',
+    email: 'admin@dgop.local',
+    roles: ['system_admin'],
+  });
+
+  assert.strictEqual(result.summary.templates, 0);
+  assert.strictEqual(result.summary.totalCases, 0);
+  assert.ok(result.caseTypeRegistry.length > 0);
+  assert.ok(result.caseTypeRegistry.every((row) => !row.hasActiveRoute));
 });
 
 test('updateCase: rejects invalid status transitions', async () => {
@@ -569,6 +589,69 @@ test('updateCase: hides out-of-scope asset-linked cases', async () => {
     () => svc.updateCase('c1', { title: 'New title' } as never, ['dq_steward'], 'actor'),
     /workflow case not found/,
   );
+});
+
+test('updateCase: hides unanchored cases unless actor created or owns the route', async () => {
+  const over: Over = {
+    case: { id: 'case-hidden', status: 'submitted', assetId: null, createdBy: 'other@dgop.local' },
+    visibleAssets: [],
+    scope: { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+    caseFindFirstResult: null,
+  };
+  const svc = makeService(over);
+
+  await assert.rejects(
+    () =>
+      svc.updateCase(
+        'case-hidden',
+        { title: 'Leaked edit' } as never,
+        ['dq_steward'],
+        'viewer@dgop.local',
+        { id: 'viewer-1', email: 'viewer@dgop.local', roles: ['dq_steward'] },
+      ),
+    /workflow case not found/,
+  );
+
+  const text = JSON.stringify(over.caseFindFirstArgs?.[0]?.where);
+  assert.ok(text.includes('"id":"case-hidden"'));
+  assert.ok(text.includes('"assetId":null'));
+  assert.ok(text.includes('"createdBy":"viewer@dgop.local"'));
+  assert.ok(text.includes('"assigneeUserId":"viewer-1"'));
+  assert.ok(text.includes('"assigneeRoleCode":{"in":["dq_steward"]}'));
+});
+
+test('updateTask: hides tasks on unanchored cases outside actor visibility', async () => {
+  const over: Over = {
+    task: {
+      id: 'task-hidden',
+      caseId: 'case-hidden',
+      title: 'Hidden task',
+      status: 'pending',
+      assigneeUserId: null,
+      case: { id: 'case-hidden', status: 'submitted', assetId: null, createdBy: 'other@dgop.local' },
+    },
+    visibleAssets: [],
+    scope: { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+    caseFindFirstResult: null,
+  };
+  const svc = makeService(over);
+
+  await assert.rejects(
+    () =>
+      svc.updateTask(
+        'task-hidden',
+        { title: 'Leaked task edit' } as never,
+        ['dq_steward'],
+        'viewer@dgop.local',
+        { id: 'viewer-1', email: 'viewer@dgop.local', roles: ['dq_steward'] },
+      ),
+    /workflow case not found/,
+  );
+
+  const text = JSON.stringify(over.caseFindFirstArgs?.[0]?.where);
+  assert.ok(text.includes('"id":"case-hidden"'));
+  assert.ok(text.includes('"assetId":null'));
+  assert.ok(text.includes('"createdBy":"viewer@dgop.local"'));
 });
 
 test('listMyTasks: applies case visibility to inbox rows', async () => {

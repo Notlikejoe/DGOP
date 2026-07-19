@@ -98,6 +98,45 @@ test('agreement lists are constrained to visible scoped assets', async () => {
   assert.ok(!whereText.includes('"assetId":null'));
 });
 
+test('request and agreement list filters reject invalid lifecycle statuses', async () => {
+  let requestFinds = 0;
+  let agreementFinds = 0;
+  const service = new DataSharingService(
+    {
+      dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+      dataSharingRequest: {
+        findMany: async () => {
+          requestFinds++;
+          return [];
+        },
+        count: async () => 0,
+      },
+      dataSharingAgreement: {
+        findMany: async () => {
+          agreementFinds++;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
+    } as never,
+  );
+
+  await assert.rejects(
+    () => service.listRequests(['data_owner'], { status: 'almost-approved', page: '1', pageSize: '10' }),
+    BadRequestException,
+  );
+  await assert.rejects(
+    () => service.listAgreements(['data_owner'], { status: 'almost-active', page: '1', pageSize: '10' }),
+    BadRequestException,
+  );
+  assert.equal(requestFinds, 0);
+  assert.equal(agreementFinds, 0);
+});
+
 test('summary scopes usage metrics through visible agreements', async () => {
   let usageWhere: unknown;
   const service = new DataSharingService(

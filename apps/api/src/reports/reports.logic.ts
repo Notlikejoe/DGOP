@@ -29,9 +29,13 @@ export interface ReportDefinition {
   scheduledPlaceholder: boolean;
 }
 
+function neutralizeSpreadsheetFormula(value: string): string {
+  return /^[=+\-@\t\r\n]|\s+[=+\-@]/u.test(value) ? `'${value}` : value;
+}
+
 function csvCell(value: string | number | boolean | null | undefined): string {
   if (value === null || value === undefined) return '';
-  const text = String(value);
+  const text = typeof value === 'string' ? neutralizeSpreadsheetFormula(value) : String(value);
   if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }

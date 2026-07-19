@@ -8,7 +8,6 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { OpenDataCandidateStatus } from '@prisma/client';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
@@ -39,7 +38,7 @@ export class OpenDataController {
   list(
     @CurrentUser() user: AuthUser,
     @Query('search') search?: string,
-    @Query('status') status?: OpenDataCandidateStatus,
+    @Query('status') status?: string,
     @Query('assetId') assetId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,

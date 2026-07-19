@@ -31,15 +31,22 @@ Audit integrity note: legacy audit rows created before hash-chain enforcement ar
 Run from the repo root unless a command says otherwise:
 
 ```powershell
-npm --prefix apps/api run test
-npm --prefix apps/api run build
-npm --prefix apps/web run build
-npm run build
-Push-Location apps/api
-$env:DATABASE_URL='postgresql://postgres:postgres@localhost:5432/dgop_dev?schema=public'
-npm exec prisma validate -- --schema prisma/schema.prisma
-Pop-Location
+npm run qa:release
 ```
+
+`qa:release` runs static API/web QA, API tests, web tests, Prisma validation,
+Prisma migration status, Prisma client generation, high-severity dependency
+audits for both apps, Git whitespace checks, and a production build.
+
+When the API and web app are running, also execute:
+
+```powershell
+npm run qa:ui
+```
+
+Before any public quick-tunnel demo, use `npm run publish:external`; it reruns
+the full `qa:release` gate, starts `start:demo`, runs `qa:ui` against the
+production-style local server, and only then opens the Cloudflare tunnel.
 
 ## Close-Out Evidence
 

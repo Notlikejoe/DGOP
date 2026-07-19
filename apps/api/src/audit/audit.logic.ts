@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { redactSensitiveJson } from '../common/sensitive-json';
 
 export interface AuditHashInput {
   actor: string;
@@ -14,6 +15,10 @@ export interface AuditHashInput {
 export interface AuditChainRow extends AuditHashInput {
   id: string;
   entryHash?: string | null;
+}
+
+export function sanitizeAuditMetadata(value: unknown): unknown {
+  return redactSensitiveJson(value);
 }
 
 function stableValue(value: unknown): unknown {

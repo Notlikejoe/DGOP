@@ -7,6 +7,7 @@ import {
 } from 'class-validator';
 
 export const LIFECYCLE_STATUSES = ['draft', 'active', 'deprecated', 'retired'] as const;
+export const OWNER_STATUSES = ['assigned', 'unassigned'] as const;
 export const RELATIONSHIP_TYPES = ['derived_from', 'feeds', 'replicates', 'related_to'] as const;
 
 // ---------- Data Assets ----------

@@ -8,7 +8,8 @@ import { CertificationAttemptStatus, TrainingAssignmentStatus } from '@prisma/cl
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth.types';
-import { parsePageParams, toPaged } from '../common/pagination';
+import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
+import { parseQueryEnum } from '../common/query-filters';
 import {
   CompleteTrainingAssignmentDto,
   CreateCertificationAttemptDto,
@@ -326,13 +327,19 @@ export class TrainingService {
   ) {
     const now = new Date();
     const where: Record<string, unknown> = this.isAdmin(user) ? {} : { userId: user.id };
-    if (filters.status === TrainingAssignmentStatus.expired) {
+    const status = parseQueryEnum<TrainingAssignmentStatus>(
+      filters.status,
+      Object.values(TrainingAssignmentStatus),
+      'training assignment status',
+      (value) => value.toLowerCase(),
+    );
+    if (status === TrainingAssignmentStatus.expired) {
       where['OR'] = [
         { status: TrainingAssignmentStatus.expired },
         { status: TrainingAssignmentStatus.completed, expiresAt: { lt: now } },
       ];
-    } else if (filters.status) {
-      where['status'] = filters.status;
+    } else if (status) {
+      where['status'] = status;
     }
     if (filters.courseId) where['courseId'] = filters.courseId;
     const params = parsePageParams(page, pageSize);
@@ -345,11 +352,12 @@ export class TrainingService {
     let total = 0;
     if (params) {
       [rows, total] = await Promise.all([
-          this.prisma.trainingAssignment.findMany({ ...query, skip: params.skip, take: params.take }),
-          this.prisma.trainingAssignment.count({ where }),
-        ]);
+        this.prisma.trainingAssignment.findMany({ ...query, skip: params.skip, take: params.take }),
+        this.prisma.trainingAssignment.count({ where }),
+      ]);
     } else {
-      rows = await this.prisma.trainingAssignment.findMany(query);
+      const bounded = boundedFirstPageParams();
+      rows = await this.prisma.trainingAssignment.findMany({ ...query, skip: bounded.skip, take: bounded.take });
     }
     const mapped = rows.map((row) => ({
       ...row,
@@ -561,12 +569,17 @@ export class TrainingService {
       },
       orderBy: [{ updatedAt: 'desc' as const }],
     };
-    const [rows, total] = params
-      ? await Promise.all([
-          this.prisma.certificationAttempt.findMany({ ...query, skip: params.skip, take: params.take }),
-          this.prisma.certificationAttempt.count({ where }),
-        ])
-      : [await this.prisma.certificationAttempt.findMany(query), 0];
+    let rows;
+    let total = 0;
+    if (params) {
+      [rows, total] = await Promise.all([
+        this.prisma.certificationAttempt.findMany({ ...query, skip: params.skip, take: params.take }),
+        this.prisma.certificationAttempt.count({ where }),
+      ]);
+    } else {
+      const bounded = boundedFirstPageParams(pageSize);
+      rows = await this.prisma.certificationAttempt.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const mapped = rows.map((row) => ({ ...row, state: certificationState(row.status, row.expiresAt) }));
     return params ? toPaged(mapped, total, params) : mapped;
   }
@@ -621,7 +634,10 @@ export class TrainingService {
       },
       orderBy: [{ activityDate: 'desc' as const }],
     };
-    if (!params) return this.prisma.continuingEducationActivity.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams();
+      return this.prisma.continuingEducationActivity.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.continuingEducationActivity.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.continuingEducationActivity.count({ where }),
@@ -662,7 +678,10 @@ export class TrainingService {
       include: { author: { select: { id: true, fullNameEn: true, fullNameAr: true } } },
       orderBy: [{ isFeatured: 'desc' as const }, { updatedAt: 'desc' as const }],
     };
-    if (!params) return this.prisma.communityArticle.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams();
+      return this.prisma.communityArticle.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.communityArticle.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.communityArticle.count({ where }),
@@ -701,7 +720,10 @@ export class TrainingService {
       include: { person: { select: { id: true, fullNameEn: true, fullNameAr: true, email: true, jobTitle: true } } },
       orderBy: [{ contributionPoints: 'desc' as const }, { expertiseArea: 'asc' as const }],
     };
-    if (!params) return this.prisma.expertProfile.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams();
+      return this.prisma.expertProfile.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.expertProfile.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.expertProfile.count({ where }),
@@ -748,7 +770,10 @@ export class TrainingService {
       },
       orderBy: [{ updatedAt: 'desc' as const }],
     };
-    if (!params) return this.prisma.mentorshipPair.findMany(query);
+    if (!params) {
+      const bounded = boundedFirstPageParams();
+      return this.prisma.mentorshipPair.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+    }
     const [rows, total] = await Promise.all([
       this.prisma.mentorshipPair.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.mentorshipPair.count({ where }),

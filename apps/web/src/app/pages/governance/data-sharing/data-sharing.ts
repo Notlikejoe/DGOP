@@ -318,7 +318,7 @@ export class DataSharingPage implements OnInit {
         this.createMode.set(null);
         this.load();
       },
-      error: () => this.toast.error(this.t('dsi.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('dsi.error.save')),
       complete: () => this.saving.set(false),
     });
   }
@@ -331,7 +331,7 @@ export class DataSharingPage implements OnInit {
         this.toast.success(this.t('dsi.saved.review'));
         this.requests.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
       },
-      error: () => this.toast.error(this.t('dsi.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('dsi.error.save')),
       complete: () => this.saving.set(false),
     });
   }
@@ -344,7 +344,7 @@ export class DataSharingPage implements OnInit {
         this.toast.success(this.t('dsi.saved.usage'));
         this.load();
       },
-      error: () => this.toast.error(this.t('dsi.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('dsi.error.save')),
       complete: () => this.saving.set(false),
     });
   }

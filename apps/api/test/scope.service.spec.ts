@@ -49,10 +49,16 @@ function makeService(roles: Role[]) {
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
 
-test('system_admin is fully unrestricted', async () => {
-  const svc = makeService([]);
+test('active system_admin is fully unrestricted', async () => {
+  const svc = makeService([{ code: 'system_admin', isSystem: true, maxClassificationRank: null, dataScopes: [] }]);
   const r = await svc.resolve(['system_admin']);
   assert.deepStrictEqual(r, { orgUnits: 'all', domains: 'all', maxClassRank: null });
+});
+
+test('missing system_admin row is not trusted as unrestricted scope', async () => {
+  const svc = makeService([]);
+  const r = await svc.resolve(['system_admin']);
+  assert.deepStrictEqual(r, { orgUnits: [], domains: [], maxClassRank: null });
 });
 
 test('no roles -> empty data scope', async () => {

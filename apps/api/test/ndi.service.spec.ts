@@ -97,6 +97,29 @@ test('list: composes filters into the AND where-clause', async () => {
   assert.ok(and.some((c) => Array.isArray(c.OR)), 'search OR clause present');
 });
 
+test('list: rejects invalid enum filters before Prisma receives them', async () => {
+  let queried = false;
+  const svc = makeService({
+    specFindMany: async () => {
+      queried = true;
+      return [];
+    },
+  });
+  await assert.rejects(
+    () => svc.list({ type: 'spreadsheet', maturityLevel: 'level_3' }),
+    /invalid ndi specification type/i,
+  );
+  await assert.rejects(
+    () => svc.list({ type: 'policy', maturityLevel: 'level_9' }),
+    /invalid ndi maturity level/i,
+  );
+  await assert.rejects(
+    () => svc.list({ status: 'archived' }),
+    /invalid ndi status filter/i,
+  );
+  assert.strictEqual(queried, false);
+});
+
 test('list: returns a plain array when no page is requested', async () => {
   const svc = makeService({ specFindMany: async () => [{ id: 's1' }] });
   const res = await svc.list({});
@@ -183,6 +206,29 @@ test('importCsv: reports an error row for an unknown domainCode', async () => {
   assert.strictEqual(res.updated, 0);
   assert.strictEqual(res.errors.length, 1);
   assert.match(res.errors[0].message, /unknown domaincode/i);
+});
+
+test('importCsv: rejects invalid type and maturity before persistence', async () => {
+  let createCalled = false;
+  const svc = makeService({
+    domainFindMany: async () => [{ id: 'd1', code: 'data_quality' }],
+    specCreate: async () => {
+      createCalled = true;
+      return {};
+    },
+  });
+  const csv = [
+    'code,nameEn,nameAr,domainCode,type,maturityLevel',
+    'BAD-TYPE,Spec,Spec,data_quality,unsupported,level_2',
+    'BAD-LEVEL,Spec,Spec,data_quality,standard,level_9',
+  ].join('\n');
+  const res = await svc.importCsv(csv, 'tester');
+  assert.strictEqual(createCalled, false);
+  assert.strictEqual(res.created, 0);
+  assert.strictEqual(res.updated, 0);
+  assert.strictEqual(res.errors.length, 2);
+  assert.match(res.errors[0].message, /invalid type/i);
+  assert.match(res.errors[1].message, /invalid maturitylevel/i);
 });
 
 test('domainTraceability: maps v5 operating models to live specs, evidence, records, and workflow cases', async () => {

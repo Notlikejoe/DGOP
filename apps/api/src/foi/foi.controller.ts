@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { FoiRequestChannel, FoiRequestStatus } from '@prisma/client';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
@@ -34,8 +33,8 @@ export class FoiController {
   list(
     @CurrentUser() user: AuthUser,
     @Query('search') search?: string,
-    @Query('status') status?: FoiRequestStatus,
-    @Query('channel') channel?: FoiRequestChannel,
+    @Query('status') status?: string,
+    @Query('channel') channel?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {

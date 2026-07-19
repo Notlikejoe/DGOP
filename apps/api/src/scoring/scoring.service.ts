@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthUser } from '../auth/auth.types';
+import { parseQueryEnum } from '../common/query-filters';
 import { EvidenceService, SpecEvidenceRollup } from '../evidence/evidence.service';
 import {
+  GAP_TYPES,
   GAP_SEVERITY,
   GapType,
   detectGaps,
@@ -80,6 +84,8 @@ type ActiveSpec = {
   domain: { id: string; code: string; shortCode: string | null; nameEn: string; nameAr: string };
 };
 
+const BROAD_SCORING_ROLES = new Set(['system_admin', 'dmo_admin', 'auditor']);
+
 @Injectable()
 export class ScoringService {
   constructor(
@@ -87,9 +93,54 @@ export class ScoringService {
     private readonly evidence: EvidenceService,
   ) {}
 
-  private async loadSpecs(domainId?: string): Promise<ActiveSpec[]> {
+  private hasBroadScoringAccess(actor: Pick<AuthUser, 'roles'>): boolean {
+    return actor.roles.some((role) => BROAD_SCORING_ROLES.has(role));
+  }
+
+  private async actorPersonId(actor: Pick<AuthUser, 'id' | 'email'>): Promise<string | null> {
+    const person = await this.prisma.person.findFirst({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [{ userId: actor.id }, { email: actor.email }],
+      },
+      select: { id: true },
+    });
+    return person?.id ?? null;
+  }
+
+  private async specVisibilityWhere(
+    actor: AuthUser,
+    domainId?: string,
+  ): Promise<Prisma.NdiSpecificationWhereInput> {
+    const base: Prisma.NdiSpecificationWhereInput = {
+      deletedAt: null,
+      isActive: true,
+      ...(domainId ? { domainId } : {}),
+    };
+    if (this.hasBroadScoringAccess(actor)) return base;
+    const personId = await this.actorPersonId(actor);
+    const visible: Prisma.NdiSpecificationWhereInput[] = [
+      {
+        evidence: {
+          some: {
+            deletedAt: null,
+            OR: [{ submittedBy: actor.email }, { reviewedBy: actor.email }],
+          },
+        },
+      },
+    ];
+    if (personId) visible.push({ ownerPersonId: personId });
+    return { AND: [base, { OR: visible }] };
+  }
+
+  private parseGapType(raw: string | undefined): GapType | undefined {
+    return parseQueryEnum<GapType>(raw, GAP_TYPES, 'NDI gap type', (value) => value.toLowerCase());
+  }
+
+  private async loadSpecs(actor: AuthUser, domainId?: string): Promise<ActiveSpec[]> {
     return this.prisma.ndiSpecification.findMany({
-      where: { deletedAt: null, isActive: true, ...(domainId ? { domainId } : {}) },
+      where: await this.specVisibilityWhere(actor, domainId),
       orderBy: [{ domain: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { code: 'asc' }],
       select: {
         id: true,
@@ -131,8 +182,8 @@ export class ScoringService {
     return 'none';
   }
 
-  async readiness(): Promise<ReadinessOverview> {
-    const specs = await this.loadSpecs();
+  async readiness(actor: AuthUser): Promise<ReadinessOverview> {
+    const specs = await this.loadSpecs(actor);
     const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id));
     const now = new Date();
 
@@ -191,10 +242,10 @@ export class ScoringService {
     };
   }
 
-  async domainDetail(domainId: string): Promise<DomainDetail> {
+  async domainDetail(actor: AuthUser, domainId: string): Promise<DomainDetail> {
     const domain = await this.prisma.ndiDomain.findUnique({ where: { id: domainId } });
     if (!domain) throw new NotFoundException('ndi_domain not found');
-    const specs = await this.loadSpecs(domainId);
+    const specs = await this.loadSpecs(actor, domainId);
     const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id));
     const now = new Date();
 
@@ -235,15 +286,16 @@ export class ScoringService {
     };
   }
 
-  async gaps(filter?: { gapType?: GapType; domainId?: string }): Promise<GapRow[]> {
-    const specs = await this.loadSpecs(filter?.domainId);
+  async gaps(actor: AuthUser, filter?: { gapType?: string; domainId?: string }): Promise<GapRow[]> {
+    const gapType = this.parseGapType(filter?.gapType);
+    const specs = await this.loadSpecs(actor, filter?.domainId);
     const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id));
     const now = new Date();
     const out: GapRow[] = [];
     for (const spec of specs) {
       const roll = rollups.get(spec.id);
       for (const g of detectGaps(this.gapInput(spec, roll), now)) {
-        if (filter?.gapType && g !== filter.gapType) continue;
+        if (gapType && g !== gapType) continue;
         out.push({
           specId: spec.id,
           code: spec.code,

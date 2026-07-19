@@ -23,6 +23,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
+import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
   CreateOpenDataCandidateDto,
@@ -46,7 +47,7 @@ import {
 
 export interface OpenDataCandidateFilters {
   search?: string;
-  status?: OpenDataCandidateStatus;
+  status?: string;
   assetId?: string;
   page?: string | number;
   pageSize?: string | number;
@@ -465,7 +466,13 @@ export class OpenDataService {
 
   private candidateFilterWhere(filters: OpenDataCandidateFilters): Prisma.OpenDataCandidateWhereInput[] {
     const and: Prisma.OpenDataCandidateWhereInput[] = [];
-    if (filters.status) and.push({ status: filters.status });
+    const status = parseQueryEnum<OpenDataCandidateStatus>(
+      filters.status,
+      Object.values(OpenDataCandidateStatus),
+      'open data candidate status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) and.push({ status });
     if (filters.assetId) and.push({ assetId: filters.assetId });
     if (filters.search?.trim()) {
       const term = filters.search.trim();

@@ -9,7 +9,7 @@ Monorepo for the DGOP application.
 ## Prerequisites
 
 - Node.js 22.22.3+, 24.15.0+, or 26+ for Angular 22 (tested on Node 24)
-- PostgreSQL running locally (this machine: PostgreSQL 18 at `/Library/PostgreSQL/18`)
+- PostgreSQL running locally and reachable through `DATABASE_URL`
 - All configuration comes from the root **`.env`** (see `.env.example`)
 
 ## 1. Install
@@ -25,6 +25,7 @@ The `dgop_dev` database, schema, and seed data are created with:
 ```bash
 npm run db:generate   # generate Prisma client
 npm run db:migrate    # create/apply migrations on dgop_dev
+npm run demo:prepare  # create ignored local seed passwords/secrets when needed
 npm run db:seed       # seed roles, classifications, statuses, NDI domains
 ```
 
@@ -46,8 +47,8 @@ npm start
 ```
 
 Client-demo mode uses production security posture, requires non-placeholder
-`JWT_SECRET`, `SEED_ADMIN_PASSWORD`, and `DGOP_WEBHOOK_TOKEN` values, and redacts
-detailed health metadata:
+`JWT_SECRET`, `SEED_ADMIN_PASSWORD`, `SEED_PERSON_PASSWORD`, and
+`DGOP_WEBHOOK_TOKEN` values, and redacts detailed health metadata:
 
 ```bash
 npm run demo:prepare
@@ -70,18 +71,20 @@ npm run publish:external
 
 The script will:
 
-1. Download `cloudflared` into `tools/` (first run only).
-2. Build the web + api if needed.
+1. Run the full release QA gate: static QA, API tests, web tests, Prisma validation/status/client generation, dependency audits, whitespace checks, and build.
+2. Download `cloudflared` into `tools/` when missing.
 3. Start the API through `start:demo` so production demo safeguards are enforced.
-4. Open a public tunnel and print a URL like `https://<random>.trycloudflare.com`.
+4. Run the UI smoke test against the production-style local server.
+5. Open a public tunnel and print a URL like `https://<random>.trycloudflare.com`.
 
 Share that URL so anyone can access the app from anywhere. The URL changes every run
 (quick tunnels are ephemeral). Stop with `Ctrl+C`.
 
 > Security note: the tunnel exposes your local app to the internet. The script aborts
 > unless strict runtime checks pass, including rotated admin seed password settings and
-> a configured integration webhook token. Keep only synthetic/test data in `dgop_dev`
-> while published. A persistent named tunnel / proper hosting comes with the production move.
+> rotated seeded person password settings, plus a configured integration webhook token.
+> Keep only synthetic/test data in `dgop_dev` while published. A persistent named
+> tunnel / proper hosting comes with the production move.
 
 ## Project scripts
 
@@ -96,8 +99,17 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | `npm run db:status` | Check Prisma migration status using the root `.env` |
 | `npm run db:migrate` | Apply Prisma migrations to `dgop_dev` |
 | `npm run db:seed` | Seed lookup data |
+| `npm run qa:api` | Run static API authorization and seed-safety checks |
 | `npm run qa:web` | Run static web UX/i18n/route/theme/RTL checks |
+| `npm run qa:ui` | Smoke-test login and key UI routes with Playwright against a running app |
+| `npm run qa` | Run API and web static quality checks together |
+| `npm run qa:release` | Run the full release gate: static QA, API tests, web tests, Prisma validation/status/client generation, dependency audits, whitespace checks, and build |
 | `npm run publish:external` | Build, run, and expose over HTTPS |
+| `npm run publish:external:dry-run` | Verify the external publish command path without starting a tunnel |
+
+`npm run qa:ui` expects the API and web app to be running. It uses Playwright from
+`apps/web/node_modules`, `NODE_PATH`, `DGOP_PLAYWRIGHT_NODE_MODULES`, or the local
+Codex bundled runtime when available.
 
 ## QA deliverables
 
@@ -118,4 +130,5 @@ Detailed per-sprint QA packs are kept where deeper test stories were written:
 
 Local admin email for demo data: `admin@dgop.local`. Run `npm run demo:prepare`
 and `npm run db:seed`, then use the ignored local `.env` value
-`SEED_ADMIN_PASSWORD` for login. Do not commit or share that password.
+`SEED_ADMIN_PASSWORD` for admin login. Seeded person demo accounts use the ignored
+local `.env` value `SEED_PERSON_PASSWORD`. Do not commit or share these passwords.

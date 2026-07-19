@@ -216,7 +216,7 @@ export class NdiRegistryPage implements OnInit {
         this.upload.set(this.emptyUpload());
         this.loadEvidence(s.id);
       },
-      error: () => this.toast.error(this.t('ndi.loadError')),
+      error: (err) => this.toast.errorFrom(err, this.t('ndi.loadError')),
     });
   }
   protected backToList(): void {
@@ -317,7 +317,7 @@ export class NdiRegistryPage implements OnInit {
         this.load();
       },
       error: (e) => {
-        this.toast.error(e?.error?.message || this.t('ndi.saveError'));
+        this.toast.errorFrom(e, this.t('ndi.saveError'));
         this.saving.set(false);
       },
     });
@@ -332,7 +332,7 @@ export class NdiRegistryPage implements OnInit {
         if (this.view() === 'detail') this.backToList();
         this.load();
       },
-      error: () => this.toast.error(this.t('ndi.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('ndi.saveError')),
     });
   }
 
@@ -362,7 +362,7 @@ export class NdiRegistryPage implements OnInit {
           this.load();
         },
         error: (e) => {
-          this.toast.error(e?.error?.message || this.t('ndi.saveError'));
+          this.toast.errorFrom(e, this.t('ndi.saveError'));
           this.importing.set(false);
         },
       });
@@ -429,7 +429,7 @@ export class NdiRegistryPage implements OnInit {
         this.loadEvidence(spec.id);
       },
       error: (e) => {
-        this.toast.error(e?.error?.message || this.t('evidence.uploadError'));
+        this.toast.errorFrom(e, this.t('evidence.uploadError'));
         this.uploading.set(false);
       },
     });
@@ -446,7 +446,7 @@ export class NdiRegistryPage implements OnInit {
         this.loadEvidence(spec.id);
       },
       error: (e) => {
-        this.toast.error(e?.error?.message || this.t('evidence.actionError'));
+        this.toast.errorFrom(e, this.t('evidence.actionError'));
         this.busyEvidenceId.set(null);
       },
     });
@@ -483,8 +483,7 @@ export class NdiRegistryPage implements OnInit {
         this.busyEvidenceId.set(null);
         this.loadEvidence(spec.id);
       },
-      error: () => {
-        this.toast.error(this.t('evidence.actionError'));
+      error: (err) => { this.toast.errorFrom(err, this.t('evidence.actionError'));
         this.busyEvidenceId.set(null);
       },
     });
@@ -500,7 +499,7 @@ export class NdiRegistryPage implements OnInit {
         a.click();
         URL.revokeObjectURL(url);
       },
-      error: () => this.toast.error(this.t('evidence.downloadError')),
+      error: (err) => this.toast.errorFrom(err, this.t('evidence.downloadError')),
     });
   }
 }

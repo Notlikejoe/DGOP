@@ -501,7 +501,7 @@ export class OpenDataPage implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message || this.t('openData.error'));
+        this.toast.errorFrom(err, this.t('openData.error'));
       },
     });
   }
@@ -513,7 +513,7 @@ export class OpenDataPage implements OnInit {
         this.selectedId.set(updated.id);
         this.load();
       },
-      error: (err) => this.toast.error(err?.error?.message || this.t('openData.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('openData.error')),
     });
   }
 
@@ -533,7 +533,7 @@ export class OpenDataPage implements OnInit {
       },
       error: (err) => {
         this.lifecycleSaving.set(false);
-        this.toast.error(err?.error?.message || this.t('openData.error'));
+        this.toast.errorFrom(err, this.t('openData.error'));
       },
     });
   }
@@ -553,7 +553,7 @@ export class OpenDataPage implements OnInit {
       },
       error: (err) => {
         this.lifecycleSaving.set(false);
-        this.toast.error(err?.error?.message || this.t('openData.error'));
+        this.toast.errorFrom(err, this.t('openData.error'));
       },
     });
   }
@@ -576,7 +576,7 @@ export class OpenDataPage implements OnInit {
       },
       error: (err) => {
         this.lifecycleSaving.set(false);
-        this.toast.error(err?.error?.message || this.t('openData.error'));
+        this.toast.errorFrom(err, this.t('openData.error'));
       },
     });
   }
@@ -598,7 +598,7 @@ export class OpenDataPage implements OnInit {
       },
       error: (err) => {
         this.lifecycleSaving.set(false);
-        this.toast.error(err?.error?.message || this.t('openData.error'));
+        this.toast.errorFrom(err, this.t('openData.error'));
       },
     });
   }
@@ -622,7 +622,7 @@ export class OpenDataPage implements OnInit {
       },
       error: (err) => {
         this.lifecycleSaving.set(false);
-        this.toast.error(err?.error?.message || this.t('openData.error'));
+        this.toast.errorFrom(err, this.t('openData.error'));
       },
     });
   }
@@ -636,7 +636,7 @@ export class OpenDataPage implements OnInit {
         this.selectedId.set(null);
         this.load();
       },
-      error: () => this.toast.error(this.t('openData.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('openData.error')),
     });
   }
 

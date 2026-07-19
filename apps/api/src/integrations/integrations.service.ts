@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import {
   DataAssetCatalogSyncStatus,
   IntegrationAdapterType,
@@ -21,11 +21,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
 import { parseCsv } from '../common/csv';
+import { redactSensitiveJson } from '../common/sensitive-json';
 import {
   buildCatalogWritebackPayload,
   catalogMappingPreview,
   catalogStatusAfterImport,
   DEFAULT_INTEGRATION_CONNECTORS,
+  adapterMatchesConnectorType,
+  defaultAdapterForConnectorType,
   hasBusinessAssetChanges,
   integrationAdapterProfile,
   MOCK_CATALOG_ROWS,
@@ -54,6 +57,19 @@ type CatalogSyncResult = {
 };
 
 const DEFAULT_CATALOG_CONNECTOR_CODE = 'CATALOG-MVP';
+const MAX_INTEGRATION_LIST_LIMIT = 100;
+
+function boundedIntegrationLimit(
+  limit: string | number | null | undefined,
+  fallback: number,
+): number {
+  const parsed =
+    limit === undefined || limit === null || String(limit).trim() === ''
+      ? fallback
+      : Number(limit);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.floor(parsed), 1), MAX_INTEGRATION_LIST_LIMIT);
+}
 
 const connectorInclude = {
   _count: {
@@ -193,27 +209,75 @@ const ADAPTER_TYPES = new Set<IntegrationAdapterKey>([
 ]);
 
 @Injectable()
-export class IntegrationsService {
+export class IntegrationsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
   ) {}
 
+  async onModuleInit(): Promise<void> {
+    await this.ensureDefaultIntegrationRegistry('system');
+  }
+
+  private async ensureDefaultIntegrationRegistry(actor = 'system'): Promise<void> {
+    await this.ensureDefaultMockConnectors(actor);
+    await this.resolveCatalogConnector(null, actor);
+  }
+
+  private async upsertIntegrationJob(input: {
+    code: string;
+    connectorId: string;
+    nameEn: string;
+    nameAr: string;
+    jobType: IntegrationJobType;
+    syncMode: string;
+    actor: string;
+  }): Promise<void> {
+    await this.prisma.integrationJob.upsert({
+      where: { code: input.code },
+      update: {
+        connectorId: input.connectorId,
+        nameEn: input.nameEn,
+        nameAr: input.nameAr,
+        jobType: input.jobType,
+        syncMode: input.syncMode,
+        isActive: true,
+        deletedAt: null,
+      },
+      create: {
+        code: input.code,
+        connectorId: input.connectorId,
+        nameEn: input.nameEn,
+        nameAr: input.nameAr,
+        jobType: input.jobType,
+        status: IntegrationJobStatus.ready,
+        syncMode: input.syncMode,
+        createdBy: input.actor,
+      },
+    });
+  }
+
   private async ensureDefaultMockConnectors(actor = 'system'): Promise<void> {
     for (const definition of DEFAULT_INTEGRATION_CONNECTORS) {
-      const existing = await this.prisma.integrationConnector.findUnique({ where: { code: definition.code } });
-      if (existing) {
-        if (existing.status === IntegrationConnectorStatus.warning && !existing.lastError) {
-          await this.prisma.integrationConnector.update({
-            where: { id: existing.id },
-            data: { status: IntegrationConnectorStatus.healthy },
-          });
-        }
-        continue;
-      }
-      await this.prisma.integrationConnector.create({
-        data: {
+      const connector = await this.prisma.integrationConnector.upsert({
+        where: { code: definition.code },
+        update: {
+          nameEn: definition.nameEn,
+          nameAr: definition.nameAr,
+          description: definition.description,
+          type: definition.type as IntegrationConnectorType,
+          direction: IntegrationDirection.inbound,
+          sourceTrust: IntegrationSourceTrust.simulated,
+          configJson: {
+            adapterType: definition.adapterType,
+            defaultEventType: definition.defaultEventType,
+            sourceName: definition.sourceName,
+          } as Prisma.InputJsonValue,
+          isActive: true,
+          deletedAt: null,
+        },
+        create: {
           code: definition.code,
           nameEn: definition.nameEn,
           nameAr: definition.nameAr,
@@ -228,18 +292,23 @@ export class IntegrationsService {
             sourceName: definition.sourceName,
           } as Prisma.InputJsonValue,
           createdBy: actor,
-          jobs: {
-            create: {
-              code: `JOB-${definition.code}`,
-              nameEn: `${definition.nameEn} event intake`,
-              nameAr: `${definition.nameAr} event intake`,
-              jobType: IntegrationJobType.signal_ingest,
-              status: IntegrationJobStatus.ready,
-              syncMode: 'webhook',
-              createdBy: actor,
-            },
-          },
         },
+        select: { id: true, status: true, lastError: true },
+      });
+      if (connector.status === IntegrationConnectorStatus.warning && !connector.lastError) {
+        await this.prisma.integrationConnector.update({
+          where: { id: connector.id },
+          data: { status: IntegrationConnectorStatus.healthy },
+        });
+      }
+      await this.upsertIntegrationJob({
+        code: `JOB-${definition.code}`,
+        connectorId: connector.id,
+        nameEn: `${definition.nameEn} event intake`,
+        nameAr: `${definition.nameAr} event intake`,
+        jobType: IntegrationJobType.signal_ingest,
+        syncMode: 'webhook',
+        actor,
       });
     }
   }
@@ -378,7 +447,14 @@ export class IntegrationsService {
   }
 
   private async assertCatalogSyncScope(roleCodes: string[]): Promise<void> {
-    if (roleCodes.includes('system_admin') || roleCodes.includes('dmo_admin')) return;
+    const adminRoleCodes = roleCodes.filter((code) => code === 'system_admin' || code === 'dmo_admin');
+    if (adminRoleCodes.length > 0) {
+      const activeAdminRole = await this.prisma.role.findFirst({
+        where: { code: { in: adminRoleCodes }, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (activeAdminRole) return;
+    }
     const scope = await this.scope.resolve(roleCodes);
     const unrestricted =
       scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank == null;
@@ -395,8 +471,6 @@ export class IntegrationsService {
   }
 
   async summary(roleCodes: string[]) {
-    await this.ensureDefaultMockConnectors();
-    await this.resolveCatalogConnector(null, 'system');
     const assetIds = await this.visibleAssetIds(roleCodes);
     const batchWhere = this.integrationBatchScopeWhere(assetIds);
     const eventWhere = this.integrationEventScopeWhere(assetIds);
@@ -485,8 +559,6 @@ export class IntegrationsService {
   }
 
   async connectors(roleCodes: string[]) {
-    await this.ensureDefaultMockConnectors();
-    await this.resolveCatalogConnector(null, 'system');
     const assetIds = await this.visibleAssetIds(roleCodes);
     const connectors = await this.prisma.integrationConnector.findMany({
       where: { deletedAt: null },
@@ -501,13 +573,13 @@ export class IntegrationsService {
     );
   }
 
-  async batches(roleCodes: string[], limit = 25) {
+  async batches(roleCodes: string[], limit?: string | number | null) {
     const assetIds = await this.visibleAssetIds(roleCodes);
     return this.prisma.integrationImportBatch.findMany({
       where: this.integrationBatchScopeWhere(assetIds),
       select: batchSafeSelect,
       orderBy: { startedAt: 'desc' },
-      take: Math.min(Math.max(limit, 1), 100),
+      take: boundedIntegrationLimit(limit, 25),
     });
   }
 
@@ -525,7 +597,7 @@ export class IntegrationsService {
     });
   }
 
-  async events(roleCodes: string[], status?: string, limit = 25) {
+  async events(roleCodes: string[], status?: string, limit?: string | number | null) {
     const assetIds = await this.visibleAssetIds(roleCodes);
     const statuses = (status ?? '')
       .split(',')
@@ -535,17 +607,17 @@ export class IntegrationsService {
       where: { ...(statuses.length ? { status: { in: statuses } } : {}), ...this.integrationEventScopeWhere(assetIds) },
       select: eventSafeSelect,
       orderBy: [{ status: 'asc' }, { receivedAt: 'desc' }],
-      take: Math.min(Math.max(limit, 1), 100),
+      take: boundedIntegrationLimit(limit, 25),
     });
   }
 
-  async reconciliationReports(roleCodes: string[], limit = 20) {
+  async reconciliationReports(roleCodes: string[], limit?: string | number | null) {
     const assetIds = await this.visibleAssetIds(roleCodes);
     return this.prisma.integrationReconciliationReport.findMany({
       where: this.integrationReconciliationScopeWhere(assetIds),
       select: reconciliationSafeSelect,
       orderBy: { createdAt: 'desc' },
-      take: Math.min(Math.max(limit, 1), 100),
+      take: boundedIntegrationLimit(limit, 20),
     });
   }
 
@@ -559,10 +631,11 @@ export class IntegrationsService {
     if (!connector) throw new NotFoundException('integration connector not found');
     const adapterType = this.connectorAdapterType(connector);
     const eventType = dto.eventType?.trim() || this.connectorDefaultEventType(connector);
-    const payload = dto.payload ?? {};
+    const rawPayload = dto.payload ?? {};
+    const payload = (redactSensitiveJson(rawPayload) ?? {}) as Record<string, unknown>;
     const normalization = normalizeIntegrationEventPayload(adapterType, eventType, {
       ...payload,
-      externalEventId: dto.externalEventId ?? (payload as Record<string, unknown>)['externalEventId'],
+      externalEventId: dto.externalEventId ?? payload['externalEventId'],
     });
     const dedupeKey = this.dedupeKey(
       connector.id,
@@ -629,7 +702,10 @@ export class IntegrationsService {
 
   async createConnector(dto: CreateIntegrationConnectorDto, actor: string) {
     const type = (dto.type ?? IntegrationConnectorType.catalog) as IntegrationConnectorType;
-    const adapterType = (dto.adapterType ?? (type === IntegrationConnectorType.catalog ? 'catalog_csv' : 'webhook_json')) as IntegrationAdapterKey;
+    const adapterType = (dto.adapterType ?? defaultAdapterForConnectorType(type)) as IntegrationAdapterKey;
+    if (!adapterMatchesConnectorType(type, adapterType)) {
+      throw new BadRequestException('Integration adapter does not match connector type');
+    }
     const connector = await this.prisma.integrationConnector.create({
       data: {
         code: dto.code,
@@ -1015,20 +1091,44 @@ export class IntegrationsService {
       if (!connector) throw new BadRequestException('Catalog connector not found');
       return connector;
     }
+    const ensureCatalogJob = async (resolvedConnectorId: string) =>
+      this.upsertIntegrationJob({
+        code: 'JOB-CATALOG-MVP',
+        connectorId: resolvedConnectorId,
+        nameEn: 'Catalog asset synchronization',
+        nameAr: 'Catalog asset synchronization',
+        jobType: IntegrationJobType.catalog_sync,
+        syncMode: 'manual',
+        actor,
+      });
     const existing = await this.prisma.integrationConnector.findFirst({
       where: { code: DEFAULT_CATALOG_CONNECTOR_CODE, deletedAt: null },
     });
     if (existing) {
       if (existing.status === IntegrationConnectorStatus.warning && !existing.lastError) {
-        return this.prisma.integrationConnector.update({
+        const updated = await this.prisma.integrationConnector.update({
           where: { id: existing.id },
           data: { status: IntegrationConnectorStatus.healthy },
         });
+        await ensureCatalogJob(updated.id);
+        return updated;
       }
+      await ensureCatalogJob(existing.id);
       return existing;
     }
-    return this.prisma.integrationConnector.create({
-      data: {
+    const connector = await this.prisma.integrationConnector.upsert({
+      where: { code: DEFAULT_CATALOG_CONNECTOR_CODE },
+      update: {
+        nameEn: 'Enterprise Catalog',
+        nameAr: 'Enterprise Catalog',
+        description: 'Default Sprint 15 catalog connector for CSV and mock REST synchronization.',
+        type: IntegrationConnectorType.catalog,
+        direction: IntegrationDirection.bidirectional,
+        sourceTrust: IntegrationSourceTrust.authoritative,
+        isActive: true,
+        deletedAt: null,
+      },
+      create: {
         code: DEFAULT_CATALOG_CONNECTOR_CODE,
         nameEn: 'Enterprise Catalog',
         nameAr: 'Enterprise Catalog',
@@ -1038,19 +1138,18 @@ export class IntegrationsService {
         status: IntegrationConnectorStatus.healthy,
         sourceTrust: IntegrationSourceTrust.authoritative,
         createdBy: actor,
-        jobs: {
-          create: {
-            code: 'JOB-CATALOG-MVP',
-            nameEn: 'Catalog asset synchronization',
-            nameAr: 'Catalog asset synchronization',
-            jobType: IntegrationJobType.catalog_sync,
-            status: IntegrationJobStatus.ready,
-            syncMode: 'manual',
-            createdBy: actor,
-          },
-        },
       },
     });
+    if (connector.status === IntegrationConnectorStatus.warning && !connector.lastError) {
+      const updated = await this.prisma.integrationConnector.update({
+        where: { id: connector.id },
+        data: { status: IntegrationConnectorStatus.healthy },
+      });
+      await ensureCatalogJob(updated.id);
+      return updated;
+    }
+    await ensureCatalogJob(connector.id);
+    return connector;
   }
 
   private async nextBatchCode(): Promise<string> {

@@ -13,10 +13,15 @@ export class AccessService {
   constructor(private readonly prisma: PrismaService) {}
 
   async permissionsForRoleCodes(roleCodes: string[]): Promise<string[]> {
-    if (roleCodes.includes('system_admin')) return [WILDCARD];
     if (roleCodes.length === 0) return [];
+    const activeRoles = await this.prisma.role.findMany({
+      where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
+      select: { id: true, code: true },
+    });
+    if (activeRoles.some((role) => role.code === 'system_admin')) return [WILDCARD];
+    if (activeRoles.length === 0) return [];
     const rows = await this.prisma.rolePermission.findMany({
-      where: { role: { code: { in: roleCodes }, isActive: true, deletedAt: null } },
+      where: { roleId: { in: activeRoles.map((role) => role.id) } },
       include: { permission: true },
     });
     return [

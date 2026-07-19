@@ -42,7 +42,7 @@ function run(command, args) {
 }
 
 function runGenerate() {
-  const result = spawnSync(npxCmd, ['prisma', 'generate'], {
+  const result = spawnSync(npxCmd, ['--no-install', 'prisma', 'generate'], {
     cwd: apiDir,
     env: process.env,
     encoding: 'utf8',
@@ -75,13 +75,13 @@ switch (command) {
     runGenerate();
     break;
   case 'status':
-    run(npxCmd, ['prisma', 'migrate', 'status']);
+    run(npxCmd, ['--no-install', 'prisma', 'migrate', 'status']);
     break;
   case 'migrate':
-    run(npxCmd, ['prisma', 'migrate', 'dev', '--name', migrationName]);
+    run(npxCmd, ['--no-install', 'prisma', 'migrate', 'dev', '--name', migrationName]);
     break;
   case 'deploy':
-    run(npxCmd, ['prisma', 'migrate', 'deploy']);
+    run(npxCmd, ['--no-install', 'prisma', 'migrate', 'deploy']);
     break;
   case 'seed':
     run(npmCmd, ['run', 'seed']);

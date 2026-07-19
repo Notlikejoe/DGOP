@@ -76,6 +76,23 @@ export class Dashboard implements OnInit {
   protected readonly summary = signal<DashboardSummary | null>(null);
   protected readonly summaryError = signal(false);
 
+  protected readonly platformSignalKind = computed<Severity>(() => {
+    if (this.state() === 'loading') return 'info';
+    if (this.state() === 'error') return 'danger';
+    const h = this.health();
+    return h?.status === 'ok' && h.database?.status === 'up' ? 'success' : 'danger';
+  });
+
+  protected readonly platformSignalLabel = computed(() => {
+    const kind = this.platformSignalKind();
+    if (kind === 'success') return this.t('cmd.online');
+    if (kind === 'danger') return this.t('cmd.offline');
+    return this.t('cmd.checking');
+  });
+
+  protected readonly databaseStatusLabel = computed(() => this.health()?.database?.status ?? this.t('cmd.notDisclosed'));
+  protected readonly environmentLabel = computed(() => this.health()?.environment ?? this.t('cmd.notDisclosed'));
+
   /** True when every persona section is empty (e.g. a minimal read-only role). */
   protected readonly hasNoSections = computed(() => {
     const s = this.summary();
@@ -98,7 +115,7 @@ export class Dashboard implements OnInit {
   });
 
   protected readonly healthKind = computed<Severity>(() => {
-    if (this.state() === 'error') return 'danger';
+    if (this.platformSignalKind() === 'danger') return 'danger';
     const s = this.summary();
     if (!s) return 'info';
     if ((s.workflow?.myOverdueTasks ?? 0) > 0) return 'danger';

@@ -12,6 +12,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
+import { parseQueryEnum } from '../common/query-filters';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
@@ -312,7 +313,13 @@ export class PrivacyService {
     if (filters.search) {
       clauses.push({ OR: [{ code: { contains: filters.search, mode: 'insensitive' } }, { processName: { contains: filters.search, mode: 'insensitive' } }, { purpose: { contains: filters.search, mode: 'insensitive' } }] });
     }
-    if (filters.status) clauses.push({ status: filters.status as PrivacyWorkStatus });
+    const status = parseQueryEnum<PrivacyWorkStatus>(
+      filters.status,
+      Object.values(PrivacyWorkStatus),
+      'RoPA status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
     const where = { AND: clauses };
     const [data, total] = await Promise.all([
       this.prisma.privacyRopaRecord.findMany({ where, include: ropaInclude, orderBy: { updatedAt: 'desc' }, skip, take }),
@@ -354,7 +361,13 @@ export class PrivacyService {
     const { skip, take } = pageParams;
     const clauses: Prisma.PrivacyDpiaWhereInput[] = [this.scopedWhere<Prisma.PrivacyDpiaWhereInput>(scope, assetIds)];
     if (filters.search) clauses.push({ OR: [{ code: { contains: filters.search, mode: 'insensitive' } }, { title: { contains: filters.search, mode: 'insensitive' } }] });
-    if (filters.status) clauses.push({ status: filters.status as PrivacyWorkStatus });
+    const status = parseQueryEnum<PrivacyWorkStatus>(
+      filters.status,
+      Object.values(PrivacyWorkStatus),
+      'DPIA status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
     const where = { AND: clauses };
     const [rows, total] = await Promise.all([
       this.prisma.privacyDpia.findMany({ where, include: dpiaInclude, orderBy: [{ riskLevel: 'desc' }, { updatedAt: 'desc' }], skip, take }),
@@ -496,7 +509,13 @@ export class PrivacyService {
     const { skip, take } = pageParams;
     const clauses: Prisma.PrivacyDsrRequestWhereInput[] = [this.scopedWhere<Prisma.PrivacyDsrRequestWhereInput>(scope, assetIds)];
     if (filters.search) clauses.push({ OR: [{ requestNumber: { contains: filters.search, mode: 'insensitive' } }, { requesterName: { contains: filters.search, mode: 'insensitive' } }, { description: { contains: filters.search, mode: 'insensitive' } }] });
-    if (filters.status) clauses.push({ status: filters.status as DsrRequestStatus });
+    const status = parseQueryEnum<DsrRequestStatus>(
+      filters.status,
+      Object.values(DsrRequestStatus),
+      'DSR status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
     const where = { AND: clauses };
     const [rows, total] = await Promise.all([
       this.prisma.privacyDsrRequest.findMany({ where, include: dsrInclude, orderBy: { dueAt: 'asc' }, skip, take }),
@@ -572,7 +591,13 @@ export class PrivacyService {
     const { skip, take } = pageParams;
     const clauses: Prisma.PrivacyBreachWhereInput[] = [this.scopedWhere<Prisma.PrivacyBreachWhereInput>(scope, assetIds)];
     if (filters.search) clauses.push({ OR: [{ code: { contains: filters.search, mode: 'insensitive' } }, { title: { contains: filters.search, mode: 'insensitive' } }] });
-    if (filters.status) clauses.push({ status: filters.status as BreachStatus });
+    const status = parseQueryEnum<BreachStatus>(
+      filters.status,
+      Object.values(BreachStatus),
+      'breach status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
     const where = { AND: clauses };
     const [rows, total] = await Promise.all([
       this.prisma.privacyBreach.findMany({ where, include: breachInclude, orderBy: { notificationDueAt: 'asc' }, skip, take }),

@@ -68,7 +68,7 @@
             <tbody>
               @for (s of specs(); track s.id) {
                 <tr>
-                  <td><a href="javascript:void(0)" (click)="openDetail(s.id)"><code>{{ s.code }}</code></a></td>
+                  <td><button type="button" class="link-button" (click)="openDetail(s.id)"><code>{{ s.code }}</code></button></td>
                   <td>{{ specName(s) }}</td>
                   <td>{{ name(s.domain) }}</td>
                   <td><app-status-chip [kind]="typeKind(s.type)" [label]="t('ndi.type.' + s.type)" /></td>
@@ -104,7 +104,7 @@
       }
     </div>
   } @else if (detail(); as s) {
-    <a class="back-link" href="javascript:void(0)" (click)="backToList()">&larr; {{ t('ndi.backToList') }}</a>
+    <button type="button" class="back-link" (click)="backToList()">&larr; {{ t('ndi.backToList') }}</button>
     <div class="ds-card">
       <div class="card-head">
         <div>
@@ -200,7 +200,7 @@
                 @for (e of evidence(); track e.id) {
                   <tr>
                     <td>
-                      <a href="javascript:void(0)" (click)="downloadEvidence(e)">{{ e.title }}</a>
+                      <button type="button" class="link-button" (click)="downloadEvidence(e)">{{ e.title }}</button>
                       <div class="muted file-name">{{ e.originalName }}</div>
                     </td>
                     <td><app-status-chip [kind]="evidenceKind(e)" [label]="evidenceStatusLabel(e.effectiveStatus)" /></td>

@@ -16,6 +16,7 @@ import { EvidenceService, UploadedFile as EvidenceFile } from './evidence.servic
 import { CreateEvidenceDto, ReviewEvidenceDto } from './evidence.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
+import { sanitizeAttachmentFilename } from '../common/download';
 
 const MAX_BYTES = Number(process.env.EVIDENCE_MAX_BYTES ?? 15 * 1024 * 1024);
 const ALLOWED_MIME = new Set([
@@ -102,6 +103,6 @@ export class EvidenceController {
   ): Promise<void> {
     const { path, originalName, mimeType } = await this.service.fileFor(id, user);
     res.setHeader('Content-Type', mimeType);
-    res.download(path, originalName);
+    res.download(path, sanitizeAttachmentFilename(originalName, 'evidence-file'));
   }
 }

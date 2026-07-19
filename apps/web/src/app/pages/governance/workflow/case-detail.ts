@@ -101,7 +101,7 @@ export class WorkflowCasePage implements OnInit {
     if (!c) return;
     this.http.post(`/api/workflow/cases/${c.id}/submit`, {}).subscribe({
       next: () => { this.toast.success(this.t('wf.caseSubmitted')); this.load(); },
-      error: () => this.toast.error(this.t('wf.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('wf.saveError')),
     });
   }
 
@@ -126,7 +126,7 @@ export class WorkflowCasePage implements OnInit {
           this.decideTask.set(null);
           this.load();
         },
-        error: () => { this.toast.error(this.t('wf.saveError')); this.saving.set(false); },
+        error: (err) => { this.toast.errorFrom(err, this.t('wf.saveError')); this.saving.set(false); },
       });
   }
 
@@ -157,7 +157,7 @@ export class WorkflowCasePage implements OnInit {
           this.taskModalOpen.set(false);
           this.load();
         },
-        error: () => { this.toast.error(this.t('wf.saveError')); this.saving.set(false); },
+        error: (err) => { this.toast.errorFrom(err, this.t('wf.saveError')); this.saving.set(false); },
       });
   }
 }

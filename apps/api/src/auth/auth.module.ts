@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { AccessModule } from '../access/access.module';
 import { isProductionLikeRuntime, isUnsafeJwtSecret } from '../common/runtime-safety';
+import { jwtDurationSeconds } from './auth-duration';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { isProductionLikeRuntime, isUnsafeJwtSecret } from '../common/runtime-sa
         return {
           secret: secret ?? 'dev-insecure-secret',
           signOptions: {
-            expiresIn: (config.get<string>('JWT_EXPIRES_IN') ?? '8h') as unknown as number,
+            expiresIn: jwtDurationSeconds(config.get<string>('JWT_EXPIRES_IN')),
           },
         };
       },

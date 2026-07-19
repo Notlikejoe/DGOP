@@ -261,6 +261,42 @@ export interface DefaultIntegrationConnectorDefinition {
   sourceName: string;
 }
 
+const ADAPTERS_BY_CONNECTOR_TYPE: Record<IntegrationConnectorKey, readonly IntegrationAdapterKey[]> = {
+  catalog: ['catalog_csv', 'mock_rest', 'webhook_json'],
+  lineage: ['webhook_json'],
+  data_quality: ['mock_data_quality', 'webhook_json'],
+  dlp: ['mock_dlp', 'webhook_json'],
+  pdp: ['webhook_json'],
+  ndi: ['webhook_json'],
+  risk: ['webhook_json'],
+  profiling: ['webhook_json'],
+  training: ['mock_lms', 'webhook_json'],
+  open_data: ['mock_open_data', 'webhook_json'],
+  foi: ['mock_foi', 'webhook_json'],
+  lms: ['mock_lms', 'webhook_json'],
+  siem: ['mock_siem', 'webhook_json'],
+  iam_sso: ['mock_iam_sso', 'webhook_json'],
+  masking: ['webhook_json'],
+  abac: ['webhook_json'],
+};
+
+export function compatibleAdaptersForConnectorType(
+  connectorType: IntegrationConnectorKey,
+): readonly IntegrationAdapterKey[] {
+  return ADAPTERS_BY_CONNECTOR_TYPE[connectorType] ?? ['webhook_json'];
+}
+
+export function adapterMatchesConnectorType(
+  connectorType: IntegrationConnectorKey,
+  adapterType: IntegrationAdapterKey,
+): boolean {
+  return compatibleAdaptersForConnectorType(connectorType).includes(adapterType);
+}
+
+export function defaultAdapterForConnectorType(connectorType: IntegrationConnectorKey): IntegrationAdapterKey {
+  return connectorType === 'catalog' ? 'catalog_csv' : 'webhook_json';
+}
+
 export const DEFAULT_INTEGRATION_CONNECTORS: DefaultIntegrationConnectorDefinition[] = [
   {
     code: 'DQ-MOCK',
@@ -321,6 +357,16 @@ export const DEFAULT_INTEGRATION_CONNECTORS: DefaultIntegrationConnectorDefiniti
     adapterType: 'mock_siem',
     defaultEventType: 'security.sensitive_access.detected',
     sourceName: 'Mock SIEM',
+  },
+  {
+    code: 'IAM-SSO-MOCK',
+    nameEn: 'IAM and SSO',
+    nameAr: 'IAM and SSO',
+    description: 'Receives identity, role, and access lifecycle signals from IAM/SSO systems.',
+    type: 'iam_sso',
+    adapterType: 'mock_iam_sso',
+    defaultEventType: 'iam.role.changed',
+    sourceName: 'Mock IAM/SSO',
   },
 ];
 

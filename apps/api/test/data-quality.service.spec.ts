@@ -7,6 +7,10 @@ import { BadRequestException } from '@nestjs/common';
 import { DataQualityPriority, DataQualitySeverity } from '@prisma/client';
 import { DataQualityService } from '../src/data-quality/data-quality.service';
 import { priorityForSeverity, profileScore, slaDueDates } from '../src/data-quality/data-quality.logic';
+import {
+  isAcceptedDataQualityImportFile,
+  isSafeDataQualityImportContent,
+} from '../src/data-quality/data-quality.config';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
@@ -14,6 +18,16 @@ const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name
 function includesScopedAsset(where: unknown, assetId: string): boolean {
   const text = JSON.stringify(where);
   return text.includes('"assetId"') && text.includes(assetId);
+}
+
+function includesOwnUnlinkedIssue(where: unknown, actor: string): boolean {
+  const text = JSON.stringify(where);
+  return text.includes('"assetId":null') && text.includes('"createdBy"') && text.includes(actor);
+}
+
+function includesBroadUnlinkedIssue(where: unknown): boolean {
+  const text = JSON.stringify(where);
+  return text.includes('{"assetId":null}') && !text.includes('"createdBy"');
 }
 
 test('summary applies data-scope asset filtering to every count', async () => {
@@ -48,6 +62,74 @@ test('summary applies data-scope asset filtering to every count', async () => {
   assert.strictEqual(summary.total, 1);
   assert.strictEqual(countWhere.length, 6);
   assert.ok(countWhere.every((where) => includesScopedAsset(where, 'visible-asset')));
+  assert.ok(countWhere.every((where) => !includesBroadUnlinkedIssue(where)));
+});
+
+test('summary includes only the scoped actor own unlinked data quality issues', async () => {
+  const countWhere: unknown[] = [];
+  const service = new DataQualityService(
+    {
+      dataAsset: {
+        findMany: async () => [],
+      },
+      dataQualityIssue: {
+        findMany: async () => [],
+        count: async (args: { where: unknown }) => {
+          countWhere.push(args.where);
+          return 0;
+        },
+      },
+      dataQualityRule: { count: async () => 0 },
+      dataQualityProfile: { count: async () => 0 },
+      dataQualityScore: { findMany: async () => [] },
+    } as never,
+    {} as never,
+    {
+      resolve: async () => ({
+        orgUnits: ['org-1'],
+        domains: ['domain-1'],
+        maxClassRank: 2,
+      }),
+    } as never,
+  );
+
+  await service.summary(['dq_steward'], 'steward@dgop.local');
+
+  assert.strictEqual(countWhere.length, 6);
+  assert.ok(countWhere.every((where) => includesOwnUnlinkedIssue(where, 'steward@dgop.local')));
+  assert.ok(countWhere.every((where) => !includesBroadUnlinkedIssue(where)));
+});
+
+test('get hides unlinked data quality issues from other scoped users', async () => {
+  let getWhere: unknown;
+  const service = new DataQualityService(
+    {
+      dataAsset: {
+        findMany: async () => [],
+      },
+      dataQualityIssue: {
+        findFirst: async (args: { where: unknown }) => {
+          getWhere = args.where;
+          return null;
+        },
+      },
+    } as never,
+    {} as never,
+    {
+      resolve: async () => ({
+        orgUnits: ['org-1'],
+        domains: ['domain-1'],
+        maxClassRank: 2,
+      }),
+    } as never,
+  );
+
+  await assert.rejects(
+    () => service.get(['dq_steward'], 'dq-hidden', 'viewer@dgop.local'),
+    /data quality issue not found/i,
+  );
+  assert.ok(includesOwnUnlinkedIssue(getWhere, 'viewer@dgop.local'));
+  assert.ok(!includesBroadUnlinkedIssue(getWhere));
 });
 
 test('list keeps legacy array shape but applies a bounded default when pagination is omitted', async () => {
@@ -86,6 +168,54 @@ test('list keeps legacy array shape but applies a bounded default when paginatio
   );
   assert.strictEqual(findManyCalls[1].skip, 0);
   assert.strictEqual(findManyCalls[1].take, 2);
+});
+
+test('list rejects invalid issue enum filters before Prisma receives them', async () => {
+  let queried = false;
+  const service = new DataQualityService(
+    {
+      dataQualityIssue: {
+        findMany: async () => {
+          queried = true;
+          return [];
+        },
+      },
+    } as never,
+    {} as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await assert.rejects(
+    () => service.list(['system_admin'], { status: 'almost_closed' }),
+    /invalid data quality status/i,
+  );
+  assert.strictEqual(queried, false);
+});
+
+test('listRules rejects invalid enum filters before Prisma receives them', async () => {
+  let queried = false;
+  const service = new DataQualityService(
+    {
+      dataQualityRule: {
+        findMany: async () => {
+          queried = true;
+          return [];
+        },
+      },
+    } as never,
+    {} as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await assert.rejects(
+    () => service.listRules(['system_admin'], { dimension: 'trustworthiness' }),
+    /invalid data quality rule dimension/i,
+  );
+  assert.strictEqual(queried, false);
 });
 
 test('refreshSlaBreachMarkers is the explicit write path for SLA breach markers', async () => {
@@ -306,6 +436,77 @@ test('importCsv does not distinguish hidden asset codes from unavailable codes',
   assert.strictEqual(result.failed, 1);
   assert.ok(result.batchId.startsWith('dq-import-'));
   assert.strictEqual(result.errors[0].code, 'asset_unavailable');
+});
+
+test('importCsv rejects invalid enum values before creating issue rows', async () => {
+  let createCalled = false;
+  const service = new DataQualityService(
+    {
+      dataAsset: { findMany: async () => [] },
+      dataQualityIssue: {
+        create: async () => {
+          createCalled = true;
+          return { id: 'bad-row' };
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  const result = await service.importCsv(
+    ['system_admin'],
+    'title,severity,priority,dimension\nBad enum,urgent,P9,fuzziness',
+    'actor',
+  );
+
+  assert.strictEqual(createCalled, false);
+  assert.strictEqual(result.created, 0);
+  assert.strictEqual(result.failed, 1);
+  assert.strictEqual(result.errors[0].code, 'row_rejected');
+  assert.match(result.errors[0].params?.reason ?? '', /invalid severity/i);
+});
+
+test('importCsv normalizes friendly enum casing for CSV operators', async () => {
+  let capturedDto: any = null;
+  const service = new DataQualityService(
+    {
+      dataAsset: { findMany: async () => [] },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+  const originalCreate = service.create.bind(service);
+  service.create = (async (_roles, dto) => {
+    capturedDto = dto;
+    return { id: 'dq-1' } as never;
+  }) as typeof originalCreate;
+
+  const result = await service.importCsv(
+    ['system_admin'],
+    'title,severity,priority,dimension\nReadable enums,HIGH,p2,Accuracy',
+    'actor',
+  );
+
+  assert.strictEqual(result.created, 1);
+  assert.strictEqual(capturedDto.severity, 'high');
+  assert.strictEqual(capturedDto.priority, 'P2');
+  assert.strictEqual(capturedDto.dimension, 'accuracy');
+});
+
+test('CSV file upload gate requires a CSV extension and safe upload MIME', () => {
+  assert.strictEqual(isAcceptedDataQualityImportFile('issues.csv', 'text/csv'), true);
+  assert.strictEqual(isAcceptedDataQualityImportFile('issues.csv', 'application/octet-stream'), true);
+  assert.strictEqual(isAcceptedDataQualityImportFile('issues.txt', 'text/csv'), false);
+  assert.strictEqual(isAcceptedDataQualityImportFile('issues.csv.exe', 'text/csv'), false);
+  assert.strictEqual(isAcceptedDataQualityImportFile('issues.csv', 'application/x-msdownload'), false);
+  assert.strictEqual(isSafeDataQualityImportContent(Buffer.from('title\nValid issue', 'utf8')), true);
+  assert.strictEqual(isSafeDataQualityImportContent(Buffer.from([0x4d, 0x5a, 0x00, 0x01])), false);
+  assert.strictEqual(isSafeDataQualityImportContent(Buffer.from([0xc3, 0x28])), false);
 });
 
 test('priority and SLA helpers map v4 severity timing consistently', () => {

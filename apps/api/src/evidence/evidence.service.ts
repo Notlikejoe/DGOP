@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
@@ -73,7 +73,7 @@ export class EvidenceService {
     private readonly audit: AuditService,
   ) {
     const configured = process.env.EVIDENCE_STORAGE_DIR || 'storage/evidence';
-    this.storageDir = isAbsolute(configured) ? configured : join(process.cwd(), configured);
+    this.storageDir = isAbsolute(configured) ? resolve(configured) : resolve(process.cwd(), configured);
     if (!existsSync(this.storageDir)) mkdirSync(this.storageDir, { recursive: true });
   }
 
@@ -119,6 +119,15 @@ export class EvidenceService {
 
   private actorEmail(actor: AuthUser): string {
     return actor.email;
+  }
+
+  private storagePath(fileName: string): string {
+    const target = resolve(this.storageDir, fileName);
+    const rel = relative(this.storageDir, target);
+    if (!fileName || rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+      throw new NotFoundException('evidence file not found');
+    }
+    return target;
   }
 
   private assertFileContentMatchesMime(file: UploadedFile): void {
@@ -268,7 +277,7 @@ export class EvidenceService {
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const safeExt = (file.originalname.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? '').toLowerCase();
     const storedName = `${randomUUID()}${safeExt}`;
-    const storedPath = join(this.storageDir, storedName);
+    const storedPath = this.storagePath(storedName);
     await writeFile(storedPath, file.buffer);
 
     let evidence;
@@ -375,7 +384,7 @@ export class EvidenceService {
     await this.prisma.ndiEvidence.update({ where: { id }, data: { deletedAt: new Date() } });
     // Best-effort file cleanup; never fail the request on a missing file.
     try {
-      await unlink(join(this.storageDir, e.fileName));
+      await unlink(this.storagePath(e.fileName));
     } catch {
       /* ignore */
     }
@@ -391,7 +400,7 @@ export class EvidenceService {
   /** Resolves the absolute file path for download and records the access in the audit trail. */
   async fileFor(id: string, actor: AuthUser) {
     const e = await this.get(id, actor);
-    const path = join(this.storageDir, e.fileName);
+    const path = this.storagePath(e.fileName);
     if (!existsSync(path)) throw new NotFoundException('evidence file not found');
     await this.audit.log({
       actor: this.actorEmail(actor),

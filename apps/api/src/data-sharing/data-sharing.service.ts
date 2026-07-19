@@ -10,6 +10,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
+import { parseQueryEnum } from '../common/query-filters';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
@@ -269,7 +270,13 @@ export class DataSharingService {
     const { skip, take } = pageParams;
     const clauses: Prisma.DataSharingRequestWhereInput[] = [this.requestScopeWhere(scope, assetIds)];
     if (filters.search) clauses.push({ OR: [{ requestNumber: { contains: filters.search, mode: 'insensitive' } }, { requesterOrg: { contains: filters.search, mode: 'insensitive' } }, { recipientOrg: { contains: filters.search, mode: 'insensitive' } }, { purpose: { contains: filters.search, mode: 'insensitive' } }] });
-    if (filters.status) clauses.push({ status: filters.status as DataSharingRequestStatus });
+    const status = parseQueryEnum<DataSharingRequestStatus>(
+      filters.status,
+      Object.values(DataSharingRequestStatus),
+      'data sharing request status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
     const where = { AND: clauses };
     const [rows, total] = await Promise.all([
       this.prisma.dataSharingRequest.findMany({ where, include: requestInclude, orderBy: [{ riskScore: 'desc' }, { updatedAt: 'desc' }], skip, take }),
@@ -389,7 +396,13 @@ export class DataSharingService {
     const { skip, take } = pageParams;
     const clauses: Prisma.DataSharingAgreementWhereInput[] = [this.agreementScopeWhere(scope, assetIds)];
     if (filters.search) clauses.push({ OR: [{ agreementNumber: { contains: filters.search, mode: 'insensitive' } }, { recipientOrg: { contains: filters.search, mode: 'insensitive' } }, { purpose: { contains: filters.search, mode: 'insensitive' } }] });
-    if (filters.status) clauses.push({ status: filters.status as DataSharingAgreementStatus });
+    const status = parseQueryEnum<DataSharingAgreementStatus>(
+      filters.status,
+      Object.values(DataSharingAgreementStatus),
+      'data sharing agreement status',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
     const where = clauses.length ? { AND: clauses } : {};
     const [rows, total] = await Promise.all([
       this.prisma.dataSharingAgreement.findMany({ where, include: agreementInclude, orderBy: { updatedAt: 'desc' }, skip, take }),

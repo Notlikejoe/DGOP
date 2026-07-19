@@ -345,7 +345,7 @@
             <div><dt>{{ t('openData.field.classification') }}</dt><dd>{{ name(candidate.classification || candidate.asset.classification) }}</dd></div>
             <div><dt>{{ t('openData.field.quality') }}</dt><dd>{{ candidate.dqScore?.score ?? '-' }}</dd></div>
             <div><dt>{{ t('openData.field.nextReview') }}</dt><dd>{{ date(candidate.nextReviewAt) }}</dd></div>
-            <div><dt>{{ t('openData.field.portal') }}</dt><dd>@if (candidate.portalUrl) { <a [href]="candidate.portalUrl" target="_blank" rel="noreferrer">{{ candidate.portalUrl }}</a> } @else { - }</dd></div>
+            <div><dt>{{ t('openData.field.portal') }}</dt><dd>@if (candidate.portalUrl) { <a [href]="candidate.portalUrl" target="_blank" rel="noopener noreferrer">{{ candidate.portalUrl }}</a> } @else { - }</dd></div>
           </dl>
 
           @if (candidate.description || candidate.decisionNote) {

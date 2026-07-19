@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { OpenDataCandidateStatus, OpenDataSignalStatus } from '@prisma/client';
+import { FoiRequestStatus, OpenDataCandidateStatus, OpenDataSignalStatus } from '@prisma/client';
 import { TransparencyService } from '../src/transparency/transparency.service';
 import {
   addTrendDate,
@@ -107,6 +107,98 @@ test('cockpit only includes sections granted by underlying permissions', async (
   assert.equal(result.risks[0].source, 'open_data');
   assert.equal(foiTouched, false);
   assert.equal(result.trends.some((bucket) => bucket.openDataPublished === 1), true);
+});
+
+test('cockpit FOI rollups do not expose unanchored records to restricted users', async () => {
+  let foiWhere: unknown;
+  const prisma = {
+    dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+    foiRequest: {
+      findMany: async (args: any) => {
+        foiWhere = args.where;
+        return [];
+      },
+    },
+    foiDisclosure: { findMany: async () => [] },
+    foiAppeal: { count: async () => 0 },
+  };
+  const service = new TransparencyService(
+    prisma as any,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }) } as any,
+    accessWith(['foi_requests.view']) as any,
+  );
+
+  const result = await service.cockpit({ ...user, roles: ['foi_officer'] });
+
+  assert.equal(result.foi?.total, 0);
+  const whereText = JSON.stringify(foiWhere);
+  assert.ok(whereText.includes('visible-asset'));
+  assert.ok(!whereText.includes('"assetId":null'));
+  assert.ok(!whereText.includes('"dataDomainId"'));
+});
+
+test('cockpit FOI rollups allow domain-only records only for matching domain scope', async () => {
+  let foiWhere: unknown;
+  const prisma = {
+    dataAsset: { findMany: async () => [] },
+    foiRequest: {
+      findMany: async (args: any) => {
+        foiWhere = args.where;
+        return [
+          {
+            id: 'foi-1',
+            requestNumber: 'FOI-2026-0001',
+            subject: 'Domain-only request',
+            requesterType: 'individual',
+            status: FoiRequestStatus.registered,
+            dueAt: new Date('2026-07-25T00:00:00Z'),
+            receivedAt: new Date('2026-07-15T00:00:00Z'),
+          },
+        ];
+      },
+    },
+    foiDisclosure: { findMany: async () => [] },
+    foiAppeal: { count: async () => 0 },
+  };
+  const service = new TransparencyService(
+    prisma as any,
+    { resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: 2 }) } as any,
+    accessWith(['foi_requests.view']) as any,
+  );
+
+  const result = await service.cockpit({ ...user, roles: ['foi_officer'] });
+
+  assert.equal(result.foi?.total, 1);
+  const whereText = JSON.stringify(foiWhere);
+  assert.ok(whereText.includes('"assetId":null'));
+  assert.ok(whereText.includes('"dataDomainId":{"in":["domain-1"]}'));
+});
+
+test('cockpit workflow rollups apply data scope and unanchored ownership visibility', async () => {
+  let workflowWhere: unknown;
+  const prisma = {
+    dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+    workflowCase: {
+      findMany: async (args: any) => {
+        workflowWhere = args.where;
+        return [];
+      },
+    },
+  };
+  const service = new TransparencyService(
+    prisma as any,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }) } as any,
+    accessWith(['workflow_cases.view']) as any,
+  );
+
+  const result = await service.cockpit({ id: 'user-1', email: 'owner@dgop.local', roles: ['foi_officer'] });
+
+  assert.equal(result.workflow?.cases, 0);
+  const whereText = JSON.stringify(workflowWhere);
+  assert.ok(whereText.includes('visible-asset'));
+  assert.ok(whereText.includes('"createdBy":"owner@dgop.local"'));
+  assert.ok(whereText.includes('"assigneeUserId":"user-1"'));
+  assert.ok(whereText.includes('"assigneeRoleCode":{"in":["foi_officer"]}'));
 });
 
 (async () => {

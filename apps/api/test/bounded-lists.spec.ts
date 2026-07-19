@@ -5,6 +5,7 @@
 import assert from 'node:assert';
 import { AssetsService } from '../src/assets/assets.service';
 import { UsersService } from '../src/users/users.service';
+import { PeopleService } from '../src/ownership/people.service';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
@@ -114,6 +115,165 @@ test('users list keeps array compatibility while capping the default query', asy
   assert.strictEqual(paged.total, 1);
   assert.strictEqual(paged.data[0].email, 'admin@dgop.local');
   assert.strictEqual(findManyCalls[1].take, 1);
+});
+
+test('people list keeps array compatibility while capping the default query', async () => {
+  const findManyCalls: any[] = [];
+  const service = new PeopleService(
+    {
+      person: {
+        findMany: async (args: any) => {
+          findManyCalls.push(args);
+          return [{ id: 'person-1' }];
+        },
+        count: async () => 1,
+      },
+    } as never,
+    {} as never,
+  );
+
+  const legacy = await service.listPaged();
+  assert.ok(Array.isArray(legacy));
+  assert.strictEqual(findManyCalls[0].skip, 0);
+  assert.strictEqual(findManyCalls[0].take, 200);
+
+  const paged = await service.listPaged(undefined, '1', '1') as any;
+  assert.strictEqual(paged.total, 1);
+  assert.strictEqual(findManyCalls[1].take, 1);
+});
+
+test('user auth lookups only load active non-deleted role assignments', async () => {
+  let findUniqueArgs: any;
+  const service = new UsersService(
+    {
+      user: {
+        findUnique: async (args: any) => {
+          findUniqueArgs = args;
+          return null;
+        },
+      },
+    } as never,
+    {} as never,
+  );
+
+  await service.findByEmailWithRoles('admin@dgop.local');
+
+  assert.deepEqual(findUniqueArgs.include.userRoles.where, {
+    role: { isActive: true, deletedAt: null },
+  });
+});
+
+test('user create rejects inactive role codes instead of assigning hidden roles', async () => {
+  const roleFindManyCalls: any[] = [];
+  const service = new UsersService(
+    {
+      user: {
+        findUnique: async () => null,
+        create: async () => {
+          throw new Error('inactive role should block user creation before persistence');
+        },
+      },
+      role: {
+        findMany: async (args: any) => {
+          roleFindManyCalls.push(args);
+          assert.strictEqual(args.where.isActive, true);
+          return [];
+        },
+      },
+    } as never,
+    { log: async () => {} } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      service.create(
+        {
+          email: 'new@dgop.local',
+          displayName: 'New User',
+          password: 'StrongPassword#123',
+          roleCodes: ['retired_role'],
+        },
+        'admin@dgop.local',
+      ),
+    /Unknown or inactive roles: retired_role/,
+  );
+  assert.strictEqual(roleFindManyCalls.length, 1);
+});
+
+test('setRoles rejects inactive role codes before replacing current assignments', async () => {
+  let deletedAssignments = false;
+  const service = new UsersService(
+    {
+      user: {
+        findUnique: async () => ({
+          id: 'user-1',
+          email: 'user@dgop.local',
+          isActive: true,
+          userRoles: [],
+        }),
+      },
+      role: {
+        findMany: async (args: any) => {
+          assert.strictEqual(args.where.isActive, true);
+          return [];
+        },
+      },
+      userRole: {
+        deleteMany: () => {
+          deletedAssignments = true;
+          return {};
+        },
+        createMany: () => ({}),
+      },
+      $transaction: async () => {
+        throw new Error('inactive role should block before assignment replacement');
+      },
+    } as never,
+    { log: async () => {} } as never,
+  );
+
+  await assert.rejects(
+    () => service.setRoles('user-1', { roleCodes: ['retired_role'] }, 'admin@dgop.local'),
+    /Unknown or inactive roles: retired_role/,
+  );
+  assert.strictEqual(deletedAssignments, false);
+});
+
+test('deactivating an admin counts only active non-deleted system_admin roles', async () => {
+  let countWhere: any;
+  const service = new UsersService(
+    {
+      user: {
+        findUnique: async () => ({
+          id: 'admin-1',
+          email: 'admin@dgop.local',
+          userRoles: [{ role: { code: 'system_admin', isActive: true, deletedAt: null } }],
+        }),
+        count: async (args: any) => {
+          countWhere = args.where;
+          return 2;
+        },
+        update: async () => ({
+          id: 'admin-1',
+          email: 'admin@dgop.local',
+          displayName: 'Admin',
+          isActive: false,
+          lastLoginAt: null,
+          createdAt: new Date(),
+          userRoles: [{ role: { code: 'system_admin', nameEn: 'System Administrator', nameAr: 'System Administrator' } }],
+        }),
+      },
+    } as never,
+    { log: async () => {} } as never,
+  );
+
+  await service.update('admin-1', { isActive: false }, 'admin@dgop.local');
+
+  assert.deepEqual(countWhere.userRoles.some.role, {
+    code: 'system_admin',
+    isActive: true,
+    deletedAt: null,
+  });
 });
 
 (async () => {

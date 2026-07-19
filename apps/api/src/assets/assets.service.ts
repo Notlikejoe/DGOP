@@ -9,11 +9,14 @@ import { ScopeService, EffectiveScope } from '../access/scope.service';
 import {
   CreateAssetDto,
   CreateAssetRelationshipDto,
+  LIFECYCLE_STATUSES,
+  OWNER_STATUSES,
   RELATIONSHIP_TYPES,
   UpdateAssetDto,
 } from './assets.dto';
 import { parseCsv } from '../common/csv';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
+import { parseQueryEnum } from '../common/query-filters';
 
 export interface AssetFilters {
   search?: string;
@@ -97,8 +100,14 @@ export class AssetsService {
     if (filters.systemId) and.push({ systemId: filters.systemId });
     if (filters.capabilityId) and.push({ capabilityId: filters.capabilityId });
     if (filters.orgUnitId) and.push({ orgUnitId: filters.orgUnitId });
-    if (filters.ownerStatus) and.push({ ownerStatus: filters.ownerStatus });
-    if (filters.lifecycleStatus) and.push({ lifecycleStatus: filters.lifecycleStatus });
+    const ownerStatus = parseQueryEnum(filters.ownerStatus, OWNER_STATUSES, 'asset owner status', (value) =>
+      value.toLowerCase(),
+    );
+    const lifecycleStatus = parseQueryEnum(filters.lifecycleStatus, LIFECYCLE_STATUSES, 'asset lifecycle status', (value) =>
+      value.toLowerCase(),
+    );
+    if (ownerStatus) and.push({ ownerStatus });
+    if (lifecycleStatus) and.push({ lifecycleStatus });
     if (filters.subjectId) and.push({ subjects: { some: { dataSubjectId: filters.subjectId } } });
     if (filters.search) {
       const term = filters.search.trim();

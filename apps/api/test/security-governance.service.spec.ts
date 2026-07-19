@@ -11,6 +11,10 @@ import { classificationRisk, evaluateAccessDecision } from '../src/security-gove
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
 
+function filterText(value: unknown): string {
+  return JSON.stringify(value);
+}
+
 test('evaluateAccessDecision denies access when no role-data mapping exists', () => {
   const result = evaluateAccessDecision({
     hasMapping: false,
@@ -165,7 +169,7 @@ test('accessReviews scopes included items, not only parent reviews', async () =>
     } as never,
     { log: async () => undefined } as never,
     {
-      resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
+      resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: 2 }),
     } as never,
   );
 
@@ -173,6 +177,108 @@ test('accessReviews scopes included items, not only parent reviews', async () =>
   const itemWhere = JSON.stringify(includeArg.items.where);
   assert.ok(itemWhere.includes('visible-asset'));
   assert.ok(itemWhere.includes('domain-1'));
+});
+
+test('accessReviews do not expose unlinked items to organization-scoped reviewers', async () => {
+  let itemWhere: unknown;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findMany: async () => [] },
+      accessReview: {
+        findMany: async (args: any) => {
+          itemWhere = args.include.items.where;
+          return [];
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await service.accessReviews(['security_reviewer']);
+
+  const text = filterText(itemWhere);
+  assert.ok(text.includes('__no_visible_access_review_items__'));
+  assert.ok(!text.includes('{"assetId":null}'));
+});
+
+test('dlpIncidents do not expose unlinked incidents to organization-scoped reviewers', async () => {
+  let dlpWhere: unknown;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findMany: async () => [] },
+      dlpIncident: {
+        findMany: async (args: any) => {
+          dlpWhere = args.where;
+          return [];
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await service.dlpIncidents(['security_reviewer']);
+
+  const text = filterText(dlpWhere);
+  assert.ok(text.includes('__no_visible_security_records__'));
+  assert.ok(!text.includes('{"assetId":null}'));
+});
+
+test('dlpIncidents allow classification-anchored unlinked incidents for classification scopes', async () => {
+  let dlpWhere: unknown;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findMany: async () => [] },
+      dlpIncident: {
+        findMany: async (args: any) => {
+          dlpWhere = args.where;
+          return [];
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: 2 }),
+    } as never,
+  );
+
+  await service.dlpIncidents(['security_reviewer']);
+
+  const text = filterText(dlpWhere);
+  assert.ok(text.includes('"assetId":null'));
+  assert.ok(text.includes('"classificationId":{"not":null}'));
+  assert.ok(text.includes('"rank":{"lte":2}'));
+});
+
+test('decisionLog scopes unlinked decisions by allowed domain', async () => {
+  let decisionWhere: unknown;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findMany: async () => [] },
+      abacDecisionLog: {
+        findMany: async (args: any) => {
+          decisionWhere = args.where;
+          return [];
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: null }),
+    } as never,
+  );
+
+  await service.decisionLog(['security_reviewer']);
+
+  const text = filterText(decisionWhere);
+  assert.ok(text.includes('"assetId":null'));
+  assert.ok(text.includes('"domainId":{"in":["domain-1"]}'));
+  assert.ok(!text.includes('__no_visible_security_decisions__'));
 });
 
 test('createDlpIncident links new incidents to workflow cases', async () => {

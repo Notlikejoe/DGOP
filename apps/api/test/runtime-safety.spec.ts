@@ -33,14 +33,64 @@ test('strict runtime rejects unsafe secrets, wildcard origins, and missing webho
     JWT_SECRET: 'replace-with-at-least-32-random-characters',
     CORS_ORIGINS: '*',
     SEED_ADMIN_PASSWORD: 'Admin@12345',
+    SEED_PERSON_PASSWORD: 'replace-with-local-demo-password',
     DGOP_AUDIT_FAIL_CLOSED: 'false',
   });
 
   assert.ok(issues.some((issue) => issue.includes('JWT_SECRET')));
   assert.ok(issues.some((issue) => issue.includes('wildcard')));
   assert.ok(issues.some((issue) => issue.includes('SEED_ADMIN_PASSWORD')));
+  assert.ok(issues.some((issue) => issue.includes('SEED_PERSON_PASSWORD')));
   assert.ok(issues.some((issue) => issue.includes('DGOP_WEBHOOK_TOKEN')));
   assert.ok(issues.some((issue) => issue.includes('DGOP_AUDIT_FAIL_CLOSED')));
+});
+
+test('strict runtime rejects non-HTTPS external origins while allowing local loopback', () => {
+  const base = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
+    JWT_SECRET: 'safe-jwt-secret-with-more-than-32-chars',
+    SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
+    SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
+    DGOP_WEBHOOK_TOKEN: 'safe-webhook-token-with-more-than-32-chars',
+  };
+  const rejected = collectRuntimeSafetyIssues({
+    ...base,
+    CORS_ORIGINS: 'http://demo.example.com',
+  });
+  const allowed = collectRuntimeSafetyIssues({
+    ...base,
+    CORS_ORIGINS: 'http://localhost:4205, http://127.0.0.1:3005, https://demo.example.com',
+  });
+
+  assert.ok(rejected.some((issue) => issue.includes('HTTPS')));
+  assert.deepStrictEqual(allowed, []);
+});
+
+test('strict runtime applies the same origin safeguards to PUBLIC_ORIGIN', () => {
+  const base = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
+    JWT_SECRET: 'safe-jwt-secret-with-more-than-32-chars',
+    CORS_ORIGINS: 'https://demo.example.com',
+    SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
+    SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
+    DGOP_WEBHOOK_TOKEN: 'safe-webhook-token-with-more-than-32-chars',
+  };
+
+  const wildcard = collectRuntimeSafetyIssues({ ...base, PUBLIC_ORIGIN: '*' });
+  const insecureExternal = collectRuntimeSafetyIssues({
+    ...base,
+    PUBLIC_ORIGIN: 'http://app.example.com',
+  });
+  const secureExternal = collectRuntimeSafetyIssues({
+    ...base,
+    PUBLIC_ORIGIN: 'https://app.example.com',
+  });
+
+  assert.ok(wildcard.some((issue) => issue.includes('wildcard')));
+  assert.ok(insecureExternal.some((issue) => issue.includes('HTTPS')));
+  assert.deepStrictEqual(secureExternal, []);
 });
 
 test('strict runtime accepts rotated demo settings', () => {
@@ -50,6 +100,7 @@ test('strict runtime accepts rotated demo settings', () => {
     JWT_SECRET: 'safe-jwt-secret-with-more-than-32-chars',
     CORS_ORIGINS: 'https://demo.example.com',
     SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
+    SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
     DGOP_WEBHOOK_TOKEN: 'safe-webhook-token-with-more-than-32-chars',
   });
 

@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
+import { contentDispositionAttachment } from '../common/download';
 import { ReportsService, type ReportFilters } from './reports.service';
 import type { ReportFormat } from './reports.logic';
 
@@ -43,7 +44,7 @@ export class ReportsController {
     const filters: ReportFilters = { from, to, status, domainId };
     const file = await this.service.export(user, id, format, filters);
     res.setHeader('Content-Type', file.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Disposition', contentDispositionAttachment(file.filename));
     res.send(file.body);
   }
 }

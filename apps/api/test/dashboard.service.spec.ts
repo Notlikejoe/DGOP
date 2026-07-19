@@ -36,12 +36,19 @@ interface MockData {
   dqOverdue?: number;
   people?: number;
   readiness?: any;
+  scoringActors?: AuthUser[];
 }
 
 function makeService(d: MockData): DashboardService {
   const prisma = {
     dataAsset: {
       findMany: async () => d.assets ?? [],
+      count: async (args: any) => {
+        if (JSON.stringify(args?.where ?? {}).includes('"ownerStatus":"assigned"')) {
+          return (d.assets ?? []).filter((asset) => asset.ownerStatus === 'assigned').length;
+        }
+        return (d.assets ?? []).length;
+      },
     },
     stewardshipAssignment: {
       findMany: async (args: any) => {
@@ -99,12 +106,14 @@ function makeService(d: MockData): DashboardService {
       granted.includes('*') || granted.includes(required),
   };
   const scoring = {
-    readiness: async () =>
-      d.readiness ?? {
+    readiness: async (actor: AuthUser) => {
+      d.scoringActors?.push(actor);
+      return d.readiness ?? {
         overall: { score: 42, maturity: 'activated', specCount: 10, satisfiedCount: 4 },
-        domains: [],
+        domains: [{ specCount: 10 }, { specCount: 0 }],
         gapTotals: { missing: 3, expired: 1, rejected: 0, unassigned: 2, stuck: 0 },
-      },
+      };
+    },
   };
   const dataQuality = {
     summary: async (roleCodes: string[]) => {
@@ -155,14 +164,37 @@ test('ndi section reuses scoring engine, gated by ndi_scoring.view', async () =>
   const off = await makeService({ perms: ['dashboard.view'] }).summary(user);
   assert.strictEqual(off.ndi, null);
 
-  const s = await makeService({ perms: ['ndi_scoring.view'] }).summary(user);
+  const scoringActors: AuthUser[] = [];
+  const s = await makeService({ perms: ['ndi_scoring.view'], scoringActors }).summary(user);
   assert.ok(s.ndi);
+  assert.deepStrictEqual(scoringActors, [user]);
   assert.strictEqual(s.ndi!.readinessPct, 42);
   assert.strictEqual(s.ndi!.maturity, 'activated');
   assert.strictEqual(s.ndi!.satisfied, 4);
   assert.strictEqual(s.ndi!.specifications, 10);
   assert.strictEqual(s.ndi!.gaps.missing, 3);
   assert.strictEqual(s.ndi!.gaps.unassigned, 2);
+});
+
+test('legacy stats does not expose global NDI counts without scoring permission', async () => {
+  const scoringActors: AuthUser[] = [];
+  const off = await makeService({
+    perms: ['dashboard.view'],
+    assets: [{ id: 'a1', ownerStatus: 'assigned' }],
+    scoringActors,
+  }).stats(user);
+  assert.strictEqual(off.ndi.specifications, 0);
+  assert.strictEqual(off.ndi.domains, 0);
+  assert.deepStrictEqual(scoringActors, []);
+
+  const on = await makeService({
+    perms: ['dashboard.view', 'ndi_scoring.view'],
+    assets: [{ id: 'a1', ownerStatus: 'assigned' }],
+    scoringActors,
+  }).stats(user);
+  assert.strictEqual(on.ndi.specifications, 10);
+  assert.strictEqual(on.ndi.domainsCovered, 1);
+  assert.deepStrictEqual(scoringActors, [user]);
 });
 
 test('workflow section reports open and overdue tasks', async () => {

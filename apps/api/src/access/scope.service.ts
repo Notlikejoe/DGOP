@@ -38,9 +38,6 @@ export class ScopeService {
   constructor(private readonly prisma: PrismaService) {}
 
   async resolve(roleCodes: string[]): Promise<EffectiveScope> {
-    if (roleCodes.includes('system_admin')) {
-      return { orgUnits: 'all', domains: 'all', maxClassRank: null };
-    }
     const roles = (await this.prisma.role.findMany({
       where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
       include: { dataScopes: true },

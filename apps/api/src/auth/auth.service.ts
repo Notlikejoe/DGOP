@@ -9,6 +9,7 @@ import { ScopeService } from '../access/scope.service';
 import {
   isProductionLikeRuntime,
   isUnsafeDefaultAdminCredential,
+  isUnsafeDemoPassword,
 } from '../common/runtime-safety';
 
 @Injectable()
@@ -38,13 +39,16 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (isProductionLikeRuntime() && isUnsafeDefaultAdminCredential(user.email, password)) {
+    if (
+      isProductionLikeRuntime() &&
+      (isUnsafeDefaultAdminCredential(user.email, password) || isUnsafeDemoPassword(password))
+    ) {
       await this.audit.log({
         actor: email,
         action: 'auth.login.failed',
         entityType: 'user',
         entityId: user.id,
-        metadata: { ip, reason: 'unsafe_default_credential' },
+        metadata: { ip, reason: 'unsafe_demo_credential' },
       });
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -55,7 +59,7 @@ export class AuthService {
       // Keep local demos usable if the development database cannot write the optional login timestamp.
       this.logger.warn(`Could not update last login for ${user.email}: ${String(error)}`);
     }
-    const roles = user.userRoles.map((ur) => ur.role.code);
+    const roles = this.activeUserRoles(user).map((ur) => ur.role.code);
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -64,17 +68,13 @@ export class AuthService {
     };
     const accessToken = this.jwt.sign(payload);
 
-    try {
-      await this.audit.log({
-        actor: user.email,
-        action: 'auth.login.success',
-        entityType: 'user',
-        entityId: user.id,
-        metadata: { ip },
-      });
-    } catch (error) {
-      this.logger.warn(`Could not write login audit event for ${user.email}: ${String(error)}`);
-    }
+    await this.audit.log({
+      actor: user.email,
+      action: 'auth.login.success',
+      entityType: 'user',
+      entityId: user.id,
+      metadata: { ip },
+    });
 
     return { accessToken, user: await this.toProfile(user) };
   }
@@ -109,6 +109,20 @@ export class AuthService {
     return { success: true };
   }
 
+  private activeUserRoles(user: {
+    userRoles: {
+      role: {
+        code: string;
+        nameEn: string;
+        nameAr: string;
+        isActive?: boolean;
+        deletedAt?: Date | null;
+      };
+    }[];
+  }) {
+    return user.userRoles.filter((ur) => ur.role.isActive !== false && ur.role.deletedAt == null);
+  }
+
   private async toProfile(user: {
     id: string;
     email: string;
@@ -116,9 +130,18 @@ export class AuthService {
     isActive: boolean;
     lastLoginAt: Date | null;
     tokenVersion: number;
-    userRoles: { role: { code: string; nameEn: string; nameAr: string } }[];
+    userRoles: {
+      role: {
+        code: string;
+        nameEn: string;
+        nameAr: string;
+        isActive?: boolean;
+        deletedAt?: Date | null;
+      };
+    }[];
   }) {
-    const roleCodes = user.userRoles.map((ur) => ur.role.code);
+    const activeRoles = this.activeUserRoles(user);
+    const roleCodes = activeRoles.map((ur) => ur.role.code);
     const [permissions, scopes] = await Promise.all([
       this.access.permissionsForRoleCodes(roleCodes),
       this.scope.resolve(roleCodes),
@@ -129,7 +152,7 @@ export class AuthService {
       displayName: user.displayName,
       isActive: user.isActive,
       lastLoginAt: user.lastLoginAt,
-      roles: user.userRoles.map((ur) => ({
+      roles: activeRoles.map((ur) => ({
         code: ur.role.code,
         nameEn: ur.role.nameEn,
         nameAr: ur.role.nameAr,

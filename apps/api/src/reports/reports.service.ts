@@ -254,21 +254,49 @@ export class ReportsService {
     return branches.length ? { deletedAt: null, OR: branches } : { deletedAt: null, id: '__no_visible_sharing_report_rows__' };
   }
 
-  private foiScoped(assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput {
-    if (assetIds === 'all') return { deletedAt: null };
-    if (assetIds.size === 0) return { deletedAt: null, assetId: null };
-    return { deletedAt: null, OR: [{ assetId: { in: [...assetIds] } }, { assetId: null }] };
+  private foiBranches(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput[] {
+    const branches: Prisma.FoiRequestWhereInput[] = [];
+    if (assetIds !== 'all' && assetIds.size > 0) branches.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all' && scope.domains !== 'all' && scope.domains.length > 0) {
+      branches.push({ AND: [{ assetId: null }, { dataDomainId: { in: scope.domains } }] });
+    }
+    return branches;
+  }
+
+  private foiScoped(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput {
+    if (this.isUnrestricted(scope)) return { deletedAt: null };
+    const branches = this.foiBranches(scope, assetIds);
+    return branches.length ? { deletedAt: null, OR: branches } : { deletedAt: null, id: '__no_visible_foi_report_rows__' };
+  }
+
+  private parseFilterDate(value: string | undefined, label: 'from' | 'to'): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) {
+      throw new BadRequestException(`Invalid ${label} date filter`);
+    }
+    if (label === 'to') date.setHours(23, 59, 59, 999);
+    return date;
   }
 
   private dateRange(field: string, filters: ReportFilters): Record<string, unknown> {
-    const range: Record<string, Date> = {};
-    if (filters.from) range.gte = new Date(filters.from);
-    if (filters.to) {
-      const to = new Date(filters.to);
-      to.setHours(23, 59, 59, 999);
-      range.lte = to;
+    const from = this.parseFilterDate(filters.from, 'from');
+    const to = this.parseFilterDate(filters.to, 'to');
+    if (from && to && from.getTime() > to.getTime()) {
+      throw new BadRequestException('Invalid report date range');
     }
+    const range: Record<string, Date> = {};
+    if (from) range.gte = from;
+    if (to) range.lte = to;
     return Object.keys(range).length ? { [field]: range } : {};
+  }
+
+  private enumFilter<T extends string>(value: string | undefined, allowed: readonly T[], label: string): T | undefined {
+    if (!value) return undefined;
+    if (!allowed.includes(value as T)) {
+      throw new BadRequestException(`Invalid ${label} filter`);
+    }
+    return value as T;
   }
 
   private result(id: string, title: string, columns: ReportResult['columns'], rows: ReportRow[], summary: ReportResult['summary']): ReportResult {
@@ -287,7 +315,7 @@ export class ReportsService {
       ...this.assetScoped(assetIds),
       ...this.dateRange('createdAt', filters),
     };
-    const foiWhere: Prisma.FoiRequestWhereInput = { ...this.foiScoped(assetIds), ...this.dateRange('receivedAt', filters) };
+    const foiWhere: Prisma.FoiRequestWhereInput = { ...this.foiScoped(scope, assetIds), ...this.dateRange('receivedAt', filters) };
     const [openDataRows, foiRows, privacyRows, sharingRows] = await Promise.all([
       canOpenData
         ? this.prisma.openDataCandidate.findMany({ where: openDataWhere, select: { status: true } })
@@ -388,7 +416,9 @@ export class ReportsService {
     const where: Prisma.OpenDataCandidateWhereInput = {
       deletedAt: null,
       ...this.assetScoped(assetIds),
-      ...(filters.status ? { status: filters.status as OpenDataCandidateStatus } : {}),
+      ...(filters.status
+        ? { status: this.enumFilter(filters.status, Object.values(OpenDataCandidateStatus), 'open data status') }
+        : {}),
       ...this.dateRange('createdAt', filters),
     };
     const rows = await this.prisma.openDataCandidate.findMany({
@@ -428,10 +458,13 @@ export class ReportsService {
   }
 
   private async foiSla(user: AuthUser, filters: ReportFilters): Promise<ReportResult> {
-    const assetIds = await this.visibleAssetIds(user);
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIdsForScope(scope);
     const where: Prisma.FoiRequestWhereInput = {
-      ...this.foiScoped(assetIds),
-      ...(filters.status ? { status: filters.status as FoiRequestStatus } : {}),
+      ...this.foiScoped(scope, assetIds),
+      ...(filters.status
+        ? { status: this.enumFilter(filters.status, Object.values(FoiRequestStatus), 'FOI status') }
+        : {}),
       ...this.dateRange('receivedAt', filters),
     };
     const rows = await this.prisma.foiRequest.findMany({

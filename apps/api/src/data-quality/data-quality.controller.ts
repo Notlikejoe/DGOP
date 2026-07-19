@@ -31,6 +31,7 @@ import {
   DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES,
   dataQualityPageConfig,
   isAcceptedDataQualityImportFile,
+  isSafeDataQualityImportContent,
 } from './data-quality.config';
 
 @Controller('data-quality')
@@ -46,7 +47,7 @@ export class DataQualityController {
   @Get('summary')
   @RequirePermissions('data_quality_issues.view')
   summary(@CurrentUser() user: AuthUser) {
-    return this.service.summary(user.roles);
+    return this.service.summary(user.roles, user.email);
   }
 
   @Get('scorecard')
@@ -58,7 +59,7 @@ export class DataQualityController {
   @Post('sla/refresh')
   @RequirePermissions('data_quality_issues.edit')
   refreshSla(@CurrentUser() user: AuthUser) {
-    return this.service.refreshSlaBreachMarkers(user.roles);
+    return this.service.refreshSlaBreachMarkers(user.roles, user.email);
   }
 
   @Get('rules')
@@ -134,13 +135,13 @@ export class DataQualityController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    return this.service.list(user.roles, { search, status, severity, dimension, assetId }, page, pageSize);
+    return this.service.list(user.roles, { search, status, severity, dimension, assetId }, page, pageSize, user.email);
   }
 
   @Get('issues/:id')
   @RequirePermissions('data_quality_issues.view')
   get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.get(user.roles, id);
+    return this.service.get(user.roles, id, user.email);
   }
 
   @Post('issues')
@@ -162,6 +163,9 @@ export class DataQualityController {
     if (!file) throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.fileRequired);
     if (!isAcceptedDataQualityImportFile(file.originalname, file.mimetype)) {
       throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.unsupportedFile);
+    }
+    if (!isSafeDataQualityImportContent(file.buffer)) {
+      throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.invalidText);
     }
     return this.service.importCsv(user.roles, file.buffer.toString('utf8'), user.email);
   }

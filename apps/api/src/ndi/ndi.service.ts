@@ -4,7 +4,9 @@ import { AuditService } from '../audit/audit.service';
 import {
   CreateNdiSpecDto,
   MATURITY_LEVELS,
+  MaturityLevel,
   SPEC_TYPES,
+  SpecType,
   UpdateNdiSpecDto,
 } from './ndi.dto';
 import { parseCsv } from '../common/csv';
@@ -25,9 +27,31 @@ export interface SpecFilters {
   status?: string; // 'active' | 'inactive' | undefined (all)
 }
 
+const SPEC_STATUS_FILTERS = ['active', 'inactive'] as const;
+type SpecStatusFilter = (typeof SPEC_STATUS_FILTERS)[number];
+
 const domainSelect = { select: { id: true, code: true, nameEn: true, nameAr: true } };
 const ownerSelect = { select: { id: true, fullNameEn: true, fullNameAr: true, email: true } };
 const specInclude = { domain: domainSelect, owner: ownerSelect };
+
+function isSpecType(value: string): value is SpecType {
+  return (SPEC_TYPES as readonly string[]).includes(value);
+}
+
+function isMaturityLevel(value: string): value is MaturityLevel {
+  return (MATURITY_LEVELS as readonly string[]).includes(value);
+}
+
+function filterEnum<T extends string>(
+  raw: string | undefined,
+  allowed: readonly T[],
+  label: string,
+): T | undefined {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return undefined;
+  if ((allowed as readonly string[]).includes(value)) return value as T;
+  throw new BadRequestException(`Invalid ${label}: ${raw}`);
+}
 
 @Injectable()
 export class NdiSpecificationsService {
@@ -167,10 +191,13 @@ export class NdiSpecificationsService {
   private filterWhere(filters: SpecFilters): Record<string, unknown>[] {
     const and: Record<string, unknown>[] = [];
     if (filters.domainId) and.push({ domainId: filters.domainId });
-    if (filters.type) and.push({ type: filters.type });
-    if (filters.maturityLevel) and.push({ maturityLevel: filters.maturityLevel });
-    if (filters.status === 'active') and.push({ isActive: true });
-    else if (filters.status === 'inactive') and.push({ isActive: false });
+    const type = filterEnum<SpecType>(filters.type, SPEC_TYPES, 'NDI specification type');
+    const maturityLevel = filterEnum<MaturityLevel>(filters.maturityLevel, MATURITY_LEVELS, 'NDI maturity level');
+    const status = filterEnum<SpecStatusFilter>(filters.status, SPEC_STATUS_FILTERS, 'NDI status filter');
+    if (type) and.push({ type });
+    if (maturityLevel) and.push({ maturityLevel });
+    if (status === 'active') and.push({ isActive: true });
+    else if (status === 'inactive') and.push({ isActive: false });
     if (filters.search) {
       const term = filters.search.trim();
       and.push({
@@ -308,9 +335,6 @@ export class NdiSpecificationsService {
 
     const domains = await this.prisma.ndiDomain.findMany();
     const domainMap = new Map(domains.map((d) => [d.code.toLowerCase(), d.id]));
-    const typeSet = new Set<string>(SPEC_TYPES);
-    const levelSet = new Set<string>(MATURITY_LEVELS);
-
     let created = 0;
     let updated = 0;
     const errors: { row: number; message: string }[] = [];
@@ -332,12 +356,12 @@ export class NdiSpecificationsService {
         continue;
       }
       const type = (row['type'] ?? 'standard').trim().toLowerCase() || 'standard';
-      if (!typeSet.has(type)) {
+      if (!isSpecType(type)) {
         errors.push({ row: line, message: `Invalid type: ${type}` });
         continue;
       }
       const maturityLevel = (row['maturitylevel'] ?? 'level_1').trim().toLowerCase() || 'level_1';
-      if (!levelSet.has(maturityLevel)) {
+      if (!isMaturityLevel(maturityLevel)) {
         errors.push({ row: line, message: `Invalid maturityLevel: ${maturityLevel}` });
         continue;
       }
@@ -349,8 +373,8 @@ export class NdiSpecificationsService {
         nameEn,
         nameAr,
         criterion: (row['criterion'] ?? '').trim() || null,
-        type: type as never,
-        maturityLevel: maturityLevel as never,
+        type,
+        maturityLevel,
         descriptionEn: (row['descriptionen'] ?? '').trim() || null,
         descriptionAr: (row['descriptionar'] ?? '').trim() || null,
         acceptanceCriteria: (row['acceptancecriteria'] ?? '').trim() || null,

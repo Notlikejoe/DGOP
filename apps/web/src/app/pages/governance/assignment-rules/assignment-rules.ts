@@ -202,7 +202,7 @@ export class AssignmentRulesPage implements OnInit {
         this.modalOpen.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('rule.saveError')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('rule.saveError')); this.saving.set(false); },
     });
   }
 
@@ -213,7 +213,7 @@ export class AssignmentRulesPage implements OnInit {
     if (!ok) return;
     this.http.delete('/api/assignment-rules/' + r.id).subscribe({
       next: () => { this.toast.success(this.t('rule.deleted')); this.load(); },
-      error: () => this.toast.error(this.t('rule.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('rule.saveError')),
     });
   }
 

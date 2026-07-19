@@ -179,8 +179,7 @@ export class PeoplePage implements OnInit {
         this.modalOpen.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.t('people.saveError'));
+      error: (err) => { this.toast.errorFrom(err, this.t('people.saveError'));
         this.saving.set(false);
       },
     });
@@ -198,7 +197,7 @@ export class PeoplePage implements OnInit {
         this.toast.success(this.t('people.deleted'));
         this.load();
       },
-      error: () => this.toast.error(this.t('people.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('people.saveError')),
     });
   }
 

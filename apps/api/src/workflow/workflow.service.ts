@@ -737,7 +737,6 @@ export class WorkflowService implements OnModuleInit {
   }
 
   async configuration(roleCodes: string[], viewer?: AuthUser) {
-    await this.ensureDefaultTemplates();
     const [templates, casesResult] = await Promise.all([
       this.listTemplates(roleCodes),
       this.listCases(roleCodes, { page: 1, pageSize: 500 }, viewer),
@@ -877,16 +876,71 @@ export class WorkflowService implements OnModuleInit {
     return Boolean(asset);
   }
 
-  private async assertAssetVisible(roleCodes: string[], assetId: string): Promise<void> {
-    const assetIds = await this.visibleAssetIds(roleCodes);
+  private async assertAssetVisible(
+    roleCodes: string[],
+    assetId: string,
+    client: PrismaWriter = this.prisma,
+  ): Promise<void> {
+    const assetIds = await this.visibleAssetIds(roleCodes, client);
     if (assetIds !== 'all' && !assetIds.has(assetId)) {
       throw new NotFoundException('workflow case not found');
     }
   }
 
-  private async assertCaseVisible(roleCodes: string[], wfCase: { assetId: string | null }): Promise<void> {
-    if (!wfCase.assetId) return;
-    await this.assertAssetVisible(roleCodes, wfCase.assetId);
+  private workflowTaskActorVisibility(
+    roleCodes: string[],
+    actor?: string | AuthUser,
+  ): Prisma.WorkflowTaskWhereInput[] {
+    const visibility: Prisma.WorkflowTaskWhereInput[] = [];
+    if (actor && typeof actor !== 'string') visibility.push({ assigneeUserId: actor.id });
+    if (roleCodes.length) {
+      visibility.push({
+        assigneeUserId: null,
+        OR: [
+          { assigneeRoleCode: { in: roleCodes } },
+          { templateStage: { assigneeRoleCode: { in: roleCodes } } },
+        ],
+      });
+    }
+    return visibility;
+  }
+
+  private workflowCaseActorVisibility(
+    roleCodes: string[],
+    actor?: string | AuthUser,
+  ): Prisma.WorkflowCaseWhereInput[] {
+    const visibility: Prisma.WorkflowCaseWhereInput[] = [];
+    const actorEmail = typeof actor === 'string' ? actor : actor?.email;
+    if (actorEmail) visibility.push({ createdBy: actorEmail });
+    const taskVisibility = this.workflowTaskActorVisibility(roleCodes, actor);
+    if (taskVisibility.length) visibility.push({ tasks: { some: { OR: taskVisibility } } });
+    return visibility;
+  }
+
+  private async assertCaseVisible(
+    roleCodes: string[],
+    wfCase: { id?: string; assetId: string | null },
+    actor?: string | AuthUser,
+    client: PrismaWriter = this.prisma,
+  ): Promise<void> {
+    if (wfCase.assetId) {
+      await this.assertAssetVisible(roleCodes, wfCase.assetId, client);
+      return;
+    }
+    const assetIds = await this.visibleAssetIds(roleCodes, client);
+    if (assetIds === 'all') return;
+    if (!wfCase.id) throw new NotFoundException('workflow case not found');
+    const actorVisibility = this.workflowCaseActorVisibility(roleCodes, actor);
+    if (!actorVisibility.length) throw new NotFoundException('workflow case not found');
+    const visible = await client.workflowCase.findFirst({
+      where: {
+        id: wfCase.id,
+        assetId: null,
+        OR: actorVisibility,
+      },
+      select: { id: true },
+    });
+    if (!visible) throw new NotFoundException('workflow case not found');
   }
 
   private async workflowCaseVisibilityWhere(
@@ -899,16 +953,7 @@ export class WorkflowService implements OnModuleInit {
     const visible: Prisma.WorkflowCaseWhereInput[] = [];
     if (assetIds.size > 0) visible.push({ assetId: { in: [...assetIds] } });
     if (viewer) {
-      const taskVisibility: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: viewer.id }];
-      if (viewer.roles.length) {
-        taskVisibility.push({
-          assigneeUserId: null,
-          OR: [
-            { assigneeRoleCode: { in: viewer.roles } },
-            { templateStage: { assigneeRoleCode: { in: viewer.roles } } },
-          ],
-        });
-      }
+      const taskVisibility = this.workflowTaskActorVisibility(viewer.roles, viewer);
       visible.push(
         { AND: [{ assetId: null }, { createdBy: viewer.email }] },
         { AND: [{ assetId: null }, { tasks: { some: { OR: taskVisibility } } }] },
@@ -1267,10 +1312,10 @@ export class WorkflowService implements OnModuleInit {
     return created;
   }
 
-  async updateCase(id: string, dto: UpdateCaseDto, roleCodes: string[], actor: string) {
+  async updateCase(id: string, dto: UpdateCaseDto, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const existing = await this.prisma.workflowCase.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('workflow case not found');
-    await this.assertCaseVisible(roleCodes, existing);
+    await this.assertCaseVisible(roleCodes, existing, viewer ?? actor);
     this.assertCaseCanChange(existing.status);
     if (dto.status !== undefined) {
       if (existing.templateId && dto.status !== existing.status) {
@@ -1317,7 +1362,7 @@ export class WorkflowService implements OnModuleInit {
     const run = async (writer: WorkflowWriter) => {
       const existing = await writer.workflowCase.findUnique({ where: { id: input.caseId } });
       if (!existing) throw new NotFoundException('workflow case not found');
-      await this.assertCaseVisible(input.roleCodes, existing);
+      await this.assertCaseVisible(input.roleCodes, existing, input.actor, writer);
 
       const now = new Date();
       if (input.completeOpenTasks) {
@@ -1392,7 +1437,7 @@ export class WorkflowService implements OnModuleInit {
         include: { case: true },
       });
       if (!task) throw new NotFoundException('workflow task not found');
-      await this.assertCaseVisible(input.roleCodes, task.case);
+      await this.assertCaseVisible(input.roleCodes, task.case, input.actor, writer);
       this.assertCaseCanChange(task.case.status);
       if (task.status === TaskStatus.completed || task.status === TaskStatus.cancelled) {
         throw new BadRequestException('This task has already been decided');
@@ -1436,13 +1481,13 @@ export class WorkflowService implements OnModuleInit {
     return this.prisma.$transaction((tx) => run(tx));
   }
 
-  async submitCase(id: string, roleCodes: string[], actor: string) {
+  async submitCase(id: string, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const existing = await this.prisma.workflowCase.findUnique({
       where: { id },
       include: { tasks: true },
     });
     if (!existing) throw new NotFoundException('workflow case not found');
-    await this.assertCaseVisible(roleCodes, existing);
+    await this.assertCaseVisible(roleCodes, existing, viewer ?? actor);
     if (existing.status !== CaseStatus.draft) {
       throw new BadRequestException('Only a draft case can be submitted');
     }
@@ -1469,10 +1514,10 @@ export class WorkflowService implements OnModuleInit {
   }
 
   // ---------- tasks ----------
-  async addTask(caseId: string, dto: AddTaskDto, roleCodes: string[], actor: string) {
+  async addTask(caseId: string, dto: AddTaskDto, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const wfCase = await this.prisma.workflowCase.findUnique({ where: { id: caseId } });
     if (!wfCase) throw new NotFoundException('workflow case not found');
-    await this.assertCaseVisible(roleCodes, wfCase);
+    await this.assertCaseVisible(roleCodes, wfCase, viewer ?? actor);
     this.assertCaseCanChange(wfCase.status);
     if (dto.assigneeUserId) await this.assertUser(dto.assigneeUserId);
     const type = dto.type ? this.assertKnownTaskType(dto.type) : 'review';
@@ -1494,10 +1539,10 @@ export class WorkflowService implements OnModuleInit {
     return this.withSla(task);
   }
 
-  async updateTask(id: string, dto: UpdateTaskDto, roleCodes: string[], actor: string) {
+  async updateTask(id: string, dto: UpdateTaskDto, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const existing = await this.prisma.workflowTask.findUnique({ where: { id }, include: { case: true } });
     if (!existing) throw new NotFoundException('workflow task not found');
-    await this.assertCaseVisible(roleCodes, existing.case);
+    await this.assertCaseVisible(roleCodes, existing.case, viewer ?? actor);
     this.assertCaseCanChange(existing.case.status);
     if (existing.status === TaskStatus.completed || existing.status === TaskStatus.cancelled) {
       throw new BadRequestException('A completed or cancelled task cannot be modified');
@@ -1560,7 +1605,7 @@ export class WorkflowService implements OnModuleInit {
     return toPaged(data, total, page);
   }
 
-  async getTask(id: string, roleCodes: string[]) {
+  async getTask(id: string, roleCodes: string[], viewer?: AuthUser) {
     const task = await this.prisma.workflowTask.findUnique({
       where: { id },
       include: {
@@ -1569,7 +1614,7 @@ export class WorkflowService implements OnModuleInit {
       },
     });
     if (!task) throw new NotFoundException('workflow task not found');
-    await this.assertCaseVisible(roleCodes, task.case);
+    await this.assertCaseVisible(roleCodes, task.case, viewer);
     return this.withSla(task);
   }
 
@@ -1726,7 +1771,7 @@ export class WorkflowService implements OnModuleInit {
       include: { case: true, templateStage: { select: { assigneeRoleCode: true } } },
     });
     if (!task) throw new NotFoundException('workflow task not found');
-    await this.assertCaseVisible(user.roles, task.case);
+    await this.assertCaseVisible(user.roles, task.case, user);
     this.assertCaseCanChange(task.case.status);
     if (task.status === TaskStatus.completed || task.status === TaskStatus.cancelled) {
       throw new BadRequestException('This task has already been decided');

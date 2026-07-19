@@ -41,10 +41,10 @@ export class SearchService {
     if (can('people.view')) groupPromises.push(this.searchPeople(query, limit));
     if (can('roles.view')) groupPromises.push(this.searchRoles(query, limit));
     if (can('workflow_cases.view')) groupPromises.push(this.searchWorkflow(query, limit, assetIds, user));
-    if (can('ndi_specifications.view')) groupPromises.push(this.searchNdi(query, limit));
-    if (can('data_quality_issues.view')) groupPromises.push(this.searchDataQuality(query, limit, assetIds));
+    if (can('ndi_specifications.view')) groupPromises.push(this.searchNdi(query, limit, scope, user));
+    if (can('data_quality_issues.view')) groupPromises.push(this.searchDataQuality(query, limit, assetIds, user));
     if (can('open_data_candidates.view')) groupPromises.push(this.searchOpenData(query, limit, assetIds));
-    if (can('foi_requests.view')) groupPromises.push(this.searchFoi(query, limit, assetIds));
+    if (can('foi_requests.view')) groupPromises.push(this.searchFoi(query, limit, scope, assetIds));
     if (can('integrations.view')) groupPromises.push(this.searchIntegrations(query, limit));
     if (
       can('data_domains.view') ||
@@ -87,6 +87,46 @@ export class SearchService {
     return where;
   }
 
+  private isUnrestricted(scope: EffectiveScope): boolean {
+    return scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank == null;
+  }
+
+  private async actorPersonId(user: Pick<AuthUser, 'id' | 'email'>): Promise<string | null> {
+    const person = await this.prisma.person.findFirst({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [{ userId: user.id }, { email: user.email }],
+      },
+      select: { id: true },
+    });
+    return person?.id ?? null;
+  }
+
+  private async ndiSpecVisibilityWhere(
+    scope: EffectiveScope,
+    user: AuthUser,
+  ): Promise<Prisma.NdiSpecificationWhereInput> {
+    if (this.isUnrestricted(scope)) return { deletedAt: null, isActive: true };
+    const personId = await this.actorPersonId(user);
+    const visible: Prisma.NdiSpecificationWhereInput[] = [
+      {
+        evidence: {
+          some: {
+            deletedAt: null,
+            OR: [{ submittedBy: user.email }, { reviewedBy: user.email }],
+          },
+        },
+      },
+    ];
+    if (personId) visible.push({ ownerPersonId: personId });
+    return {
+      deletedAt: null,
+      isActive: true,
+      OR: visible,
+    };
+  }
+
   private async visibleAssetIds(roleCodes: string[]): Promise<Set<string> | 'all'> {
     const scope = await this.scope.resolve(roleCodes);
     const unrestricted =
@@ -99,12 +139,28 @@ export class SearchService {
     return new Set(rows.map((row) => row.id));
   }
 
-  private assetLinkedWhere(assetIds: Set<string> | 'all', includeUnlinked: boolean) {
+  private dataQualityIssueScopeWhere(
+    assetIds: Set<string> | 'all',
+    user: Pick<AuthUser, 'email'>,
+  ): Prisma.DataQualityIssueWhereInput {
     if (assetIds === 'all') return {};
-    const scopedAssetWhere = assetIds.size > 0 ? { assetId: { in: [...assetIds] } } : null;
-    if (includeUnlinked && scopedAssetWhere) return { OR: [{ assetId: null }, scopedAssetWhere] };
-    if (includeUnlinked) return { assetId: null };
-    return scopedAssetWhere ?? { id: { equals: '__no_visible_records__' } };
+    const or: Prisma.DataQualityIssueWhereInput[] = [];
+    if (assetIds.size > 0) or.push({ assetId: { in: [...assetIds] } });
+    or.push({ AND: [{ assetId: null }, { createdBy: user.email }] });
+    return { OR: or };
+  }
+
+  private foiScopeWhere(
+    scope: EffectiveScope,
+    assetIds: Set<string> | 'all',
+  ): Prisma.FoiRequestWhereInput {
+    if (assetIds === 'all') return {};
+    const or: Prisma.FoiRequestWhereInput[] = [];
+    if (assetIds.size > 0) or.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all' && scope.maxClassRank == null && scope.domains !== 'all') {
+      or.push({ AND: [{ assetId: null }, { dataDomainId: { in: scope.domains } }] });
+    }
+    return or.length ? { OR: or } : { id: { equals: '__no_visible_records__' } };
   }
 
   private workflowCaseScopeWhere(
@@ -285,20 +341,28 @@ export class SearchService {
     );
   }
 
-  private async searchNdi(query: string, limit: number): Promise<SearchGroup | null> {
+  private async searchNdi(
+    query: string,
+    limit: number,
+    scope: EffectiveScope,
+    user: AuthUser,
+  ): Promise<SearchGroup | null> {
     const rows = await this.prisma.ndiSpecification.findMany({
       where: {
-        deletedAt: null,
-        isActive: true,
-        OR: [
-          { code: this.contains(query) },
-          { nameEn: this.contains(query) },
-          { nameAr: this.contains(query) },
-          { descriptionEn: this.contains(query) },
-          { descriptionAr: this.contains(query) },
-          { criterion: this.contains(query) },
-          { acceptanceCriteria: this.contains(query) },
-          { reference: this.contains(query) },
+        AND: [
+          await this.ndiSpecVisibilityWhere(scope, user),
+          {
+            OR: [
+              { code: this.contains(query) },
+              { nameEn: this.contains(query) },
+              { nameAr: this.contains(query) },
+              { descriptionEn: this.contains(query) },
+              { descriptionAr: this.contains(query) },
+              { criterion: this.contains(query) },
+              { acceptanceCriteria: this.contains(query) },
+              { reference: this.contains(query) },
+            ],
+          },
         ],
       },
       select: { id: true, code: true, nameEn: true, type: true, maturityLevel: true, domain: { select: { nameEn: true } } },
@@ -323,12 +387,13 @@ export class SearchService {
     query: string,
     limit: number,
     assetIds: Set<string> | 'all',
+    user: AuthUser,
   ): Promise<SearchGroup | null> {
     const rows = await this.prisma.dataQualityIssue.findMany({
       where: {
         AND: [
           { deletedAt: null },
-          this.assetLinkedWhere(assetIds, true),
+          this.dataQualityIssueScopeWhere(assetIds, user),
           {
             OR: [
               { code: this.contains(query) },
@@ -413,13 +478,14 @@ export class SearchService {
   private async searchFoi(
     query: string,
     limit: number,
+    scope: EffectiveScope,
     assetIds: Set<string> | 'all',
   ): Promise<SearchGroup | null> {
     const rows = await this.prisma.foiRequest.findMany({
       where: {
         AND: [
           { deletedAt: null },
-          this.assetLinkedWhere(assetIds, true),
+          this.foiScopeWhere(scope, assetIds),
           {
             OR: [
               { requestNumber: this.contains(query) },

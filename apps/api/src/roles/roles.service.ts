@@ -28,7 +28,11 @@ export class RolesService {
       where: { deletedAt: null },
       orderBy: { nameEn: 'asc' },
       include: {
-        _count: { select: { userRoles: true, permissions: true } },
+        _count: { select: { permissions: true } },
+        userRoles: {
+          where: { user: { isActive: true } },
+          select: { userId: true },
+        },
       },
     });
     return roles.map((r) => ({
@@ -40,7 +44,7 @@ export class RolesService {
       isSystem: r.isSystem,
       isActive: r.isActive,
       maxClassificationRank: r.maxClassificationRank,
-      userCount: r._count.userRoles,
+      userCount: r.userRoles.length,
       permissionCount: r._count.permissions,
     }));
   }
@@ -106,6 +110,12 @@ export class RolesService {
 
   async update(id: string, dto: UpdateRoleDto, actor: string) {
     const role = await this.requireRole(id);
+    if (role.code === 'system_admin') {
+      throw new ForbiddenException('system_admin role is immutable');
+    }
+    if (role.isSystem && dto.isActive === false) {
+      throw new ForbiddenException('System roles cannot be deactivated');
+    }
     const role2 = await this.prisma.role.update({
       where: { id: role.id },
       data: {
@@ -181,6 +191,7 @@ export class RolesService {
     if (role.code === 'system_admin') {
       throw new ForbiddenException('system_admin scope is always unrestricted');
     }
+    await this.assertScopeRefsExist(dto.scopes);
     await this.prisma.$transaction([
       this.prisma.roleDataScope.deleteMany({ where: { roleId: role.id } }),
       this.prisma.roleDataScope.createMany({
@@ -214,6 +225,31 @@ export class RolesService {
   async scopePreview(id: string) {
     const role = await this.requireRole(id);
     return this.scope.resolve([role.code]);
+  }
+
+  private async assertScopeRefsExist(scopes: SetRoleScopesDto['scopes']): Promise<void> {
+    const orgUnitRefs = [...new Set(scopes.filter((scope) => scope.scopeType === 'org_unit').map((scope) => scope.refId))];
+    const domainRefs = [...new Set(scopes.filter((scope) => scope.scopeType === 'data_domain').map((scope) => scope.refId))];
+    const missing: string[] = [];
+    if (orgUnitRefs.length) {
+      const rows = await this.prisma.organizationUnit.findMany({
+        where: { id: { in: orgUnitRefs }, deletedAt: null, isActive: true },
+        select: { id: true },
+      });
+      const found = new Set(rows.map((row) => row.id));
+      missing.push(...orgUnitRefs.filter((id) => !found.has(id)).map((id) => `org_unit:${id}`));
+    }
+    if (domainRefs.length) {
+      const rows = await this.prisma.dataDomain.findMany({
+        where: { id: { in: domainRefs }, deletedAt: null, isActive: true },
+        select: { id: true },
+      });
+      const found = new Set(rows.map((row) => row.id));
+      missing.push(...domainRefs.filter((id) => !found.has(id)).map((id) => `data_domain:${id}`));
+    }
+    if (missing.length) {
+      throw new BadRequestException(`Unknown or inactive scope references: ${missing.join(', ')}`);
+    }
   }
 
   private async requireRole(id: string) {

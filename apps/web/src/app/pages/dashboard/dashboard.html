@@ -190,13 +190,7 @@
                 <span class="eyebrow">{{ t('cmd.platformSignal') }}</span>
                 <h2>{{ t('cmd.systemReadiness') }}</h2>
               </div>
-              @if (state() === 'ok') {
-                <app-status-chip kind="success" [label]="t('cmd.online')" />
-              } @else if (state() === 'error') {
-                <app-status-chip kind="danger" [label]="t('cmd.offline')" />
-              } @else {
-                <app-status-chip kind="info" [label]="t('cmd.checking')" />
-              }
+              <app-status-chip [kind]="platformSignalKind()" [label]="platformSignalLabel()" />
             </div>
 
             @if (state() === 'loading') {
@@ -206,11 +200,11 @@
               <dl class="kv">
                 <div class="kv__row">
                   <dt>{{ t('cmd.database') }}</dt>
-                  <dd>{{ health()?.database?.status }}</dd>
+                  <dd>{{ databaseStatusLabel() }}</dd>
                 </div>
                 <div class="kv__row">
                   <dt>{{ t('cmd.environment') }}</dt>
-                  <dd>{{ health()?.environment }}</dd>
+                  <dd>{{ environmentLabel() }}</dd>
                 </div>
                 <div class="kv__row">
                   <dt>{{ t('cmd.service') }}</dt>

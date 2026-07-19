@@ -201,9 +201,48 @@ export class SecurityGovernanceService {
     return { OR: [{ id: { in: [...assetIds] } }] };
   }
 
-  private assetRelationScope(assetIds: Set<string> | 'all') {
+  private assetClassificationScope(
+    scope: EffectiveScope,
+    assetIds: Set<string> | 'all',
+  ): Prisma.DlpIncidentWhereInput {
     if (assetIds === 'all') return {};
-    return { OR: [{ assetId: null }, { assetId: { in: [...assetIds] } }] };
+    const or: Prisma.DlpIncidentWhereInput[] = [];
+    if (assetIds.size > 0) or.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank != null) {
+      or.push({
+        AND: [
+          { assetId: null },
+          { classificationId: { not: null } },
+          { classification: { rank: { lte: scope.maxClassRank } } },
+        ],
+      });
+    }
+    return or.length ? { OR: or } : { id: { equals: '__no_visible_security_records__' } };
+  }
+
+  private assetDomainClassificationScope(
+    scope: EffectiveScope,
+    assetIds: Set<string> | 'all',
+  ): Prisma.AbacDecisionLogWhereInput {
+    if (assetIds === 'all') return {};
+    const or: Prisma.AbacDecisionLogWhereInput[] = [];
+    if (assetIds.size > 0) or.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all') {
+      const unlinked: Prisma.AbacDecisionLogWhereInput[] = [{ assetId: null }];
+      if (scope.domains !== 'all') {
+        unlinked.push({ domainId: { in: scope.domains } });
+      }
+      if (scope.maxClassRank != null) {
+        unlinked.push({
+          OR: [
+            { classificationId: null },
+            { classification: { rank: { lte: scope.maxClassRank } } },
+          ],
+        });
+      }
+      if (unlinked.length > 1) or.push({ AND: unlinked });
+    }
+    return or.length ? { OR: or } : { id: { equals: '__no_visible_security_decisions__' } };
   }
 
   private requiredAssetScope(assetIds: Set<string> | 'all') {
@@ -221,13 +260,29 @@ export class SecurityGovernanceService {
   }
 
   private reviewItemScope(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.AccessReviewItemWhereInput {
-    const and: Prisma.AccessReviewItemWhereInput[] = [];
-    if (assetIds !== 'all') and.push({ OR: [{ assetId: null }, { assetId: { in: [...assetIds] } }] });
-    if (scope.domains !== 'all') and.push({ OR: [{ domainId: null }, { domainId: { in: scope.domains } }] });
-    if (scope.maxClassRank != null) {
-      and.push({ OR: [{ classificationId: null }, { classification: { rank: { lte: scope.maxClassRank } } }] });
+    if (assetIds === 'all') {
+      return this.domainClassWhere<Prisma.AccessReviewItemWhereInput>(scope);
     }
-    return and.length ? { AND: and } : {};
+    const or: Prisma.AccessReviewItemWhereInput[] = [];
+    if (assetIds.size > 0) or.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all') {
+      const unlinked: Prisma.AccessReviewItemWhereInput[] = [{ assetId: null }];
+      if (scope.domains !== 'all') {
+        unlinked.push({ domainId: { in: scope.domains } });
+      } else if (scope.maxClassRank == null) {
+        return or.length ? { OR: or } : { id: { equals: '__no_visible_access_review_items__' } };
+      }
+      if (scope.maxClassRank != null) {
+        unlinked.push({
+          OR: [
+            { classificationId: null },
+            { classification: { rank: { lte: scope.maxClassRank } } },
+          ],
+        });
+      }
+      if (unlinked.length > 1) or.push({ AND: unlinked });
+    }
+    return or.length ? { OR: or } : { id: { equals: '__no_visible_access_review_items__' } };
   }
 
   private async nextCode(prefix: string, model: 'maskingPolicy' | 'accessReview' | 'dlpIncident'): Promise<string> {
@@ -369,7 +424,8 @@ export class SecurityGovernanceService {
     const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
     const mappingWhere = { isActive: true, ...this.domainClassWhere<Prisma.RoleDataAccessMapWhereInput>(scope) };
     const policyWhere = { deletedAt: null, isActive: true, ...this.domainClassWhere<Prisma.MaskingPolicyWhereInput>(scope) };
-    const assetScope = this.assetRelationScope(assetIds);
+    const dlpScope = this.assetClassificationScope(scope, assetIds);
+    const decisionScope = this.assetDomainClassificationScope(scope, assetIds);
     const itemScope = this.reviewItemScope(scope, assetIds);
     const [mappings, policies, pendingReviews, openDlp, pendingClassification, recentDecisions] = await Promise.all([
       this.prisma.roleDataAccessMap.count({ where: mappingWhere }),
@@ -378,7 +434,7 @@ export class SecurityGovernanceService {
       this.prisma.dlpIncident.count({
         where: {
           AND: [
-            assetScope,
+            dlpScope,
             { status: { notIn: [DlpIncidentStatus.closed, DlpIncidentStatus.false_positive] } },
           ],
         },
@@ -387,7 +443,7 @@ export class SecurityGovernanceService {
         where: { AND: [this.requiredAssetScope(assetIds), { status: ClassificationRequestStatus.pending }] },
       }),
       this.prisma.abacDecisionLog.findMany({
-        where: assetScope,
+        where: decisionScope,
         include: {
           role: { select: { id: true, code: true, nameEn: true, nameAr: true } },
           asset: { select: { id: true, code: true, nameEn: true, nameAr: true } },
@@ -443,9 +499,9 @@ export class SecurityGovernanceService {
   }
 
   async dlpIncidents(roleCodes: string[]) {
-    const assetIds = await this.visibleAssetIds(roleCodes);
+    const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
     return this.prisma.dlpIncident.findMany({
-      where: this.assetRelationScope(assetIds),
+      where: this.assetClassificationScope(scope, assetIds),
       include: dlpInclude,
       orderBy: [{ status: 'asc' }, { detectedAt: 'desc' }],
       take: 50,
@@ -463,9 +519,9 @@ export class SecurityGovernanceService {
   }
 
   async decisionLog(roleCodes: string[]) {
-    const assetIds = await this.visibleAssetIds(roleCodes);
+    const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
     return this.prisma.abacDecisionLog.findMany({
-      where: this.assetRelationScope(assetIds),
+      where: this.assetDomainClassificationScope(scope, assetIds),
       include: {
         actorUser: { select: { id: true, email: true, displayName: true } },
         role: { select: { id: true, code: true, nameEn: true, nameAr: true } },

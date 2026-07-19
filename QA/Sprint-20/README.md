@@ -19,7 +19,7 @@ Acceptance:
 As a FOI Officer, I want a clear SLA countdown, so that urgent and overdue requests are visible without reading technical fields.
 
 Acceptance:
-- Due date is calculated with a KSA business-day placeholder.
+- Due date is calculated with the KSA business-day calendar logic.
 - Queue rows show on-track, due-soon, overdue, or closed status with text and color.
 - Summary metrics show open, due-soon, and overdue requests.
 

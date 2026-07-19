@@ -3,6 +3,7 @@
  * Run with: ts-node test/scoring.service.spec.ts
  */
 import assert from 'node:assert';
+import { BadRequestException } from '@nestjs/common';
 import {
   detectGaps,
   maturityBand,
@@ -14,6 +15,8 @@ import { ScoringService } from '../src/scoring/scoring.service';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
+const adminUser = { id: 'admin-user', email: 'admin@dgop.local', roles: ['system_admin'] };
+const scopedUser = { id: 'scoped-user', email: 'owner@dgop.local', roles: ['ndi_reviewer'] };
 
 // ---------- pure logic ----------
 test('specWeight: type weight times maturity bonus', () => {
@@ -178,7 +181,7 @@ test('readiness: overall + per-domain scores and gap totals', async () => {
     ['s1', roll({ hasCurrentApproved: true, counts: { ...roll().counts, approved: 1 } })],
   ]);
   const svc = makeService(specs, rollups, [domainA, domainB]);
-  const r = await svc.readiness();
+  const r = await svc.readiness(adminUser);
 
   assert.strictEqual(r.overall.specCount, 3);
   assert.strictEqual(r.overall.satisfiedCount, 1);
@@ -197,7 +200,7 @@ test('domainDetail: rows include score, status, gaps', async () => {
     ['s1', roll({ hasCurrentApproved: true, counts: { ...roll().counts, approved: 1 } })],
   ]);
   const svc = makeService(specs, rollups, [domainA]);
-  const d = await svc.domainDetail('dA');
+  const d = await svc.domainDetail(adminUser, 'dA');
   assert.strictEqual(d.specs.length, 2);
   const r1 = d.specs.find((s) => s.id === 's1')!;
   assert.strictEqual(r1.satisfied, true);
@@ -216,12 +219,74 @@ test('gaps: queue sorted high severity first, filterable by type', async () => {
     ['s1', roll({ hasCurrentApproved: true, counts: { ...roll().counts, approved: 1 } })],
   ]);
   const svc = makeService(specs, rollups, [domainA]);
-  const all = await svc.gaps();
+  const all = await svc.gaps(adminUser);
   assert.strictEqual(all.length, 2);
   assert.strictEqual(all[0].severity, 'high');
-  const onlyUnassigned = await svc.gaps({ gapType: 'unassigned' });
+  const onlyUnassigned = await svc.gaps(adminUser, { gapType: 'unassigned' });
   assert.strictEqual(onlyUnassigned.length, 1);
   assert.strictEqual(onlyUnassigned[0].gapType, 'unassigned');
+});
+
+test('gaps: rejects invalid gap type before loading specs or evidence', async () => {
+  let specLoads = 0;
+  let evidenceLoads = 0;
+  const prisma = {
+    ndiSpecification: {
+      findMany: async () => {
+        specLoads += 1;
+        return [];
+      },
+    },
+  };
+  const evidence = {
+    rollupForSpecs: async () => {
+      evidenceLoads += 1;
+      return new Map();
+    },
+  };
+  const svc = new ScoringService(prisma as never, evidence as never);
+
+  await assert.rejects(
+    () => svc.gaps(adminUser, { gapType: 'almost_missing' }),
+    BadRequestException,
+  );
+  assert.strictEqual(specLoads, 0);
+  assert.strictEqual(evidenceLoads, 0);
+});
+
+test('readiness: scoped scoring only loads specs visible by owner or evidence responsibility', async () => {
+  let specWhere: unknown;
+  let rollupIds: string[] = [];
+  const visibleSpec = spec('visible', { ownerPersonId: 'person-1' });
+  const prisma = {
+    person: {
+      findFirst: async () => ({ id: 'person-1' }),
+    },
+    ndiSpecification: {
+      findMany: async (args: any) => {
+        specWhere = args.where;
+        return [visibleSpec];
+      },
+    },
+    ndiDomain: {
+      findMany: async () => [domainA],
+    },
+  };
+  const evidence = {
+    rollupForSpecs: async (ids: string[]) => {
+      rollupIds = ids;
+      return new Map();
+    },
+  };
+  const svc = new ScoringService(prisma as never, evidence as never);
+  const r = await svc.readiness(scopedUser);
+  const whereText = JSON.stringify(specWhere);
+
+  assert.strictEqual(r.overall.specCount, 1);
+  assert.deepStrictEqual(rollupIds, ['visible']);
+  assert.ok(whereText.includes('ownerPersonId'));
+  assert.ok(whereText.includes('submittedBy'));
+  assert.ok(whereText.includes('reviewedBy'));
 });
 
 (async () => {

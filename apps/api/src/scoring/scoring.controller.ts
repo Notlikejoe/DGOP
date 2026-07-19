@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ScoringService } from './scoring.service';
-import { GapType } from './scoring.logic';
-import { RequirePermissions } from '../auth/decorators';
+import { CurrentUser, RequirePermissions } from '../auth/decorators';
+import { AuthUser } from '../auth/auth.types';
 
 @Controller('ndi/scoring')
 export class ScoringController {
@@ -9,19 +9,19 @@ export class ScoringController {
 
   @Get('readiness')
   @RequirePermissions('ndi_scoring.view')
-  readiness() {
-    return this.service.readiness();
+  readiness(@CurrentUser() user: AuthUser) {
+    return this.service.readiness(user);
   }
 
   @Get('domains/:domainId')
   @RequirePermissions('ndi_scoring.view')
-  domainDetail(@Param('domainId') domainId: string) {
-    return this.service.domainDetail(domainId);
+  domainDetail(@CurrentUser() user: AuthUser, @Param('domainId') domainId: string) {
+    return this.service.domainDetail(user, domainId);
   }
 
   @Get('gaps')
   @RequirePermissions('ndi_scoring.view')
-  gaps(@Query('gapType') gapType?: GapType, @Query('domainId') domainId?: string) {
-    return this.service.gaps({ gapType, domainId });
+  gaps(@CurrentUser() user: AuthUser, @Query('gapType') gapType?: string, @Query('domainId') domainId?: string) {
+    return this.service.gaps(user, { gapType, domainId });
   }
 }

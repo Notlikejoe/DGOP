@@ -5,7 +5,7 @@
 import assert from 'node:assert';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdtempSync, readdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 
 // Point storage at a throwaway temp dir before importing the service.
 process.env.EVIDENCE_STORAGE_DIR = mkdtempSync(join(tmpdir(), 'dgop-evidence-'));
@@ -215,6 +215,42 @@ test('create: removes the stored file if database persistence fails', async () =
   );
 
   assert.strictEqual(readdirSync(storageDir).length, before);
+});
+
+test('fileFor: rejects legacy file names that escape evidence storage', async () => {
+  const svc = makeService({
+    evidenceRow: { ...base, fileName: '../outside.pdf' },
+  });
+
+  await assert.rejects(
+    () => svc.fileFor('e1', adminUser),
+    /evidence file not found/i,
+  );
+});
+
+test('fileFor: resolves stored files only inside evidence storage', async () => {
+  const svc = makeService({
+    evidenceRow: { ...base, fileName: 'inside.txt', mimeType: 'text/plain', originalName: 'inside.txt' },
+  });
+  const storageDir = (svc as unknown as { storageDir: string }).storageDir;
+  writeFileSync(join(storageDir, 'inside.txt'), 'ok');
+
+  const file = await svc.fileFor('e1', adminUser);
+  assert.strictEqual(file.path, join(storageDir, 'inside.txt'));
+  assert.strictEqual(file.originalName, 'inside.txt');
+});
+
+test('remove: ignores unsafe legacy file names while soft-deleting the evidence row', async () => {
+  let captured: any = null;
+  const svc = makeService({
+    evidenceRow: { ...base, status: 'draft', fileName: '../outside.pdf', submittedBy: 'admin@dgop.local' },
+    onUpdate: (a) => (captured = a.data),
+  });
+
+  const result = await svc.remove('e1', adminUser);
+
+  assert.strictEqual(result.success, true);
+  assert.ok(captured.deletedAt instanceof Date);
 });
 
 test('listBySpec: scoped users only query owned or submitted evidence', async () => {

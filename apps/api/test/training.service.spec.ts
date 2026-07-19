@@ -3,7 +3,9 @@
  * Run with: ts-node test/training.service.spec.ts
  */
 import assert from 'node:assert';
+import { BadRequestException } from '@nestjs/common';
 import { TrainingService } from '../src/training/training.service';
+import { MAX_PAGE_SIZE } from '../src/common/pagination';
 import { assignmentEffectiveStatus, awarenessReadinessScore, certificationState, pct } from '../src/training/training.logic';
 
 const tests: { name: string; fn: () => void | Promise<void> }[] = [];
@@ -87,6 +89,100 @@ test('course prerequisite validation rejects cycles through an existing chain', 
     assertPrerequisiteCourse: (id: string, courseId: string) => Promise<string>;
   };
   await assert.rejects(() => validator.assertPrerequisiteCourse('course-2', 'course-1'), /cycle/);
+});
+
+test('assignment list rejects invalid status before Prisma receives it', async () => {
+  let assignmentFinds = 0;
+  const service = new TrainingService(
+    {
+      trainingAssignment: {
+        findMany: async () => {
+          assignmentFinds++;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      service.listAssignments(
+        { id: 'user-1', email: 'user@dgop.local', roles: ['data_steward'] },
+        { status: 'nearly_done' },
+        '1',
+        '10',
+      ),
+    BadRequestException,
+  );
+  assert.strictEqual(assignmentFinds, 0);
+});
+
+test('assignment list keeps legacy array response while bounding the default query', async () => {
+  let captured: { skip?: number; take?: number } | null = null;
+  const service = new TrainingService(
+    {
+      trainingAssignment: {
+        findMany: async (args: { skip?: number; take?: number }) => {
+          captured = args;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+  );
+
+  const result = await service.listAssignments(
+    { id: 'admin-1', email: 'admin@dgop.local', roles: ['system_admin'] },
+    {},
+  );
+
+  assert.deepStrictEqual(result, []);
+  assert.ok(captured);
+  const args = captured as { skip?: number; take?: number };
+  assert.strictEqual(args.skip, 0);
+  assert.strictEqual(args.take, MAX_PAGE_SIZE);
+});
+
+test('awareness community lists keep legacy arrays while bounding default queries', async () => {
+  const captured: Record<string, { skip?: number; take?: number }> = {};
+  const delegate = (name: string) => ({
+    findMany: async (args: { skip?: number; take?: number }) => {
+      captured[name] = args;
+      return [];
+    },
+    count: async () => 0,
+  });
+  const service = new TrainingService(
+    {
+      certificationAttempt: delegate('certificationAttempt'),
+      continuingEducationActivity: delegate('continuingEducationActivity'),
+      communityArticle: delegate('communityArticle'),
+      expertProfile: delegate('expertProfile'),
+      mentorshipPair: delegate('mentorshipPair'),
+    } as never,
+    { log: async () => undefined } as never,
+  );
+  const admin = { id: 'admin-1', email: 'admin@dgop.local', roles: ['system_admin'] };
+
+  await service.listCertificationAttempts(admin);
+  await service.listContinuingEducation(admin);
+  await service.listCommunityArticles();
+  await service.listExpertProfiles();
+  await service.listMentorships(admin);
+
+  for (const name of [
+    'certificationAttempt',
+    'continuingEducationActivity',
+    'communityArticle',
+    'expertProfile',
+    'mentorshipPair',
+  ]) {
+    assert.strictEqual(captured[name]?.skip, 0, `${name} skip`);
+    assert.strictEqual(captured[name]?.take, MAX_PAGE_SIZE, `${name} take`);
+  }
 });
 
 (async () => {

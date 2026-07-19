@@ -89,6 +89,7 @@ export type ProductionAcceptanceDefinition = {
   ownerRoleCode: string;
   target: string;
   evidence: string[];
+  acceptedDeferral?: string;
 };
 
 export type DgpoSizingInput = {
@@ -97,6 +98,14 @@ export type DgpoSizingInput = {
   systemPlatforms: number;
   activeCases: number;
   openTasks: number;
+};
+
+export type OperatingPressureInput = {
+  bodyCode: string;
+  pressure: number;
+  governedAssets: number;
+  dataDomains: number;
+  recommendedFte: number;
 };
 
 export const OPERATING_BODY_DEFINITIONS: OperatingBodyDefinition[] = [
@@ -502,6 +511,7 @@ export const PRODUCTION_ACCEPTANCE_DEFINITIONS: ProductionAcceptanceDefinition[]
     ownerRoleCode: 'platform_admin',
     target: 'Search should be under 500ms p95 after production indexing and data-volume testing.',
     evidence: ['bounded search limit', 'scope-filtered queries', 'performance test plan'],
+    acceptedDeferral: 'Requires target production data volume, indexing/cache decisions, and signed load-test evidence in the selected hosting environment.',
   },
   {
     code: 'asset_360_performance',
@@ -510,6 +520,7 @@ export const PRODUCTION_ACCEPTANCE_DEFINITIONS: ProductionAcceptanceDefinition[]
     ownerRoleCode: 'platform_admin',
     target: 'Asset 360 should load under 2 seconds for production reference data volume.',
     evidence: ['bounded API selects', 'asset route build evidence', 'performance test plan'],
+    acceptedDeferral: 'Requires production-like reference data volume and browser/API timing evidence after final infrastructure sizing.',
   },
   {
     code: 'bulk_import_target',
@@ -518,6 +529,7 @@ export const PRODUCTION_ACCEPTANCE_DEFINITIONS: ProductionAcceptanceDefinition[]
     ownerRoleCode: 'data_custodian',
     target: '10,000-row import should complete under 10 minutes with row-level error reporting.',
     evidence: ['CSV import engine', 'row error outputs', 'batch reconciliation'],
+    acceptedDeferral: 'Requires production database sizing, import-file storage limits, and a 10,000-row signed performance run.',
   },
   {
     code: 'workflow_scale_target',
@@ -526,6 +538,7 @@ export const PRODUCTION_ACCEPTANCE_DEFINITIONS: ProductionAcceptanceDefinition[]
     ownerRoleCode: 'dmo_admin',
     target: 'Workflow queues should remain usable and SLA timers accurate within +/-30 seconds at target case volume.',
     evidence: ['workflow tests', 'KSA SLA helpers', 'scale test plan'],
+    acceptedDeferral: 'Requires a target-environment concurrency test with seeded role queues, active cases, and SLA recalculation evidence.',
   },
   {
     code: 'recovery_target',
@@ -534,6 +547,7 @@ export const PRODUCTION_ACCEPTANCE_DEFINITIONS: ProductionAcceptanceDefinition[]
     ownerRoleCode: 'platform_admin',
     target: 'Recover API/UI service in under 5 minutes for demo/UAT; production RTO/RPO depend on hosting/backup architecture.',
     evidence: ['production-style run', 'health endpoint', 'DR acceptance note'],
+    acceptedDeferral: 'Requires production backup/restore architecture, DR runbook exercise, and signed RTO/RPO acceptance evidence.',
   },
   {
     code: 'hypercare_support',
@@ -764,6 +778,26 @@ export function dgpoSizingGuidance(input: DgpoSizingInput) {
       'One coordinator band is assumed per 40 active cases or 80 open workflow tasks.',
     ],
   };
+}
+
+export function operatingPressureStatus(input: OperatingPressureInput): ProductionReadinessStatus {
+  if (input.pressure <= 0) return 'ready';
+  if (input.bodyCode === 'dgsc') return 'watch';
+
+  const stewardCapacity = Math.max(12, input.recommendedFte * 6);
+  const domainCapacity = Math.max(12, input.dataDomains * 3);
+  const qualityCapacity = Math.max(5, Math.ceil(input.governedAssets * 0.3));
+
+  const threshold =
+    input.bodyCode === 'dmo'
+      ? stewardCapacity
+      : input.bodyCode === 'domain_council'
+        ? domainCapacity
+        : input.bodyCode === 'data_council'
+          ? qualityCapacity
+          : 12;
+
+  return input.pressure > threshold ? 'watch' : 'ready';
 }
 
 export function platformServiceStatus(input: PlatformServiceInput): ProductionReadinessStatus {

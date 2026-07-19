@@ -330,7 +330,7 @@ export class FoiPage implements OnInit {
         this.selectedId.set(request.id);
         this.load();
       },
-      error: () => this.toast.error(this.t('foi.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('foi.error.save')),
       complete: () => this.saving.set(false),
     });
   }
@@ -383,7 +383,7 @@ export class FoiPage implements OnInit {
         this.requests.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
         this.selectedId.set(updated.id);
       },
-      error: () => this.toast.error(this.t('foi.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('foi.error.save')),
       complete: () => this.saving.set(false),
     });
   }

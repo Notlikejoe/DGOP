@@ -25,21 +25,21 @@ export class UsersService {
   findByEmailWithRoles(email: string) {
     return this.prisma.user.findUnique({
       where: { email },
-      include: { userRoles: { include: { role: true } } },
+      include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
     });
   }
 
   findByIdWithRoles(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
-      include: { userRoles: { include: { role: true } } },
+      include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
     });
   }
 
   async listUsers(page?: string | number, pageSize?: string | number) {
     const query = {
       orderBy: { createdAt: 'asc' as const },
-      include: { userRoles: { include: { role: true } } },
+      include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
     };
     const params = parsePageParams(page, pageSize);
     if (!params) {
@@ -162,11 +162,11 @@ export class UsersService {
   private async resolveRoleIds(roleCodes: string[]): Promise<string[]> {
     if (roleCodes.length === 0) return [];
     const roles = await this.prisma.role.findMany({
-      where: { code: { in: roleCodes }, deletedAt: null },
+      where: { code: { in: roleCodes }, deletedAt: null, isActive: true },
     });
     const found = new Set(roles.map((r) => r.code));
     const missing = roleCodes.filter((c) => !found.has(c));
-    if (missing.length) throw new BadRequestException(`Unknown roles: ${missing.join(', ')}`);
+    if (missing.length) throw new BadRequestException(`Unknown or inactive roles: ${missing.join(', ')}`);
     return roles.map((r) => r.id);
   }
 
@@ -176,12 +176,14 @@ export class UsersService {
       where: { id: userId },
       include: { userRoles: { include: { role: true } } },
     });
-    const isAdmin = target?.userRoles.some((ur) => ur.role.code === 'system_admin');
+    const isAdmin = target?.userRoles.some((ur) =>
+      ur.role.code === 'system_admin' && ur.role.isActive && !ur.role.deletedAt,
+    );
     if (!isAdmin) return;
     const activeAdmins = await this.prisma.user.count({
       where: {
         isActive: true,
-        userRoles: { some: { role: { code: 'system_admin' } } },
+        userRoles: { some: { role: { code: 'system_admin', isActive: true, deletedAt: null } } },
       },
     });
     if (activeAdmins <= 1) {

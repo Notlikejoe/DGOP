@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   BusinessGlossaryStatus,
   BusinessLineageStatus,
@@ -44,6 +44,17 @@ const assetSelect = {
 
 const domainSelect = { id: true, code: true, nameEn: true, nameAr: true };
 const workflowSelect = { id: true, code: true, status: true, title: true };
+const FINAL_GLOSSARY_STATUSES = new Set<BusinessGlossaryStatus>([
+  BusinessGlossaryStatus.approved,
+  BusinessGlossaryStatus.needs_revision,
+  BusinessGlossaryStatus.retired,
+  BusinessGlossaryStatus.expired,
+]);
+const FINAL_LIFECYCLE_STATUSES = new Set<LifecycleDecisionStatus>([
+  LifecycleDecisionStatus.approved,
+  LifecycleDecisionStatus.implemented,
+  LifecycleDecisionStatus.rejected,
+]);
 
 @Injectable()
 export class BusinessValueService {
@@ -256,6 +267,9 @@ export class BusinessValueService {
 
   async decideGlossaryTerm(roleCodes: string[], id: string, dto: DecideGlossaryTermDto, actor: string) {
     const existing = await this.findVisibleGlossary(roleCodes, id);
+    if (existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
+      throw new ForbiddenException('Glossary term creators cannot make the final review decision');
+    }
     const definitionChanged = dto.definition && dto.definition !== existing.definition;
     const nextVersion = definitionChanged ? existing.version + 1 : existing.version;
     const row = await this.prisma.$transaction(async (tx) => {
@@ -292,6 +306,9 @@ export class BusinessValueService {
     }
     const domainId = dto.domainId ?? source?.domainId ?? target?.domainId ?? null;
     await this.assertDomainVisible(scope, domainId);
+    if (!source && !target && !domainId) {
+      throw new BadRequestException('Lineage maps need a visible asset or domain');
+    }
     const score = clampScore(dto.impactScore, 50);
     const code = await this.nextCode('businessLineageMap', 'BLI');
     const row = await this.prisma.businessLineageMap.create({
@@ -315,6 +332,9 @@ export class BusinessValueService {
 
   async updateLineage(roleCodes: string[], id: string, dto: UpdateBusinessLineageDto, actor: string) {
     const existing = await this.findVisibleLineage(roleCodes, id);
+    if (existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
+      throw new ForbiddenException('Lineage creators cannot verify their own lineage map');
+    }
     const impactScore = dto.impactScore === undefined ? existing.impactScore : clampScore(dto.impactScore, existing.impactScore);
     const row = await this.prisma.businessLineageMap.update({
       where: { id },
@@ -362,20 +382,26 @@ export class BusinessValueService {
       assetId = valuation.assetId;
     }
     if (assetId) await this.assertAssetVisible(scope, assetId);
-    const row = await this.prisma.dataUserSurvey.create({
-      data: {
-        valuationId: dto.valuationId ?? null,
-        assetId,
-        respondent: dto.respondent ?? null,
-        score: clampScore(dto.score, 0),
-        feedback: dto.feedback ?? null,
-        createdBy: actor,
-      },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.dataUserSurvey.create({
+        data: {
+          valuationId: dto.valuationId ?? null,
+          assetId,
+          respondent: dto.respondent ?? null,
+          score: clampScore(dto.score, 0),
+          feedback: dto.feedback ?? null,
+          createdBy: actor,
+        },
+      });
+      if (dto.valuationId) {
+        const surveys = await tx.dataUserSurvey.findMany({ where: { valuationId: dto.valuationId }, select: { score: true } });
+        await tx.dataAssetValuation.update({
+          where: { id: dto.valuationId },
+          data: { surveyScore: averageScore(surveys.map((survey) => survey.score)) },
+        });
+      }
+      return created;
     });
-    if (dto.valuationId) {
-      const surveys = await this.prisma.dataUserSurvey.findMany({ where: { valuationId: dto.valuationId }, select: { score: true } });
-      await this.prisma.dataAssetValuation.update({ where: { id: dto.valuationId }, data: { surveyScore: averageScore(surveys.map((survey) => survey.score)) } });
-    }
     await this.audit.log({ actor, action: 'business_value.survey.create', entityType: 'data_user_survey', entityId: row.id });
     return row;
   }
@@ -406,6 +432,9 @@ export class BusinessValueService {
 
   async decideLifecycle(roleCodes: string[], id: string, dto: DecideLifecycleDecisionDto, actor: string) {
     const existing = await this.findVisibleLifecycle(roleCodes, id);
+    if (existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
+      throw new ForbiddenException('Lifecycle decision creators cannot approve or reject their own decision');
+    }
     const isApproved = dto.status === LifecycleDecisionStatus.approved || dto.status === LifecycleDecisionStatus.implemented;
     const row = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.assetLifecycleDecision.update({

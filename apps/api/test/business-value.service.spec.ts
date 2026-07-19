@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { BusinessGlossaryStatus, BusinessImpactLevel, DataValueStatus, LifecycleDecisionStatus } from '@prisma/client';
+import { BusinessValueService } from '../src/business-value/business-value.service';
 import {
   averageScore,
   clampScore,
@@ -56,6 +57,96 @@ test('lifecycle decisions expose blocked and ready operating signals', () => {
 test('survey averaging tolerates empty and null inputs', () => {
   assert.equal(averageScore([]), 0);
   assert.equal(averageScore([100, null, 50]), 50);
+});
+
+test('lineage maps require a visible asset or domain anchor', async () => {
+  let persisted = false;
+  const service = new BusinessValueService(
+    {
+      businessLineageMap: {
+        create: async () => {
+          persisted = true;
+          return {};
+        },
+      },
+    } as never,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: ['ou-1'], domains: ['domain-1'], maxClassRank: 2 }) } as never,
+  );
+
+  await assert.rejects(
+    () => service.createLineage(['business_value_steward'], { processName: 'Revenue reporting' }, 'creator@dgop.local'),
+    /Lineage maps need a visible asset or domain/,
+  );
+  assert.equal(persisted, false);
+});
+
+test('glossary creators cannot make their own final review decision', async () => {
+  let updated = false;
+  const service = new BusinessValueService(
+    {
+      businessGlossaryTerm: {
+        findFirst: async () => ({
+          id: 'term-1',
+          definition: 'Current definition',
+          version: 1,
+          createdBy: 'creator@dgop.local',
+        }),
+        update: async () => {
+          updated = true;
+          return {};
+        },
+      },
+    } as never,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      service.decideGlossaryTerm(
+        ['system_admin'],
+        'term-1',
+        { status: BusinessGlossaryStatus.approved },
+        'creator@dgop.local',
+      ),
+    /creators cannot make the final review decision/,
+  );
+  assert.equal(updated, false);
+});
+
+test('lifecycle creators cannot approve their own lifecycle decision', async () => {
+  let updated = false;
+  const service = new BusinessValueService(
+    {
+      assetLifecycleDecision: {
+        findFirst: async () => ({
+          id: 'lifecycle-1',
+          assetId: 'asset-1',
+          proposedStatus: 'retired',
+          createdBy: 'creator@dgop.local',
+        }),
+        update: async () => {
+          updated = true;
+          return {};
+        },
+      },
+    } as never,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      service.decideLifecycle(
+        ['system_admin'],
+        'lifecycle-1',
+        { status: LifecycleDecisionStatus.approved },
+        'creator@dgop.local',
+      ),
+    /creators cannot approve or reject their own decision/,
+  );
+  assert.equal(updated, false);
 });
 
 (async () => {

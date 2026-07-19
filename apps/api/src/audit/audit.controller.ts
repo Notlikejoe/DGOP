@@ -21,7 +21,7 @@ export class AuditController {
 
   @Post('chain/accept-legacy-baseline')
   @Roles('system_admin', 'dmo_admin')
-  @RequirePermissions('audit.view')
+  @RequirePermissions('audit.baseline_accept')
   acceptLegacyBaseline(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
     return this.service.acceptLegacyBaseline(user.email, limit);
   }

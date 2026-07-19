@@ -112,7 +112,12 @@ export class WorkflowPage implements OnInit {
 
   ngOnInit(): void {
     this.loadAll();
-    this.http.get<Ref[]>('/api/assets').subscribe((a) => this.assets.set(a));
+    if (this.auth.hasPermission('data_assets.view')) {
+      this.http.get<Ref[]>('/api/assets').subscribe({
+        next: (a) => this.assets.set(a),
+        error: () => this.assets.set([]),
+      });
+    }
   }
 
   protected get canViewCases(): boolean { return this.auth.hasPermission('workflow_cases.view'); }
@@ -128,7 +133,7 @@ export class WorkflowPage implements OnInit {
         this.taskTotal.set(total);
         this.state.set('ok');
       },
-      () => this.state.set('error'),
+      (error) => this.handleLoadError(error),
     );
     if (this.canViewCases) {
       this.loadPaged<CaseRow>(
@@ -139,7 +144,7 @@ export class WorkflowPage implements OnInit {
           this.caseTotal.set(total);
           this.ensureSelectedTemplate();
         },
-        () => this.handleLoadError(),
+        (error) => this.handleLoadError(error),
       );
       this.http.get<WorkflowTemplate[]>('/api/workflow/templates').subscribe({
         next: (templates) => {
@@ -147,15 +152,15 @@ export class WorkflowPage implements OnInit {
           this.ensureNewCaseType();
           this.ensureSelectedTemplate(templates);
         },
-        error: () => this.handleLoadError(),
+        error: (error) => this.handleLoadError(error),
       });
       this.http.get<WorkflowGraph>('/api/workflow/graph').subscribe({
         next: (graph) => this.graph.set(graph),
-        error: () => this.handleLoadError(),
+        error: (error) => this.handleLoadError(error),
       });
       this.http.get<WorkflowConfiguration>('/api/workflow/configuration').subscribe({
         next: (configuration) => this.configuration.set(configuration),
-        error: () => this.handleLoadError(),
+        error: (error) => this.handleLoadError(error),
       });
     } else {
       this.cases.set([]);
@@ -238,7 +243,7 @@ export class WorkflowPage implements OnInit {
           this.decideTask.set(null);
           this.loadAll();
         },
-        error: () => { this.toast.error(this.t('wf.saveError')); this.saving.set(false); },
+        error: (err) => { this.toast.errorFrom(err, this.t('wf.saveError')); this.saving.set(false); },
       });
   }
 
@@ -315,7 +320,7 @@ export class WorkflowPage implements OnInit {
           this.tab.set('cases');
           this.loadAll();
         },
-        error: () => { this.toast.error(this.t('wf.saveError')); this.saving.set(false); },
+        error: (err) => { this.toast.errorFrom(err, this.t('wf.saveError')); this.saving.set(false); },
       });
   }
 
@@ -378,7 +383,7 @@ export class WorkflowPage implements OnInit {
     url: string,
     params: Record<string, string>,
     onDone: (rows: T[], total: number) => void,
-    onError: () => void,
+    onError: (error: unknown) => void,
   ): void {
     const pageSize = 200;
     const rows: T[] = [];
@@ -400,8 +405,8 @@ export class WorkflowPage implements OnInit {
     loadPage(1);
   }
 
-  private handleLoadError(): void {
+  private handleLoadError(error: unknown): void {
     this.state.set('error');
-    this.toast.error(this.t('crud.loadError'));
+    this.toast.errorFrom(error, this.t('crud.loadError'));
   }
 }

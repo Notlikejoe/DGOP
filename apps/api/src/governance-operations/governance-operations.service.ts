@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   CaseStatus,
   ClassificationRequestStatus,
@@ -53,6 +53,7 @@ import {
   lifecycleReadiness,
   notificationSeverity,
   operatingDefinitionStatus,
+  operatingPressureStatus,
   platformArchitectureStatus,
   platformServiceStatus,
 } from './governance-operations.logic';
@@ -80,6 +81,7 @@ function workflowTaskSignalKey(taskId: string, kind: 'notification' | 'escalatio
 
 @Injectable()
 export class GovernanceOperationsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(GovernanceOperationsService.name);
   private readonly systemUser: AuthUser = {
     id: 'system',
     email: 'system@scheduler.dgop.local',
@@ -95,8 +97,16 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     private readonly workflow?: WorkflowService,
   ) {}
 
-  onModuleInit(): void {
-    if (process.env.NODE_ENV === 'test' || process.env.GOVERNANCE_OPERATIONS_SCHEDULER === 'false') return;
+  async onModuleInit(): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      await this.ensureDefaultCalendarTemplates();
+    } catch (error) {
+      this.logger.warn(
+        `Governance operations calendar bootstrap failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (process.env.GOVERNANCE_OPERATIONS_SCHEDULER === 'false') return;
     const intervalMs = Math.max(Number(process.env.GOVERNANCE_OPERATIONS_SCHEDULER_MS ?? 300000), 60000);
     this.slaWorker = setInterval(() => void this.runScheduledGovernanceCycle(), intervalMs);
     void this.runScheduledGovernanceCycle();
@@ -116,7 +126,9 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         await this.generateCalendarOccurrences(this.systemUser);
       });
     } catch (error) {
-      console.warn('Governance operations scheduler failed', error instanceof Error ? error.message : error);
+      this.logger.warn(
+        `Governance operations scheduler failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       this.slaWorkerRunning = false;
     }
@@ -166,6 +178,57 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     return visible.length ? { OR: visible } : { id: '__no_visible_governance_operations__' };
   }
 
+  private workflowLinkScopeWhere(
+    assetIds: Set<string> | 'all',
+    user: AuthUser,
+  ): Prisma.GovernanceNotificationWhereInput {
+    if (assetIds === 'all') return {};
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    return {
+      OR: [
+        { AND: [{ workflowCaseId: null }, { workflowTaskId: null }] },
+        { workflowCase: caseWhere },
+        { workflowTask: { case: caseWhere } },
+      ],
+    };
+  }
+
+  private notificationRecipientWhere(user: AuthUser): Prisma.GovernanceNotificationWhereInput {
+    return {
+      OR: [
+        { assigneeUserId: user.id },
+        { targetRoleCode: { in: user.roles } },
+        { AND: [{ assigneeUserId: null }, { targetRoleCode: null }] },
+      ],
+    };
+  }
+
+  private notificationVisibilityWhere(
+    assetIds: Set<string> | 'all',
+    user: AuthUser,
+  ): Prisma.GovernanceNotificationWhereInput {
+    return {
+      AND: [
+        this.notificationRecipientWhere(user),
+        this.workflowLinkScopeWhere(assetIds, user),
+      ],
+    };
+  }
+
+  private workflowLinkedEscalationScopeWhere(
+    assetIds: Set<string> | 'all',
+    user: AuthUser,
+  ): Prisma.GovernanceEscalationWhereInput {
+    if (assetIds === 'all') return {};
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    return {
+      OR: [
+        { workflowCase: caseWhere },
+        { workflowTask: { case: caseWhere } },
+      ],
+    };
+  }
+
   private workflowTaskOwnershipWhere(user: AuthUser): Prisma.WorkflowTaskWhereInput[] {
     const ownership: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: user.id }];
     if (user.roles.length) {
@@ -193,11 +256,14 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     return where;
   }
 
-  private dataQualityIssueScopeWhere(assetIds: Set<string> | 'all'): Prisma.DataQualityIssueWhereInput {
+  private dataQualityIssueScopeWhere(assetIds: Set<string> | 'all', actorEmail?: string): Prisma.DataQualityIssueWhereInput {
     if (assetIds === 'all') return {};
-    return assetIds.size
-      ? { OR: [{ assetId: null }, { assetId: { in: [...assetIds] } }] }
-      : { assetId: null };
+    const or: Prisma.DataQualityIssueWhereInput[] = [];
+    if (assetIds.size) or.push({ assetId: { in: [...assetIds] } });
+    if (actorEmail) {
+      or.push({ AND: [{ assetId: null }, { createdBy: actorEmail }] });
+    }
+    return or.length ? { OR: or } : { id: { equals: '__no_visible_governance_dq_issues__' } };
   }
 
   private async holidayConfig() {
@@ -210,7 +276,6 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   async workspace(user: AuthUser) {
-    await this.ensureDefaultCalendarTemplates();
     const scope = await this.scope.resolve(user.roles);
     const assetIds = await this.visibleAssetIds(scope);
     const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
@@ -223,13 +288,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         take: 80,
       }),
       this.prisma.governanceNotification.findMany({
-        where: {
-          OR: [
-            { assigneeUserId: user.id },
-            { targetRoleCode: { in: user.roles } },
-            { AND: [{ assigneeUserId: null }, { targetRoleCode: null }] },
-          ],
-        },
+        where: this.notificationVisibilityWhere(assetIds, user),
         include: {
           workflowCase: { select: { id: true, code: true, title: true, status: true } },
           workflowTask: { select: { id: true, title: true, status: true, dueDate: true } },
@@ -250,7 +309,13 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         take: 80,
       }),
       this.prisma.complianceCalendarTemplate.findMany({
-        include: { occurrences: { orderBy: { dueAt: 'asc' }, take: 5 } },
+        include: {
+          occurrences: {
+            where: { OR: [{ workflowCase: caseWhere }, { workflowCaseId: null }] },
+            orderBy: { dueAt: 'asc' },
+            take: 5,
+          },
+        },
         orderBy: [{ status: 'asc' }, { nextRunAt: 'asc' }],
       }),
       this.prisma.complianceCalendarOccurrence.findMany({
@@ -297,7 +362,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
       case: caseWhere,
     };
-    const dqScopeWhere = this.dataQualityIssueScopeWhere(assetIds);
+    const dqScopeWhere = this.dataQualityIssueScopeWhere(assetIds, user.email);
     const dqOpenStatuses = [
       DataQualityIssueStatus.open,
       DataQualityIssueStatus.triaged,
@@ -624,6 +689,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         ready: items.filter((item) => item.status === 'ready').length,
         watch: items.filter((item) => item.status === 'watch').length,
         blocked: items.filter((item) => item.status === 'blocked').length,
+        acceptedDeferrals: items.filter((item) => item.acceptedDeferral).length,
       },
       items,
       environments: ['DEV', 'TEST', 'UAT', 'PRE-PROD', 'PROD', 'DR'].map((name) => ({
@@ -728,7 +794,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       scope.orgUnits === 'all'
         ? { deletedAt: null, isActive: true }
         : { deletedAt: null, isActive: true, ownerOrgUnitId: { in: scope.orgUnits } };
-    const dqScopeWhere = this.dataQualityIssueScopeWhere(assetIds);
+    const dqScopeWhere = this.dataQualityIssueScopeWhere(assetIds, user.email);
     const dqOpenStatuses = [
       DataQualityIssueStatus.open,
       DataQualityIssueStatus.triaged,
@@ -817,6 +883,14 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       },
     };
 
+    const dgpoSizing = dgpoSizingGuidance({
+      governedAssets,
+      dataDomains,
+      systemPlatforms,
+      activeCases,
+      openTasks,
+    });
+
     const bodies = OPERATING_BODY_DEFINITIONS.map((body) => {
       const definitionStatus = operatingDefinitionStatus(body);
       const pressure =
@@ -831,7 +905,13 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
                 : 0;
       const status = combineReadinessStatus([
         definitionStatus,
-        pressure >= 10 ? 'watch' : 'ready',
+        operatingPressureStatus({
+          bodyCode: body.code,
+          pressure,
+          governedAssets,
+          dataDomains,
+          recommendedFte: dgpoSizing.recommendedFte,
+        }),
       ]);
       return { ...body, status, operatingPressure: pressure };
     });
@@ -893,13 +973,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         { from: 'domain_council', to: 'data_council', decision: 'Resolve cross-domain or policy-impacting decisions' },
         { from: 'data_council', to: 'dgsc', decision: 'Escalate executive risk, funding, or exception acceptance' },
       ],
-      dgpoSizing: dgpoSizingGuidance({
-        governedAssets,
-        dataDomains,
-        systemPlatforms,
-        activeCases,
-        openTasks,
-      }),
+      dgpoSizing,
       kpiTraceability,
       gapRegister: [
         {
@@ -1311,21 +1385,42 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   async readNotification(id: string, user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
     const row = await this.prisma.governanceNotification.findFirst({
       where: {
-        id,
-        OR: [{ assigneeUserId: user.id }, { targetRoleCode: { in: user.roles } }, { AND: [{ assigneeUserId: null }, { targetRoleCode: null }] }],
+        AND: [
+          { id },
+          this.notificationVisibilityWhere(assetIds, user),
+        ],
       },
     });
     if (!row) throw new NotFoundException('governance_notification not found');
-    return this.prisma.governanceNotification.update({
+    const updated = await this.prisma.governanceNotification.update({
       where: { id },
       data: { status: GovernanceNotificationStatus.read, readAt: new Date() },
     });
+    await this.audit.log({
+      actor: user.email,
+      action: 'governance_operations.notification.read',
+      entityType: 'governance_notification',
+      entityId: id,
+      metadata: { previousStatus: row.status, targetRoleCode: row.targetRoleCode },
+    });
+    return updated;
   }
 
   async updateEscalation(id: string, dto: UpdateEscalationDto, user: AuthUser) {
-    const row = await this.prisma.governanceEscalation.findUnique({ where: { id } });
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const row = await this.prisma.governanceEscalation.findFirst({
+      where: {
+        AND: [
+          { id },
+          this.workflowLinkedEscalationScopeWhere(assetIds, user),
+        ],
+      },
+    });
     if (!row) throw new NotFoundException('governance_escalation not found');
     const updated = await this.prisma.governanceEscalation.update({
       where: { id },

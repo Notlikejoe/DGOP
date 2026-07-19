@@ -336,8 +336,7 @@ export class HierarchyPage implements OnInit {
         this.modalOpen.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.i18n.t('crud.saveError'));
+      error: (err) => { this.toast.errorFrom(err, this.i18n.t('crud.saveError'));
         this.saving.set(false);
       },
     });
@@ -351,7 +350,7 @@ export class HierarchyPage implements OnInit {
         this.toast.success(this.i18n.t('crud.deleted'));
         this.load();
       },
-      error: () => this.toast.error(this.i18n.t('crud.deleteError')),
+      error: (err) => this.toast.errorFrom(err, this.i18n.t('crud.deleteError')),
     });
   }
 

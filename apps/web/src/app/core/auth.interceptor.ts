@@ -28,9 +28,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     catchError((err: HttpErrorResponse) => {
       const isLogin = req.url.includes('/api/auth/login');
       const isSessionProbe = req.url.includes('/api/auth/session');
+      const isAlreadyOnLogin = router.url.startsWith('/login');
       if (err.status === 401 && !isLogin && !isSessionProbe) {
         auth.clearSession();
-        void router.navigate(['/login']);
+        if (!isAlreadyOnLogin) {
+          const currentUrl = router.url && router.url !== '/' ? router.url : '/dashboard';
+          void router.navigate(['/login'], { queryParams: { returnUrl: currentUrl } });
+        }
       }
       return throwError(() => err);
     }),

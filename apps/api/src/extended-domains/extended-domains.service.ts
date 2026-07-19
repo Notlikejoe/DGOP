@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ArchitectureReviewDecision,
   CaseStatus,
   MdmMatchStatus,
   MetadataCertificationStatus,
+  NdiEvidenceStatus,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,6 +38,13 @@ const assetSelect = {
   domain: { select: { id: true, code: true, nameEn: true, nameAr: true } },
 };
 
+const BROAD_EVIDENCE_ROLES = new Set(['system_admin', 'dmo_admin', 'auditor']);
+const FINAL_REFERENCE_DECISIONS = new Set<ReferenceDecisionDto['decision']>([
+  'approve',
+  'reject',
+  'activate',
+  'retire',
+]);
 @Injectable()
 export class ExtendedDomainsService {
   constructor(
@@ -109,6 +117,38 @@ export class ExtendedDomainsService {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) throw new BadRequestException('Invalid date value');
     return parsed;
+  }
+
+  private async assertEvidenceLinkable(roleCodes: string[], evidenceId: string | null | undefined, actor: string): Promise<void> {
+    if (!evidenceId) return;
+    const broadAccess = roleCodes.some((role) => BROAD_EVIDENCE_ROLES.has(role));
+    const person = broadAccess
+      ? null
+      : await this.prisma.person.findFirst({
+          where: { deletedAt: null, isActive: true, email: actor },
+          select: { id: true },
+        });
+    const visibility: Prisma.NdiEvidenceWhereInput[] = broadAccess
+      ? []
+      : [
+          { submittedBy: actor },
+          { reviewedBy: actor },
+          ...(person ? [{ spec: { ownerPersonId: person.id } } as Prisma.NdiEvidenceWhereInput] : []),
+        ];
+    const now = new Date();
+    const evidence = await this.prisma.ndiEvidence.findFirst({
+      where: {
+        id: evidenceId,
+        deletedAt: null,
+        OR: [
+          { status: { in: [NdiEvidenceStatus.submitted, NdiEvidenceStatus.under_review] } },
+          { status: NdiEvidenceStatus.approved, OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] },
+        ],
+        ...(visibility.length ? { AND: [{ OR: visibility }] } : {}),
+      },
+      select: { id: true },
+    });
+    if (!evidence) throw new NotFoundException('evidence not found');
   }
 
   async summary(roleCodes: string[]) {
@@ -192,6 +232,7 @@ export class ExtendedDomainsService {
     await Promise.all([
       this.assertAssetVisible(roleCodes, dto.sourceAssetId),
       this.assertAssetVisible(roleCodes, dto.candidateAssetId),
+      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
     ]);
     const score = clampScore(dto.matchScore, 0);
     const code = await this.nextCode('mdmMatchCandidate', 'MCM');
@@ -215,8 +256,14 @@ export class ExtendedDomainsService {
   }
 
   async resolveMatch(roleCodes: string[], id: string, dto: ResolveMdmMatchDto, actor: string) {
-    await this.findVisibleMatch(roleCodes, id);
+    const [existing] = await Promise.all([
+      this.findVisibleMatch(roleCodes, id),
+      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
+    ]);
     const final = dto.status === MdmMatchStatus.merged || dto.status === MdmMatchStatus.rejected || dto.status === MdmMatchStatus.superseded;
+    if (final && existing.createdBy === actor) {
+      throw new ForbiddenException('MDM match creators cannot make the final resolution decision');
+    }
     const row = await this.prisma.mdmMatchCandidate.update({
       where: { id },
       data: {
@@ -235,9 +282,14 @@ export class ExtendedDomainsService {
   }
 
   async createReferenceVersion(roleCodes: string[], dto: CreateReferenceVersionDto, actor: string) {
+    const scope = await this.scope.resolve(roleCodes);
     const asset = dto.assetId ? await this.assertAssetVisible(roleCodes, dto.assetId) : null;
     const domainId = dto.domainId ?? asset?.domainId ?? null;
     await this.assertDomainVisible(roleCodes, domainId);
+    if (!asset && !domainId && !this.isUnrestricted(scope)) {
+      throw new BadRequestException('Reference data versions need a visible asset or domain');
+    }
+    await this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor);
     const row = await this.prisma.referenceDataVersion.create({
       data: {
         code: dto.code,
@@ -259,7 +311,10 @@ export class ExtendedDomainsService {
   }
 
   async decideReferenceVersion(roleCodes: string[], id: string, dto: ReferenceDecisionDto, actor: string) {
-    await this.findVisibleReference(roleCodes, id);
+    const existing = await this.findVisibleReference(roleCodes, id);
+    if (existing.createdBy === actor && FINAL_REFERENCE_DECISIONS.has(dto.decision)) {
+      throw new ForbiddenException('Reference version creators cannot make the final decision');
+    }
     const status = referenceVersionStatus(dto.decision);
     const row = await this.prisma.referenceDataVersion.update({
       where: { id },
@@ -274,7 +329,10 @@ export class ExtendedDomainsService {
   }
 
   async createCertification(roleCodes: string[], dto: CreateMetadataCertificationDto, actor: string) {
-    await this.assertAssetVisible(roleCodes, dto.assetId);
+    await Promise.all([
+      this.assertAssetVisible(roleCodes, dto.assetId),
+      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
+    ]);
     const code = await this.nextCode('metadataCertification', 'META');
     return this.prisma.$transaction(async (tx) => {
       const workflowCaseId = await this.createWorkflow(tx, 'metadata_certification', `Metadata certification ${code}`, dto.assetId, roleCodes, actor);
@@ -303,13 +361,19 @@ export class ExtendedDomainsService {
   }
 
   async saveCertification(roleCodes: string[], id: string, dto: SaveMetadataCertificationDto, actor: string) {
-    const existing = await this.findVisibleCertification(roleCodes, id);
+    const [existing] = await Promise.all([
+      this.findVisibleCertification(roleCodes, id),
+      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
+    ]);
     const qualityScore = dto.qualityScore === undefined ? existing.qualityScore : clampScore(dto.qualityScore, existing.qualityScore);
     const completenessScore = dto.completenessScore === undefined ? existing.completenessScore : clampScore(dto.completenessScore, existing.completenessScore);
     const ownerConfirmed = dto.ownerConfirmed ?? existing.ownerConfirmed;
     const glossaryAligned = dto.glossaryAligned ?? existing.glossaryAligned;
     const lineageReviewed = dto.lineageReviewed ?? existing.lineageReviewed;
     const status = dto.status ?? certificationStatus({ qualityScore, completenessScore, ownerConfirmed, glossaryAligned, lineageReviewed });
+    if (existing.createdBy === actor && status === MetadataCertificationStatus.certified) {
+      throw new ForbiddenException('Metadata certification creators cannot certify their own metadata');
+    }
     const row = await this.prisma.metadataCertification.update({
       where: { id },
       data: {
@@ -332,7 +396,10 @@ export class ExtendedDomainsService {
   }
 
   async createArchitectureReview(roleCodes: string[], dto: CreateArchitectureReviewDto, actor: string) {
-    await this.assertAssetVisible(roleCodes, dto.assetId);
+    await Promise.all([
+      this.assertAssetVisible(roleCodes, dto.assetId),
+      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
+    ]);
     const code = await this.nextCode('architectureReview', 'DAM');
     return this.prisma.$transaction(async (tx) => {
       const workflowCaseId = await this.createWorkflow(tx, 'architecture_review', `Architecture review ${code}`, dto.assetId, roleCodes, actor);
@@ -357,7 +424,13 @@ export class ExtendedDomainsService {
   }
 
   async decideArchitectureReview(roleCodes: string[], id: string, dto: DecideArchitectureReviewDto, actor: string) {
-    await this.findVisibleArchitectureReview(roleCodes, id);
+    const [existing] = await Promise.all([
+      this.findVisibleArchitectureReview(roleCodes, id),
+      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
+    ]);
+    if (existing.createdBy === actor && isArchitectureDecisionFinal(dto.decision)) {
+      throw new ForbiddenException('Architecture review creators cannot make the final decision');
+    }
     const row = await this.prisma.architectureReview.update({
       where: { id },
       data: {

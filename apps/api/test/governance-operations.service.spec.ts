@@ -3,6 +3,7 @@ import {
   GovernanceEscalationLevel,
   GovernanceEscalationStatus,
   GovernanceNotificationSeverity,
+  GovernanceNotificationStatus,
 } from '@prisma/client';
 import { GovernanceOperationsService } from '../src/governance-operations/governance-operations.service';
 import {
@@ -27,6 +28,7 @@ import {
   lifecycleReadiness,
   notificationSeverity,
   operatingDefinitionStatus,
+  operatingPressureStatus,
   platformArchitectureStatus,
   platformServiceStatus,
 } from '../src/governance-operations/governance-operations.logic';
@@ -35,6 +37,16 @@ type TestFn = () => void | Promise<void>;
 const tests: { name: string; fn: TestFn }[] = [];
 function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
+}
+
+function includesScopedOwnUnlinked(where: unknown, actor: string): boolean {
+  const text = JSON.stringify(where);
+  return text.includes('"assetId":null') && text.includes('"createdBy"') && text.includes(actor);
+}
+
+function includesBroadUnlinkedAsset(where: unknown): boolean {
+  const text = JSON.stringify(where);
+  return text.includes('{"assetId":null}') && !text.includes('"createdBy"');
 }
 
 test('KSA business days skip Friday, Saturday, and configured holidays', () => {
@@ -203,6 +215,39 @@ test('DGPO sizing grows with assets, domains, systems, and active workflow press
   assert.equal(large.bands.assetStewards >= 5, true);
 });
 
+test('operating pressure uses capacity-aware thresholds instead of raw task count', () => {
+  assert.equal(
+    operatingPressureStatus({
+      bodyCode: 'dmo',
+      pressure: 12,
+      governedAssets: 5,
+      dataDomains: 6,
+      recommendedFte: 3,
+    }),
+    'ready',
+  );
+  assert.equal(
+    operatingPressureStatus({
+      bodyCode: 'domain_council',
+      pressure: 40,
+      governedAssets: 5,
+      dataDomains: 6,
+      recommendedFte: 3,
+    }),
+    'watch',
+  );
+  assert.equal(
+    operatingPressureStatus({
+      bodyCode: 'dgsc',
+      pressure: 1,
+      governedAssets: 5,
+      dataDomains: 6,
+      recommendedFte: 3,
+    }),
+    'watch',
+  );
+});
+
 test('production readiness aggregates scoped engine signals into a ready response', async () => {
   const prisma: any = {
     ksaHoliday: { findMany: async () => [] },
@@ -308,6 +353,62 @@ test('production readiness treats verified accepted legacy audit baseline as rea
   const auditCheck = readiness.checks.find((check) => check.code === 'audit_chain');
   assert.equal(auditCheck?.status, 'ready');
   assert.equal(auditCheck?.metric.legacyBaselineAccepted, true);
+});
+
+test('production readiness does not count every unlinked data quality issue for scoped users', async () => {
+  const dqWhere: unknown[] = [];
+  const prisma: any = {
+    ksaHoliday: { findMany: async () => [] },
+    dataAsset: {
+      count: async () => 0,
+      findMany: async () => [],
+    },
+    workflowCase: { count: async () => 0 },
+    workflowTask: {
+      count: async () => 0,
+      findMany: async () => [],
+    },
+    dataQualityIssue: {
+      count: async (args: any) => {
+        dqWhere.push(args.where);
+        return 0;
+      },
+    },
+    auditLog: { count: async () => 0 },
+    integrationEvent: { count: async () => 0 },
+    integrationImportBatch: { count: async () => 0 },
+    integrationConnector: { count: async () => 0 },
+    governanceEscalation: { count: async () => 0 },
+  };
+  const audit = {
+    verifyChain: async () => ({
+      totalRowsRead: 0,
+      valid: true,
+      checked: 0,
+      legacyRows: 0,
+      brokenAt: null,
+      expectedHash: null,
+      actualHash: null,
+      expectedPreviousHash: null,
+      actualPreviousHash: null,
+    }),
+    legacyBaselineAccepted: async () => false,
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    audit as never,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await service.productionReadiness({
+    id: 'viewer',
+    email: 'viewer@dgop.local',
+    roles: ['dq_steward'],
+  });
+
+  assert.equal(dqWhere.length, 2);
+  assert.equal(dqWhere.every((where) => includesScopedOwnUnlinked(where, 'viewer@dgop.local')), true);
+  assert.equal(dqWhere.every((where) => !includesBroadUnlinkedAsset(where)), true);
 });
 
 test('operating model exposes v5 governance bodies, lifecycle, KPI traceability, and sizing', async () => {
@@ -482,6 +583,13 @@ test('enterprise close-out exposes control crosswalk, production acceptance, and
   assert.equal(acceptance.summary.items, PRODUCTION_ACCEPTANCE_DEFINITIONS.length);
   assert.equal(acceptance.environments.length, 6);
   assert.equal(acceptance.items.some((item) => item.family === 'performance' && item.status === 'watch'), true);
+  assert.equal(acceptance.summary.acceptedDeferrals >= 5, true);
+  assert.equal(
+    acceptance.items
+      .filter((item) => ['search_performance', 'asset_360_performance', 'bulk_import_target', 'workflow_scale_target', 'recovery_target'].includes(item.code))
+      .every((item) => item.acceptedDeferral),
+    true,
+  );
 
   const errors = await service.errorExperienceReadiness({
     id: 'admin',
@@ -573,6 +681,183 @@ test('SLA recalculation uses stable dedupe keys for workflow task signals', asyn
   assert.equal(createdEscalations.length, 1);
   assert.equal(updatedEscalations.length, 1);
   assert.equal(createdEscalations[0].dedupeKey, 'workflow_task:task-1:escalation');
+});
+
+test('readNotification marks only visible notifications as read and records audit evidence', async () => {
+  const auditEvents: any[] = [];
+  const prisma: any = {
+    dataAsset: { findMany: async () => [] },
+    governanceNotification: {
+      findFirst: async ({ where }: any) => {
+        assert.equal(where.AND[0].id, 'notice-1');
+        assert.deepEqual(where.AND[1].AND[0].OR[0], { assigneeUserId: 'user-1' });
+        assert.equal(JSON.stringify(where).includes('workflowCase'), true);
+        return {
+          id: 'notice-1',
+          status: GovernanceNotificationStatus.unread,
+          targetRoleCode: 'dmo_admin',
+        };
+      },
+      update: async ({ where, data }: any) => {
+        assert.deepEqual(where, { id: 'notice-1' });
+        assert.equal(data.status, GovernanceNotificationStatus.read);
+        assert.ok(data.readAt instanceof Date);
+        return { id: 'notice-1', ...data };
+      },
+    },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async (event: any) => auditEvents.push(event) } as never,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.readNotification('notice-1', {
+    id: 'user-1',
+    email: 'dmo@dgop.local',
+    roles: ['dmo_admin'],
+  });
+
+  assert.equal(result.status, GovernanceNotificationStatus.read);
+  assert.equal(auditEvents.length, 1);
+  assert.equal(auditEvents[0].action, 'governance_operations.notification.read');
+  assert.equal(auditEvents[0].entityId, 'notice-1');
+  assert.equal(auditEvents[0].actor, 'dmo@dgop.local');
+});
+
+test('workspace notifications are constrained by linked workflow visibility', async () => {
+  let notificationWhere: any;
+  let templateInclude: any;
+  const prisma: any = {
+    ksaHoliday: { findMany: async () => [] },
+    dataAsset: { findMany: async () => [{ id: 'asset-visible' }] },
+    workflowTask: { findMany: async () => [] },
+    governanceNotification: {
+      findMany: async ({ where }: any) => {
+        notificationWhere = where;
+        return [];
+      },
+    },
+    governanceEscalation: { findMany: async () => [] },
+    complianceCalendarTemplate: {
+      findMany: async ({ include }: any) => {
+        templateInclude = include;
+        return [];
+      },
+    },
+    complianceCalendarOccurrence: { findMany: async () => [] },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await service.workspace({
+    id: 'user-1',
+    email: 'owner@dgop.local',
+    roles: ['data_owner'],
+  });
+
+  const text = JSON.stringify(notificationWhere);
+  assert.equal(text.includes('"assigneeUserId":"user-1"'), true);
+  assert.equal(text.includes('"workflowCase"'), true);
+  assert.equal(text.includes('"workflowTask"'), true);
+  assert.equal(text.includes('asset-visible'), true);
+  assert.equal(text.includes('"workflowCaseId":null'), true);
+  assert.equal(text.includes('"workflowTaskId":null'), true);
+  const templateText = JSON.stringify(templateInclude);
+  assert.equal(templateText.includes('"workflowCase"'), true);
+  assert.equal(templateText.includes('asset-visible'), true);
+  assert.equal(templateText.includes('"workflowCaseId":null'), true);
+});
+
+test('updateEscalation hides escalations outside workflow visibility', async () => {
+  let escalationWhere: any;
+  const prisma: any = {
+    dataAsset: { findMany: async () => [{ id: 'asset-visible' }] },
+    governanceEscalation: {
+      findFirst: async ({ where }: any) => {
+        escalationWhere = where;
+        return null;
+      },
+    },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await assert.rejects(
+    () => service.updateEscalation(
+      'esc-hidden',
+      { status: GovernanceEscalationStatus.acknowledged },
+      { id: 'user-1', email: 'owner@dgop.local', roles: ['data_owner'] },
+    ),
+    /governance_escalation not found/,
+  );
+
+  const text = JSON.stringify(escalationWhere);
+  assert.equal(text.includes('"id":"esc-hidden"'), true);
+  assert.equal(text.includes('"workflowCase"'), true);
+  assert.equal(text.includes('"workflowTask"'), true);
+  assert.equal(text.includes('asset-visible'), true);
+});
+
+test('workspace is read-only and does not bootstrap default calendar templates', async () => {
+  const prisma: any = {
+    ksaHoliday: { findMany: async () => [] },
+    workflowTask: { findMany: async () => [] },
+    governanceNotification: { findMany: async () => [] },
+    governanceEscalation: { findMany: async () => [] },
+    complianceCalendarTemplate: { findMany: async () => [] },
+    complianceCalendarOccurrence: { findMany: async () => [] },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+  (service as any).ensureDefaultCalendarTemplates = async () => {
+    throw new Error('read path attempted calendar bootstrap');
+  };
+
+  const workspace = await service.workspace({
+    id: 'admin',
+    email: 'admin@dgop.local',
+    roles: ['system_admin'],
+  });
+
+  assert.equal(workspace.summary.openTasks, 0);
+  assert.equal(workspace.templates.length, 0);
+});
+
+test('onModuleInit bootstraps governance calendar templates outside read endpoints', async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousScheduler = process.env.GOVERNANCE_OPERATIONS_SCHEDULER;
+  process.env.NODE_ENV = 'development';
+  process.env.GOVERNANCE_OPERATIONS_SCHEDULER = 'false';
+  try {
+    let bootstrapCalls = 0;
+    const service = new GovernanceOperationsService(
+      {} as never,
+      { log: async () => {} } as never,
+      { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+    );
+    (service as any).ensureDefaultCalendarTemplates = async () => {
+      bootstrapCalls += 1;
+    };
+
+    await service.onModuleInit();
+
+    assert.equal(bootstrapCalls, 1);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousScheduler === undefined) delete process.env.GOVERNANCE_OPERATIONS_SCHEDULER;
+    else process.env.GOVERNANCE_OPERATIONS_SCHEDULER = previousScheduler;
+  }
 });
 
 (async () => {

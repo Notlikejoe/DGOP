@@ -195,7 +195,7 @@ export class OwnershipPage implements OnInit {
           this.submitTarget.set(null);
           this.load();
         },
-        error: () => { this.toast.error(this.t('own.saveError')); this.submitting.set(false); },
+        error: (err) => { this.toast.errorFrom(err, this.t('own.saveError')); this.submitting.set(false); },
       });
   }
 
@@ -302,7 +302,7 @@ export class OwnershipPage implements OnInit {
         this.load();
         this.loadConflicts();
       },
-      error: () => { this.toast.error(this.t('own.saveError')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('own.saveError')); this.saving.set(false); },
     });
   }
 
@@ -313,7 +313,7 @@ export class OwnershipPage implements OnInit {
     if (!ok) return;
     this.http.delete('/api/assignments/' + a.id).subscribe({
       next: () => { this.toast.success(this.t('own.deleted')); this.load(); this.loadConflicts(); },
-      error: () => this.toast.error(this.t('own.saveError')),
+      error: (err) => this.toast.errorFrom(err, this.t('own.saveError')),
     });
   }
 

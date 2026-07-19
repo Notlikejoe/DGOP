@@ -36,7 +36,7 @@ export class IntegrationsController {
   @Get('batches')
   @RequirePermissions('integrations.view')
   batches(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
-    return this.service.batches(user.roles, limit ? Number(limit) : 25);
+    return this.service.batches(user.roles, limit);
   }
 
   @Get('batches/:id/errors')
@@ -48,7 +48,7 @@ export class IntegrationsController {
   @Get('events')
   @RequirePermissions('integrations.view')
   events(@CurrentUser() user: AuthUser, @Query('status') status?: string, @Query('limit') limit?: string) {
-    return this.service.events(user.roles, status, limit ? Number(limit) : 25);
+    return this.service.events(user.roles, status, limit);
   }
 
   @Post('events/:id/retry')
@@ -64,7 +64,7 @@ export class IntegrationsController {
   @Get('reconciliation')
   @RequirePermissions('integrations.view')
   reconciliation(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {
-    return this.service.reconciliationReports(user.roles, limit ? Number(limit) : 20);
+    return this.service.reconciliationReports(user.roles, limit);
   }
 
   @Post('webhooks/:connectorCode')

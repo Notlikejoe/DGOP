@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePageParams, toPaged, type Paged } from '../common/pagination';
 import { isProductionLikeRuntime } from '../common/runtime-safety';
-import { hashAuditEntry, verifyAuditHashChain } from './audit.logic';
+import { hashAuditEntry, sanitizeAuditMetadata, verifyAuditHashChain } from './audit.logic';
 
 export interface AuditEntry {
   actor: string;
@@ -54,6 +54,7 @@ export class AuditService {
 
   async log(entry: AuditEntry, client: AuditWriter = this.prisma): Promise<void> {
     try {
+      const metadata = sanitizeAuditMetadata(entry.metadata ?? null);
       const previous = await client.auditLog.findFirst({
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         select: { entryHash: true },
@@ -66,7 +67,7 @@ export class AuditService {
         action: entry.action,
         entityType: entry.entityType,
         entityId: entry.entityId ?? null,
-        metadata: entry.metadata ?? null,
+        metadata,
         createdAt,
         previousHash,
         chainVersion,
@@ -77,7 +78,7 @@ export class AuditService {
           action: entry.action,
           entityType: entry.entityType,
           entityId: entry.entityId ?? null,
-          metadata: (entry.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+          metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
           previousHash,
           entryHash,
           chainVersion,

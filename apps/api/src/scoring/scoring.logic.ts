@@ -30,6 +30,7 @@ export const MATURITY_INDEX: Record<string, number> = {
 export const STUCK_DAYS = 14;
 
 export type GapType = 'missing' | 'expired' | 'rejected' | 'unassigned' | 'stuck';
+export const GAP_TYPES = ['missing', 'expired', 'rejected', 'unassigned', 'stuck'] as const satisfies readonly GapType[];
 
 export interface MaturityBand {
   key: string;

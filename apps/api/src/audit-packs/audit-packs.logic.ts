@@ -34,6 +34,7 @@ const CRC_TABLE = (() => {
   }
   return table;
 })();
+const UNSAFE_ZIP_PATH_CHARS = /[\u0000-\u001f\u007f:*?"<>|]/u;
 
 export function sha256(input: Buffer | string): string {
   return createHash('sha256').update(input).digest('hex');
@@ -53,8 +54,19 @@ function dosDateTime(date: Date): { time: number; date: number } {
   };
 }
 
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '');
+function safeZipEntryPath(path: string): string {
+  const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/');
+  const segments = normalized.split('/');
+  if (
+    !normalized ||
+    normalized.length > 240 ||
+    normalized.startsWith('../') ||
+    normalized.endsWith('/') ||
+    segments.some((segment) => !segment || segment === '.' || segment === '..' || UNSAFE_ZIP_PATH_CHARS.test(segment))
+  ) {
+    throw new Error('unsafe audit pack file path');
+  }
+  return normalized;
 }
 
 export function zipStore(entries: ZipEntry[], now = new Date()): Buffer {
@@ -64,7 +76,7 @@ export function zipStore(entries: ZipEntry[], now = new Date()): Buffer {
   const stamp = dosDateTime(now);
 
   for (const entry of entries) {
-    const name = Buffer.from(normalizePath(entry.path), 'utf8');
+    const name = Buffer.from(safeZipEntryPath(entry.path), 'utf8');
     const body = Buffer.isBuffer(entry.body) ? entry.body : Buffer.from(entry.body, 'utf8');
     const crc = crc32(body);
 
@@ -124,7 +136,7 @@ export function buildManifest(input: Omit<AuditPackManifest, 'files'>, files: Zi
     ...input,
     files: files.map((file) => {
       const body = Buffer.isBuffer(file.body) ? file.body : Buffer.from(file.body, 'utf8');
-      return { path: normalizePath(file.path), sha256: sha256(body), bytes: body.length };
+      return { path: safeZipEntryPath(file.path), sha256: sha256(body), bytes: body.length };
     }),
   };
 }

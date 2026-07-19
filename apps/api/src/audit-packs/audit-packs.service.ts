@@ -12,6 +12,7 @@ type StoredPackPayload = {
   summary: Record<string, unknown>;
   files: StoredFile[];
 };
+const BROAD_AUDIT_PACK_ROLES = new Set(['system_admin', 'dmo_admin', 'auditor']);
 
 const packSelect = {
   domain: { select: { id: true, code: true, shortCode: true, nameEn: true, nameAr: true } },
@@ -25,22 +26,27 @@ export class AuditPacksService {
     private readonly scoring: ScoringService,
   ) {}
 
-  async list() {
+  private hasBroadAuditPackAccess(actor: Pick<AuthUser, 'roles'>): boolean {
+    return actor.roles.some((role) => BROAD_AUDIT_PACK_ROLES.has(role));
+  }
+
+  async list(actor: AuthUser) {
     return this.prisma.ndiAuditPack.findMany({
+      where: this.hasBroadAuditPackAccess(actor) ? undefined : { requestedBy: actor.email },
       include: packSelect,
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
   }
 
-  async readiness(domainId?: string) {
-    return this.buildBundle('preview', domainId, new Date(), false);
+  async readiness(actor: AuthUser, domainId?: string) {
+    return this.buildBundle('preview', domainId, new Date(), false, actor);
   }
 
   async generate(dto: CreateNdiAuditPackDto, actor: AuthUser) {
     const code = await this.nextCode();
     const generatedAt = new Date();
-    const bundle = await this.buildBundle(code, dto.domainId, generatedAt, true);
+    const bundle = await this.buildBundle(code, dto.domainId, generatedAt, true, actor);
     const zip = this.zipFromStored(bundle.stored, bundle.manifest);
 
     const pack = await this.prisma.ndiAuditPack.create({
@@ -73,7 +79,10 @@ export class AuditPacksService {
   }
 
   async exportZip(id: string, actor: AuthUser) {
-    const pack = await this.prisma.ndiAuditPack.findUnique({ where: { id }, include: packSelect });
+    const pack = await this.prisma.ndiAuditPack.findFirst({
+      where: { id, ...(this.hasBroadAuditPackAccess(actor) ? {} : { requestedBy: actor.email }) },
+      include: packSelect,
+    });
     if (!pack) throw new NotFoundException('ndi_audit_pack not found');
     if (pack.status !== NdiAuditPackStatus.generated) throw new BadRequestException('Audit pack is not ready for download');
     const zip = this.zipFromStored(pack.summaryJson as unknown as StoredPackPayload, pack.manifestJson as Record<string, unknown>);
@@ -107,17 +116,60 @@ export class AuditPacksService {
     return `NDI-PACK-${day}-${String(count + 1).padStart(3, '0')}`;
   }
 
-  private async buildBundle(packCode: string, domainId: string | undefined, generatedAt: Date, includePayload: boolean) {
+  private async actorPersonId(actor: Pick<AuthUser, 'id' | 'email'>): Promise<string | null> {
+    const person = await this.prisma.person.findFirst({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [{ userId: actor.id }, { email: actor.email }],
+      },
+      select: { id: true },
+    });
+    return person?.id ?? null;
+  }
+
+  private async specVisibilityWhere(
+    actor: AuthUser,
+    domainId?: string,
+  ): Promise<{ where: Prisma.NdiSpecificationWhereInput; personId: string | null }> {
+    const base: Prisma.NdiSpecificationWhereInput = {
+      deletedAt: null,
+      isActive: true,
+      ...(domainId ? { domainId } : {}),
+    };
+    if (this.hasBroadAuditPackAccess(actor)) return { where: base, personId: null };
+    const personId = await this.actorPersonId(actor);
+    const visible: Prisma.NdiSpecificationWhereInput[] = [
+      {
+        evidence: {
+          some: {
+            deletedAt: null,
+            OR: [{ submittedBy: actor.email }, { reviewedBy: actor.email }],
+          },
+        },
+      },
+    ];
+    if (personId) visible.push({ ownerPersonId: personId });
+    return { where: { AND: [base, { OR: visible }] }, personId };
+  }
+
+  private async buildBundle(
+    packCode: string,
+    domainId: string | undefined,
+    generatedAt: Date,
+    includePayload: boolean,
+    actor: AuthUser,
+  ) {
     if (domainId) {
       const exists = await this.prisma.ndiDomain.findUnique({ where: { id: domainId }, select: { id: true } });
       if (!exists) throw new BadRequestException('NDI domain not found');
     }
     const [detail, gaps, specs, workflowDecisions, hooks] = await Promise.all([
-      domainId ? this.scoring.domainDetail(domainId) : this.scoring.readiness(),
-      this.scoring.gaps(domainId ? { domainId } : undefined),
-      this.specifications(domainId),
-      this.workflowDecisions(),
-      this.complianceHooks(),
+      domainId ? this.scoring.domainDetail(actor, domainId) : this.scoring.readiness(actor),
+      this.scoring.gaps(actor, domainId ? { domainId } : undefined),
+      this.specifications(actor, domainId),
+      this.workflowDecisions(actor),
+      this.complianceHooks(actor),
     ]);
 
     const specRows = specs.map((spec) => ({
@@ -194,9 +246,24 @@ export class AuditPacksService {
     };
   }
 
-  private specifications(domainId?: string) {
+  private async specifications(actor: AuthUser, domainId?: string) {
+    const { where, personId } = await this.specVisibilityWhere(actor, domainId);
+    const evidenceWhere: Prisma.NdiEvidenceWhereInput = this.hasBroadAuditPackAccess(actor)
+      ? { deletedAt: null, status: NdiEvidenceStatus.approved }
+      : {
+          AND: [
+            { deletedAt: null, status: NdiEvidenceStatus.approved },
+            {
+              OR: [
+                { submittedBy: actor.email },
+                { reviewedBy: actor.email },
+                ...(personId ? [{ spec: { ownerPersonId: personId } }] : []),
+              ],
+            },
+          ],
+        };
     return this.prisma.ndiSpecification.findMany({
-      where: { deletedAt: null, isActive: true, ...(domainId ? { domainId } : {}) },
+      where,
       orderBy: [{ domain: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { code: 'asc' }],
       select: {
         id: true,
@@ -207,7 +274,7 @@ export class AuditPacksService {
         domain: { select: { code: true, shortCode: true, nameEn: true } },
         owner: { select: { fullNameEn: true, email: true } },
         evidence: {
-          where: { deletedAt: null, status: NdiEvidenceStatus.approved },
+          where: evidenceWhere,
           orderBy: { reviewedAt: 'desc' },
           select: {
             id: true,
@@ -223,10 +290,20 @@ export class AuditPacksService {
     });
   }
 
-  private async workflowDecisions() {
+  private async workflowDecisions(actor: AuthUser) {
     const rows = await this.prisma.workflowTask.findMany({
       where: {
         decision: { in: [TaskDecision.approved, TaskDecision.rejected] },
+        ...(this.hasBroadAuditPackAccess(actor)
+          ? {}
+          : {
+              OR: [
+                { assigneeUserId: actor.id },
+                { assigneeRoleCode: { in: actor.roles } },
+                { events: { some: { actor: actor.email } } },
+                { case: { is: { createdBy: actor.email } } },
+              ],
+            }),
       },
       orderBy: { completedAt: 'desc' },
       take: 100,
@@ -250,7 +327,13 @@ export class AuditPacksService {
     }));
   }
 
-  private async complianceHooks() {
+  private async complianceHooks(actor: AuthUser) {
+    if (!this.hasBroadAuditPackAccess(actor)) {
+      return {
+        scoped: true,
+        note: 'Cross-domain compliance hook totals are available in admin and auditor audit packs only.',
+      };
+    }
     const [dq, masking, abac, training, stewardship, privacy, sharing] = await Promise.all([
       this.prisma.dataQualityIssue.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { _all: true } }),
       this.prisma.maskingPolicy.count({ where: { deletedAt: null, isActive: true } }),

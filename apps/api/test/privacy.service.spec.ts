@@ -107,6 +107,53 @@ test('privacy lists do not expose unanchored records to scoped users', async () 
   assert.ok(!whereText.includes('"assetId":null'));
 });
 
+test('privacy list filters reject invalid status values before Prisma receives them', async () => {
+  const calls: string[] = [];
+  const service = new PrivacyService(
+    {
+      dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+      privacyRopaRecord: {
+        findMany: async () => {
+          calls.push('ropa');
+          return [];
+        },
+        count: async () => 0,
+      },
+      privacyDpia: {
+        findMany: async () => {
+          calls.push('dpia');
+          return [];
+        },
+        count: async () => 0,
+      },
+      privacyDsrRequest: {
+        findMany: async () => {
+          calls.push('dsr');
+          return [];
+        },
+        count: async () => 0,
+      },
+      privacyBreach: {
+        findMany: async () => {
+          calls.push('breach');
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
+    } as never,
+  );
+
+  await assert.rejects(() => service.listRopa(['privacy_officer'], { status: 'waiting', page: '1', pageSize: '10' }), BadRequestException);
+  await assert.rejects(() => service.listDpias(['privacy_officer'], { status: 'waiting', page: '1', pageSize: '10' }), BadRequestException);
+  await assert.rejects(() => service.listDsr(['privacy_officer'], { status: 'waiting', page: '1', pageSize: '10' }), BadRequestException);
+  await assert.rejects(() => service.listBreaches(['privacy_officer'], { status: 'waiting', page: '1', pageSize: '10' }), BadRequestException);
+  assert.deepEqual(calls, []);
+});
+
 test('privacy summary scopes consent and retention counters', async () => {
   const countWheres: unknown[] = [];
   const service = new PrivacyService(

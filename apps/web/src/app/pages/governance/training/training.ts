@@ -253,7 +253,7 @@ export class TrainingPage implements OnInit {
         this.expertProfiles.set(r.experts);
         this.mentorshipPairs.set(r.mentorships);
       },
-      error: () => this.toast.error(this.t('training.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('training.error')),
     });
   }
 
@@ -271,7 +271,7 @@ export class TrainingPage implements OnInit {
         this.roles.set(r.roles);
         this.users.set(r.users);
       },
-      error: () => this.toast.error(this.t('training.error')),
+      error: (err) => this.toast.errorFrom(err, this.t('training.error')),
     });
   }
 
@@ -332,7 +332,7 @@ export class TrainingPage implements OnInit {
         this.courseOpen.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('training.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('training.error')); this.saving.set(false); },
     });
   }
 
@@ -359,7 +359,7 @@ export class TrainingPage implements OnInit {
         this.requirementOpen.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('training.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('training.error')); this.saving.set(false); },
     });
   }
 
@@ -384,7 +384,7 @@ export class TrainingPage implements OnInit {
         this.assignmentOpen.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('training.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('training.error')); this.saving.set(false); },
     });
   }
 
@@ -408,7 +408,7 @@ export class TrainingPage implements OnInit {
         this.completeTarget.set(null);
         this.load();
       },
-      error: () => { this.toast.error(this.t('training.error')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('training.error')); this.saving.set(false); },
     });
   }
 
@@ -421,7 +421,7 @@ export class TrainingPage implements OnInit {
         this.syncing.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('training.error')); this.syncing.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('training.error')); this.syncing.set(false); },
     });
   }
 

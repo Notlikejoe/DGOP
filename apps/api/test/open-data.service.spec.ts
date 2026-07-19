@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { BadRequestException } from '@nestjs/common';
 import {
   OpenDataApprovalDecision,
   OpenDataCandidateStatus,
@@ -302,6 +303,29 @@ test('status lifecycle rejects direct draft to published transition', () => {
     canTransitionOpenDataStatus(OpenDataCandidateStatus.under_review, OpenDataCandidateStatus.approved),
     true,
   );
+});
+
+test('list rejects invalid candidate status before Prisma receives it', async () => {
+  let candidateFinds = 0;
+  const service = new OpenDataService(
+    {
+      openDataCandidate: {
+        findMany: async () => {
+          candidateFinds++;
+          return [];
+        },
+        count: async () => 0,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await assert.rejects(
+    () => service.list(['open_data_officer'], { status: 'publishedish', page: '1', pageSize: '10' }),
+    BadRequestException,
+  );
+  assert.equal(candidateFinds, 0);
 });
 
 test('create: links asset defaults, DQ score, people, and eligibility signals', async () => {

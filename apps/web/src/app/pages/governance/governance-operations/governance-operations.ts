@@ -144,7 +144,7 @@ interface ControlCrosswalk {
 
 interface ProductionAcceptance {
   status: string;
-  summary: { items: number; ready: number; watch: number; blocked: number };
+  summary: { items: number; ready: number; watch: number; blocked: number; acceptedDeferrals?: number };
   items: Array<{
     code: string;
     name: string;
@@ -153,6 +153,7 @@ interface ProductionAcceptance {
     target: string;
     evidence: string[];
     status: string;
+    acceptedDeferral?: string;
   }>;
   environments: Array<{ name: string; status: string; entry: string; exit: string }>;
 }

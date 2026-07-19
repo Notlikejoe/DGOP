@@ -154,6 +154,20 @@
 .table-wrap { overflow-x: auto; }
 .actions-col { white-space: nowrap; text-align: end; }
 .btn-sm { padding: 0.25rem 0.6rem; font-size: 0.85rem; margin-inline-start: 0.25rem; }
+.link-button {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--primary, #0f766e);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: start;
+}
+.link-button:hover,
+.link-button:focus-visible {
+  text-decoration: underline;
+}
 
 .form { display: flex; flex-direction: column; gap: 0.75rem; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
@@ -167,7 +181,18 @@
 .import-result { margin-top: 0.5rem; }
 .error-list { margin: 0.5rem 0 0; padding-inline-start: 1.25rem; color: var(--ds-danger, #c0392b); }
 
-.back-link { display: inline-block; margin-bottom: 0.5rem; color: var(--ds-text-muted, #64748b); text-decoration: none; }
+.back-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+  color: var(--ds-text-muted, #64748b);
+  font: inherit;
+  padding: 0;
+  text-decoration: none;
+}
 .back-link:hover { text-decoration: underline; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
 .card-title { margin: 0 0 0.25rem; font-size: 1.1rem; }

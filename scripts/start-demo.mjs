@@ -53,13 +53,26 @@ function isSafePassword(value) {
   );
 }
 
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function originIsSafe(origin) {
+  if (!origin || origin === '*' || origin.toLowerCase() === 'true') return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol === 'https:') return true;
+    return parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 function originsAreSafe(value) {
   if (!value && !process.env.PUBLIC_ORIGIN) return false;
   const origins = `${value ?? ''},${process.env.PUBLIC_ORIGIN ?? ''}`
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  return origins.length > 0 && origins.every((origin) => origin !== '*' && origin.toLowerCase() !== 'true');
+  return origins.length > 0 && origins.every(originIsSafe);
 }
 
 loadRootEnv();
@@ -71,6 +84,7 @@ requireEnv('DATABASE_URL');
 requireEnv('JWT_SECRET', isSafeSecret);
 requireEnv('CORS_ORIGINS', originsAreSafe);
 requireEnv('SEED_ADMIN_PASSWORD', isSafePassword);
+requireEnv('SEED_PERSON_PASSWORD', isSafePassword);
 requireEnv('DGOP_WEBHOOK_TOKEN', isSafeSecret);
 
 const apiEntry = join(root, 'apps', 'api', 'dist', 'main.js');

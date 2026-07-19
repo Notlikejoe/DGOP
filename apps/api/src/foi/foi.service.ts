@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
+import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
   CreateFoiAppealDto,
@@ -27,8 +28,8 @@ import { addKsaBusinessDays, canDiscloseFoi, foiSlaStatus, statusForFoiDecision 
 
 export interface FoiRequestFilters {
   search?: string;
-  status?: FoiRequestStatus;
-  channel?: FoiRequestChannel;
+  status?: string;
+  channel?: string;
   page?: string | number;
   pageSize?: string | number;
 }
@@ -80,10 +81,19 @@ export class FoiService {
     return new Set(rows.map((row) => row.id));
   }
 
-  private requestScopeWhere(assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput {
-    if (assetIds === 'all') return { deletedAt: null };
-    if (assetIds.size === 0) return { deletedAt: null, assetId: null };
-    return { deletedAt: null, OR: [{ assetId: { in: [...assetIds] } }, { assetId: null }] };
+  private visibleRequestBranches(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput[] {
+    const branches: Prisma.FoiRequestWhereInput[] = [];
+    if (assetIds !== 'all' && assetIds.size > 0) branches.push({ assetId: { in: [...assetIds] } });
+    if (scope.orgUnits === 'all' && scope.domains !== 'all' && scope.domains.length > 0) {
+      branches.push({ AND: [{ assetId: null }, { dataDomainId: { in: scope.domains } }] });
+    }
+    return branches;
+  }
+
+  private requestScopeWhere(scope: EffectiveScope, assetIds: Set<string> | 'all'): Prisma.FoiRequestWhereInput {
+    if (scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank == null) return { deletedAt: null };
+    const branches = this.visibleRequestBranches(scope, assetIds);
+    return branches.length ? { deletedAt: null, OR: branches } : { deletedAt: null, id: '__no_visible_foi_records__' };
   }
 
   private async assertAssetVisible(roleCodes: string[], assetId?: string | null) {
@@ -120,8 +130,10 @@ export class FoiService {
   }
 
   private async requireRequest(roleCodes: string[], id: string): Promise<RequestWithInclude> {
+    const scope = await this.scope.resolve(roleCodes);
+    const assetIds = await this.visibleAssetIds(roleCodes);
     const request = await this.prisma.foiRequest.findFirst({
-      where: { AND: [{ id }, this.requestScopeWhere(await this.visibleAssetIds(roleCodes))] },
+      where: { AND: [{ id }, this.requestScopeWhere(scope, assetIds)] },
       include: requestInclude,
     });
     if (!request) throw new NotFoundException('foi request not found');
@@ -212,11 +224,12 @@ export class FoiService {
   }
 
   async summary(roleCodes: string[]) {
-    const where = this.requestScopeWhere(await this.visibleAssetIds(roleCodes));
-    const [total, open, overdueRows, dueSoonRows, appeals, disclosures] = await Promise.all([
+    const scope = await this.scope.resolve(roleCodes);
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    const where = this.requestScopeWhere(scope, assetIds);
+    const [total, open, slaRows, appeals, disclosures] = await Promise.all([
       this.prisma.foiRequest.count({ where }),
       this.prisma.foiRequest.count({ where: { ...where, status: { in: [FoiRequestStatus.registered, FoiRequestStatus.under_review, FoiRequestStatus.awaiting_clarification, FoiRequestStatus.decision_due, FoiRequestStatus.extended] } } }),
-      this.prisma.foiRequest.findMany({ where, select: { dueAt: true, status: true } }),
       this.prisma.foiRequest.findMany({ where, select: { dueAt: true, status: true } }),
       this.prisma.foiAppeal.count({ where: { request: { is: where } } }),
       this.prisma.foiDisclosure.count({ where: { request: { is: where } } }),
@@ -224,18 +237,31 @@ export class FoiService {
     return {
       total,
       open,
-      overdue: overdueRows.filter((row) => foiSlaStatus(row.dueAt, row.status) === 'overdue').length,
-      dueSoon: dueSoonRows.filter((row) => foiSlaStatus(row.dueAt, row.status) === 'due_soon').length,
+      overdue: slaRows.filter((row) => foiSlaStatus(row.dueAt, row.status) === 'overdue').length,
+      dueSoon: slaRows.filter((row) => foiSlaStatus(row.dueAt, row.status) === 'due_soon').length,
       appeals,
       disclosures,
     };
   }
 
   async list(roleCodes: string[], filters: FoiRequestFilters) {
-    const scoped = this.requestScopeWhere(await this.visibleAssetIds(roleCodes));
+    const scope = await this.scope.resolve(roleCodes);
+    const scoped = this.requestScopeWhere(scope, await this.visibleAssetIds(roleCodes));
     const clauses: Prisma.FoiRequestWhereInput[] = [scoped];
-    if (filters.status) clauses.push({ status: filters.status });
-    if (filters.channel) clauses.push({ channel: filters.channel });
+    const status = parseQueryEnum<FoiRequestStatus>(
+      filters.status,
+      Object.values(FoiRequestStatus),
+      'FOI status',
+      (value) => value.toLowerCase(),
+    );
+    const channel = parseQueryEnum<FoiRequestChannel>(
+      filters.channel,
+      Object.values(FoiRequestChannel),
+      'FOI channel',
+      (value) => value.toLowerCase(),
+    );
+    if (status) clauses.push({ status });
+    if (channel) clauses.push({ channel });
     if (filters.search?.trim()) {
       const q = filters.search.trim();
       clauses.push({

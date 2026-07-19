@@ -104,7 +104,7 @@ export class ExceptionQueuePage implements OnInit {
         this.modalOpen.set(false);
         this.load();
       },
-      error: () => { this.toast.error(this.t('exc.saveError')); this.saving.set(false); },
+      error: (err) => { this.toast.errorFrom(err, this.t('exc.saveError')); this.saving.set(false); },
     });
   }
 

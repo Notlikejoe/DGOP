@@ -3,7 +3,7 @@
  * Run with: ts-node test/integrations.service.spec.ts
  */
 import assert from 'node:assert';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   IntegrationConnectorStatus,
   IntegrationDirection,
@@ -12,8 +12,11 @@ import {
 } from '@prisma/client';
 import { IntegrationsService } from '../src/integrations/integrations.service';
 import {
+  adapterMatchesConnectorType,
   buildCatalogWritebackPayload,
   catalogMappingPreview,
+  defaultAdapterForConnectorType,
+  DEFAULT_INTEGRATION_CONNECTORS,
   normalizeIntegrationEventPayload,
   normalizeCatalogAssetRow,
 } from '../src/integrations/integrations.logic';
@@ -82,11 +85,18 @@ function prismaBase(tx: Record<string, any>) {
       count: async () => 0,
       findUnique: async () => null,
     },
+    integrationJob: { upsert: async () => ({ id: 'job-1' }) },
     dataDomain: { findMany: async () => [{ id: 'domain-1', code: 'finance' }] },
     organizationUnit: { findMany: async () => [] },
     systemPlatform: { findMany: async () => [] },
     businessCapability: { findMany: async () => [] },
     classification: { findMany: async () => [{ id: 'class-1', code: 'internal' }] },
+    role: {
+      findFirst: async ({ where }: any) =>
+        where.code.in.some((code: string) => code === 'system_admin' || code === 'dmo_admin')
+          ? { id: 'role-admin' }
+          : null,
+    },
     $transaction: async (fn: (client: unknown) => unknown) => fn(txClient),
   };
 }
@@ -216,6 +226,27 @@ test('runCatalogSync rejects restricted data-scope users', async () => {
   );
 });
 
+test('runCatalogSync rejects stale admin role codes that are not active in the database', async () => {
+  const service = serviceWith(
+    { role: { findFirst: async () => null } } as never,
+    [],
+    { orgUnits: ['org-1'], domains: 'all', maxClassRank: null },
+  );
+
+  await assert.rejects(
+    () =>
+      service.runCatalogSync(
+        ['system_admin'],
+        {
+          adapterType: 'catalog_csv',
+          csv: 'externalId,code,nameEn,nameAr\nCAT-1,AST-1,Finance Feed,Finance Feed',
+        },
+        'admin@dgop.local',
+      ),
+    ForbiddenException,
+  );
+});
+
 test('runCatalogSync does not overwrite existing governed asset metadata', async () => {
   let assetUpdate: any;
   const warnings: any[] = [];
@@ -311,6 +342,214 @@ test('normalizeIntegrationEventPayload rejects adapter payloads that are not rea
   assert.ok(result.issues.some((issue) => issue.field === 'payload'));
 });
 
+test('integration adapter compatibility prevents misleading connector engines', () => {
+  assert.strictEqual(adapterMatchesConnectorType('data_quality', 'mock_data_quality'), true);
+  assert.strictEqual(adapterMatchesConnectorType('data_quality', 'webhook_json'), true);
+  assert.strictEqual(adapterMatchesConnectorType('data_quality', 'catalog_csv'), false);
+  assert.strictEqual(adapterMatchesConnectorType('siem', 'mock_siem'), true);
+  assert.strictEqual(adapterMatchesConnectorType('iam_sso', 'mock_iam_sso'), true);
+  assert.strictEqual(adapterMatchesConnectorType('siem', 'mock_dlp'), false);
+  assert.strictEqual(defaultAdapterForConnectorType('catalog'), 'catalog_csv');
+  assert.strictEqual(defaultAdapterForConnectorType('data_quality'), 'webhook_json');
+});
+
+test('default integration connectors cover every simulated enterprise adapter', () => {
+  const defaultAdapters = new Set(DEFAULT_INTEGRATION_CONNECTORS.map((connector) => connector.adapterType));
+  for (const adapter of [
+    'mock_data_quality',
+    'mock_dlp',
+    'mock_open_data',
+    'mock_foi',
+    'mock_lms',
+    'mock_siem',
+    'mock_iam_sso',
+  ] as const) {
+    assert.ok(defaultAdapters.has(adapter), `${adapter} must have a default connector`);
+  }
+  for (const connector of DEFAULT_INTEGRATION_CONNECTORS) {
+    assert.ok(
+      adapterMatchesConnectorType(connector.type, connector.adapterType),
+      `${connector.code} must use an adapter compatible with ${connector.type}`,
+    );
+  }
+});
+
+test('default integration connector bootstrap is idempotent and repairs jobs separately', async () => {
+  const connectorUpserts: any[] = [];
+  const jobUpserts: any[] = [];
+  const statusUpdates: any[] = [];
+  const service = serviceWith({
+    integrationConnector: {
+      upsert: async (args: any) => {
+        connectorUpserts.push(args);
+        return {
+          id: `connector-${connectorUpserts.length}`,
+          status: IntegrationConnectorStatus.warning,
+          lastError: null,
+        };
+      },
+      update: async (args: any) => {
+        statusUpdates.push(args);
+        return { id: args.where.id, status: args.data.status, lastError: null };
+      },
+    },
+    integrationJob: {
+      upsert: async (args: any) => {
+        jobUpserts.push(args);
+        return { id: `job-${jobUpserts.length}`, ...args.create };
+      },
+    },
+  } as never);
+
+  await (service as any).ensureDefaultMockConnectors('system');
+
+  assert.strictEqual(connectorUpserts.length, DEFAULT_INTEGRATION_CONNECTORS.length);
+  assert.strictEqual(jobUpserts.length, DEFAULT_INTEGRATION_CONNECTORS.length);
+  assert.strictEqual(statusUpdates.length, DEFAULT_INTEGRATION_CONNECTORS.length);
+  assert.strictEqual(connectorUpserts[0].create.jobs, undefined);
+  assert.strictEqual(jobUpserts[0].update.status, undefined);
+  assert.ok(jobUpserts.some((args) => args.where.code === 'JOB-IAM-SSO-MOCK'));
+});
+
+test('default catalog connector bootstrap is idempotent and repairs the catalog job', async () => {
+  const connectorUpserts: any[] = [];
+  const jobUpserts: any[] = [];
+  const statusUpdates: any[] = [];
+  const service = serviceWith({
+    integrationConnector: {
+      findFirst: async () => null,
+      upsert: async (args: any) => {
+        connectorUpserts.push(args);
+        return {
+          id: 'catalog-connector-1',
+          code: 'CATALOG-MVP',
+          status: IntegrationConnectorStatus.warning,
+          lastError: null,
+        };
+      },
+      update: async (args: any) => {
+        statusUpdates.push(args);
+        return { id: args.where.id, status: args.data.status, lastError: null };
+      },
+    },
+    integrationJob: {
+      upsert: async (args: any) => {
+        jobUpserts.push(args);
+        return { id: 'catalog-job-1', ...args.create };
+      },
+    },
+  } as never);
+
+  const result = await (service as any).resolveCatalogConnector(null, 'system');
+
+  assert.strictEqual(result.id, 'catalog-connector-1');
+  assert.strictEqual(result.status, IntegrationConnectorStatus.healthy);
+  assert.strictEqual(connectorUpserts.length, 1);
+  assert.strictEqual(statusUpdates.length, 1);
+  assert.strictEqual(connectorUpserts[0].create.jobs, undefined);
+  assert.strictEqual(jobUpserts[0].where.code, 'JOB-CATALOG-MVP');
+  assert.strictEqual(jobUpserts[0].create.connectorId, 'catalog-connector-1');
+});
+
+test('onModuleInit bootstraps the default integration registry outside read endpoints', async () => {
+  const connectorUpserts: any[] = [];
+  const jobUpserts: any[] = [];
+  const service = serviceWith({
+    integrationConnector: {
+      findFirst: async () => null,
+      upsert: async (args: any) => {
+        connectorUpserts.push(args);
+        return {
+          id: `connector-${connectorUpserts.length}`,
+          code: args.create?.code ?? args.where.code,
+          status: IntegrationConnectorStatus.healthy,
+          lastError: null,
+        };
+      },
+      update: async (args: any) => ({ id: args.where.id, status: args.data.status, lastError: null }),
+    },
+    integrationJob: {
+      upsert: async (args: any) => {
+        jobUpserts.push(args);
+        return { id: `job-${jobUpserts.length}`, ...args.create };
+      },
+    },
+  } as never);
+
+  await service.onModuleInit();
+
+  assert.strictEqual(connectorUpserts.length, DEFAULT_INTEGRATION_CONNECTORS.length + 1);
+  assert.strictEqual(jobUpserts.length, DEFAULT_INTEGRATION_CONNECTORS.length + 1);
+  assert.ok(connectorUpserts.some((args) => args.where.code === 'CATALOG-MVP'));
+  assert.ok(jobUpserts.some((args) => args.where.code === 'JOB-CATALOG-MVP'));
+});
+
+test('integration summary read does not bootstrap or mutate default connectors', async () => {
+  const forbiddenWrite = async () => {
+    throw new Error('read endpoint must not bootstrap integration defaults');
+  };
+  const service = serviceWith({
+    integrationConnector: {
+      count: async () => 0,
+      upsert: forbiddenWrite,
+      update: forbiddenWrite,
+    },
+    dataAsset: { count: async () => 0 },
+    integrationImportBatch: { count: async () => 0, findFirst: async () => null },
+    integrationImportError: { count: async () => 0 },
+    integrationWritebackLog: { count: async () => 0 },
+    integrationEvent: { count: async () => 0 },
+    integrationReconciliationReport: { count: async () => 0 },
+  } as never);
+
+  const result = await service.summary(['system_admin']) as any;
+
+  assert.strictEqual(result.connectors, 0);
+  assert.strictEqual(result.lastRunAt, null);
+});
+
+test('integration connectors read does not bootstrap or mutate default connectors', async () => {
+  const forbiddenWrite = async () => {
+    throw new Error('read endpoint must not bootstrap integration defaults');
+  };
+  const service = serviceWith({
+    integrationConnector: {
+      findMany: async () => [],
+      upsert: forbiddenWrite,
+      update: forbiddenWrite,
+    },
+  } as never);
+
+  const result = await service.connectors(['system_admin']);
+
+  assert.deepStrictEqual(result, []);
+});
+
+test('createConnector rejects an adapter that does not match the connector type', async () => {
+  const service = serviceWith({
+    integrationConnector: {
+      create: async () => {
+        throw new Error('should not persist incompatible connector');
+      },
+    },
+  } as never);
+
+  await assert.rejects(
+    () =>
+      service.createConnector(
+        {
+          code: 'BAD-DQ-CATALOG',
+          nameEn: 'Bad DQ catalog adapter',
+          nameAr: 'Bad DQ catalog adapter',
+          type: 'data_quality',
+          adapterType: 'catalog_csv',
+        },
+        'admin@dgop.local',
+      ),
+    BadRequestException,
+  );
+});
+
 test('receiveWebhook rejects requests when no webhook token is configured', async () => {
   const service = serviceWith({} as never);
 
@@ -379,6 +618,44 @@ test('batches scope restricted users to visible asset write-back history and omi
   });
   assert.strictEqual(findManyArgs.select.mappingPreviewJson, undefined);
   assert.strictEqual(findManyArgs.select.reconciliationJson, undefined);
+});
+
+test('integration list limits reject NaN and clamp extremes before Prisma receives take', async () => {
+  const calls: any[] = [];
+  const service = serviceWith(
+    {
+      integrationImportBatch: {
+        findMany: async (args: any) => {
+          calls.push({ kind: 'batch', take: args.take });
+          return [];
+        },
+      },
+      integrationEvent: {
+        findMany: async (args: any) => {
+          calls.push({ kind: 'event', take: args.take });
+          return [];
+        },
+      },
+      integrationReconciliationReport: {
+        findMany: async (args: any) => {
+          calls.push({ kind: 'reconciliation', take: args.take });
+          return [];
+        },
+      },
+    },
+    [],
+    { orgUnits: 'all', domains: 'all', maxClassRank: null },
+  );
+
+  await service.batches(['system_admin'], 'not-a-number');
+  await service.events(['system_admin'], undefined, 250);
+  await service.reconciliationReports(['system_admin'], 0);
+
+  assert.deepStrictEqual(calls, [
+    { kind: 'batch', take: 25 },
+    { kind: 'event', take: 100 },
+    { kind: 'reconciliation', take: 1 },
+  ]);
 });
 
 test('events scope restricted users to visible asset-linked events and omit raw event payloads', async () => {
@@ -487,7 +764,12 @@ test('receiveWebhook persists, processes, reconciles, and audits integration eve
       {
         externalEventId: 'DQ-1',
         eventType: 'dq.issue.detected',
-        payload: { assetCode: 'AST-1', severity: 'low' },
+        payload: {
+          assetCode: 'AST-1',
+          severity: 'low',
+          webhookToken: 'raw-token',
+          nested: { authorization: 'Bearer raw-token', apiKey: 'raw-key' },
+        },
       },
       TEST_WEBHOOK_TOKEN,
     ),
@@ -496,6 +778,11 @@ test('receiveWebhook persists, processes, reconciles, and audits integration eve
   assert.strictEqual(result.status, IntegrationEventStatus.succeeded);
   assert.strictEqual(result.attempts, 1);
   assert.strictEqual(reports.length, 1);
+  assert.strictEqual(eventRow.payloadJson.webhookToken, '[REDACTED]');
+  assert.strictEqual(eventRow.payloadJson.nested.authorization, '[REDACTED]');
+  assert.strictEqual(eventRow.payloadJson.nested.apiKey, '[REDACTED]');
+  assert.strictEqual(eventRow.payloadJson.assetCode, 'AST-1');
+  assert.strictEqual(eventRow.normalizedJson.raw.webhookToken, '[REDACTED]');
   assert.ok(auditLog.some((entry: any) => entry.action === 'integration.webhook.receive'));
   assert.ok(auditLog.some((entry: any) => entry.action === 'integration.event.process'));
 });

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { OpenDataCandidateStatus } from '@prisma/client';
+import { contentDispositionAttachment, sanitizeAttachmentFilename } from '../src/common/download';
 import { ReportsService } from '../src/reports/reports.service';
 import { filterDefinitions, toCsv, toSimplePdf, type ReportDefinition } from '../src/reports/reports.logic';
 
@@ -65,6 +66,38 @@ test('CSV export quotes commas and PDF export returns a PDF buffer', () => {
   assert.ok(csv.includes('"Finance, Customer"'));
   const pdf = toSimplePdf(result);
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+});
+
+test('CSV export neutralizes spreadsheet formula text without changing numbers', () => {
+  const result = {
+    id: 'r1',
+    title: 'Report',
+    generatedAt: '2026-07-14T00:00:00Z',
+    columns: [
+      { key: 'value', label: 'Value' },
+      { key: 'number', label: 'Number' },
+    ],
+    rows: [
+      { value: '=HYPERLINK("https://example.invalid","open")', number: -7 },
+      { value: '+SUM(1,2)', number: 3 },
+      { value: '-1+2', number: 4 },
+      { value: '@cmd', number: 5 },
+      { value: '  =SUM(1,2)', number: 6 },
+    ],
+    summary: { total: 5 },
+  };
+  const csv = toCsv(result);
+  assert.ok(csv.includes('"\'=HYPERLINK(""https://example.invalid"",""open"")"'));
+  assert.ok(csv.includes("'+SUM(1,2)"));
+  assert.ok(csv.includes("'-1+2"));
+  assert.ok(csv.includes("'@cmd"));
+  assert.ok(csv.includes("'  =SUM(1,2)"));
+  assert.ok(csv.includes(',-7'));
+});
+
+test('download headers sanitize unsafe attachment filenames', () => {
+  assert.equal(sanitizeAttachmentFilename('..bad\"\\\r\nX-Trace: yep.csv'), 'bad-X-Trace- yep.csv');
+  assert.equal(contentDispositionAttachment('NDI-PACK-20260719-001.zip'), 'attachment; filename="NDI-PACK-20260719-001.zip"');
 });
 
 test('reports service exposes only accessible reports and runs open data workload', async () => {
@@ -179,6 +212,32 @@ test('NDI readiness report hides specifications outside the actor visibility sco
   assert.ok(evidenceWhere.includes('reviewedBy'));
 });
 
+test('FOI reports do not expose unanchored records to restricted users', async () => {
+  let foiWhere: unknown;
+  const scopedUser = { id: 'u-foi', email: 'foi@dgop.local', roles: ['foi_officer'] };
+  const service = new ReportsService(
+    {
+      dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
+      foiRequest: {
+        findMany: async (args: any) => {
+          foiWhere = args.where;
+          return [];
+        },
+      },
+    } as any,
+    { resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }) } as any,
+    accessWith(['foi_requests.view']) as any,
+  );
+
+  const report = await service.run(scopedUser, 'foi-sla');
+
+  assert.equal(report.rows.length, 0);
+  const whereText = JSON.stringify(foiWhere);
+  assert.ok(whereText.includes('visible-asset'));
+  assert.ok(!whereText.includes('"assetId":null'));
+  assert.ok(!whereText.includes('"dataDomainId"'));
+});
+
 test('reports service rejects inaccessible reports', async () => {
   const service = new ReportsService(
     {} as any,
@@ -186,6 +245,72 @@ test('reports service rejects inaccessible reports', async () => {
     accessWith(['dashboard.view']) as any,
   );
   await assert.rejects(() => service.run(user, 'foi-sla'), /report access denied/);
+});
+
+test('reports service rejects invalid date filters before querying Prisma', async () => {
+  let queried = false;
+  const service = new ReportsService(
+    {
+      dataAsset: { findMany: async () => [] },
+      openDataCandidate: {
+        findMany: async () => {
+          queried = true;
+          return [];
+        },
+      },
+    } as any,
+    { resolve: async () => allScope } as any,
+    accessWith(['dashboard.view', 'open_data_candidates.view']) as any,
+  );
+
+  await assert.rejects(() => service.run(user, 'open-data-workload', { from: 'not-a-date' }), /Invalid from date filter/);
+  assert.equal(queried, false);
+});
+
+test('reports service rejects reversed date ranges before querying Prisma', async () => {
+  let queried = false;
+  const service = new ReportsService(
+    {
+      dataAsset: { findMany: async () => [] },
+      openDataCandidate: {
+        findMany: async () => {
+          queried = true;
+          return [];
+        },
+      },
+    } as any,
+    { resolve: async () => allScope } as any,
+    accessWith(['dashboard.view', 'open_data_candidates.view']) as any,
+  );
+
+  await assert.rejects(
+    () => service.run(user, 'open-data-workload', { from: '2026-08-02', to: '2026-08-01' }),
+    /Invalid report date range/,
+  );
+  assert.equal(queried, false);
+});
+
+test('reports service rejects invalid status filters before querying Prisma', async () => {
+  let queried = false;
+  const service = new ReportsService(
+    {
+      dataAsset: { findMany: async () => [] },
+      openDataCandidate: {
+        findMany: async () => {
+          queried = true;
+          return [];
+        },
+      },
+    } as any,
+    { resolve: async () => allScope } as any,
+    accessWith(['dashboard.view', 'open_data_candidates.view']) as any,
+  );
+
+  await assert.rejects(
+    () => service.run(user, 'open-data-workload', { status: 'published;drop' }),
+    /Invalid open data status filter/,
+  );
+  assert.equal(queried, false);
 });
 
 (async () => {

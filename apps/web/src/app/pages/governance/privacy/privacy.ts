@@ -379,7 +379,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.createMode.set(null);
         this.load();
       },
-      error: () => this.toast.error(this.t('privacy.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
       complete: () => this.saving.set(false),
     });
   }
@@ -392,7 +392,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.toast.success(this.t('privacy.saved.gate'));
         this.dpias.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
       },
-      error: () => this.toast.error(this.t('privacy.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
       complete: () => this.saving.set(false),
     });
   }
@@ -405,7 +405,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.toast.success(this.t('privacy.saved.dsrUpdate'));
         this.dsrs.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
       },
-      error: () => this.toast.error(this.t('privacy.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
       complete: () => this.saving.set(false),
     });
   }
@@ -418,7 +418,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.toast.success(this.t('privacy.saved.breachUpdate'));
         this.breaches.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
       },
-      error: () => this.toast.error(this.t('privacy.error.save')),
+      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
       complete: () => this.saving.set(false),
     });
   }

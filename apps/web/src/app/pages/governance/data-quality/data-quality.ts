@@ -96,6 +96,55 @@ interface DqProfileColumn {
   dimension?: string | null;
 }
 
+interface DqProfileDimensionScore {
+  score: number;
+  totalChecks: number;
+  failedChecks: number;
+}
+
+interface DqProfileRecommendation {
+  id?: string;
+  columnName: string;
+  dimension: string;
+  severity: string;
+  confidence?: number;
+  titleEn?: string;
+  titleAr?: string;
+  reason?: string;
+}
+
+interface DqProfileRelationship {
+  sourceColumn: string;
+  targetDataset?: string;
+  targetColumn: string;
+  relationshipType: string;
+  overlapPct?: number;
+  cardinality?: string;
+  confidence: number;
+  suggestedAction: string;
+}
+
+interface DqProfileSummaryJson {
+  datasetName?: string;
+  rowCount?: number;
+  columnCount?: number;
+  qualityScore?: number;
+  anomalyCount?: number;
+  recommendedRules?: number;
+  dimensionScores?: Record<string, DqProfileDimensionScore>;
+  recommendations?: DqProfileRecommendation[];
+  relationships?: DqProfileRelationship[];
+  crossColumnFindings?: DqProfileRelationship[];
+  summary?: {
+    engine?: string;
+    profileDepth?: string;
+    strongestDimension?: string | null;
+    weakestDimension?: string | null;
+    criticalColumns?: number;
+    generatedAt?: string;
+  };
+}
+
 interface DqProfile {
   id: string;
   rowCount: number;
@@ -103,10 +152,21 @@ interface DqProfile {
   qualityScore: number;
   recommendedRules: number;
   anomalyCount: number;
+  source?: string | null;
+  summaryJson?: DqProfileSummaryJson | null;
+  engineReport?: DqProfileSummaryJson;
+  draftedRuleIds?: string[];
+  createdIssueIds?: string[];
   createdAt: string;
   asset?: Ref | null;
   domain?: Ref | null;
   columns: DqProfileColumn[];
+}
+
+interface DqProfileRunResult extends DqProfile {
+  engineReport?: DqProfileSummaryJson;
+  draftedRuleIds?: string[];
+  createdIssueIds?: string[];
 }
 
 interface DqScorecard {
@@ -126,6 +186,14 @@ interface DqImportConfig {
   sampleCsv: string;
 }
 
+interface DqProfilingConfig {
+  maxFileSizeBytes: number;
+  maxFileSizeLabel: string;
+  acceptedExtensions: string[];
+  acceptedMimeTypes: string[];
+  sampleCsv: string;
+}
+
 interface DqPageConfig {
   statuses: string[];
   severities: string[];
@@ -133,6 +201,7 @@ interface DqPageConfig {
   dimensions: string[];
   defaults: { severity: string; priority: string; dimension: string };
   import: DqImportConfig;
+  profiling: DqProfilingConfig;
 }
 
 interface DqImportRowError {
@@ -206,6 +275,16 @@ export class DataQualityPage implements OnInit {
   protected readonly importFileError = signal('');
   protected readonly importCsv = signal('');
   protected readonly importResult = signal<DqImportResult | null>(null);
+  protected readonly profileOpen = signal(false);
+  protected readonly profiling = signal(false);
+  protected readonly profileFile = signal<File | null>(null);
+  protected readonly profileFileError = signal('');
+  protected readonly profileCsv = signal('');
+  protected readonly profileDatasetName = signal('');
+  protected readonly profileAssetId = signal('');
+  protected readonly profileCreateIssues = signal(true);
+  protected readonly profileCreateRuleDrafts = signal(true);
+  protected readonly profileResult = signal<DqProfileRunResult | null>(null);
   protected readonly resolutionSummary = signal('');
   protected readonly rcaDraft = signal<RcaDraft>(this.emptyRcaDraft());
   protected readonly draft = signal<IssueDraft>(this.emptyDraft());
@@ -221,22 +300,36 @@ export class DataQualityPage implements OnInit {
   protected readonly priorities = computed(() => this.config()?.priorities ?? []);
   protected readonly dimensions = computed(() => this.config()?.dimensions ?? []);
   protected readonly importConfig = computed(() => this.config()?.import ?? null);
+  protected readonly profileConfig = computed(() => this.config()?.profiling ?? null);
   protected readonly importReady = computed(() => !!this.importFile() || !!this.importCsv().trim());
+  protected readonly profileReady = computed(() => !!this.profileFile() || !!this.profileCsv().trim());
   protected readonly importAccept = computed(() => {
     const config = this.importConfig();
+    return config ? [...config.acceptedExtensions, ...config.acceptedMimeTypes].join(',') : '';
+  });
+  protected readonly profileAccept = computed(() => {
+    const config = this.profileConfig();
     return config ? [...config.acceptedExtensions, ...config.acceptedMimeTypes].join(',') : '';
   });
   protected readonly importHelp = computed(() => {
     const size = this.importConfig()?.maxFileSizeLabel ?? '-';
     return this.t('dq.importFile.help').replace('{size}', size);
   });
+  protected readonly profileHelp = computed(() => {
+    const size = this.profileConfig()?.maxFileSizeLabel ?? '-';
+    return this.t('dq.profile.fileHelp').replace('{size}', size);
+  });
   protected readonly importFileName = computed(() => this.importFile()?.name ?? '');
+  protected readonly profileFileName = computed(() => this.profileFile()?.name ?? '');
   protected readonly importFileSize = computed(() => {
     const file = this.importFile();
     if (!file) return '';
-    if (file.size < BYTES_PER_KILOBYTE) return `${file.size} B`;
-    if (file.size < BYTES_PER_MEGABYTE) return `${Math.round(file.size / BYTES_PER_KILOBYTE)} KB`;
-    return `${(file.size / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
+    return this.fileSizeLabel(file);
+  });
+  protected readonly profileFileSize = computed(() => {
+    const file = this.profileFile();
+    if (!file) return '';
+    return this.fileSizeLabel(file);
   });
   protected readonly topProfiles = computed(() => this.profiles().slice(0, 3));
   protected readonly activeRules = computed(() => this.rules().filter((rule) => rule.status !== 'retired').slice(0, 6));
@@ -251,6 +344,7 @@ export class DataQualityPage implements OnInit {
   protected get canCreate(): boolean { return this.auth.hasPermission('data_quality_issues.create'); }
   protected get canEdit(): boolean { return this.auth.hasPermission('data_quality_issues.edit'); }
   protected get canImport(): boolean { return this.auth.hasPermission('data_quality_issues.import'); }
+  protected get canProfile(): boolean { return this.auth.hasPermission('data_quality_profiles.create'); }
   protected get canEditRules(): boolean { return this.auth.hasPermission('data_quality_rules.edit'); }
 
   protected load(): void {
@@ -410,14 +504,37 @@ export class DataQualityPage implements OnInit {
     this.importOpen.set(true);
   }
 
+  protected openProfile(): void {
+    this.clearProfileFile();
+    this.profileCsv.set('');
+    this.profileDatasetName.set('');
+    this.profileAssetId.set(this.selected()?.asset?.id ?? this.assets()[0]?.id ?? '');
+    this.profileCreateIssues.set(true);
+    this.profileCreateRuleDrafts.set(true);
+    this.profileResult.set(null);
+    this.profileOpen.set(true);
+  }
+
   protected insertSample(input?: HTMLInputElement): void {
     this.clearImportFile(input);
     this.importCsv.set(this.importConfig()?.sampleCsv ?? '');
   }
 
+  protected insertProfileSample(input?: HTMLInputElement): void {
+    this.clearProfileFile(input);
+    this.profileDatasetName.set(this.profileDatasetName() || 'Patient revenue extract');
+    this.profileCsv.set(this.profileConfig()?.sampleCsv ?? '');
+  }
+
   protected setImportCsv(value: string): void {
     this.clearImportFile();
     this.importCsv.set(value);
+  }
+
+  protected setProfileCsv(value: string): void {
+    this.clearProfileFile();
+    this.profileCsv.set(value);
+    this.profileResult.set(null);
   }
 
   protected onImportFileChange(event: Event): void {
@@ -455,9 +572,36 @@ export class DataQualityPage implements OnInit {
     this.importCsv.set('');
   }
 
+  protected onProfileFileChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    this.profileFileError.set('');
+    this.profileResult.set(null);
+    if (!file) {
+      this.clearProfileFile();
+      return;
+    }
+    const error = this.validateCsvFile(file, this.profileConfig());
+    if (error) {
+      this.profileFileError.set(error);
+      this.clearProfileFile();
+      input.value = '';
+      return;
+    }
+    this.profileFile.set(file);
+    this.profileCsv.set('');
+    this.profileDatasetName.set(this.profileDatasetName() || file.name.replace(/\.csv$/i, ''));
+  }
+
   protected clearImportFile(input?: HTMLInputElement): void {
     this.importFile.set(null);
     this.importFileError.set('');
+    if (input) input.value = '';
+  }
+
+  protected clearProfileFile(input?: HTMLInputElement): void {
+    this.profileFile.set(null);
+    this.profileFileError.set('');
     if (input) input.value = '';
   }
 
@@ -485,10 +629,67 @@ export class DataQualityPage implements OnInit {
     });
   }
 
+  protected runProfile(): void {
+    if (!this.profileReady() || this.profiling()) return;
+    this.profiling.set(true);
+    this.profileResult.set(null);
+    const file = this.profileFile();
+    const request = file
+      ? this.http.post<DqProfileRunResult>(
+          '/api/data-quality/profiles/run-file',
+          this.profileFormData(file),
+        )
+      : this.http.post<DqProfileRunResult>(
+          '/api/data-quality/profiles/run',
+          {
+            assetId: this.profileAssetId() || null,
+            datasetName: this.profileDatasetName() || null,
+            csv: this.profileCsv(),
+            createIssues: this.profileCreateIssues(),
+            createRuleDrafts: this.profileCreateRuleDrafts(),
+          },
+        );
+    request.subscribe({
+      next: (result) => {
+        this.profileResult.set(result);
+        this.toast.success(this.t('dq.profile.done'));
+        this.profiling.set(false);
+        this.load();
+      },
+      error: (err) => { this.toast.errorFrom(err, this.t('dq.profile.error')); this.profiling.set(false); },
+    });
+  }
+
   private importFormData(file: File): FormData {
     const formData = new FormData();
     formData.append('file', file, file.name);
     return formData;
+  }
+
+  private profileFormData(file: File): FormData {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    if (this.profileAssetId()) formData.append('assetId', this.profileAssetId());
+    if (this.profileDatasetName()) formData.append('datasetName', this.profileDatasetName());
+    formData.append('createIssues', String(this.profileCreateIssues()));
+    formData.append('createRuleDrafts', String(this.profileCreateRuleDrafts()));
+    return formData;
+  }
+
+  private validateCsvFile(file: File, config: DqProfilingConfig | DqImportConfig | null): string {
+    if (!config) return this.t('dq.config.error');
+    const isCsv =
+      config.acceptedExtensions.some((extension) => file.name.toLowerCase().endsWith(extension.toLowerCase())) ||
+      config.acceptedMimeTypes.includes(file.type);
+    if (!isCsv) return this.t('dq.importFile.invalid');
+    if (file.size > config.maxFileSizeBytes) return this.t('dq.importFile.tooLarge').replace('{size}', config.maxFileSizeLabel);
+    return '';
+  }
+
+  private fileSizeLabel(file: File): string {
+    if (file.size < BYTES_PER_KILOBYTE) return `${file.size} B`;
+    if (file.size < BYTES_PER_MEGABYTE) return `${Math.round(file.size / BYTES_PER_KILOBYTE)} KB`;
+    return `${(file.size / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
   }
 
   protected importErrorText(error: DqImportRowError): string {
@@ -561,8 +762,30 @@ export class DataQualityPage implements OnInit {
     this.createOpen.set(false);
     this.importOpen.set(false);
     this.clearImportFile();
+    this.profileOpen.set(false);
+    this.clearProfileFile();
     this.closeTarget.set(null);
     this.rcaTarget.set(null);
+  }
+
+  protected profileTitle(profile: DqProfile): string {
+    const linked = profile.asset ? this.name(profile.asset) : profile.domain ? this.name(profile.domain) : '';
+    return profile.summaryJson?.datasetName || linked || this.t('dq.profile.dataset');
+  }
+
+  protected profileDimensions(profile: DqProfile | DqProfileRunResult): { dimension: string; score: number; failedChecks: number }[] {
+    const scores = profile.engineReport?.dimensionScores ?? profile.summaryJson?.dimensionScores ?? {};
+    return Object.entries(scores)
+      .map(([dimension, value]) => ({ dimension, score: value.score, failedChecks: value.failedChecks }))
+      .slice(0, 6);
+  }
+
+  protected profileRelationships(profile: DqProfile | DqProfileRunResult): DqProfileRelationship[] {
+    return (profile.engineReport?.relationships ?? profile.summaryJson?.relationships ?? []).slice(0, 4);
+  }
+
+  protected profileRecommendations(profile: DqProfile | DqProfileRunResult): DqProfileRecommendation[] {
+    return (profile.engineReport?.recommendations ?? profile.summaryJson?.recommendations ?? []).slice(0, 5);
   }
 
   protected name(o?: { nameEn?: string; nameAr?: string; fullNameEn?: string; fullNameAr?: string } | null): string {

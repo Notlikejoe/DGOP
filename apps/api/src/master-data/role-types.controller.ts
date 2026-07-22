@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { RoleTypesService } from './role-types.service';
 import { CreateRoleTypeDto, UpdateRoleTypeDto } from './dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -16,7 +16,7 @@ export class RoleTypesController {
 
   @Get(':id')
   @RequirePermissions('role_types.view')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.get(id);
   }
 
@@ -28,13 +28,13 @@ export class RoleTypesController {
 
   @Patch(':id')
   @RequirePermissions('role_types.edit')
-  update(@Param('id') id: string, @Body() dto: UpdateRoleTypeDto, @CurrentUser() user: AuthUser) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRoleTypeDto, @CurrentUser() user: AuthUser) {
     return this.service.update(id, dto, user.email);
   }
 
   @Delete(':id')
   @RequirePermissions('role_types.delete')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.service.remove(id, user.email);
   }
 }

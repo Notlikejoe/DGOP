@@ -18,6 +18,12 @@ import {
   workflowTemplateConfigurationStatus,
   workflowHealth,
 } from '../src/workflow/workflow.logic';
+import {
+  parseBpmnXml,
+  simulateWorkflowRoute,
+  templateToBpmnXml,
+  validateWorkflowRoute,
+} from '../src/workflow/workflow.bpmn';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -325,6 +331,144 @@ test('workflow templates: default routes include graphable stages and transition
   assert.ok(dq.transitions.some((transition) => transition.isHappyPath === false));
 });
 
+test('BPMN designer: exports default route XML and parses it back into executable stages', () => {
+  const dq = DEFAULT_WORKFLOW_TEMPLATES.find((template) => template.caseType === 'data_quality_issue');
+  assert.ok(dq);
+  const stages = dq.stages.map((stage, index) => ({
+    id: stage.code,
+    code: stage.code,
+    nameEn: stage.nameEn,
+    nameAr: stage.nameAr,
+    description: stage.description,
+    kind: stage.kind,
+    taskType: stage.taskType,
+    assigneeRoleCode: stage.assigneeRoleCode ?? null,
+    dueDays: stage.dueDays,
+    sortOrder: index + 1,
+    isStart: Boolean(stage.isStart),
+    isDecision: Boolean(stage.isDecision),
+    isFinal: Boolean(stage.isFinal),
+    isActive: true,
+  }));
+  const xml = templateToBpmnXml({
+    id: 'tpl-dq',
+    code: dq.code,
+    caseType: dq.caseType,
+    nameEn: dq.nameEn,
+    nameAr: dq.nameAr,
+    description: dq.description,
+    defaultSlaDays: dq.defaultSlaDays,
+    stages,
+    transitions: dq.transitions.map((transition, index) => ({
+      fromStageId: transition.from,
+      toStageId: transition.to,
+      labelEn: transition.labelEn,
+      labelAr: transition.labelAr,
+      decision: transition.decision ?? null,
+      isHappyPath: transition.isHappyPath ?? true,
+      sortOrder: index + 1,
+    })),
+  });
+  const parsed = parseBpmnXml(xml);
+  assert.strictEqual(parsed.validation.status, 'warning');
+  assert.ok(parsed.validation.readinessScore > 0);
+  assert.ok(parsed.validation.checklist.some((item) => item.code === 'route_shape' && item.status === 'pass'));
+  assert.ok(parsed.stages.some((stage) => stage.code === 'validate' && stage.isDecision));
+  assert.ok(parsed.transitions.some((transition) => transition.decision === 'rejected'));
+});
+
+test('BPMN designer: validation blocks routes without a final stage', () => {
+  const validation = validateWorkflowRoute(
+    [
+      {
+        code: 'intake',
+        nameEn: 'Intake',
+        nameAr: 'Intake',
+        kind: 'intake',
+        taskType: 'information',
+        assigneeRoleCode: 'dmo_admin',
+        dueDays: 1,
+        sortOrder: 1,
+        isStart: true,
+        isDecision: false,
+        isFinal: false,
+        isActive: true,
+      },
+    ],
+    [],
+  );
+  assert.strictEqual(validation.status, 'blocked');
+  assert.ok(validation.errors.some((message) => message.includes('final stage')));
+});
+
+test('BPMN designer: simulation previews task path and governance requirements', () => {
+  const stages = [
+    {
+      code: 'intake',
+      nameEn: 'Intake',
+      nameAr: 'Intake',
+      kind: 'intake',
+      nodeType: 'user_task',
+      taskType: 'information',
+      assignmentStrategy: 'role',
+      assigneeRoleCode: 'dmo_admin',
+      dueDays: 1,
+      formSchemaJson: { fields: ['title'] },
+      notificationRulesJson: [{ event: 'created' }],
+      sortOrder: 1,
+      isStart: true,
+      isDecision: false,
+      isFinal: false,
+      isActive: true,
+    },
+    {
+      code: 'approve',
+      nameEn: 'Approve',
+      nameAr: 'Approve',
+      kind: 'decision',
+      nodeType: 'user_task',
+      taskType: 'approval',
+      assignmentStrategy: 'role',
+      assigneeRoleCode: 'data_owner',
+      dueDays: 2,
+      evidenceRequirementsJson: [{ name: 'Decision evidence' }],
+      notificationRulesJson: [{ event: 'assigned' }],
+      sortOrder: 2,
+      isStart: false,
+      isDecision: true,
+      isFinal: false,
+      isActive: true,
+    },
+    {
+      code: 'close',
+      nameEn: 'Close',
+      nameAr: 'Close',
+      kind: 'closure',
+      nodeType: 'user_task',
+      taskType: 'approval',
+      assignmentStrategy: 'role',
+      assigneeRoleCode: 'dmo_admin',
+      dueDays: 1,
+      evidenceRequirementsJson: [{ name: 'Closure note' }],
+      notificationRulesJson: [{ event: 'completed' }],
+      sortOrder: 3,
+      isStart: false,
+      isDecision: false,
+      isFinal: true,
+      isActive: true,
+    },
+  ];
+  const simulation = simulateWorkflowRoute(stages, [
+    { fromStageId: 'intake', toStageId: 'approve', labelEn: 'Ready', labelAr: 'Ready', isHappyPath: true, sortOrder: 1 },
+    { fromStageId: 'approve', toStageId: 'close', labelEn: 'Approved', labelAr: 'Approved', decision: 'approved', isHappyPath: true, sortOrder: 2 },
+  ]);
+
+  assert.strictEqual(simulation.status, 'warning');
+  assert.deepStrictEqual(simulation.path.map((step) => step.code), ['intake', 'approve', 'close']);
+  assert.strictEqual(simulation.summary.estimatedSlaDays, 4);
+  assert.strictEqual(simulation.summary.evidenceItems, 2);
+});
+
 test('workflow templates: v5 universal case types have dedicated route templates', () => {
   const required = [
     'open_data_publication_approval',
@@ -415,6 +559,91 @@ test('workflow routes: rejected decisions follow the non-happy transition', () =
     'rejected',
   );
   assert.strictEqual(transition?.toStageId, 'review');
+});
+
+test('workflow designer publish retires old transitions instead of hard deleting them', async () => {
+  const svc = makeService({});
+  const retired: unknown[] = [];
+  const created: unknown[] = [];
+  const tx: any = {
+    workflowTemplateStage: {
+      findMany: async () => [
+        { id: 'stage-intake-old', code: 'intake' },
+        { id: 'stage-review-old', code: 'review' },
+      ],
+      update: async ({ where, data }: any) => ({ id: where.id, ...data }),
+      create: async ({ data }: any) => ({ id: `stage-${data.code}`, ...data }),
+      updateMany: async () => ({ count: 0 }),
+    },
+    workflowTemplateTransition: {
+      updateMany: async (args: any) => {
+        retired.push(args);
+        return { count: 1 };
+      },
+      create: async (args: any) => {
+        created.push(args.data);
+        return { id: `transition-${created.length}`, ...args.data };
+      },
+      deleteMany: async () => {
+        throw new Error('workflow route publish must not hard delete transitions');
+      },
+    },
+  };
+
+  await (svc as any).applyPublishedBpmnRoute(
+    tx,
+    'tpl-1',
+    [
+      {
+        code: 'intake',
+        nameEn: 'Intake',
+        nameAr: 'Intake',
+        description: null,
+        kind: 'intake',
+        taskType: 'review',
+        assigneeRoleCode: 'data_steward',
+        dueDays: 1,
+        sortOrder: 1,
+        isStart: true,
+        isDecision: false,
+        isFinal: false,
+        isActive: true,
+      },
+      {
+        code: 'review',
+        nameEn: 'Review',
+        nameAr: 'Review',
+        description: null,
+        kind: 'review',
+        taskType: 'approval',
+        assigneeRoleCode: 'data_owner',
+        dueDays: 2,
+        sortOrder: 2,
+        isStart: false,
+        isDecision: false,
+        isFinal: true,
+        isActive: true,
+      },
+    ],
+    [
+      {
+        fromStageId: 'intake',
+        toStageId: 'review',
+        labelEn: 'Ready',
+        labelAr: 'Ready',
+        decision: null,
+        isHappyPath: true,
+        sortOrder: 1,
+      },
+    ],
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(retired.length, 1);
+  assert.deepStrictEqual((retired[0] as any).where, { templateId: 'tpl-1', isActive: true });
+  assert.strictEqual((retired[0] as any).data.isActive, false);
+  assert.strictEqual((retired[0] as any).data.retiredBy, 'admin@dgop.local');
+  assert.strictEqual((created[0] as any).isActive, true);
 });
 
 test('selectWorkflowTemplate: chooses domain route before generic case route', () => {

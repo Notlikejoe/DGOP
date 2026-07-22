@@ -43,6 +43,7 @@ interface Metric {
   value: string | number;
   tone: 'accent' | 'success' | 'warning' | 'neutral';
 }
+const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
 
 @Component({
   selector: 'app-hierarchy-page',
@@ -309,8 +310,7 @@ export class HierarchyPage implements OnInit {
   }
 
   protected canSave(): boolean {
-    const m = this.model();
-    return !!(m.code && m.nameEn && m.nameAr);
+    return this.validationErrors().length === 0;
   }
 
   protected save(): void {
@@ -318,10 +318,10 @@ export class HierarchyPage implements OnInit {
     this.saving.set(true);
     const m = this.model();
     const body = {
-      code: m.code,
-      nameEn: m.nameEn,
-      nameAr: m.nameAr,
-      description: m.description || null,
+      code: typeof m.code === 'string' ? m.code.trim() : m.code,
+      nameEn: typeof m.nameEn === 'string' ? m.nameEn.trim() : m.nameEn,
+      nameAr: typeof m.nameAr === 'string' ? m.nameAr.trim() : m.nameAr,
+      description: typeof m.description === 'string' ? m.description.trim() || null : null,
       parentId: m.parentId || null,
       isActive: m.isActive ?? true,
     };
@@ -356,6 +356,31 @@ export class HierarchyPage implements OnInit {
 
   protected close(): void {
     this.modalOpen.set(false);
+  }
+
+  protected validationErrors(): string[] {
+    const errors: string[] = [];
+    const m = this.model();
+    const code = typeof m.code === 'string' ? m.code.trim() : '';
+    const nameEn = typeof m.nameEn === 'string' ? m.nameEn.trim() : '';
+    const nameAr = typeof m.nameAr === 'string' ? m.nameAr.trim() : '';
+    const description = typeof m.description === 'string' ? m.description.trim() : '';
+    const original = this.editingId() ? this.nodes().find((node) => node.id === this.editingId()) : null;
+
+    if (!code) errors.push(this.t('validation.codeRequired'));
+    else if (!CODE_PATTERN.test(code)) errors.push(this.t('validation.codeFormat'));
+    if (code.length > 64) errors.push(this.t('validation.codeLength'));
+    if (original && code !== original.code) errors.push(this.t('validation.codeImmutable'));
+    if (!nameEn) errors.push(this.t('validation.nameEnRequired'));
+    if (!nameAr) errors.push(this.t('validation.nameArRequired'));
+    if (nameEn.length > 180 || nameAr.length > 180) errors.push(this.t('validation.nameLength'));
+    if (description.length > 1000) errors.push(this.t('validation.descriptionLength'));
+    if (this.editingId() && m.parentId === this.editingId()) errors.push(this.t('validation.parentSelf'));
+    if (this.editingId() && typeof m.parentId === 'string' && this.descendants(this.editingId()!).has(m.parentId)) {
+      errors.push(this.t('validation.parentDescendant'));
+    }
+
+    return [...new Set(errors)];
   }
 
   protected t(key: string): string {

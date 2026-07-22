@@ -10,6 +10,13 @@ export class ClassificationsService extends BaseCrudService {
       model: 'classification',
       entityType: 'classification',
       orderBy: { rank: 'asc' },
+      deleteDependencies: [
+        { model: 'dataAsset', field: 'classificationId', label: 'data assets', where: { deletedAt: null } },
+        { model: 'maskingPolicy', field: 'classificationId', label: 'masking policies' },
+        { model: 'roleDataAccessMap', field: 'maxClassificationId', label: 'data access maps' },
+        { model: 'accessReviewItem', field: 'classificationId', label: 'access review items' },
+        { model: 'dlpIncident', field: 'classificationId', label: 'DLP incidents' },
+      ],
     });
   }
 }

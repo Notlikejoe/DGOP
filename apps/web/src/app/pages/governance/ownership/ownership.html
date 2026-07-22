@@ -145,13 +145,23 @@
         </div>
         <label class="field">
           <span class="field__label">{{ t('own.field.justification') }}</span>
-          <textarea class="field__input" rows="2" [ngModel]="draft().justification" (ngModelChange)="set('justification', $event)" name="justification"></textarea>
+          <textarea class="field__input" rows="2" [ngModel]="draft().justification" (ngModelChange)="set('justification', $event)" name="justification" [attr.maxlength]="justificationMax"></textarea>
         </label>
         @if (!editingId() && draft().isPrimary) {
           <label class="check">
             <input type="checkbox" [ngModel]="draft().demoteExisting" (ngModelChange)="set('demoteExisting', $event)" name="demoteExisting" />
             <span>{{ t('own.demoteExisting') }}</span>
           </label>
+        }
+        @if (validationErrors().length) {
+          <div class="validation-panel" role="alert">
+            <strong>{{ t('own.validation.title') }}</strong>
+            <ul>
+              @for (message of validationErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          </div>
         }
       </form>
       <div footer>

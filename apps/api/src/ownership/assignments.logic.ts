@@ -1,6 +1,82 @@
-import { AssignmentTargetType } from '@prisma/client';
+import { ApprovalStatus, AssignmentTargetType } from '@prisma/client';
 
 export type RecommendationConfidenceLabel = 'authoritative' | 'high' | 'medium' | 'low' | 'none';
+
+export const OWNERSHIP_NAME_MAX = 180;
+export const OWNERSHIP_DESCRIPTION_MAX = 1000;
+export const OWNERSHIP_JUSTIFICATION_MAX = 1000;
+export const OWNERSHIP_PRIORITY_MAX = 9999;
+export const ASSIGNMENT_TARGET_TYPES = Object.values(AssignmentTargetType);
+export const ASSIGNMENT_APPROVAL_STATUSES = Object.values(ApprovalStatus);
+export const ASSIGNMENT_STATUS_FILTERS = ['active', 'inactive'] as const;
+
+export interface OwnershipTextInput {
+  nameEn?: unknown;
+  nameAr?: unknown;
+  description?: unknown;
+  justification?: unknown;
+}
+
+export interface OwnershipWindowInput {
+  effectiveDate: Date;
+  expiryDate: Date | null;
+}
+
+export function normalizeOwnershipText(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return value as never;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function validateOwnershipText(input: OwnershipTextInput, requireNames = false): string[] {
+  const errors: string[] = [];
+  const nameEn = typeof input.nameEn === 'string' ? input.nameEn.trim() : input.nameEn;
+  const nameAr = typeof input.nameAr === 'string' ? input.nameAr.trim() : input.nameAr;
+  const description = normalizeOwnershipText(input.description);
+  const justification = normalizeOwnershipText(input.justification);
+
+  if (nameEn != null && typeof nameEn !== 'string') errors.push('English name must be text');
+  if (nameAr != null && typeof nameAr !== 'string') errors.push('Arabic name must be text');
+  if (requireNames && !nameEn) errors.push('English name is required');
+  if (requireNames && !nameAr) errors.push('Arabic name is required');
+  if (!requireNames && input.nameEn !== undefined && !nameEn) errors.push('English name cannot be blank');
+  if (!requireNames && input.nameAr !== undefined && !nameAr) errors.push('Arabic name cannot be blank');
+  if (typeof nameEn === 'string' && nameEn.length > OWNERSHIP_NAME_MAX) {
+    errors.push(`English name must be ${OWNERSHIP_NAME_MAX} characters or fewer`);
+  }
+  if (typeof nameAr === 'string' && nameAr.length > OWNERSHIP_NAME_MAX) {
+    errors.push(`Arabic name must be ${OWNERSHIP_NAME_MAX} characters or fewer`);
+  }
+  if (description != null && typeof description !== 'string') errors.push('Description must be text');
+  if (typeof description === 'string' && description.length > OWNERSHIP_DESCRIPTION_MAX) {
+    errors.push(`Description must be ${OWNERSHIP_DESCRIPTION_MAX} characters or fewer`);
+  }
+  if (justification != null && typeof justification !== 'string') errors.push('Justification must be text');
+  if (typeof justification === 'string' && justification.length > OWNERSHIP_JUSTIFICATION_MAX) {
+    errors.push(`Justification must be ${OWNERSHIP_JUSTIFICATION_MAX} characters or fewer`);
+  }
+  return errors;
+}
+
+export function validateOwnershipWindow(input: OwnershipWindowInput): string[] {
+  return input.expiryDate && input.expiryDate <= input.effectiveDate
+    ? ['Expiry date must be after the effective date']
+    : [];
+}
+
+export function isAssignmentTargetType(value: unknown): value is AssignmentTargetType {
+  return typeof value === 'string' && ASSIGNMENT_TARGET_TYPES.includes(value as AssignmentTargetType);
+}
+
+export function isAssignmentApprovalStatus(value: unknown): value is ApprovalStatus {
+  return typeof value === 'string' && ASSIGNMENT_APPROVAL_STATUSES.includes(value as ApprovalStatus);
+}
+
+export function isAssignmentStatusFilter(value: unknown): value is (typeof ASSIGNMENT_STATUS_FILTERS)[number] {
+  return typeof value === 'string' && ASSIGNMENT_STATUS_FILTERS.includes(value as (typeof ASSIGNMENT_STATUS_FILTERS)[number]);
+}
 
 const SCOPE_BASE: Record<string, number> = {
   [AssignmentTargetType.domain]: 92,

@@ -65,6 +65,7 @@ interface Filters {
 }
 
 const TARGET_TYPES: TargetType[] = ['asset', 'domain', 'capability', 'subject', 'org_unit', 'system'];
+const OWNERSHIP_JUSTIFICATION_MAX = 1000;
 
 @Component({
   selector: 'app-ownership',
@@ -108,6 +109,7 @@ export class OwnershipPage implements OnInit {
   protected readonly submitting = signal(false);
 
   protected readonly targetOptions = computed<Ref[]>(() => this.lookups()[this.draft().targetType] ?? []);
+  protected readonly justificationMax = OWNERSHIP_JUSTIFICATION_MAX;
 
   ngOnInit(): void {
     this.loadLookups();
@@ -270,7 +272,7 @@ export class OwnershipPage implements OnInit {
 
   protected canSave(): boolean {
     const d = this.draft();
-    return !!(d.targetType && d.targetId && d.roleTypeId && d.personId && d.effectiveDate);
+    return !!(d.targetType && d.targetId && d.roleTypeId && d.personId && d.effectiveDate) && this.validationErrors().length === 0;
   }
 
   protected save(): void {
@@ -283,7 +285,7 @@ export class OwnershipPage implements OnInit {
       isPrimary: d.isPrimary,
       effectiveDate: new Date(d.effectiveDate).toISOString(),
       expiryDate: d.expiryDate ? new Date(d.expiryDate).toISOString() : null,
-      justification: d.justification || null,
+      justification: d.justification.trim() || null,
     };
     const req = id
       ? this.http.patch('/api/assignments/' + id, base)
@@ -307,6 +309,52 @@ export class OwnershipPage implements OnInit {
   }
 
   protected close(): void { this.modalOpen.set(false); }
+
+  private windowsOverlap(
+    a: { effectiveDate: string; expiryDate?: string | null },
+    b: { effectiveDate: string; expiryDate?: string | null },
+  ): boolean {
+    const aStart = new Date(a.effectiveDate).getTime();
+    const bStart = new Date(b.effectiveDate).getTime();
+    const aEnd = a.expiryDate ? new Date(a.expiryDate).getTime() : new Date('9999-12-31').getTime();
+    const bEnd = b.expiryDate ? new Date(b.expiryDate).getTime() : new Date('9999-12-31').getTime();
+    return aStart <= bEnd && bStart <= aEnd;
+  }
+
+  protected validationErrors(): string[] {
+    const d = this.draft();
+    const errors: string[] = [];
+    if (!d.targetType) errors.push(this.t('own.validation.targetTypeRequired'));
+    if (!d.targetId) errors.push(this.t('own.validation.targetRequired'));
+    if (!d.roleTypeId) errors.push(this.t('own.validation.roleRequired'));
+    if (!d.personId) errors.push(this.t('own.validation.personRequired'));
+    if (!d.effectiveDate) errors.push(this.t('own.validation.effectiveRequired'));
+    if (d.justification.trim().length > OWNERSHIP_JUSTIFICATION_MAX) {
+      errors.push(this.t('own.validation.justificationLength'));
+    }
+    if (d.effectiveDate && d.expiryDate && new Date(d.expiryDate) <= new Date(d.effectiveDate)) {
+      errors.push(this.t('own.validation.window'));
+    }
+    if (d.isPrimary && d.targetId && d.roleTypeId) {
+      const overlap = this.assignments().some((assignment) =>
+        assignment.id !== this.editingId() &&
+        assignment.targetType === d.targetType &&
+        assignment.targetId === d.targetId &&
+        assignment.roleTypeId === d.roleTypeId &&
+        assignment.isPrimary &&
+        assignment.isActive &&
+        assignment.approvalStatus === 'approved' &&
+        this.windowsOverlap(
+          { effectiveDate: d.effectiveDate, expiryDate: d.expiryDate || null },
+          assignment,
+        ),
+      );
+      if (overlap && (this.editingId() || !d.demoteExisting)) {
+        errors.push(this.t('own.validation.primaryConflict'));
+      }
+    }
+    return errors;
+  }
 
   protected async remove(a: Assignment): Promise<void> {
     const ok = await this.confirm.ask('own.confirmDelete');

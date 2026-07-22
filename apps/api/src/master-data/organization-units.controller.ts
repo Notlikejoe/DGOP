@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { OrganizationUnitsService } from './organization-units.service';
 import { CreateOrgUnitDto, UpdateOrgUnitDto } from './dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -22,7 +22,7 @@ export class OrganizationUnitsController {
 
   @Get(':id')
   @RequirePermissions('org_units.view')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.get(id);
   }
 
@@ -34,13 +34,13 @@ export class OrganizationUnitsController {
 
   @Patch(':id')
   @RequirePermissions('org_units.edit')
-  update(@Param('id') id: string, @Body() dto: UpdateOrgUnitDto, @CurrentUser() user: AuthUser) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateOrgUnitDto, @CurrentUser() user: AuthUser) {
     return this.service.update(id, dto, user.email);
   }
 
   @Delete(':id')
   @RequirePermissions('org_units.delete')
-  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.service.remove(id, user.email);
   }
 }

@@ -19,14 +19,18 @@ import {
   DecideArchitectureReviewDto,
   ReferenceDecisionDto,
   ResolveMdmMatchDto,
+  RunMdmMatchingDto,
   SaveMetadataCertificationDto,
 } from './extended-domains.dto';
 import {
   certificationStatus,
   clampScore,
+  canonicalMdmPairKey,
   defaultMatchStatus,
   defaultMatchStep,
   isArchitectureDecisionFinal,
+  MdmMatchAssetProfile,
+  rankMdmMatches,
   referenceVersionStatus,
 } from './extended-domains.logic';
 
@@ -37,6 +41,26 @@ const assetSelect = {
   nameAr: true,
   domain: { select: { id: true, code: true, nameEn: true, nameAr: true } },
 };
+const mdmAssetSelect = {
+  id: true,
+  code: true,
+  nameEn: true,
+  nameAr: true,
+  description: true,
+  ownerName: true,
+  domainId: true,
+  orgUnitId: true,
+  systemId: true,
+  capabilityId: true,
+  classificationId: true,
+  externalCatalogId: true,
+  catalogSource: true,
+  catalogTrustLevel: true,
+  domain: { select: { id: true, code: true } },
+  system: { select: { id: true, code: true } },
+  subjects: { include: { dataSubject: { select: { code: true, nameEn: true, nameAr: true } } } },
+};
+type MdmAssetRow = Prisma.DataAssetGetPayload<{ select: typeof mdmAssetSelect }>;
 
 const BROAD_EVIDENCE_ROLES = new Set(['system_admin', 'dmo_admin', 'auditor']);
 const FINAL_REFERENCE_DECISIONS = new Set<ReferenceDecisionDto['decision']>([
@@ -62,6 +86,28 @@ export class ExtendedDomainsService {
       where.OR = [{ classificationId: null }, { classification: { rank: { lte: scope.maxClassRank } } }];
     }
     return where;
+  }
+
+  private toMdmProfile(row: MdmAssetRow): MdmMatchAssetProfile {
+    return {
+      id: row.id,
+      code: row.code,
+      nameEn: row.nameEn,
+      nameAr: row.nameAr,
+      description: row.description,
+      ownerName: row.ownerName,
+      domainId: row.domainId,
+      domainCode: row.domain?.code ?? null,
+      orgUnitId: row.orgUnitId,
+      systemId: row.systemId,
+      systemCode: row.system?.code ?? null,
+      capabilityId: row.capabilityId,
+      classificationId: row.classificationId,
+      externalCatalogId: row.externalCatalogId,
+      catalogSource: row.catalogSource,
+      catalogTrustLevel: row.catalogTrustLevel,
+      subjects: row.subjects.map((link) => link.dataSubject.code),
+    };
   }
 
   private isUnrestricted(scope: EffectiveScope): boolean {
@@ -253,6 +299,138 @@ export class ExtendedDomainsService {
     });
     await this.audit.log({ actor, action: 'extended_domains.mdm_match.create', entityType: 'mdm_match_candidate', entityId: row.id, metadata: { code } });
     return row;
+  }
+
+  async runMdmMatching(roleCodes: string[], dto: RunMdmMatchingDto, actor: string) {
+    if (!dto.sourceAssetId && !dto.domainId) {
+      throw new BadRequestException('MDM matching requires a source asset or data domain');
+    }
+    const scope = await this.scope.resolve(roleCodes);
+    const scopedAssetWhere = this.assetScopeWhere(scope);
+    if (dto.domainId) await this.assertDomainVisible(roleCodes, dto.domainId);
+
+    const sourceWhere: Prisma.DataAssetWhereInput = dto.sourceAssetId
+      ? { AND: [scopedAssetWhere, { id: dto.sourceAssetId }] }
+      : { AND: [scopedAssetWhere, { domainId: dto.domainId }] };
+    const sourceRows = await this.prisma.dataAsset.findMany({
+      where: sourceWhere,
+      select: mdmAssetSelect,
+      orderBy: [{ updatedAt: 'desc' }, { code: 'asc' }],
+      take: dto.sourceAssetId ? 1 : 25,
+    });
+    if (!sourceRows.length) throw new NotFoundException('source data asset not found');
+
+    const sourceIds = sourceRows.map((row) => row.id);
+    const requestedCandidateIds = [...new Set(dto.candidateAssetIds ?? [])].filter((id) => !sourceIds.includes(id));
+    const candidateWhere: Prisma.DataAssetWhereInput = requestedCandidateIds.length
+      ? { AND: [scopedAssetWhere, { id: { in: requestedCandidateIds } }] }
+      : { AND: [scopedAssetWhere, { id: { notIn: sourceIds } }] };
+    const candidateRows = await this.prisma.dataAsset.findMany({
+      where: candidateWhere,
+      select: mdmAssetSelect,
+      orderBy: [{ updatedAt: 'desc' }, { code: 'asc' }],
+      take: requestedCandidateIds.length ? requestedCandidateIds.length : 250,
+    });
+    if (requestedCandidateIds.length && candidateRows.length !== requestedCandidateIds.length) {
+      throw new NotFoundException('candidate data asset not found');
+    }
+
+    const sourceProfiles = sourceRows.map((row) => this.toMdmProfile(row));
+    const candidateProfiles = candidateRows.map((row) => this.toMdmProfile(row));
+    const evaluatedPairs = sourceProfiles.length * candidateProfiles.length;
+    const recommendations = rankMdmMatches(sourceProfiles, candidateProfiles, {
+      threshold: dto.threshold ?? 65,
+      limit: dto.limit ?? 10,
+    });
+    const existing = recommendations.length
+      ? await this.prisma.mdmMatchCandidate.findMany({
+          where: {
+            OR: recommendations.flatMap((match) => [
+              { sourceAssetId: match.sourceAssetId, candidateAssetId: match.candidateAssetId },
+              { sourceAssetId: match.candidateAssetId, candidateAssetId: match.sourceAssetId },
+            ]),
+          },
+          select: { sourceAssetId: true, candidateAssetId: true },
+        })
+      : [];
+    const existingPairs = new Set(existing.map((row) => canonicalMdmPairKey(row.sourceAssetId, row.candidateAssetId)));
+    const newRecommendations = recommendations.filter((match) => !existingPairs.has(match.pairKey));
+    const persist = dto.persist ?? true;
+
+    if (!persist) {
+      return {
+        threshold: dto.threshold ?? 65,
+        limit: dto.limit ?? 10,
+        evaluatedPairs,
+        recommendedCount: recommendations.length,
+        createdCount: 0,
+        skippedExistingCount: recommendations.length - newRecommendations.length,
+        candidates: recommendations,
+      };
+    }
+
+    const created: unknown[] = [];
+    for (const match of newRecommendations) {
+      const code = await this.nextCode('mdmMatchCandidate', 'MCM');
+      const row = await this.prisma.mdmMatchCandidate.upsert({
+        where: {
+          sourceAssetId_candidateAssetId: {
+            sourceAssetId: match.sourceAssetId,
+            candidateAssetId: match.candidateAssetId,
+          },
+        },
+        update: {},
+        create: {
+          code,
+          sourceAssetId: match.sourceAssetId,
+          candidateAssetId: match.candidateAssetId,
+          matchScore: match.matchScore,
+          status: match.status,
+          resolutionStep: match.resolutionStep,
+          sourceTrustRank: match.sourceTrustRank,
+          survivorshipRulesJson: {
+            ...match.survivorshipRulesJson,
+            generatedBy: actor,
+            generatedAt: new Date().toISOString(),
+          } as Prisma.InputJsonObject,
+          proposedGoldenRecordJson: match.proposedGoldenRecordJson as Prisma.InputJsonObject,
+          resolutionNote: match.explanation,
+          createdBy: actor,
+        },
+        include: {
+          sourceAsset: { select: assetSelect },
+          candidateAsset: { select: assetSelect },
+          evidence: { select: { id: true, title: true, sha256: true, status: true } },
+        },
+      });
+      created.push(row);
+    }
+
+    await this.audit.log({
+      actor,
+      action: 'extended_domains.mdm_match.run',
+      entityType: 'mdm_match_candidate',
+      metadata: {
+        threshold: dto.threshold ?? 65,
+        limit: dto.limit ?? 10,
+        sourceAssetId: dto.sourceAssetId ?? null,
+        domainId: dto.domainId ?? null,
+        evaluatedPairs,
+        recommendedCount: recommendations.length,
+        createdCount: created.length,
+        skippedExistingCount: recommendations.length - newRecommendations.length,
+      },
+    });
+    return {
+      threshold: dto.threshold ?? 65,
+      limit: dto.limit ?? 10,
+      evaluatedPairs,
+      recommendedCount: recommendations.length,
+      createdCount: created.length,
+      skippedExistingCount: recommendations.length - newRecommendations.length,
+      candidates: created,
+      preview: recommendations,
+    };
   }
 
   async resolveMatch(roleCodes: string[], id: string, dto: ResolveMdmMatchDto, actor: string) {

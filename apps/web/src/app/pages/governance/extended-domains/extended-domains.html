@@ -29,6 +29,25 @@
           <div><span class="eyebrow">MCM</span><h2>{{ t('extended.mdm') }}</h2></div>
           <app-status-chip kind="info" [label]="w.mdmMatches.length + ''" />
         </div>
+        <div class="engine-box">
+          <div>
+            <strong>{{ t('extended.mdmEngine') }}</strong>
+            <span>{{ t('extended.mdmEngineHint') }}</span>
+          </div>
+          <div class="form-grid engine-form">
+            <select [(ngModel)]="matchRunForm.sourceAssetId"><option value="">{{ t('extended.sourceAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
+            <input type="number" min="50" max="100" [placeholder]="t('extended.threshold')" [(ngModel)]="matchRunForm.threshold" />
+            <input type="number" min="1" max="50" [placeholder]="t('extended.limit')" [(ngModel)]="matchRunForm.limit" />
+            <button class="ds-btn ds-btn--primary" type="button" (click)="runMdmMatching()" [disabled]="saving()">{{ t('extended.runEngine') }}</button>
+          </div>
+          @if (matchRunResult(); as run) {
+            <div class="run-summary">
+              <span>{{ run.createdCount }} {{ t('extended.created') }}</span>
+              <span>{{ run.recommendedCount }} {{ t('extended.recommended') }}</span>
+              <span>{{ run.skippedExistingCount }} {{ t('extended.skippedExisting') }}</span>
+            </div>
+          }
+        </div>
         <div class="form-grid">
           <select [(ngModel)]="matchForm.sourceAssetId"><option value="">{{ t('extended.sourceAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
           <select [(ngModel)]="matchForm.candidateAssetId"><option value="">{{ t('extended.candidateAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ asset.nameEn }}</option> }</select>
@@ -42,6 +61,18 @@
                 <strong>{{ row.code }} · {{ row.matchScore }}%</strong>
                 <span>{{ row.sourceAsset?.code }} → {{ row.candidateAsset?.code }}</span>
               </div>
+              @if (row.resolutionNote || topMdmFactors(row).length) {
+                <div class="match-insight">
+                  @if (row.resolutionNote) { <small class="match-note">{{ row.resolutionNote }}</small> }
+                  @if (topMdmFactors(row).length) {
+                    <div class="factor-list">
+                      @for (factor of topMdmFactors(row); track factor.key) {
+                        <span>{{ factor.label }} {{ factor.score }}%</span>
+                      }
+                    </div>
+                  }
+                </div>
+              }
               <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
               <div class="actions">
                 <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="resolveMatch(row, 'merged')">{{ t('extended.merge') }}</button>

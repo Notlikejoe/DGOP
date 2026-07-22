@@ -76,9 +76,18 @@ export interface WorkflowTemplateStage {
   nameAr: string;
   description?: string | null;
   kind: string;
+  nodeType?: string | null;
   taskType: string;
+  assignmentStrategy?: string | null;
   assigneeRoleCode?: string | null;
   dueDays: number;
+  formSchemaJson?: unknown | null;
+  slaConfigJson?: unknown | null;
+  notificationRulesJson?: unknown | null;
+  evidenceRequirementsJson?: unknown | null;
+  automationConfigJson?: unknown | null;
+  gatewayConfigJson?: unknown | null;
+  parallelGroup?: string | null;
   sortOrder: number;
   isStart: boolean;
   isDecision: boolean;
@@ -93,6 +102,8 @@ export interface WorkflowTemplateTransition {
   labelEn: string;
   labelAr: string;
   decision?: string | null;
+  conditionExpression?: string | null;
+  conditionJson?: unknown | null;
   isHappyPath: boolean;
 }
 
@@ -186,6 +197,111 @@ export interface WorkflowRoutePreview {
   stages: WorkflowTemplateStage[];
   transitions: WorkflowTemplateTransition[];
   warnings: string[];
+}
+
+export interface WorkflowBpmnValidation {
+  status: 'ready' | 'warning' | 'blocked';
+  errors: string[];
+  warnings: string[];
+  stageCount: number;
+  transitionCount: number;
+  readinessScore: number;
+  checklist: Array<{
+    code: string;
+    label: string;
+    status: 'pass' | 'warning' | 'fail';
+    detail: string;
+  }>;
+}
+
+export interface WorkflowDesignerEnterprise {
+  readinessScore: number;
+  checklist: WorkflowBpmnValidation['checklist'];
+  coverage: {
+    forms: number;
+    evidence: number;
+    notifications: number;
+    automation: number;
+    roleAssignments: number;
+  };
+  rulePacks: Array<{
+    code: string;
+    nameEn: string;
+    nodeType: string;
+    assignmentStrategy: string;
+    assigneeRoleCode?: string | null;
+    hasForm: boolean;
+    hasEvidence: boolean;
+    hasNotifications: boolean;
+    hasAutomation: boolean;
+    dueDays: number;
+    isDecision: boolean;
+    isFinal: boolean;
+  }>;
+}
+
+export interface WorkflowDesignerResponse {
+  template: WorkflowTemplate;
+  bpmnXml: string;
+  validation: WorkflowBpmnValidation;
+  designerJson?: Record<string, unknown> | null;
+  version: {
+    current: number;
+    lastPublishedAt?: string | null;
+    lastPublishedBy?: string | null;
+  };
+  enterprise?: WorkflowDesignerEnterprise;
+}
+
+export interface WorkflowDesignerSimulation {
+  status: 'ready' | 'warning' | 'blocked';
+  summary: {
+    taskCount: number;
+    decisionPoints: number;
+    estimatedSlaDays: number;
+    evidenceItems: number;
+    notificationRules: number;
+    automationSteps: number;
+  };
+  path: Array<{
+    code: string;
+    nameEn: string;
+    taskType: string;
+    nodeType: string;
+    assigneeRoleCode?: string | null;
+    dueDays: number;
+    isDecision: boolean;
+    isFinal: boolean;
+    chosenDecision?: string | null;
+    branchOptions: string[];
+  }>;
+  blockers: string[];
+  warnings: string[];
+}
+
+export interface WorkflowMigrationPreview {
+  risk: 'safe' | 'caution' | 'blocked';
+  validation: WorkflowBpmnValidation;
+  summary: {
+    activeCases: number;
+    manualReviewCases: number;
+    addedStages: number;
+    retiredStages: number;
+    addedTransitions: number;
+    retiredTransitions: number;
+  };
+  stageChanges: { added: string[]; retired: string[] };
+  transitionChanges: { added: string[]; retired: string[] };
+  caseActions: Array<{
+    id: string;
+    code: string;
+    title: string;
+    status: string;
+    openTasks: number;
+    activeStageCodes: string[];
+    action: 'continue' | 'manual_review';
+    reason: string;
+  }>;
 }
 
 export const SLA_KIND: Record<string, StatusKind> = {

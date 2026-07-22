@@ -4,12 +4,13 @@ import { I18nService } from './core/i18n.service';
 import { ThemeService } from './core/theme.service';
 import { ToastHost } from './shared/toast';
 import { ConfirmDialog } from './shared/confirm-dialog';
+import { ProblemScreen } from './shared/problem-screen';
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, ToastHost, ConfirmDialog],
-  template: '<router-outlet /><app-toast /><app-confirm-dialog />',
+  imports: [RouterOutlet, ToastHost, ConfirmDialog, ProblemScreen],
+  template: '<router-outlet /><app-toast /><app-confirm-dialog /><app-problem-screen />',
 })
 export class App implements OnInit {
   private readonly theme = inject(ThemeService);

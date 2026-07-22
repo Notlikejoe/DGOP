@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
 import {
   ArchitectureReviewDecision,
   MdmMatchStatus,
@@ -15,6 +15,15 @@ export class CreateMdmMatchDto {
   @IsOptional() @IsObject() survivorshipRulesJson?: Record<string, unknown>;
   @IsOptional() @IsObject() proposedGoldenRecordJson?: Record<string, unknown>;
   @IsOptional() @IsString() evidenceId?: string;
+}
+
+export class RunMdmMatchingDto {
+  @IsOptional() @IsString() sourceAssetId?: string;
+  @IsOptional() @IsString() domainId?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) candidateAssetIds?: string[];
+  @IsOptional() @Type(() => Number) @IsInt() @Min(50) @Max(100) threshold?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number;
+  @IsOptional() @IsBoolean() persist?: boolean;
 }
 
 export class ResolveMdmMatchDto {

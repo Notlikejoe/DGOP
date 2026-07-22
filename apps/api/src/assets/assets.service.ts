@@ -9,11 +9,17 @@ import { ScopeService, EffectiveScope } from '../access/scope.service';
 import {
   CreateAssetDto,
   CreateAssetRelationshipDto,
-  LIFECYCLE_STATUSES,
   OWNER_STATUSES,
-  RELATIONSHIP_TYPES,
   UpdateAssetDto,
 } from './assets.dto';
+import {
+  LIFECYCLE_STATUSES,
+  normalizeAssetCode,
+  normalizeOptionalText,
+  uniqueIds,
+  validateAssetCrossFields,
+  validateAssetText,
+} from './assets.logic';
 import { parseCsv } from '../common/csv';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
 import { parseQueryEnum } from '../common/query-filters';
@@ -197,15 +203,122 @@ export class AssetsService {
     return ownerName && ownerName.trim() ? 'assigned' : 'unassigned';
   }
 
+  private assertAssetText(
+    dto: CreateAssetDto | UpdateAssetDto | (UpdateAssetDto & { code?: unknown }),
+    options: { requireCode: boolean; requireNames: boolean; allowCode: boolean },
+  ): void {
+    const errors = validateAssetText(dto, options);
+    if (errors.length) throw new BadRequestException(errors.join('; '));
+  }
+
+  private normalizeCreateDto(dto: CreateAssetDto): CreateAssetDto {
+    this.assertAssetText(dto, { requireCode: true, requireNames: true, allowCode: true });
+    return {
+      ...dto,
+      code: normalizeAssetCode(dto.code),
+      nameEn: dto.nameEn.trim(),
+      nameAr: dto.nameAr.trim(),
+      description: normalizeOptionalText(dto.description) ?? undefined,
+      ownerName: normalizeOptionalText(dto.ownerName) ?? null,
+      lifecycleStatus: dto.lifecycleStatus ?? 'draft',
+      subjectIds: uniqueIds(dto.subjectIds),
+    };
+  }
+
+  private normalizeUpdateDto(dto: UpdateAssetDto & { code?: unknown }): UpdateAssetDto {
+    this.assertAssetText(dto, { requireCode: false, requireNames: false, allowCode: false });
+    return {
+      ...dto,
+      nameEn: typeof dto.nameEn === 'string' ? dto.nameEn.trim() : dto.nameEn,
+      nameAr: typeof dto.nameAr === 'string' ? dto.nameAr.trim() : dto.nameAr,
+      description: normalizeOptionalText(dto.description),
+      ownerName: normalizeOptionalText(dto.ownerName),
+      subjectIds: dto.subjectIds === undefined ? undefined : uniqueIds(dto.subjectIds),
+    };
+  }
+
+  private async assertAssetIntegrity(target: {
+    domainId?: string | null;
+    orgUnitId?: string | null;
+    systemId?: string | null;
+    capabilityId?: string | null;
+    classificationId?: string | null;
+    subjectIds?: string[];
+  }): Promise<void> {
+    const [domain, orgUnit, system, capability, classification, subjects] = await Promise.all([
+      target.domainId
+        ? this.prisma.dataDomain.findFirst({
+            where: { id: target.domainId, deletedAt: null, isActive: true },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      target.orgUnitId
+        ? this.prisma.organizationUnit.findFirst({
+            where: { id: target.orgUnitId, deletedAt: null, isActive: true },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      target.systemId
+        ? this.prisma.systemPlatform.findFirst({
+            where: { id: target.systemId, deletedAt: null, isActive: true },
+            select: { id: true, code: true, ownerOrgUnitId: true },
+          })
+        : Promise.resolve(null),
+      target.capabilityId
+        ? this.prisma.businessCapability.findFirst({
+            where: { id: target.capabilityId, deletedAt: null, isActive: true },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      target.classificationId
+        ? this.prisma.classification.findFirst({
+            where: { id: target.classificationId, deletedAt: null, isActive: true },
+            select: { id: true, code: true, rank: true },
+          })
+        : Promise.resolve(null),
+      target.subjectIds?.length
+        ? this.prisma.dataSubject.findMany({
+            where: { id: { in: target.subjectIds }, deletedAt: null, isActive: true },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    if (target.domainId && !domain) throw new BadRequestException('Data asset domain is not active or does not exist');
+    if (target.orgUnitId && !orgUnit) {
+      throw new BadRequestException('Data asset organization unit is not active or does not exist');
+    }
+    if (target.systemId && !system) throw new BadRequestException('Data asset system is not active or does not exist');
+    if (target.capabilityId && !capability) {
+      throw new BadRequestException('Data asset capability is not active or does not exist');
+    }
+    if (target.classificationId && !classification) {
+      throw new BadRequestException('Data asset classification is not active or does not exist');
+    }
+    if (target.subjectIds?.length && subjects.length !== target.subjectIds.length) {
+      throw new BadRequestException('One or more data subjects are not active or do not exist');
+    }
+
+    const errors = validateAssetCrossFields({
+      subjectIds: target.subjectIds ?? [],
+      classification,
+      orgUnitId: target.orgUnitId,
+      system,
+    });
+    if (errors.length) throw new BadRequestException(errors.join('; '));
+  }
+
   async create(roleCodes: string[], dto: CreateAssetDto, actor: string) {
-    await this.assertWritableScope(roleCodes, dto);
-    const { subjectIds, ...rest } = dto;
+    const normalized = this.normalizeCreateDto(dto);
+    await this.assertWritableScope(roleCodes, normalized);
+    await this.assertAssetIntegrity(normalized);
+    const { subjectIds, ...rest } = normalized;
     const asset = await this.prisma.dataAsset.create({
       data: {
         ...rest,
-        ownerName: dto.ownerName ?? null,
-        ownerStatus: this.ownerStatusFor(dto.ownerName),
-        lifecycleStatus: dto.lifecycleStatus ?? 'draft',
+        ownerName: normalized.ownerName ?? null,
+        ownerStatus: this.ownerStatusFor(normalized.ownerName),
+        lifecycleStatus: normalized.lifecycleStatus ?? 'draft',
         subjects: subjectIds?.length
           ? { create: subjectIds.map((dataSubjectId) => ({ dataSubjectId })) }
           : undefined,
@@ -222,29 +335,44 @@ export class AssetsService {
     return asset;
   }
 
-  async update(id: string, roleCodes: string[], dto: UpdateAssetDto, actor: string) {
+  async update(id: string, roleCodes: string[], dto: UpdateAssetDto & { code?: unknown }, actor: string) {
     const existing = await this.get(roleCodes, id);
+    const normalized = this.normalizeUpdateDto(dto);
+    const subjectIds =
+      normalized.subjectIds !== undefined
+        ? normalized.subjectIds
+        : existing.subjects.map((subject) => subject.dataSubject.id);
+    const nextIntegrityTarget = {
+      domainId: normalized.domainId !== undefined ? normalized.domainId : existing.domainId,
+      orgUnitId: normalized.orgUnitId !== undefined ? normalized.orgUnitId : existing.orgUnitId,
+      systemId: normalized.systemId !== undefined ? normalized.systemId : existing.systemId,
+      capabilityId: normalized.capabilityId !== undefined ? normalized.capabilityId : existing.capabilityId,
+      classificationId:
+        normalized.classificationId !== undefined ? normalized.classificationId : existing.classificationId,
+      subjectIds,
+    };
     await this.assertWritableScope(roleCodes, {
-      domainId: dto.domainId !== undefined ? dto.domainId : existing.domainId,
-      orgUnitId: dto.orgUnitId !== undefined ? dto.orgUnitId : existing.orgUnitId,
-      classificationId: dto.classificationId !== undefined ? dto.classificationId : existing.classificationId,
+      domainId: nextIntegrityTarget.domainId,
+      orgUnitId: nextIntegrityTarget.orgUnitId,
+      classificationId: nextIntegrityTarget.classificationId,
     });
+    await this.assertAssetIntegrity(nextIntegrityTarget);
     const persisted = await this.prisma.dataAsset.findFirst({ where: { id, deletedAt: null } });
     if (!persisted) throw new NotFoundException('data_asset not found');
-    const { subjectIds, ...rest } = dto;
+    const { subjectIds: nextSubjectIds, ...rest } = normalized;
 
     const data: Record<string, unknown> = { ...rest };
-    if (dto.ownerName !== undefined) {
-      data['ownerName'] = dto.ownerName ?? null;
-      data['ownerStatus'] = this.ownerStatusFor(dto.ownerName);
+    if (normalized.ownerName !== undefined) {
+      data['ownerName'] = normalized.ownerName ?? null;
+      data['ownerStatus'] = this.ownerStatusFor(normalized.ownerName);
     }
 
     const asset = await this.prisma.$transaction(async (tx) => {
-      if (subjectIds) {
+      if (nextSubjectIds) {
         await tx.assetSubject.deleteMany({ where: { assetId: id } });
-        if (subjectIds.length) {
+        if (nextSubjectIds.length) {
           await tx.assetSubject.createMany({
-            data: subjectIds.map((dataSubjectId) => ({ assetId: id, dataSubjectId })),
+            data: nextSubjectIds.map((dataSubjectId) => ({ assetId: id, dataSubjectId })),
             skipDuplicates: true,
           });
         }
@@ -338,12 +466,12 @@ export class AssetsService {
 
     const [domains, orgUnits, systems, capabilities, classifications, subjects] =
       await Promise.all([
-        this.prisma.dataDomain.findMany({ where: { deletedAt: null } }),
-        this.prisma.organizationUnit.findMany({ where: { deletedAt: null } }),
-        this.prisma.systemPlatform.findMany({ where: { deletedAt: null } }),
-        this.prisma.businessCapability.findMany({ where: { deletedAt: null } }),
-        this.prisma.classification.findMany({ where: { deletedAt: null } }),
-        this.prisma.dataSubject.findMany({ where: { deletedAt: null } }),
+        this.prisma.dataDomain.findMany({ where: { deletedAt: null, isActive: true } }),
+        this.prisma.organizationUnit.findMany({ where: { deletedAt: null, isActive: true } }),
+        this.prisma.systemPlatform.findMany({ where: { deletedAt: null, isActive: true } }),
+        this.prisma.businessCapability.findMany({ where: { deletedAt: null, isActive: true } }),
+        this.prisma.classification.findMany({ where: { deletedAt: null, isActive: true } }),
+        this.prisma.dataSubject.findMany({ where: { deletedAt: null, isActive: true } }),
       ]);
     const byCode = (list: { id: string; code: string }[]) =>
       new Map(list.map((x) => [x.code.toLowerCase(), x.id]));
@@ -353,6 +481,8 @@ export class AssetsService {
     const capMap = byCode(capabilities);
     const classMap = byCode(classifications);
     const subjectMap = byCode(subjects);
+    const systemById = new Map(systems.map((system) => [system.id, system]));
+    const classificationById = new Map(classifications.map((classification) => [classification.id, classification]));
 
     let created = 0;
     let updated = 0;
@@ -361,15 +491,20 @@ export class AssetsService {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const line = i + 2; // 1-based + header row
-      const code = (row['code'] ?? '').trim();
+      const code = normalizeAssetCode(row['code'] ?? '');
       const nameEn = (row['nameen'] ?? '').trim();
       const nameAr = (row['namear'] ?? '').trim();
-      if (!code || !nameEn || !nameAr) {
-        errors.push({ row: line, message: 'Missing required code/nameEn/nameAr' });
+      const lifecycleStatus = (row['lifecyclestatus'] ?? 'draft').trim() || 'draft';
+      const ownerName = normalizeOptionalText(row['ownername'] ?? '') ?? null;
+      const description = normalizeOptionalText(row['description'] ?? '') ?? null;
+      const textErrors = validateAssetText(
+        { code, nameEn, nameAr, description, lifecycleStatus, ownerName },
+        { requireCode: true, requireNames: true, allowCode: true },
+      );
+      if (textErrors.length) {
+        errors.push({ row: line, message: textErrors.join('; ') });
         continue;
       }
-      const lifecycleStatus = (row['lifecyclestatus'] ?? 'draft').trim() || 'draft';
-      const ownerName = (row['ownername'] ?? '').trim() || null;
       const resolve = (
         map: Map<string, string>,
         col: string,
@@ -414,11 +549,22 @@ export class AssetsService {
         subjectIds.push(id);
       }
       if (subjectError) continue;
+      const uniqueSubjectIds = uniqueIds(subjectIds);
+      const crossErrors = validateAssetCrossFields({
+        subjectIds: uniqueSubjectIds,
+        classification: classificationId ? classificationById.get(classificationId) : null,
+        orgUnitId,
+        system: systemId ? systemById.get(systemId) : null,
+      });
+      if (crossErrors.length) {
+        errors.push({ row: line, message: crossErrors.join('; ') });
+        continue;
+      }
 
       const data = {
         nameEn,
         nameAr,
-        description: (row['description'] ?? '').trim() || null,
+        description,
         lifecycleStatus,
         ownerName,
         ownerStatus: this.ownerStatusFor(ownerName),
@@ -435,9 +581,9 @@ export class AssetsService {
           await this.prisma.$transaction(async (tx) => {
             await tx.dataAsset.update({ where: { code }, data: { ...data, deletedAt: null, isActive: true } });
             await tx.assetSubject.deleteMany({ where: { assetId: existing.id } });
-            if (subjectIds.length) {
+            if (uniqueSubjectIds.length) {
               await tx.assetSubject.createMany({
-                data: subjectIds.map((dataSubjectId) => ({ assetId: existing.id, dataSubjectId })),
+                data: uniqueSubjectIds.map((dataSubjectId) => ({ assetId: existing.id, dataSubjectId })),
                 skipDuplicates: true,
               });
             }
@@ -448,8 +594,8 @@ export class AssetsService {
             data: {
               code,
               ...data,
-              subjects: subjectIds.length
-                ? { create: subjectIds.map((dataSubjectId) => ({ dataSubjectId })) }
+              subjects: uniqueSubjectIds.length
+                ? { create: uniqueSubjectIds.map((dataSubjectId) => ({ dataSubjectId })) }
                 : undefined,
             },
           });

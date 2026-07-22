@@ -10,6 +10,10 @@ export class BusinessCapabilitiesService extends HierarchyCrudService {
       model: 'businessCapability',
       entityType: 'business_capability',
       orderBy: { nameEn: 'asc' },
+      deleteDependencies: [
+        { model: 'businessCapability', field: 'parentId', label: 'child capabilities', where: { deletedAt: null } },
+        { model: 'dataAsset', field: 'capabilityId', label: 'data assets', where: { deletedAt: null } },
+      ],
     });
   }
 }

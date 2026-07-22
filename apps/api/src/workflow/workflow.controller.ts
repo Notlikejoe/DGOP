@@ -11,12 +11,16 @@ import { WorkflowService } from './workflow.service';
 import {
   AddTaskDto,
   CreateCaseDto,
+  CreateWorkflowTemplateDto,
   DecisionDto,
   ListMyTasksDto,
   ListWorkflowCasesDto,
+  SaveWorkflowBpmnDto,
   SubmitAssignmentDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  WorkflowDesignerMigrationPreviewDto,
+  WorkflowDesignerSimulationDto,
   WorkflowRoutePreviewDto,
 } from './workflow.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -31,6 +35,50 @@ export class WorkflowController {
   @RequirePermissions('workflow_cases.view')
   templates(@CurrentUser() user: AuthUser) {
     return this.service.listTemplates(user.roles);
+  }
+
+  @Post('templates')
+  @RequirePermissions('workflow_cases.edit')
+  createTemplate(@Body() dto: CreateWorkflowTemplateDto, @CurrentUser() user: AuthUser) {
+    return this.service.createDesignerTemplate(dto, user);
+  }
+
+  @Get('templates/:id/designer')
+  @RequirePermissions('workflow_cases.view')
+  templateDesigner(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.getTemplateDesigner(id, user.roles);
+  }
+
+  @Post('templates/:id/designer/save')
+  @RequirePermissions('workflow_cases.edit')
+  saveTemplateDesigner(@Param('id') id: string, @Body() dto: SaveWorkflowBpmnDto, @CurrentUser() user: AuthUser) {
+    return this.service.saveTemplateBpmnDraft(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/publish')
+  @RequirePermissions('workflow_cases.edit')
+  publishTemplateDesigner(@Param('id') id: string, @Body() dto: SaveWorkflowBpmnDto, @CurrentUser() user: AuthUser) {
+    return this.service.publishTemplateBpmn(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/simulate')
+  @RequirePermissions('workflow_cases.edit')
+  simulateTemplateDesigner(
+    @Param('id') id: string,
+    @Body() dto: WorkflowDesignerSimulationDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.simulateTemplateDesigner(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/migration-preview')
+  @RequirePermissions('workflow_cases.edit')
+  migrationPreview(
+    @Param('id') id: string,
+    @Body() dto: WorkflowDesignerMigrationPreviewDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.workflowTemplateMigrationPreview(id, dto, user);
   }
 
   @Get('graph')

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   CaseStatus,
   ClassificationRequestStatus,
@@ -8,6 +8,7 @@ import {
   DlpIncidentStatus,
   GovernanceEscalationLevel,
   GovernanceEscalationStatus,
+  GovernanceNotificationSeverity,
   GovernanceNotificationStatus,
   IntegrationBatchStatus,
   IntegrationConnectorStatus,
@@ -23,9 +24,12 @@ import { AuthUser } from '../auth/auth.types';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
   CreateComplianceCalendarTemplateDto,
+  CreateGovernanceNotificationDto,
   CreateKsaHolidayDto,
+  DispatchNotificationsDto,
   UpdateComplianceCalendarTemplateDto,
   UpdateEscalationDto,
+  UpdateNotificationDto,
 } from './governance-operations.dto';
 import {
   CHARTER_LIFECYCLE_STEPS,
@@ -40,6 +44,7 @@ import {
   SECURITY_CONTROL_CROSSWALK_DEFINITIONS,
   addKsaBusinessDays,
   backlogStatus,
+  buildNotificationDeliveryPlan,
   businessDaysBetween,
   combineReadinessStatus,
   dateKey,
@@ -56,6 +61,7 @@ import {
   operatingPressureStatus,
   platformArchitectureStatus,
   platformServiceStatus,
+  summarizeNotificationLayer,
 } from './governance-operations.logic';
 
 const taskInclude = {
@@ -72,6 +78,13 @@ const taskInclude = {
     },
   },
 };
+
+const notificationInclude = {
+  workflowCase: { select: { id: true, code: true, title: true, status: true } },
+  workflowTask: { select: { id: true, title: true, status: true, dueDate: true } },
+} satisfies Prisma.GovernanceNotificationInclude;
+
+type NotificationWithLinks = Prisma.GovernanceNotificationGetPayload<{ include: typeof notificationInclude }>;
 
 const GOVERNANCE_SCHEDULER_LOCK_KEY = 174205361;
 
@@ -215,6 +228,63 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     };
   }
 
+  private externalNotificationDeliveryEnabled(): boolean {
+    return process.env.DGOP_NOTIFICATION_EXTERNAL_DELIVERY === 'true';
+  }
+
+  private enrichNotification(row: NotificationWithLinks) {
+    const overdueBusinessDays = row.workflowTask?.dueDate
+      ? Math.max(0, businessDaysBetween(row.workflowTask.dueDate, new Date()))
+      : 0;
+    const deliveryPlan = buildNotificationDeliveryPlan({
+      severity: row.severity,
+      status: row.status,
+      sourceType: row.sourceType,
+      targetRoleCode: row.targetRoleCode,
+      assigneeUserId: row.assigneeUserId,
+      emailTo: row.emailTo,
+      workflowCaseId: row.workflowCaseId,
+      workflowTaskId: row.workflowTaskId,
+      overdueBusinessDays,
+      externalDeliveryEnabled: this.externalNotificationDeliveryEnabled(),
+    });
+    return {
+      ...row,
+      audience: deliveryPlan.deliveryMode,
+      deliveryPlan,
+    };
+  }
+
+  private notificationLayer(notifications: NotificationWithLinks[], activeEscalations = 0) {
+    const enriched = notifications.map((row) => this.enrichNotification(row));
+    return {
+      generatedAt: new Date().toISOString(),
+      summary: summarizeNotificationLayer(
+        enriched.map((row) => ({
+          severity: row.severity,
+          status: row.status,
+          assigneeUserId: row.assigneeUserId,
+          targetRoleCode: row.targetRoleCode,
+          deliveryPlan: row.deliveryPlan,
+        })),
+        activeEscalations,
+      ),
+      channels: ['in_app', 'email', 'email_digest', 'teams', 'sms', 'webhook'],
+      notifications: enriched,
+    };
+  }
+
+  private cleanOptional(value?: string | null): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private requireTrimmed(value: string, field: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) throw new BadRequestException(`${field} is required`);
+    return trimmed;
+  }
+
   private workflowLinkedEscalationScopeWhere(
     assetIds: Set<string> | 'all',
     user: AuthUser,
@@ -256,6 +326,92 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     return where;
   }
 
+  private async resolveNotificationCreateData(
+    dto: CreateGovernanceNotificationDto,
+    user: AuthUser,
+    assetIds: Set<string> | 'all',
+  ): Promise<{
+    targetRoleCode: string | null;
+    assigneeUserId: string | null;
+    workflowCaseId: string | null;
+    workflowTaskId: string | null;
+    sourceType: string;
+    sourceId: string | null;
+    emailTo: string | null;
+    dedupeKey: string | null;
+  }> {
+    let targetRoleCode = this.cleanOptional(dto.targetRoleCode);
+    let assigneeUserId = this.cleanOptional(dto.assigneeUserId);
+    let emailTo = this.cleanOptional(dto.emailTo);
+    let workflowCaseId = this.cleanOptional(dto.workflowCaseId);
+    const workflowTaskId = this.cleanOptional(dto.workflowTaskId);
+    const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+
+    if (workflowTaskId) {
+      const task = await this.prisma.workflowTask.findFirst({
+        where: { id: workflowTaskId, case: caseWhere },
+        select: {
+          id: true,
+          caseId: true,
+          assigneeUserId: true,
+          assignee: { select: { email: true, isActive: true } },
+        },
+      });
+      if (!task) throw new NotFoundException('workflow_task not found');
+      if (workflowCaseId && workflowCaseId !== task.caseId) {
+        throw new BadRequestException('workflowTaskId does not belong to workflowCaseId');
+      }
+      workflowCaseId = task.caseId;
+      if (!assigneeUserId && !targetRoleCode && task.assigneeUserId) assigneeUserId = task.assigneeUserId;
+      if (!emailTo && !targetRoleCode && task.assignee?.isActive) emailTo = task.assignee.email;
+    }
+
+    if (workflowCaseId) {
+      const workflowCase = await this.prisma.workflowCase.findFirst({
+        where: { AND: [{ id: workflowCaseId }, caseWhere] },
+        select: { id: true },
+      });
+      if (!workflowCase) throw new NotFoundException('workflow_case not found');
+    }
+
+    if (assigneeUserId && targetRoleCode) {
+      throw new BadRequestException('Choose either assigneeUserId or targetRoleCode, not both');
+    }
+
+    if (assigneeUserId) {
+      const assignee = await this.prisma.user.findFirst({
+        where: { id: assigneeUserId, isActive: true },
+        select: { id: true, email: true },
+      });
+      if (!assignee) throw new NotFoundException('assignee user not found');
+      emailTo = emailTo ?? assignee.email;
+    }
+
+    if (targetRoleCode) {
+      const role = await this.prisma.role.findFirst({
+        where: { code: targetRoleCode, isActive: true, deletedAt: null },
+        select: { code: true },
+      });
+      if (!role) throw new NotFoundException('target role not found');
+    }
+
+    const sourceType =
+      this.cleanOptional(dto.sourceType) ??
+      (workflowTaskId ? 'workflow_task' : workflowCaseId ? 'workflow_case' : 'manual_notification');
+    const sourceId = this.cleanOptional(dto.sourceId) ?? workflowTaskId ?? workflowCaseId ?? null;
+
+    return {
+      targetRoleCode,
+      assigneeUserId,
+      workflowCaseId,
+      workflowTaskId,
+      sourceType,
+      sourceId,
+      emailTo,
+      dedupeKey: this.cleanOptional(dto.dedupeKey),
+    };
+  }
+
   private dataQualityIssueScopeWhere(assetIds: Set<string> | 'all', actorEmail?: string): Prisma.DataQualityIssueWhereInput {
     if (assetIds === 'all') return {};
     const or: Prisma.DataQualityIssueWhereInput[] = [];
@@ -289,10 +445,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       }),
       this.prisma.governanceNotification.findMany({
         where: this.notificationVisibilityWhere(assetIds, user),
-        include: {
-          workflowCase: { select: { id: true, code: true, title: true, status: true } },
-          workflowTask: { select: { id: true, title: true, status: true, dueDate: true } },
-        },
+        include: notificationInclude,
         orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
         take: 80,
       }),
@@ -345,7 +498,8 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         holidaysConfigured: holidays.length,
       },
       taskSignals,
-      notifications,
+      notifications: notifications.map((row) => this.enrichNotification(row)),
+      notificationLayer: this.notificationLayer(notifications, escalations.length),
       escalations,
       templates,
       occurrences,
@@ -1384,6 +1538,84 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     return row;
   }
 
+  async notificationDigest(user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const where = this.notificationVisibilityWhere(assetIds, user);
+    const [notifications, activeEscalations] = await Promise.all([
+      this.prisma.governanceNotification.findMany({
+        where,
+        include: notificationInclude,
+        orderBy: [{ status: 'asc' }, { severity: 'desc' }, { createdAt: 'desc' }],
+        take: 300,
+      }),
+      this.prisma.governanceEscalation.count({
+        where: {
+          AND: [
+            this.workflowLinkedEscalationScopeWhere(assetIds, user),
+            { status: { in: [GovernanceEscalationStatus.open, GovernanceEscalationStatus.acknowledged] } },
+          ],
+        },
+      }),
+    ]);
+    return this.notificationLayer(notifications, activeEscalations);
+  }
+
+  async createNotification(dto: CreateGovernanceNotificationDto, user: AuthUser) {
+    const title = this.requireTrimmed(dto.title, 'title');
+    const message = this.requireTrimmed(dto.message, 'message');
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const target = await this.resolveNotificationCreateData(dto, user, assetIds);
+    if (target.dedupeKey) {
+      const existing = await this.prisma.governanceNotification.findUnique({
+        where: { dedupeKey: target.dedupeKey },
+        select: { id: true },
+      });
+      if (existing) throw new ConflictException('governance_notification already exists');
+    }
+    try {
+      const row = await this.prisma.governanceNotification.create({
+        data: {
+          dedupeKey: target.dedupeKey,
+          title,
+          message,
+          severity: dto.severity ?? GovernanceNotificationSeverity.info,
+          sourceType: target.sourceType,
+          sourceId: target.sourceId,
+          targetRoleCode: target.targetRoleCode,
+          assigneeUserId: target.assigneeUserId,
+          workflowCaseId: target.workflowCaseId,
+          workflowTaskId: target.workflowTaskId,
+          emailTo: target.emailTo,
+          createdBy: user.email,
+        },
+        include: notificationInclude,
+      });
+      await this.audit.log({
+        actor: user.email,
+        action: 'governance_operations.notification.create',
+        entityType: 'governance_notification',
+        entityId: row.id,
+        metadata: {
+          severity: row.severity,
+          sourceType: row.sourceType,
+          sourceId: row.sourceId,
+          targetRoleCode: row.targetRoleCode,
+          assigneeUserId: row.assigneeUserId,
+          workflowCaseId: row.workflowCaseId,
+          workflowTaskId: row.workflowTaskId,
+        },
+      });
+      return this.enrichNotification(row);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('governance_notification already exists');
+      }
+      throw error;
+    }
+  }
+
   async readNotification(id: string, user: AuthUser) {
     const scope = await this.scope.resolve(user.roles);
     const assetIds = await this.visibleAssetIds(scope);
@@ -1408,6 +1640,78 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       metadata: { previousStatus: row.status, targetRoleCode: row.targetRoleCode },
     });
     return updated;
+  }
+
+  async updateNotification(id: string, dto: UpdateNotificationDto, user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const row = await this.prisma.governanceNotification.findFirst({
+      where: {
+        AND: [
+          { id },
+          this.notificationVisibilityWhere(assetIds, user),
+        ],
+      },
+    });
+    if (!row) throw new NotFoundException('governance_notification not found');
+    const updated = await this.prisma.governanceNotification.update({
+      where: { id },
+      data: {
+        status: dto.status,
+        readAt:
+          dto.status === GovernanceNotificationStatus.read || dto.status === GovernanceNotificationStatus.archived
+            ? row.readAt ?? new Date()
+            : null,
+      },
+      include: notificationInclude,
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'governance_operations.notification.update',
+      entityType: 'governance_notification',
+      entityId: id,
+      metadata: { previousStatus: row.status, status: dto.status },
+    });
+    return this.enrichNotification(updated);
+  }
+
+  async dispatchNotifications(dto: DispatchNotificationsDto, user: AuthUser) {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const where: Prisma.GovernanceNotificationWhereInput = {
+      AND: [
+        this.notificationVisibilityWhere(assetIds, user),
+        { status: GovernanceNotificationStatus.unread },
+      ],
+    };
+    const notifications = await this.prisma.governanceNotification.findMany({
+      where,
+      include: notificationInclude,
+      orderBy: [{ severity: 'desc' }, { createdAt: 'asc' }],
+      take: 100,
+    });
+    const layer = this.notificationLayer(notifications);
+    await this.audit.log({
+      actor: user.email,
+      action: 'governance_operations.notification.dispatch_plan',
+      entityType: 'governance_notification',
+      entityId: 'bulk',
+      metadata: {
+        dryRun: dto.dryRun ?? true,
+        planned: notifications.length,
+        externalDeliveryEnabled: this.externalNotificationDeliveryEnabled(),
+        channels: layer.summary.byChannel,
+        priorities: layer.summary.byPriority,
+      },
+    });
+    return {
+      dryRun: dto.dryRun ?? true,
+      dispatched: 0,
+      planned: notifications.length,
+      externalDeliveryEnabled: this.externalNotificationDeliveryEnabled(),
+      note: 'External channels are planned for connector delivery; in-app notifications remain the persisted system of record.',
+      ...layer,
+    };
   }
 
   async updateEscalation(id: string, dto: UpdateEscalationDto, user: AuthUser) {

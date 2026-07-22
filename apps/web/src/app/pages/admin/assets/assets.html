@@ -400,7 +400,18 @@
         <div class="grid-2">
           <label class="field">
             <span class="field__label">{{ t('assets.field.code') }}<span class="req">*</span></span>
-            <input type="text" class="field__input" [ngModel]="draft().code" (ngModelChange)="set('code', $event)" name="code" [disabled]="!!editingId()" />
+            <input
+              type="text"
+              class="field__input"
+              [ngModel]="draft().code"
+              (ngModelChange)="set('code', $event)"
+              name="code"
+              [disabled]="!!editingId()"
+              [attr.maxlength]="assetCodeMax"
+              [attr.pattern]="assetCodePatternText"
+              autocomplete="off"
+            />
+            <span class="hint">{{ t(editingId() ? 'assets.validation.codeLockedHint' : 'assets.validation.codeHint') }}</span>
           </label>
           <label class="field">
             <span class="field__label">{{ t('assets.field.lifecycle') }}</span>
@@ -410,17 +421,17 @@
           </label>
           <label class="field">
             <span class="field__label">{{ t('assets.field.nameEn') }}<span class="req">*</span></span>
-            <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" />
+            <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" [attr.maxlength]="assetNameMax" />
           </label>
           <label class="field">
             <span class="field__label">{{ t('assets.field.nameAr') }}<span class="req">*</span></span>
-            <input type="text" class="field__input" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" name="nameAr" dir="rtl" />
+            <input type="text" class="field__input" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" name="nameAr" dir="rtl" [attr.maxlength]="assetNameMax" />
           </label>
         </div>
 
         <label class="field">
           <span class="field__label">{{ t('assets.field.description') }}</span>
-          <textarea class="field__input" rows="2" [ngModel]="draft().description" (ngModelChange)="set('description', $event)" name="description"></textarea>
+          <textarea class="field__input" rows="2" [ngModel]="draft().description" (ngModelChange)="set('description', $event)" name="description" [attr.maxlength]="assetDescriptionMax"></textarea>
         </label>
 
         <div class="grid-2">
@@ -461,7 +472,7 @@
           </label>
           <label class="field">
             <span class="field__label">{{ t('assets.field.owner') }}</span>
-            <input type="text" class="field__input" [ngModel]="draft().ownerName" (ngModelChange)="set('ownerName', $event)" name="ownerName" />
+            <input type="text" class="field__input" [ngModel]="draft().ownerName" (ngModelChange)="set('ownerName', $event)" name="ownerName" [attr.maxlength]="assetOwnerMax" />
             <span class="hint">{{ t('assets.field.ownerHint') }}</span>
           </label>
         </div>
@@ -477,6 +488,17 @@
             }
           </div>
         </div>
+
+        @if (validationErrors().length) {
+          <div class="validation-panel" role="alert">
+            <strong>{{ t('assets.validation.title') }}</strong>
+            <ul>
+              @for (message of validationErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          </div>
+        }
       </form>
 
       <div footer>

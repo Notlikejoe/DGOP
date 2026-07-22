@@ -177,6 +177,7 @@
                     [ngModel]="model()[field.key]"
                     (ngModelChange)="setField(field.key, $event)"
                     [name]="field.key"
+                    [readonly]="isImmutableField(field.key)"
                   />
                 </span>
               }
@@ -196,10 +197,21 @@
                   [ngModel]="model()[field.key]"
                   (ngModelChange)="setField(field.key, $event)"
                   [name]="field.key"
+                  [readonly]="isImmutableField(field.key)"
                 />
               }
             }
           </label>
+        }
+        @if (validationErrors().length) {
+          <div class="validation-panel" role="alert">
+            <strong>{{ t('validation.title') }}</strong>
+            <ul>
+              @for (message of validationErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          </div>
         }
       </form>
 

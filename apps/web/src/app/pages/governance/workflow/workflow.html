@@ -14,16 +14,21 @@
 
   <div class="tabs">
     @if (canViewCases) {
-      <button type="button" class="tab" [class.tab--active]="tab() === 'map'" (click)="tab.set('map')">
+      <button type="button" class="tab" [class.tab--active]="tab() === 'map'" (click)="setTab('map')">
         {{ t('wf.tab.map') }}
       </button>
     }
-    <button type="button" class="tab" [class.tab--active]="tab() === 'tasks'" (click)="tab.set('tasks')">
+    <button type="button" class="tab" [class.tab--active]="tab() === 'tasks'" (click)="setTab('tasks')">
       {{ t('wf.tab.myTasks') }} <span class="tab__count">{{ taskTotal() }}</span>
     </button>
     @if (canViewCases) {
-      <button type="button" class="tab" [class.tab--active]="tab() === 'cases'" (click)="tab.set('cases')">
+      <button type="button" class="tab" [class.tab--active]="tab() === 'cases'" (click)="setTab('cases')">
         {{ t('wf.tab.cases') }} <span class="tab__count">{{ caseTotal() }}</span>
+      </button>
+    }
+    @if (canEditDesigner) {
+      <button type="button" class="tab" [class.tab--active]="tab() === 'designer'" (click)="setTab('designer')">
+        {{ t('wf.tab.designer') }}
       </button>
     }
   </div>
@@ -289,6 +294,311 @@
       } @else {
         <div class="empty"><p>{{ t('wf.graph.empty') }}</p></div>
       }
+    } @else if (tab() === 'designer') {
+      <section class="designer-console--enterprise">
+        @if (designer(); as d) {
+          <div class="designer-commandbar">
+            <div>
+              <span class="section-kicker">{{ t('wf.designer.enterpriseEyebrow') }}</span>
+              <h2>{{ t('wf.designer.enterpriseTitle') }}</h2>
+              <p>{{ t('wf.designer.enterpriseHelp') }}</p>
+            </div>
+            <div class="designer-commandbar__actions">
+              <div class="designer-mode-toggle" [attr.aria-label]="t('wf.designer.viewMode')">
+                <button type="button" [class.is-active]="designerViewMode() === 'business'" (click)="setDesignerViewMode('business')">
+                  {{ t('wf.designer.businessMap') }}
+                </button>
+                <button type="button" [class.is-active]="designerViewMode() === 'technical'" (click)="setDesignerViewMode('technical')">
+                  {{ t('wf.designer.advancedCanvas') }}
+                </button>
+              </div>
+              <div class="designer-score">
+                <span>{{ t('wf.designer.readiness') }}</span>
+                <strong>{{ designerReadiness() }}%</strong>
+                <app-status-chip [kind]="validationKind(d.validation.status)" [label]="t('wf.designer.status.' + d.validation.status)" />
+              </div>
+            </div>
+          </div>
+
+          <div class="designer-kpis">
+            <article>
+              <span>{{ t('wf.graph.stages') }}</span>
+              <strong>{{ d.validation.stageCount }}</strong>
+            </article>
+            <article>
+              <span>{{ t('wf.designer.transitions') }}</span>
+              <strong>{{ d.validation.transitionCount }}</strong>
+            </article>
+            <article>
+              <span>{{ t('wf.designer.caseImpact') }}</span>
+              <strong>{{ designerMigration()?.summary?.activeCases ?? 0 }}</strong>
+            </article>
+            <article>
+              <span>{{ t('wf.designer.estimatedSla') }}</span>
+              <strong>{{ designerSimulation()?.summary?.estimatedSlaDays ?? d.template.defaultSlaDays }}</strong>
+            </article>
+          </div>
+        }
+
+        <div class="designer-client-layout">
+          <section class="designer-workspace">
+            <div class="designer-workspace__head">
+              <div>
+                <span class="section-kicker">
+                  {{ designerViewMode() === 'technical' ? t('wf.designer.canvasEyebrow') : t('wf.designer.clientMapEyebrow') }}
+                </span>
+                <h2>
+                  {{ designerViewMode() === 'technical'
+                    ? (designer()?.template ? templateName(designer()!.template) : t('wf.designer.canvasTitle'))
+                    : t('wf.designer.clientMapTitle') }}
+                </h2>
+                <p>
+                  {{ designerViewMode() === 'technical' ? t('wf.designer.canvasHelp') : t('wf.designer.clientMapHelp') }}
+                </p>
+              </div>
+              @if (designerViewMode() === 'technical') {
+                <div class="designer-actions">
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openImport()">{{ t('wf.designer.import') }}</button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="exportDesignerBpmn()">{{ t('wf.designer.export') }}</button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="resetDesignerCanvas()">{{ t('wf.designer.reset') }}</button>
+                </div>
+              }
+            </div>
+
+            @if (designerViewMode() === 'technical') {
+              @if (designerState() === 'loading') {
+                <div class="empty"><p>{{ t('crud.loading') }}</p></div>
+              } @else if (designerState() === 'error') {
+                <div class="empty">
+                  <p>{{ t('crud.loadError') }}</p>
+                  <button type="button" class="ds-btn ds-btn--primary" (click)="ensureDesignerLoaded()">{{ t('crud.retry') }}</button>
+                </div>
+              } @else {
+                <div #bpmnCanvas class="bpmn-canvas" [attr.aria-label]="t('wf.designer.canvasTitle')"></div>
+              }
+            } @else {
+              <div class="client-route-map">
+                <div class="route-story-head">
+                  <div class="route-root-node">
+                    <span>{{ t('wf.designer.routeRoot') }}</span>
+                    <strong>{{ designer()?.template ? templateName(designer()!.template) : '-' }}</strong>
+                    <small>{{ designerRouteStages().length }} {{ t('wf.graph.stages') }}</small>
+                  </div>
+
+                  <div class="route-story-summary">
+                    <span class="section-kicker">{{ t('wf.designer.clientMapEyebrow') }}</span>
+                    <h3>{{ t('wf.designer.clientMapTitle') }}</h3>
+                    <p>{{ t('wf.designer.clientMapHelp') }}</p>
+                    <div class="designer-kpis route-story-metrics">
+                      <article>
+                        <span>{{ t('wf.graph.stages') }}</span>
+                        <strong>{{ designerRouteStages().length }}</strong>
+                      </article>
+                      <article>
+                        <span>{{ t('wf.designer.transitions') }}</span>
+                        <strong>{{ designer()?.template?.transitions?.length ?? 0 }}</strong>
+                      </article>
+                      <article>
+                        <span>{{ t('wf.designer.estimatedSla') }}</span>
+                        <strong>{{ designerSimulation()?.summary?.estimatedSlaDays ?? designer()?.template?.defaultSlaDays ?? '-' }}</strong>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="client-stage-lane">
+                  @for (stage of designerRouteStages(); track stage.id; let index = $index) {
+                    <article
+                      class="client-stage-node"
+                      [class.client-stage-node--decision]="stage.isDecision"
+                      [class.client-stage-node--final]="stage.isFinal"
+                    >
+                      <div class="client-stage-node__top">
+                        <span class="client-stage-node__step">{{ index + 1 }}</span>
+                        <app-status-chip [kind]="stageReadinessKind(stage.code)" [label]="stageReadinessLabel(stage.code)" />
+                      </div>
+                      <span class="graph-node__type">{{ t('wf.stage.' + stage.kind) }}</span>
+                      <h3>{{ stageName(stage) }}</h3>
+                      <p>{{ stage.description || t('wf.designer.noStageDescription') }}</p>
+                      <dl>
+                        <div>
+                          <dt>{{ t('wf.graph.ownerRole') }}</dt>
+                          <dd>{{ roleLabel(stage.assigneeRoleCode) }}</dd>
+                        </div>
+                        <div>
+                          <dt>{{ t('wf.designer.stageSla') }}</dt>
+                          <dd>{{ stage.dueDays }} {{ t('wf.graph.days') }}</dd>
+                        </div>
+                      </dl>
+                      @if (transitionLabelsFor(stage.id).length > 0) {
+                        <div class="branch-strip">
+                          @for (label of transitionLabelsFor(stage.id); track label) {
+                            <span>{{ label }}</span>
+                          }
+                        </div>
+                      }
+                    </article>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+
+          <aside class="designer-side-stack">
+            <section class="designer-panel designer-panel--compact">
+            <div class="designer-panel__head">
+              <span class="section-kicker">{{ t('wf.designer.eyebrow') }}</span>
+              <h2>{{ t('wf.designer.routeLibrary') }}</h2>
+              <p>{{ t('wf.designer.routeLibraryHelp') }}</p>
+            </div>
+
+            <label class="field">
+              <span class="field__label">{{ t('wf.field.route') }}</span>
+              <select class="field__input" [ngModel]="designerTemplateId()" (ngModelChange)="selectDesignerTemplate($event)" name="designerRoute">
+                @for (template of templates(); track template.id) {
+                  <option [value]="template.id">{{ template.code }} - {{ templateName(template) }}</option>
+                }
+              </select>
+            </label>
+
+            <div class="designer-checklist">
+              <div class="designer-checklist__head">
+                <span>{{ t('wf.designer.checklist') }}</span>
+                <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerPreviewing()" (click)="refreshDesignerPreviews()">
+                  {{ designerPreviewing() ? t('crud.loading') : t('wf.designer.refreshPreview') }}
+                </button>
+              </div>
+              @for (item of designerChecklist(); track item.code) {
+                <article class="check-row">
+                  <app-status-chip [kind]="checklistKind(item.status)" [label]="t('wf.designer.check.' + item.status)" />
+                  <div>
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                </article>
+              }
+            </div>
+
+            <button type="button" class="ds-btn ds-btn--ghost" (click)="openRouteModal()">
+              {{ t('wf.designer.newRoute') }}
+            </button>
+            </section>
+
+          <section class="designer-panel designer-panel--publish">
+            <div class="designer-panel__head">
+              <span class="section-kicker">{{ t('wf.designer.publishEyebrow') }}</span>
+              <h2>{{ t('wf.designer.publishTitle') }}</h2>
+              <p>{{ t('wf.designer.publishHelp') }}</p>
+            </div>
+
+            @if (designer(); as d) {
+              <div class="publish-summary">
+                <div>
+                  <span>{{ t('wf.designer.lastPublished') }}</span>
+                  <strong>{{ fmtDate(d.version.lastPublishedAt) }}</strong>
+                </div>
+                <div>
+                  <span>{{ t('wf.designer.publishedBy') }}</span>
+                  <strong>{{ d.version.lastPublishedBy || '-' }}</strong>
+                </div>
+              </div>
+            }
+
+            <label class="field">
+              <span class="field__label">{{ t('wf.designer.changeSummary') }}</span>
+              <textarea class="field__input" rows="4" [ngModel]="designerSummary()" (ngModelChange)="designerSummary.set($event)" name="designerSummary"></textarea>
+            </label>
+
+            <div class="publish-actions">
+              <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving()" (click)="saveDesignerDraft()">
+                {{ designerSaving() ? t('crud.saving') : t('wf.designer.saveDraft') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="designerSaving()" (click)="publishDesigner()">
+                {{ designerSaving() ? t('crud.saving') : t('wf.designer.publish') }}
+              </button>
+            </div>
+
+            @if (designerMigration(); as migration) {
+              <div class="migration-card">
+                <div>
+                  <span>{{ t('wf.designer.migrationRisk') }}</span>
+                  <app-status-chip [kind]="migrationKind(migration.risk)" [label]="t('wf.designer.risk.' + migration.risk)" />
+                </div>
+                <p>{{ migration.summary.manualReviewCases }} {{ t('wf.designer.manualReviewCases') }}</p>
+              </div>
+            }
+          </section>
+          </aside>
+        </div>
+
+        <div class="designer-lower-grid">
+          @if (designerSimulation(); as sim) {
+            <section class="designer-evidence-card">
+              <div class="designer-evidence-card__head">
+                <div>
+                  <span class="section-kicker">{{ t('wf.designer.simulationEyebrow') }}</span>
+                  <h3>{{ t('wf.designer.simulationTitle') }}</h3>
+                </div>
+                <app-status-chip [kind]="validationKind(sim.status)" [label]="t('wf.designer.status.' + sim.status)" />
+              </div>
+              <div class="simulation-track">
+                @for (step of sim.path; track step.code; let index = $index) {
+                  <article>
+                    <span>{{ index + 1 }}</span>
+                    <div>
+                      <strong>{{ step.nameEn }}</strong>
+                      <small>{{ nodeTypeLabel(step.nodeType) }} - {{ roleLabel(step.assigneeRoleCode) }} - {{ step.dueDays }} {{ t('wf.graph.days') }}</small>
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+
+          @if (designerMigration(); as migration) {
+            <section class="designer-evidence-card">
+              <div class="designer-evidence-card__head">
+                <div>
+                  <span class="section-kicker">{{ t('wf.designer.migrationEyebrow') }}</span>
+                  <h3>{{ t('wf.designer.migrationTitle') }}</h3>
+                </div>
+                <app-status-chip [kind]="migrationKind(migration.risk)" [label]="t('wf.designer.risk.' + migration.risk)" />
+              </div>
+              <div class="migration-grid">
+                <div><span>{{ t('wf.designer.addedStages') }}</span><strong>{{ migration.summary.addedStages }}</strong></div>
+                <div><span>{{ t('wf.designer.retiredStages') }}</span><strong>{{ migration.summary.retiredStages }}</strong></div>
+                <div><span>{{ t('wf.designer.manualReview') }}</span><strong>{{ migration.summary.manualReviewCases }}</strong></div>
+              </div>
+              @for (row of migration.caseActions.slice(0, 4); track row.id) {
+                <p class="migration-row"><code>{{ row.code }}</code> {{ row.reason }}</p>
+              }
+            </section>
+          }
+
+          <section class="designer-evidence-card designer-evidence-card--wide">
+            <div class="designer-evidence-card__head">
+              <div>
+                <span class="section-kicker">{{ t('wf.designer.rulePacksEyebrow') }}</span>
+                <h3>{{ t('wf.designer.rulePacksTitle') }}</h3>
+              </div>
+            </div>
+            <div class="rule-pack-grid">
+              @for (pack of designerRulePacks(); track pack.code) {
+                <article>
+                  <code>{{ pack.code }}</code>
+                  <strong>{{ pack.nameEn }}</strong>
+                  <span>{{ nodeTypeLabel(pack.nodeType) }} - {{ roleLabel(pack.assigneeRoleCode) }}</span>
+                  <div>
+                    <app-status-chip [kind]="pack.hasForm ? 'success' : 'warning'" [label]="t('wf.designer.forms') + ': ' + requirementLabel(pack.hasForm)" />
+                    <app-status-chip [kind]="pack.hasEvidence ? 'success' : 'warning'" [label]="t('wf.designer.evidence') + ': ' + requirementLabel(pack.hasEvidence)" />
+                    <app-status-chip [kind]="pack.hasNotifications ? 'success' : 'warning'" [label]="t('wf.designer.notifications') + ': ' + requirementLabel(pack.hasNotifications)" />
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+        </div>
+      </section>
     } @else if (tab() === 'tasks') {
       @if (tasks().length === 0) {
         <div class="empty"><p>{{ t('wf.noTasks') }}</p></div>
@@ -425,6 +735,51 @@
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeNewCase()">{{ t('crud.cancel') }}</button>
         <button type="button" class="ds-btn ds-btn--primary" [disabled]="!newTitle().trim() || saving()" (click)="createCase()">
           {{ saving() ? t('crud.saving') : t('wf.createCase') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (importModalOpen()) {
+    <app-modal [title]="t('wf.designer.importTitle')" (close)="closeImport()">
+      <div class="form">
+        <p class="muted">{{ t('wf.designer.importHelp') }}</p>
+        <label class="field">
+          <span class="field__label">{{ t('wf.designer.bpmnXml') }}</span>
+          <textarea class="field__input mono" rows="12" [ngModel]="bpmnImportText()" (ngModelChange)="bpmnImportText.set($event)" name="bpmnXml"></textarea>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeImport()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!bpmnImportText().trim()" (click)="applyImport()">
+          {{ t('wf.designer.loadIntoCanvas') }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (routeModalOpen()) {
+    <app-modal [title]="t('wf.designer.newRoute')" (close)="closeRouteModal()">
+      <div class="form">
+        <label class="field">
+          <span class="field__label">{{ t('wf.designer.routeName') }}<span class="req">*</span></span>
+          <input class="field__input" [ngModel]="routeName()" (ngModelChange)="routeName.set($event)" name="routeName" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.designer.routeCode') }}</span>
+          <input class="field__input" [ngModel]="routeCode()" (ngModelChange)="routeCode.set($event)" name="routeCode" />
+        </label>
+        <label class="field">
+          <span class="field__label">{{ t('wf.field.type') }}</span>
+          <select class="field__input" [ngModel]="routeCaseType()" (ngModelChange)="routeCaseType.set($event)" name="routeCaseType">
+            @for (type of caseTypes(); track type) { <option [value]="type">{{ t('wf.type.' + type) }}</option> }
+          </select>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeRouteModal()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!routeName().trim() || designerSaving()" (click)="createDesignerRoute()">
+          {{ designerSaving() ? t('crud.saving') : t('wf.designer.createRoute') }}
         </button>
       </div>
     </app-modal>

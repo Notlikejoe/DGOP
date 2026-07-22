@@ -116,6 +116,16 @@
             <span class="field__label">{{ t('people.field.active') }}</span>
           </label>
         </div>
+        @if (validationErrors().length) {
+          <div class="validation-panel" role="alert">
+            <strong>{{ t('validation.title') }}</strong>
+            <ul>
+              @for (message of validationErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          </div>
+        }
       </form>
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>

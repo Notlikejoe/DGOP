@@ -45,8 +45,12 @@
       </article>
       <article class="strip-card">
         <span>{{ t('integrations.metric.writebacks') }}</span>
-        <strong>{{ s.simulatedWritebacks }}</strong>
-        <small>{{ t('integrations.metric.writebackHelp') }}</small>
+        <strong>{{ s.writebacks }}</strong>
+        <small>
+          {{ s.sentWritebacks }} {{ t('integrations.metric.sent') }} -
+          {{ s.simulatedWritebacks }} {{ t('integrations.metric.simulated') }} -
+          {{ s.failedWritebacks }} {{ t('integrations.metric.failed') }}
+        </small>
       </article>
     </div>
   }
@@ -82,6 +86,10 @@
                 <small>
                   {{ connector._count?.events ?? 0 }} {{ t('integrations.connectors.events') }} -
                   {{ connector._count?.reconciliationReports ?? 0 }} {{ t('integrations.connectors.reconciliations') }}
+                </small>
+                <small>
+                  {{ t('integrations.runtime.' + runtimeMode(connector)) }} -
+                  {{ t('integrations.runtime.endpoints') }}: {{ runtimeEndpoints(connector) }}
                 </small>
               </span>
               <app-status-chip [kind]="connectorKind(connector.status)" [label]="t('integrations.connectorStatus.' + connector.status)" />
@@ -124,6 +132,31 @@
           </label>
         </div>
 
+        @if (selectedConnector(); as connector) {
+          <div class="runtime-callout" [class.runtime-callout--external]="runtimeMode(connector) === 'external_http'">
+            <app-icon [name]="runtimeMode(connector) === 'external_http' ? 'globe' : 'server'" />
+            <div>
+              <strong>{{ t('integrations.runtime.' + runtimeMode(connector)) }}</strong>
+              <p>
+                {{ t('integrations.runtime.endpoints') }}: {{ runtimeEndpoints(connector) }}
+                @if (connector.runtime?.timeoutMs) {
+                  <span>- {{ connector.runtime?.timeoutMs }}ms</span>
+                }
+              </p>
+            </div>
+            @if (connector.runtime?.canHealthCheck) {
+              <button
+                type="button"
+                class="ds-btn ds-btn--ghost btn-sm"
+                [disabled]="!canRun || !!testingConnectorId()"
+                (click)="testConnector(connector)"
+              >
+                {{ testingConnectorId() === connector.id ? t('integrations.connectors.testing') : t('integrations.connectors.test') }}
+              </button>
+            }
+          </div>
+        }
+
         @if (adapterType() === 'catalog_csv') {
           <div class="csv-area">
             <label class="csv-upload">
@@ -143,6 +176,17 @@
               <span class="field__label">{{ t('integrations.file.paste') }}</span>
               <textarea class="field__input mono" rows="8" [ngModel]="csvText()" (ngModelChange)="setCsv($event)"></textarea>
             </label>
+          </div>
+        } @else if (adapterType() === 'webhook_json') {
+          <div class="mock-callout real-callout">
+            <app-icon name="globe" />
+            <div>
+              <strong>{{ t('integrations.real.title') }}</strong>
+              <p>{{ t('integrations.real.copy') }}</p>
+              @if (!selectedConnector()?.runtime?.canPull) {
+                <p class="callout-warning">{{ t('integrations.real.needsPull') }}</p>
+              }
+            </div>
           </div>
         } @else {
           <div class="mock-callout">
@@ -376,8 +420,8 @@
       <div class="panel-head compact">
         <div>
           <span class="eyebrow">{{ t('integrations.writeback.eyebrow') }}</span>
-          <h2>{{ t('integrations.writeback.title') }}</h2>
-          <p>{{ t('integrations.writeback.subtitle') }}</p>
+          <h2>{{ t(writebackTitleKey()) }}</h2>
+          <p>{{ t(writebackSubtitleKey()) }}</p>
         </div>
         <app-icon name="fileCheck" />
       </div>
@@ -392,13 +436,13 @@
           </select>
         </label>
         <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canWriteback || !selectedWritebackAssetId() || writingBack()" (click)="simulateWriteback()">
-          {{ writingBack() ? t('integrations.writeback.running') : t('integrations.writeback.action') }}
+          {{ writingBack() ? t('integrations.writeback.running') : t(writebackActionKey()) }}
         </button>
       </div>
 
       @if (writeback(); as log) {
         <div class="writeback-result">
-          <app-status-chip kind="success" [label]="t('integrations.writeback.status.' + log.status)" />
+          <app-status-chip [kind]="writebackKind(log.status)" [label]="t('integrations.writeback.status.' + log.status)" />
           <span>{{ name(log.asset) }} - {{ name(log.connector) }}</span>
           <small>{{ date(log.createdAt) }}</small>
         </div>

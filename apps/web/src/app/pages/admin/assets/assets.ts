@@ -22,6 +22,9 @@ interface Ref {
   nameEn: string;
   nameAr: string;
 }
+interface SystemRef extends Ref {
+  ownerOrgUnitId?: string | null;
+}
 interface ClassRef extends Ref {
   rank: number;
   color: string;
@@ -139,6 +142,13 @@ interface Filters {
 const SAMPLE_CSV = `code,nameEn,nameAr,description,lifecycleStatus,ownerName,domainCode,orgUnitCode,systemCode,capabilityCode,classificationCode,subjectCodes
 AST-SAMPLE-1,Sample Claims Dataset,مجموعة مطالبات,Sample import row,active,Sample Owner,finance,,,revenue_cycle,internal,patient|supplier`;
 
+const ASSET_CODE_PATTERN = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$/;
+const ASSET_CODE_MAX = 48;
+const ASSET_NAME_MAX = 180;
+const ASSET_DESCRIPTION_MAX = 1000;
+const ASSET_OWNER_MAX = 160;
+const MIN_PERSONAL_DATA_CLASSIFICATION_RANK = 2;
+
 @Component({
   selector: 'app-admin-assets',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -162,7 +172,7 @@ export class AssetsPage implements OnInit {
   // Lookups
   protected readonly domains = signal<Ref[]>([]);
   protected readonly orgUnits = signal<Ref[]>([]);
-  protected readonly systems = signal<Ref[]>([]);
+  protected readonly systems = signal<SystemRef[]>([]);
   protected readonly capabilities = signal<Ref[]>([]);
   protected readonly classifications = signal<ClassRef[]>([]);
   protected readonly subjects = signal<Ref[]>([]);
@@ -214,6 +224,11 @@ export class AssetsPage implements OnInit {
 
   protected readonly lifecycles = ['draft', 'active', 'deprecated', 'retired'];
   protected readonly relTypes = ['derived_from', 'feeds', 'replicates', 'related_to'];
+  protected readonly assetCodeMax = ASSET_CODE_MAX;
+  protected readonly assetCodePatternText = ASSET_CODE_PATTERN.source;
+  protected readonly assetNameMax = ASSET_NAME_MAX;
+  protected readonly assetDescriptionMax = ASSET_DESCRIPTION_MAX;
+  protected readonly assetOwnerMax = ASSET_OWNER_MAX;
   private requestedAssetId: string | null = null;
 
   ngOnInit(): void {
@@ -277,7 +292,7 @@ export class AssetsPage implements OnInit {
     forkJoin({
       domains: this.http.get<Ref[]>('/api/data-domains'),
       orgUnits: this.http.get<Ref[]>('/api/org-units'),
-      systems: this.http.get<Ref[]>('/api/systems'),
+      systems: this.http.get<SystemRef[]>('/api/systems'),
       capabilities: this.http.get<Ref[]>('/api/business-capabilities'),
       classifications: this.http.get<ClassRef[]>('/api/classifications'),
       subjects: this.http.get<Ref[]>('/api/data-subjects'),
@@ -378,7 +393,8 @@ export class AssetsPage implements OnInit {
   }
 
   protected set<K extends keyof Draft>(key: K, value: Draft[K]): void {
-    this.draft.update((d) => ({ ...d, [key]: value }));
+    const next = key === 'code' && typeof value === 'string' ? value.trim().toUpperCase() : value;
+    this.draft.update((d) => ({ ...d, [key]: next as Draft[K] }));
   }
 
   protected toggleSubject(id: string): void {
@@ -422,28 +438,28 @@ export class AssetsPage implements OnInit {
 
   protected canSave(): boolean {
     const d = this.draft();
-    return !!(d.code && d.nameEn && d.nameAr);
+    return !!(d.code.trim() && d.nameEn.trim() && d.nameAr.trim()) && this.validationErrors().length === 0;
   }
 
   protected save(): void {
     if (!this.canSave() || this.saving()) return;
     this.saving.set(true);
     const d = this.draft();
-    const body = {
-      code: d.code,
-      nameEn: d.nameEn,
-      nameAr: d.nameAr,
-      description: d.description || null,
+    const id = this.editingId();
+    const body: Record<string, unknown> = {
+      ...(id ? {} : { code: d.code.trim().toUpperCase() }),
+      nameEn: d.nameEn.trim(),
+      nameAr: d.nameAr.trim(),
+      description: d.description.trim() || null,
       lifecycleStatus: d.lifecycleStatus,
-      ownerName: d.ownerName || null,
+      ownerName: d.ownerName.trim() || null,
       domainId: d.domainId || null,
       orgUnitId: d.orgUnitId || null,
       systemId: d.systemId || null,
       capabilityId: d.capabilityId || null,
       classificationId: d.classificationId || null,
-      subjectIds: d.subjectIds,
+      subjectIds: [...new Set(d.subjectIds)],
     };
-    const id = this.editingId();
     const req = id
       ? this.http.patch('/api/assets/' + id, body)
       : this.http.post('/api/assets', body);
@@ -463,6 +479,51 @@ export class AssetsPage implements OnInit {
 
   protected close(): void {
     this.modalOpen.set(false);
+  }
+
+  private selectedSystem(): SystemRef | undefined {
+    const systemId = this.draft().systemId;
+    return systemId ? this.systems().find((system) => system.id === systemId) : undefined;
+  }
+
+  private selectedClassification(): ClassRef | undefined {
+    const classificationId = this.draft().classificationId;
+    return classificationId
+      ? this.classifications().find((classification) => classification.id === classificationId)
+      : undefined;
+  }
+
+  protected validationErrors(): string[] {
+    const d = this.draft();
+    const errors: string[] = [];
+    const code = d.code.trim().toUpperCase();
+    const nameEn = d.nameEn.trim();
+    const nameAr = d.nameAr.trim();
+    const description = d.description.trim();
+    const ownerName = d.ownerName.trim();
+    const classification = this.selectedClassification();
+    const system = this.selectedSystem();
+
+    if (!this.editingId() && !code) errors.push(this.t('assets.validation.codeRequired'));
+    if (code.length > ASSET_CODE_MAX) errors.push(this.t('assets.validation.codeLength'));
+    if (code && !ASSET_CODE_PATTERN.test(code)) errors.push(this.t('assets.validation.codeFormat'));
+    if (!nameEn) errors.push(this.t('assets.validation.nameEnRequired'));
+    if (!nameAr) errors.push(this.t('assets.validation.nameArRequired'));
+    if (nameEn.length > ASSET_NAME_MAX || nameAr.length > ASSET_NAME_MAX) {
+      errors.push(this.t('assets.validation.nameLength'));
+    }
+    if (description.length > ASSET_DESCRIPTION_MAX) errors.push(this.t('assets.validation.descriptionLength'));
+    if (ownerName.length > ASSET_OWNER_MAX) errors.push(this.t('assets.validation.ownerLength'));
+    if (d.subjectIds.length > 0 && !classification) {
+      errors.push(this.t('assets.validation.subjectNeedsClassification'));
+    }
+    if (d.subjectIds.length > 0 && classification && classification.rank < MIN_PERSONAL_DATA_CLASSIFICATION_RANK) {
+      errors.push(this.t('assets.validation.subjectNotPublic'));
+    }
+    if (d.orgUnitId && system?.ownerOrgUnitId && system.ownerOrgUnitId !== d.orgUnitId) {
+      errors.push(this.t('assets.validation.systemOrgMismatch'));
+    }
+    return errors;
   }
 
   protected async deleteAsset(a: Asset): Promise<void> {

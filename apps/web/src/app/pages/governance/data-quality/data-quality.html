@@ -7,6 +7,9 @@
     </div>
     <div class="header-actions">
       <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
+      @if (canProfile) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openProfile()">{{ t('dq.profile.run') }}</button>
+      }
       @if (canImport) {
         <button type="button" class="ds-btn ds-btn--ghost" (click)="openImport()">{{ t('dq.import') }}</button>
       }
@@ -252,20 +255,42 @@
             <h2>{{ t('dq.profiles.title') }}</h2>
             <p>{{ t('dq.profiles.subtitle') }}</p>
           </div>
+          @if (canProfile) {
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openProfile()">{{ t('dq.profile.runShort') }}</button>
+          }
         </div>
         <div class="profile-list">
           @for (profile of topProfiles(); track profile.id) {
             <article class="profile-card">
               <div class="profile-card__head">
                 <div>
-                  <strong>{{ name(profile.asset) || name(profile.domain) }}</strong>
-                  <p>{{ profile.columnCount }} {{ t('dq.profiles.columns') }} - {{ profile.anomalyCount }} {{ t('dq.profiles.anomalies') }}</p>
+                  <strong>{{ profileTitle(profile) }}</strong>
+                  <p>{{ profile.rowCount }} {{ t('dq.profile.rows') }} - {{ profile.columnCount }} {{ t('dq.profiles.columns') }}</p>
                 </div>
                 <app-status-chip [kind]="scoreKind(profile.qualityScore)" [label]="profile.qualityScore + '%'" />
               </div>
+              <div class="profile-card__stats">
+                <span><strong>{{ profile.recommendedRules }}</strong>{{ t('dq.profile.recommendedRules') }}</span>
+                <span><strong>{{ profile.anomalyCount }}</strong>{{ t('dq.profiles.anomalies') }}</span>
+                <span><strong>{{ profileRelationships(profile).length }}</strong>{{ t('dq.profile.relationships') }}</span>
+              </div>
+              @if (profileDimensions(profile).length) {
+                <div class="profile-dimensions">
+                  @for (dimension of profileDimensions(profile).slice(0, 3); track dimension.dimension) {
+                    <span>
+                      <b>{{ t('dq.dimension.' + dimension.dimension) }}</b>
+                      <em>{{ dimension.score }}%</em>
+                    </span>
+                  }
+                </div>
+              }
               <div class="suggestion-list">
-                @for (column of profile.columns.slice(0, 3); track column.id) {
-                  <span>{{ column.columnName }}: {{ column.recommendation || t('dq.profiles.noRecommendation') }}</span>
+                @for (recommendation of profileRecommendations(profile).slice(0, 3); track recommendation.id || recommendation.columnName) {
+                  <span>{{ recommendation.columnName }}: {{ recommendation.reason || recommendation.titleEn || t('dq.profiles.noRecommendation') }}</span>
+                } @empty {
+                  @for (column of profile.columns.slice(0, 3); track column.id) {
+                    <span>{{ column.columnName }}: {{ column.recommendation || t('dq.profiles.noRecommendation') }}</span>
+                  }
                 }
               </div>
             </article>
@@ -337,6 +362,116 @@
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
         <button type="button" class="ds-btn ds-btn--primary" [disabled]="importing() || !importReady()" (click)="runImport()">{{ t('dq.importRun') }}</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (profileOpen()) {
+    <app-modal [title]="t('dq.profile.modalTitle')" (close)="closeModals()">
+      <div class="form profile-runner">
+        <p class="hint">{{ t('dq.profile.help') }}</p>
+        <div class="grid-2">
+          <label class="field">
+            <span class="field__label">{{ t('dq.field.asset') }}</span>
+            <select class="field__input" [ngModel]="profileAssetId()" (ngModelChange)="profileAssetId.set($event)">
+              <option value="">{{ t('dq.profile.noAsset') }}</option>
+              @for (a of assets(); track a.id) { <option [value]="a.id">{{ name(a) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('dq.profile.datasetName') }}</span>
+            <input class="field__input" [ngModel]="profileDatasetName()" (ngModelChange)="profileDatasetName.set($event)" [placeholder]="t('dq.profile.datasetPlaceholder')" />
+          </label>
+        </div>
+
+        <label class="csv-upload">
+          <span class="csv-upload__label">{{ t('dq.profile.choose') }}</span>
+          <span class="csv-upload__hint">{{ profileHelp() }}</span>
+          <input #profileCsvInput type="file" [attr.accept]="profileAccept()" [disabled]="!profileConfig()" (change)="onProfileFileChange($event)" />
+        </label>
+        @if (profileFile(); as file) {
+          <div class="csv-file">
+            <div>
+              <strong>{{ profileFileName() }}</strong>
+              <span>{{ profileFileSize() }}</span>
+            </div>
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="clearProfileFile(profileCsvInput)">{{ t('dq.importFile.clear') }}</button>
+          </div>
+        }
+        @if (profileFileError()) {
+          <p class="error">{{ profileFileError() }}</p>
+        }
+        <label class="field">
+          <span class="field__label">{{ t('dq.profile.paste') }}</span>
+          <textarea rows="8" class="field__input mono" [disabled]="!!profileFile()" [ngModel]="profileCsv()" (ngModelChange)="setProfileCsv($event)" [placeholder]="t('dq.profile.pastePlaceholder')"></textarea>
+        </label>
+        <div class="profile-runner__actions">
+          <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!profileConfig()" (click)="insertProfileSample(profileCsvInput)">{{ t('dq.profile.sample') }}</button>
+          <label class="check-row">
+            <input type="checkbox" [ngModel]="profileCreateRuleDrafts()" (ngModelChange)="profileCreateRuleDrafts.set($event)" />
+            <span>{{ t('dq.profile.createRules') }}</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" [ngModel]="profileCreateIssues()" (ngModelChange)="profileCreateIssues.set($event)" />
+            <span>{{ t('dq.profile.createIssues') }}</span>
+          </label>
+        </div>
+
+        @if (profileResult(); as result) {
+          <section class="profile-result">
+            <div class="profile-result__head">
+              <div>
+                <span class="eyebrow">{{ t('dq.profile.result') }}</span>
+                <h3>{{ profileTitle(result) }}</h3>
+                <p>{{ result.rowCount }} {{ t('dq.profile.rows') }} - {{ result.columnCount }} {{ t('dq.profiles.columns') }}</p>
+              </div>
+              <app-status-chip [kind]="scoreKind(result.qualityScore)" [label]="result.qualityScore + '%'" />
+            </div>
+            <div class="profile-result__metrics">
+              <span><strong>{{ result.recommendedRules }}</strong>{{ t('dq.profile.recommendedRules') }}</span>
+              <span><strong>{{ result.anomalyCount }}</strong>{{ t('dq.profiles.anomalies') }}</span>
+              <span><strong>{{ result.draftedRuleIds?.length ?? 0 }}</strong>{{ t('dq.profile.draftedRules') }}</span>
+              <span><strong>{{ result.createdIssueIds?.length ?? 0 }}</strong>{{ t('dq.profile.createdIssues') }}</span>
+            </div>
+            <div class="profile-result__sections">
+              <section>
+                <h4>{{ t('dq.profile.dimensionScores') }}</h4>
+                <div class="profile-dimensions profile-dimensions--stacked">
+                  @for (dimension of profileDimensions(result); track dimension.dimension) {
+                    <span>
+                      <b>{{ t('dq.dimension.' + dimension.dimension) }}</b>
+                      <em>{{ dimension.score }}%</em>
+                    </span>
+                  }
+                </div>
+              </section>
+              <section>
+                <h4>{{ t('dq.profile.relationships') }}</h4>
+                <div class="suggestion-list">
+                  @for (relationship of profileRelationships(result); track relationship.sourceColumn + relationship.targetColumn) {
+                    <span>{{ relationship.sourceColumn }} -> {{ relationship.targetDataset ? relationship.targetDataset + '.' : '' }}{{ relationship.targetColumn }} ({{ relationship.confidence }}%)</span>
+                  } @empty {
+                    <span>{{ t('dq.profile.noRelationships') }}</span>
+                  }
+                </div>
+              </section>
+              <section>
+                <h4>{{ t('dq.profile.recommendations') }}</h4>
+                <div class="suggestion-list">
+                  @for (recommendation of profileRecommendations(result); track recommendation.id || recommendation.columnName) {
+                    <span>{{ recommendation.columnName }}: {{ recommendation.reason || recommendation.titleEn }}</span>
+                  } @empty {
+                    <span>{{ t('dq.profiles.noRecommendation') }}</span>
+                  }
+                </div>
+              </section>
+            </div>
+          </section>
+        }
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeModals()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="profiling() || !profileReady()" (click)="runProfile()">{{ profiling() ? t('dq.profile.running') : t('dq.profile.run') }}</button>
       </div>
     </app-modal>
   }

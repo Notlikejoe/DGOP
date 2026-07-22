@@ -135,6 +135,12 @@
   outline-offset: 1px;
 }
 
+.field__input[readonly] {
+  color: var(--on-surface-muted);
+  background: color-mix(in srgb, var(--surface-muted) 72%, var(--surface));
+  cursor: not-allowed;
+}
+
 .field__checkbox {
   width: 18px;
   height: 18px;
@@ -169,4 +175,22 @@
 
 .item-row__resp {
   max-width: 220px;
+}
+
+.validation-panel {
+  padding: var(--space-3);
+  color: var(--warning-strong, var(--warning));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
+  border-radius: var(--radius-md);
+}
+
+.validation-panel strong {
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+.validation-panel ul {
+  margin: 0;
+  padding-inline-start: var(--space-5);
 }

@@ -46,6 +46,9 @@ interface Draft {
 interface Filters { scopeType: string; roleTypeId: string; }
 
 const SCOPE_TYPES: ScopeType[] = ['domain', 'capability', 'subject', 'org_unit', 'system'];
+const RULE_NAME_MAX = 180;
+const RULE_DESCRIPTION_MAX = 1000;
+const RULE_PRIORITY_MAX = 9999;
 
 @Component({
   selector: 'app-assignment-rules',
@@ -79,6 +82,9 @@ export class AssignmentRulesPage implements OnInit {
   protected readonly saving = signal(false);
 
   protected readonly refOptions = computed<Ref[]>(() => this.lookups()[this.draft().scopeType] ?? []);
+  protected readonly ruleNameMax = RULE_NAME_MAX;
+  protected readonly ruleDescriptionMax = RULE_DESCRIPTION_MAX;
+  protected readonly rulePriorityMax = RULE_PRIORITY_MAX;
 
   ngOnInit(): void {
     this.loadLookups();
@@ -173,7 +179,7 @@ export class AssignmentRulesPage implements OnInit {
 
   protected canSave(): boolean {
     const d = this.draft();
-    return !!(d.nameEn && d.nameAr && d.scopeType && d.refId && d.roleTypeId && d.personId);
+    return !!(d.nameEn.trim() && d.nameAr.trim() && d.scopeType && d.refId && d.roleTypeId && d.personId) && this.validationErrors().length === 0;
   }
 
   protected save(): void {
@@ -181,9 +187,9 @@ export class AssignmentRulesPage implements OnInit {
     this.saving.set(true);
     const d = this.draft();
     const body = {
-      nameEn: d.nameEn,
-      nameAr: d.nameAr,
-      description: d.description || null,
+      nameEn: d.nameEn.trim(),
+      nameAr: d.nameAr.trim(),
+      description: d.description.trim() || null,
       scopeType: d.scopeType,
       refId: d.refId,
       roleTypeId: d.roleTypeId,
@@ -207,6 +213,40 @@ export class AssignmentRulesPage implements OnInit {
   }
 
   protected close(): void { this.modalOpen.set(false); }
+
+  protected validationErrors(): string[] {
+    const d = this.draft();
+    const errors: string[] = [];
+    const nameEn = d.nameEn.trim();
+    const nameAr = d.nameAr.trim();
+    const description = d.description.trim();
+    const priority = Number(d.priority);
+    if (!nameEn) errors.push(this.t('rule.validation.nameEnRequired'));
+    if (!nameAr) errors.push(this.t('rule.validation.nameArRequired'));
+    if (nameEn.length > RULE_NAME_MAX || nameAr.length > RULE_NAME_MAX) {
+      errors.push(this.t('rule.validation.nameLength'));
+    }
+    if (description.length > RULE_DESCRIPTION_MAX) {
+      errors.push(this.t('rule.validation.descriptionLength'));
+    }
+    if (!d.scopeType) errors.push(this.t('rule.validation.scopeRequired'));
+    if (!d.refId) errors.push(this.t('rule.validation.refRequired'));
+    if (!d.roleTypeId) errors.push(this.t('rule.validation.roleRequired'));
+    if (!d.personId) errors.push(this.t('rule.validation.personRequired'));
+    if (!Number.isInteger(priority) || priority < 1 || priority > RULE_PRIORITY_MAX) {
+      errors.push(this.t('rule.validation.priorityRange'));
+    }
+    const duplicate = this.rules().some((rule) =>
+      rule.id !== this.editingId() &&
+      rule.isActive &&
+      rule.scopeType === d.scopeType &&
+      rule.refId === d.refId &&
+      rule.roleTypeId === d.roleTypeId &&
+      rule.priority === priority,
+    );
+    if (duplicate) errors.push(this.t('rule.validation.duplicate'));
+    return errors;
+  }
 
   protected async remove(r: Rule): Promise<void> {
     const ok = await this.confirm.ask('rule.confirmDelete');

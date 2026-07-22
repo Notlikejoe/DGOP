@@ -1,4 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -17,6 +28,9 @@ import {
   Task,
   WorkflowGraph,
   WorkflowConfiguration,
+  WorkflowDesignerResponse,
+  WorkflowDesignerSimulation,
+  WorkflowMigrationPreview,
   WorkflowRoutePreview,
   WorkflowTemplate,
   WorkflowTemplateStage,
@@ -29,15 +43,18 @@ import {
   templateUrl: './workflow.html',
   styleUrl: './workflow.scss',
 })
-export class WorkflowPage implements OnInit {
+export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('bpmnCanvas') private bpmnCanvas?: ElementRef<HTMLElement>;
+
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly inactiveCaseStatuses = new Set(['closed', 'rejected']);
   private readonly inactiveTaskStatuses = new Set(['completed', 'cancelled']);
+  private bpmnModeler: any | null = null;
 
-  protected readonly tab = signal<'map' | 'tasks' | 'cases'>('map');
+  protected readonly tab = signal<'map' | 'tasks' | 'cases' | 'designer'>('map');
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly tasks = signal<Task[]>([]);
   protected readonly taskTotal = signal(0);
@@ -48,6 +65,44 @@ export class WorkflowPage implements OnInit {
   protected readonly graph = signal<WorkflowGraph | null>(null);
   protected readonly configuration = signal<WorkflowConfiguration | null>(null);
   protected readonly selectedTemplateId = signal<string>('');
+  protected readonly designer = signal<WorkflowDesignerResponse | null>(null);
+  protected readonly designerTemplateId = signal<string>('');
+  protected readonly designerState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  protected readonly designerSaving = signal(false);
+  protected readonly designerPreviewing = signal(false);
+  protected readonly designerSummary = signal('');
+  protected readonly designerViewMode = signal<'business' | 'technical'>('business');
+  protected readonly designerSimulation = signal<WorkflowDesignerSimulation | null>(null);
+  protected readonly designerMigration = signal<WorkflowMigrationPreview | null>(null);
+  protected readonly importModalOpen = signal(false);
+  protected readonly routeModalOpen = signal(false);
+  protected readonly bpmnImportText = signal('');
+  protected readonly routeName = signal('');
+  protected readonly routeCode = signal('');
+  protected readonly routeCaseType = signal('general');
+
+  protected readonly designerChecklist = computed(() => {
+    const designer = this.designer();
+    return designer?.enterprise?.checklist ?? designer?.validation.checklist ?? [];
+  });
+
+  protected readonly designerRulePacks = computed(() => this.designer()?.enterprise?.rulePacks ?? []);
+
+  protected readonly designerReadiness = computed(() =>
+    this.designer()?.enterprise?.readinessScore ?? this.designer()?.validation.readinessScore ?? 0,
+  );
+
+  protected readonly designerRouteStages = computed(() =>
+    [...(this.designer()?.template.stages ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
+  );
+
+  protected readonly designerActiveCases = computed(() => {
+    const template = this.designer()?.template;
+    if (!template) return [];
+    return this.cases().filter(
+      (row) => this.caseMatchesTemplate(row, template) && !this.inactiveCaseStatuses.has(row.status),
+    );
+  });
 
   protected readonly caseTypes = computed(() => {
     const types = [...new Set(this.templates().map((template) => template.caseType).filter(Boolean))];
@@ -120,8 +175,18 @@ export class WorkflowPage implements OnInit {
     }
   }
 
+  ngAfterViewInit(): void {
+    if (this.tab() === 'designer') this.ensureDesignerLoaded();
+  }
+
+  ngOnDestroy(): void {
+    this.bpmnModeler?.destroy();
+    this.bpmnModeler = null;
+  }
+
   protected get canViewCases(): boolean { return this.auth.hasPermission('workflow_cases.view'); }
   protected get canCreateCase(): boolean { return this.auth.hasPermission('workflow_cases.create'); }
+  protected get canEditDesigner(): boolean { return this.auth.hasPermission('workflow_cases.edit'); }
 
   protected loadAll(): void {
     this.state.set('loading');
@@ -151,6 +216,7 @@ export class WorkflowPage implements OnInit {
           this.templates.set(templates);
           this.ensureNewCaseType();
           this.ensureSelectedTemplate(templates);
+          if (this.tab() === 'designer') this.ensureDesignerLoaded();
         },
         error: (error) => this.handleLoadError(error),
       });
@@ -196,6 +262,17 @@ export class WorkflowPage implements OnInit {
   }
   protected selectTemplate(template: WorkflowTemplate): void {
     this.selectedTemplateId.set(template.id);
+  }
+  protected setTab(next: 'map' | 'tasks' | 'cases' | 'designer'): void {
+    this.tab.set(next);
+    if (next === 'designer') this.ensureDesignerLoaded();
+  }
+
+  protected setDesignerViewMode(mode: 'business' | 'technical'): void {
+    this.designerViewMode.set(mode);
+    if (mode === 'technical') {
+      setTimeout(() => this.renderBpmn(this.designer()?.bpmnXml ?? ''), 0);
+    }
   }
   protected roleLabel(code?: string | null): string {
     if (!code) return this.t('wf.graph.noDefaultRole');
@@ -322,6 +399,288 @@ export class WorkflowPage implements OnInit {
         },
         error: (err) => { this.toast.errorFrom(err, this.t('wf.saveError')); this.saving.set(false); },
       });
+  }
+
+  // ---------- BPMN designer ----------
+  protected selectDesignerTemplate(templateId: string): void {
+    if (!templateId || templateId === this.designerTemplateId()) return;
+    this.designerTemplateId.set(templateId);
+    this.loadDesigner(templateId);
+  }
+
+  protected openRouteModal(): void {
+    this.routeName.set('');
+    this.routeCode.set('');
+    this.routeCaseType.set(this.caseTypes()[0] ?? 'general');
+    this.routeModalOpen.set(true);
+  }
+
+  protected closeRouteModal(): void {
+    this.routeModalOpen.set(false);
+  }
+
+  protected createDesignerRoute(): void {
+    if (!this.routeName().trim() || this.designerSaving()) return;
+    this.designerSaving.set(true);
+    this.http.post<WorkflowDesignerResponse>('/api/workflow/templates', {
+      code: this.routeCode() || null,
+      caseType: this.routeCaseType(),
+      nameEn: this.routeName().trim(),
+      nameAr: this.routeName().trim(),
+      trigger: 'manual',
+      defaultSlaDays: 5,
+    }).subscribe({
+      next: (res) => {
+        this.toast.success(this.t('wf.designer.routeCreated'));
+        this.designerSaving.set(false);
+        this.routeModalOpen.set(false);
+        this.designer.set(res);
+        this.designerTemplateId.set(res.template.id);
+        this.renderBpmn(res.bpmnXml);
+        setTimeout(() => this.refreshDesignerPreviews(), 0);
+        this.loadAll();
+      },
+      error: (err) => {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+        this.designerSaving.set(false);
+      },
+    });
+  }
+
+  protected openImport(): void {
+    this.bpmnImportText.set(this.designer()?.bpmnXml ?? '');
+    this.importModalOpen.set(true);
+  }
+
+  protected closeImport(): void {
+    this.importModalOpen.set(false);
+  }
+
+  protected applyImport(): void {
+    if (!this.bpmnImportText().trim()) return;
+    this.renderBpmn(this.bpmnImportText());
+    this.importModalOpen.set(false);
+  }
+
+  protected exportDesignerBpmn(): void {
+    this.currentBpmnXml().then((xml) => {
+      const template = this.designer()?.template;
+      const fileName = `${template?.code ?? 'workflow-route'}.bpmn`;
+      const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    }).catch(() => this.toast.error(this.t('wf.designer.exportError')));
+  }
+
+  protected resetDesignerCanvas(): void {
+    const xml = this.designer()?.bpmnXml;
+    if (!xml) return;
+    this.renderBpmn(xml);
+  }
+
+  protected saveDesignerDraft(): void {
+    this.persistDesigner('save');
+  }
+
+  protected publishDesigner(): void {
+    this.persistDesigner('publish');
+  }
+
+  protected validationKind(status?: string): StatusKind {
+    if (status === 'ready') return 'success';
+    if (status === 'warning') return 'warning';
+    if (status === 'blocked') return 'danger';
+    return 'muted';
+  }
+
+  protected checklistKind(status?: string): StatusKind {
+    if (status === 'pass') return 'success';
+    if (status === 'warning') return 'warning';
+    if (status === 'fail') return 'danger';
+    return 'muted';
+  }
+
+  protected migrationKind(risk?: string): StatusKind {
+    if (risk === 'safe') return 'success';
+    if (risk === 'caution') return 'warning';
+    if (risk === 'blocked') return 'danger';
+    return 'muted';
+  }
+
+  protected requirementLabel(value: boolean): string {
+    return value ? this.t('wf.designer.configured') : this.t('wf.designer.missing');
+  }
+
+  protected nodeTypeLabel(value?: string | null): string {
+    return (value ?? 'user_task')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  protected stageRulePack(code: string) {
+    return this.designerRulePacks().find((pack) => pack.code === code) ?? null;
+  }
+
+  protected stageReadinessKind(code: string): StatusKind {
+    const pack = this.stageRulePack(code);
+    if (!pack) return 'muted';
+    if (pack.hasForm && pack.hasEvidence && pack.hasNotifications) return 'success';
+    if (pack.hasEvidence || pack.hasNotifications || pack.hasForm) return 'warning';
+    return 'danger';
+  }
+
+  protected stageReadinessLabel(code: string): string {
+    const pack = this.stageRulePack(code);
+    if (!pack) return this.t('wf.designer.stageMapped');
+    if (pack.hasForm && pack.hasEvidence && pack.hasNotifications) return this.t('wf.designer.stageReady');
+    if (pack.hasEvidence || pack.hasNotifications || pack.hasForm) return this.t('wf.designer.stagePartial');
+    return this.t('wf.designer.stageNeedsRules');
+  }
+
+  protected transitionLabelsFor(stageId: string): string[] {
+    const template = this.designer()?.template;
+    if (!template) return [];
+    return template.transitions
+      .filter((transition) => transition.fromStageId === stageId)
+      .map((transition) => this.i18n.lang() === 'ar' ? transition.labelAr : transition.labelEn)
+      .filter(Boolean);
+  }
+
+  protected async refreshDesignerPreviews(): Promise<void> {
+    const template = this.designer()?.template;
+    if (!template || this.designerPreviewing()) return;
+    this.designerPreviewing.set(true);
+    try {
+      const xml = await this.currentBpmnXml();
+      this.http.post<WorkflowDesignerSimulation>(
+        `/api/workflow/templates/${template.id}/designer/simulate`,
+        { bpmnXml: xml },
+      ).subscribe({
+        next: (res) => this.designerSimulation.set(res),
+        error: () => this.designerSimulation.set(null),
+      });
+      this.http.post<WorkflowMigrationPreview>(
+        `/api/workflow/templates/${template.id}/designer/migration-preview`,
+        { bpmnXml: xml },
+      ).subscribe({
+        next: (res) => {
+          this.designerMigration.set(res);
+          this.designerPreviewing.set(false);
+        },
+        error: () => {
+          this.designerMigration.set(null);
+          this.designerPreviewing.set(false);
+        },
+      });
+    } catch (err) {
+      this.designerPreviewing.set(false);
+      this.toast.errorFrom(err, this.t('wf.designer.exportError'));
+    }
+  }
+
+  protected ensureDesignerLoaded(): void {
+    if (!this.canViewCases) return;
+    const templates = this.templates();
+    if (!templates.length) return;
+    const selected = this.designerTemplateId() || this.selectedTemplateId() || templates[0].id;
+    this.designerTemplateId.set(selected);
+    if (this.designer()?.template.id === selected && this.designerState() === 'ready') {
+      setTimeout(() => this.renderBpmn(this.designer()?.bpmnXml ?? ''), 0);
+      return;
+    }
+    this.loadDesigner(selected);
+  }
+
+  private loadDesigner(templateId: string): void {
+    this.designerState.set('loading');
+    this.http.get<WorkflowDesignerResponse>(`/api/workflow/templates/${templateId}/designer`).subscribe({
+      next: (res) => {
+        this.designer.set(res);
+        this.bpmnImportText.set(res.bpmnXml);
+        this.designerSimulation.set(null);
+        this.designerMigration.set(null);
+        this.designerState.set('ready');
+        setTimeout(() => {
+          this.renderBpmn(res.bpmnXml);
+          this.refreshDesignerPreviews();
+        }, 0);
+      },
+      error: (err) => {
+        this.designerState.set('error');
+        this.toast.errorFrom(err, this.t('crud.loadError'));
+      },
+    });
+  }
+
+  private async ensureModeler(): Promise<any | null> {
+    const container = this.bpmnCanvas?.nativeElement;
+    if (!container) return null;
+    if (!this.bpmnModeler) {
+      const module = await import('bpmn-js/lib/Modeler');
+      this.bpmnModeler = new module.default({
+        container,
+      });
+    }
+    return this.bpmnModeler;
+  }
+
+  private async renderBpmn(xml: string): Promise<void> {
+    if (!xml.trim()) return;
+    try {
+      const modeler = await this.ensureModeler();
+      if (!modeler) return;
+      const result = await modeler.importXML(xml);
+      const warnings = result?.warnings?.length ?? 0;
+      if (warnings > 0) this.toast.show(this.t('wf.designer.importWarnings'), 'info');
+    } catch {
+      this.toast.error(this.t('wf.designer.invalidXml'));
+    }
+  }
+
+  private async currentBpmnXml(): Promise<string> {
+    const modeler = await this.ensureModeler();
+    if (!modeler) return this.designer()?.bpmnXml ?? '';
+    const result = await modeler.saveXML({ format: true });
+    return result.xml;
+  }
+
+  private async persistDesigner(mode: 'save' | 'publish'): Promise<void> {
+    const template = this.designer()?.template;
+    if (!template || this.designerSaving()) return;
+    this.designerSaving.set(true);
+    try {
+      const xml = await this.currentBpmnXml();
+      this.http.post<WorkflowDesignerResponse>(
+        `/api/workflow/templates/${template.id}/designer/${mode}`,
+        {
+          bpmnXml: xml,
+          changeSummary: this.designerSummary() || null,
+        },
+      ).subscribe({
+        next: (res) => {
+          this.designer.set(res);
+          this.bpmnImportText.set(res.bpmnXml);
+          this.designerSimulation.set(null);
+          this.designerMigration.set(null);
+          this.designerSummary.set('');
+          this.designerSaving.set(false);
+          this.toast.success(mode === 'publish' ? this.t('wf.designer.published') : this.t('wf.designer.saved'));
+          this.refreshDesignerPreviews();
+          if (mode === 'publish') this.loadAll();
+        },
+        error: (err) => {
+          this.toast.errorFrom(err, this.t('wf.saveError'));
+          this.designerSaving.set(false);
+        },
+      });
+    } catch (err) {
+      this.toast.errorFrom(err, this.t('wf.designer.exportError'));
+      this.designerSaving.set(false);
+    }
   }
 
   private caseMatchesTemplate(row: CaseRow, template: WorkflowTemplate): boolean {

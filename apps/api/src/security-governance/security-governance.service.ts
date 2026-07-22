@@ -23,7 +23,7 @@ import {
   SimulateAccessDecisionDto,
   UpdateAccessReviewItemDto,
 } from './security-governance.dto';
-import { classificationRisk, evaluateAccessDecision } from './security-governance.logic';
+import { evaluateAbacDecision, validateRoleDataAccessMapIntegrity } from './security-governance.logic';
 
 type PrismaWriter = PrismaService | Prisma.TransactionClient;
 const SECURITY_MAINTENANCE_ROLES = new Set(['system_admin', 'dmo_admin']);
@@ -564,6 +564,10 @@ export class SecurityGovernanceService {
     if (!role) throw new BadRequestException('Role not found');
     await this.assertSecurityTarget(roleCodes, dto, { rejectUnboundedClassification: true });
     await this.assertMaskingPolicyInScope(roleCodes, dto.maskingPolicyId);
+    const integrityErrors = validateRoleDataAccessMapIntegrity(dto);
+    if (integrityErrors.length) {
+      throw new BadRequestException(`Invalid role-data access map: ${integrityErrors.join('; ')}`);
+    }
     const nextReviewAt = new Date();
     nextReviewAt.setDate(nextReviewAt.getDate() + (dto.reviewCadenceDays ?? 90));
     const scopeKey = accessScopeKey(dto.domainId || null, dto.classificationId || null);
@@ -590,7 +594,19 @@ export class SecurityGovernanceService {
     const row = existing
       ? await this.prisma.roleDataAccessMap.update({ where: { id: existing.id }, data, include: mappingInclude })
       : await this.createAccessMapWithRaceRecovery(dto.roleId, scopeKey, data);
-    await this.audit.log({ actor, action: 'role_data_access_map.upsert', entityType: 'role_data_access_map', entityId: row.id, metadata: { role: role.code } });
+    await this.audit.log({
+      actor,
+      action: 'role_data_access_map.upsert',
+      entityType: 'role_data_access_map',
+      entityId: row.id,
+      metadata: {
+        role: role.code,
+        scopeKey,
+        personalDataAllowed: data.personalDataAllowed,
+        approvalRequired: data.approvalRequired,
+        hasMaskingPolicy: !!data.maskingPolicyId,
+      },
+    });
     return row;
   }
 
@@ -792,10 +808,16 @@ export class SecurityGovernanceService {
         return bSpecific - aSpecific;
       })
       .find((row) => !row.classification || !asset.classification || row.classification.rank >= asset.classification.rank);
-    const result = evaluateAccessDecision({
+    const result = evaluateAbacDecision({
       hasMapping: !!mapping,
       requestedAction: dto.requestedAction ?? 'read',
+      purpose: dto.purpose ?? 'governance',
+      networkZone: dto.networkZone ?? 'internal',
       personalDataRequested: dto.personalDataRequested ?? false,
+      legalBasisConfirmed: dto.legalBasisConfirmed ?? false,
+      emergencyAccess: dto.emergencyAccess ?? false,
+      approvalTicketId: dto.approvalTicketId ?? null,
+      businessJustification: dto.businessJustification ?? null,
       personalDataAllowed: mapping?.personalDataAllowed ?? false,
       approvalRequired: mapping?.approvalRequired ?? true,
       hasMaskingPolicy: !!mapping?.maskingPolicy,
@@ -810,7 +832,7 @@ export class SecurityGovernanceService {
         domainId: asset.domainId,
         classificationId: asset.classificationId,
         maskingPolicyId: mapping?.maskingPolicyId ?? null,
-        requestedAction: dto.requestedAction ?? 'read',
+        requestedAction: result.normalizedAction,
         decision: result.decision as AccessDecision,
         reason: result.reason,
       },
@@ -826,8 +848,28 @@ export class SecurityGovernanceService {
       action: 'abac_decision.simulate',
       entityType: 'abac_decision',
       entityId: log.id,
-      metadata: { decision: result.decision, risk: classificationRisk(asset.classification?.rank) },
+      metadata: {
+        decision: result.decision,
+        risk: result.risk,
+        purpose: result.purpose,
+        networkZone: result.networkZone,
+        obligations: result.obligations,
+        violations: result.violations,
+        ruleTrace: result.ruleTrace,
+        hasBusinessJustification: !!dto.businessJustification?.trim(),
+        approvalTicketId: dto.approvalTicketId ?? null,
+      },
     });
-    return log;
+    return {
+      ...log,
+      abac: {
+        risk: result.risk,
+        purpose: result.purpose,
+        networkZone: result.networkZone,
+        obligations: result.obligations,
+        violations: result.violations,
+        ruleTrace: result.ruleTrace,
+      },
+    };
   }
 }

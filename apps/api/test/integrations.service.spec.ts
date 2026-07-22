@@ -5,20 +5,27 @@
 import assert from 'node:assert';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
+  DataAssetCatalogSyncStatus,
   IntegrationConnectorStatus,
   IntegrationDirection,
   IntegrationEventStatus,
   IntegrationSourceTrust,
+  IntegrationWritebackStatus,
 } from '@prisma/client';
 import { IntegrationsService } from '../src/integrations/integrations.service';
 import {
   adapterMatchesConnectorType,
   buildCatalogWritebackPayload,
+  catalogRowsFromExternalPayload,
   catalogMappingPreview,
   defaultAdapterForConnectorType,
   DEFAULT_INTEGRATION_CONNECTORS,
+  enterpriseConnectorRuntime,
+  isPrivateConnectorHost,
+  isSafeConnectorHeaderName,
   normalizeIntegrationEventPayload,
   normalizeCatalogAssetRow,
+  validateEnterpriseConnectorUrl,
 } from '../src/integrations/integrations.logic';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
@@ -59,6 +66,12 @@ async function withEnv<T>(name: string, value: string | undefined, fn: () => Pro
     if (previous === undefined) delete process.env[name];
     else process.env[name] = previous;
   }
+}
+
+function trustPublicConnectorDns(service: IntegrationsService, address = '93.184.216.34') {
+  (service as any).connectorHostAddresses = async () => [
+    { address, family: address.includes(':') ? 6 : 4 },
+  ];
 }
 
 function prismaBase(tx: Record<string, any>) {
@@ -342,6 +355,65 @@ test('normalizeIntegrationEventPayload rejects adapter payloads that are not rea
   assert.ok(result.issues.some((issue) => issue.field === 'payload'));
 });
 
+test('external catalog payload rows normalize into catalog import fields', () => {
+  const rows = catalogRowsFromExternalPayload({
+    assets: [
+      {
+        externalId: 'EXT-1',
+        assetCode: 'AST-1',
+        nameEn: 'Finance Feed',
+        nameAr: 'Finance Feed',
+        domain_code: 'finance',
+        classificationCode: 'internal',
+      },
+    ],
+  });
+
+  assert.deepStrictEqual(rows, [
+    {
+      externalid: 'EXT-1',
+      assetcode: 'AST-1',
+      nameen: 'Finance Feed',
+      namear: 'Finance Feed',
+      domain_code: 'finance',
+      classificationcode: 'internal',
+    },
+  ]);
+});
+
+test('enterprise connector runtime and URL validation distinguish real endpoints from mocks', () => {
+  const runtime = enterpriseConnectorRuntime('webhook_json', 'authoritative', {
+    pullUrl: 'https://catalog.example.com/assets',
+    writebackUrl: 'https://catalog.example.com/writeback',
+  });
+  assert.strictEqual(runtime.mode, 'external_http');
+  assert.strictEqual(runtime.canPull, true);
+  assert.strictEqual(runtime.canWriteback, true);
+  assert.strictEqual(enterpriseConnectorRuntime('mock_siem', 'simulated', {}).mode, 'simulated');
+  assert.deepStrictEqual(validateEnterpriseConnectorUrl('http://catalog.example.com/assets'), [
+    'Connector endpoint must use HTTPS unless insecure HTTP is explicitly enabled',
+  ]);
+  assert.deepStrictEqual(validateEnterpriseConnectorUrl('https://user:pass@catalog.example.com/assets'), [
+    'Connector endpoint must not include credentials in the URL',
+  ]);
+  assert.deepStrictEqual(validateEnterpriseConnectorUrl('https://127.0.0.1/assets'), [
+    'Private connector endpoint requires explicit private-network allowance',
+  ]);
+  assert.deepStrictEqual(validateEnterpriseConnectorUrl('https://[fc00::1]/assets'), [
+    'Private connector endpoint requires explicit private-network allowance',
+  ]);
+  assert.deepStrictEqual(validateEnterpriseConnectorUrl('https://metadata.internal/assets'), [
+    'Private connector endpoint requires explicit private-network allowance',
+  ]);
+  assert.deepStrictEqual(
+    validateEnterpriseConnectorUrl('https://127.0.0.1/assets', { allowPrivateNetwork: true }),
+    [],
+  );
+  assert.strictEqual(isPrivateConnectorHost('::ffff:127.0.0.1'), true);
+  assert.strictEqual(isSafeConnectorHeaderName('x-source-system'), true);
+  assert.strictEqual(isSafeConnectorHeaderName('Host'), false);
+});
+
 test('integration adapter compatibility prevents misleading connector engines', () => {
   assert.strictEqual(adapterMatchesConnectorType('data_quality', 'mock_data_quality'), true);
   assert.strictEqual(adapterMatchesConnectorType('data_quality', 'webhook_json'), true);
@@ -548,6 +620,353 @@ test('createConnector rejects an adapter that does not match the connector type'
       ),
     BadRequestException,
   );
+});
+
+test('createConnector persists real external connector config without inline secrets', async () => {
+  let createArgs: any;
+  const service = serviceWith({
+    integrationConnector: {
+      create: async (args: any) => {
+        createArgs = args;
+        return { id: 'connector-real', ...args.data, _count: {} };
+      },
+    },
+  } as never);
+
+  await service.createConnector(
+    {
+      code: 'CATALOG-REAL',
+      nameEn: 'Real Catalog',
+      nameAr: 'Real Catalog',
+      type: 'catalog',
+      adapterType: 'webhook_json',
+      sourceTrust: 'authoritative',
+      pullUrl: 'https://catalog.example.com/api/assets',
+      writebackUrl: 'https://catalog.example.com/api/writeback',
+      healthUrl: 'https://catalog.example.com/health',
+      authHeaderName: 'Authorization',
+      authHeaderValueEnv: 'CATALOG_TOKEN',
+      headers: {
+        'x-source-system': 'DGOP',
+        authorization: 'Bearer must-not-persist',
+      },
+      timeoutMs: 5000,
+    },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(createArgs.data.configJson.adapterType, 'webhook_json');
+  assert.strictEqual(createArgs.data.configJson.pullUrl, 'https://catalog.example.com/api/assets');
+  assert.strictEqual(createArgs.data.configJson.authHeaderValueEnv, 'CATALOG_TOKEN');
+  assert.strictEqual(createArgs.data.configJson.headers['x-source-system'], 'DGOP');
+  assert.strictEqual(createArgs.data.configJson.headers.authorization, undefined);
+});
+
+test('connectors exposes runtime capabilities but not raw connector config', async () => {
+  const service = serviceWith({
+    integrationConnector: {
+      findMany: async () => [
+        {
+          ...connector,
+          configJson: {
+            adapterType: 'webhook_json',
+            pullUrl: 'https://catalog.example.com/api/assets',
+            writebackUrl: 'https://catalog.example.com/api/writeback',
+            authHeaderValueEnv: 'SECRET_ENV',
+          },
+        },
+      ],
+    },
+    integrationImportBatch: { count: async () => 0 },
+    integrationExternalReference: { count: async () => 0 },
+    integrationWritebackLog: { count: async () => 0 },
+    integrationEvent: { count: async () => 0 },
+    integrationReconciliationReport: { count: async () => 0 },
+  } as never);
+
+  const result = await service.connectors(['system_admin']) as any[];
+
+  assert.strictEqual(result[0].runtime.mode, 'external_http');
+  assert.strictEqual(result[0].runtime.canPull, true);
+  assert.strictEqual(result[0].runtime.canWriteback, true);
+  assert.strictEqual(result[0].configJson, undefined);
+});
+
+test('runCatalogSync pulls catalog rows from a real external connector endpoint', async () => {
+  const realConnector = {
+    ...connector,
+    id: 'connector-real',
+    code: 'CATALOG-REAL',
+    status: IntegrationConnectorStatus.warning,
+    sourceTrust: IntegrationSourceTrust.authoritative,
+    configJson: {
+      adapterType: 'webhook_json',
+      pullUrl: 'https://catalog.example.com/api/assets',
+      authHeaderName: 'Authorization',
+      authHeaderValueEnv: 'CATALOG_TOKEN',
+      headers: { 'x-source-system': 'DGOP' },
+    },
+  };
+  let createdAsset: any;
+  let batchCreate: any;
+  let fetchedUrl = '';
+  let fetchedHeaders: Record<string, string> = {};
+  const tx = {
+    integrationImportBatch: {
+      create: async (args: any) => {
+        batchCreate = args.data;
+        return { id: 'batch-http' };
+      },
+      update: async (args: any) => ({ id: 'batch-http', ...args.data, connector: realConnector, errors: [] }),
+    },
+    integrationImportError: { create: async () => undefined },
+    integrationConnector: { update: async () => undefined },
+    integrationJob: { updateMany: async () => ({ count: 1 }) },
+    integrationExternalReference: {
+      findUnique: async () => null,
+      upsert: async () => ({ id: 'ref-http' }),
+    },
+    dataAsset: {
+      findUnique: async () => null,
+      create: async (args: any) => {
+        createdAsset = { id: 'asset-http', ...args.data };
+        return createdAsset;
+      },
+    },
+  };
+  const prisma = prismaBase(tx) as any;
+  prisma.integrationConnector.findFirst = async () => realConnector;
+  const auditLog: unknown[] = [];
+  const service = serviceWith(prisma, auditLog);
+  trustPublicConnectorDns(service);
+  const originalFetch = globalThis.fetch;
+  (globalThis as any).fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    fetchedUrl = String(input);
+    fetchedHeaders = init?.headers as Record<string, string>;
+    return new Response(
+      JSON.stringify({
+        assets: [
+          {
+            externalId: 'EXT-HTTP-1',
+            assetCode: 'AST-HTTP-1',
+            nameEn: 'HTTP Catalog Asset',
+            nameAr: 'HTTP Catalog Asset',
+            domainCode: 'finance',
+            classificationCode: 'internal',
+          },
+        ],
+      }),
+      { status: 200, statusText: 'OK', headers: { 'content-type': 'application/json' } },
+    );
+  };
+
+  try {
+    const result = await withEnv('CATALOG_TOKEN', 'Bearer catalog-token', () =>
+      service.runCatalogSync(
+        ['system_admin'],
+        { adapterType: 'webhook_json', connectorId: realConnector.id },
+        'admin@dgop.local',
+      ),
+    ) as any;
+
+    assert.strictEqual(fetchedUrl, 'https://catalog.example.com/api/assets');
+    assert.strictEqual(fetchedHeaders.Authorization, 'Bearer catalog-token');
+    assert.strictEqual(fetchedHeaders['x-source-system'], 'DGOP');
+    assert.strictEqual(createdAsset.code, 'AST-HTTP-1');
+    assert.strictEqual(createdAsset.externalCatalogId, 'EXT-HTTP-1');
+    assert.strictEqual(batchCreate.sourceName, 'CATALOG-REAL external HTTP');
+    assert.strictEqual(result.createdRows, 1);
+    assert.ok(auditLog.some((entry: any) => entry.action === 'integration.catalog_sync'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('testConnector runs real health endpoint and updates connector status', async () => {
+  const auditLog: unknown[] = [];
+  const realConnector = {
+    ...connector,
+    id: 'connector-health',
+    code: 'CATALOG-HEALTH',
+    sourceTrust: IntegrationSourceTrust.authoritative,
+    configJson: {
+      adapterType: 'webhook_json',
+      healthUrl: 'https://catalog.example.com/health',
+    },
+  };
+  let statusUpdate: any;
+  let fetchedUrl = '';
+  const service = serviceWith(
+    {
+      integrationConnector: {
+        findFirst: async () => realConnector,
+        update: async (args: any) => {
+          statusUpdate = args.data;
+          return { ...realConnector, ...args.data };
+        },
+      },
+    } as never,
+    auditLog,
+  );
+  trustPublicConnectorDns(service);
+  const originalFetch = globalThis.fetch;
+  (globalThis as any).fetch = async (input: RequestInfo | URL) => {
+    fetchedUrl = String(input);
+    return new Response(null, { status: 204, statusText: 'No Content' });
+  };
+
+  try {
+    const result = await service.testConnector(realConnector.id, 'admin@dgop.local') as any;
+
+    assert.strictEqual(fetchedUrl, 'https://catalog.example.com/health');
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(statusUpdate.status, IntegrationConnectorStatus.healthy);
+    assert.strictEqual(statusUpdate.lastError, null);
+    assert.ok(auditLog.some((entry: any) => entry.action === 'integration_connector.health_check'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('testConnector rejects public hostnames that resolve to private addresses', async () => {
+  const realConnector = {
+    ...connector,
+    id: 'connector-private-dns',
+    code: 'CATALOG-PRIVATE-DNS',
+    sourceTrust: IntegrationSourceTrust.authoritative,
+    configJson: {
+      adapterType: 'webhook_json',
+      healthUrl: 'https://catalog.example.com/health',
+    },
+  };
+  const service = serviceWith({
+    integrationConnector: {
+      findFirst: async () => realConnector,
+      update: async () => {
+        throw new Error('connector status must not update for rejected DNS targets');
+      },
+    },
+  } as never);
+  (service as any).connectorHostAddresses = async () => [{ address: '127.0.0.1', family: 4 }];
+  const originalFetch = globalThis.fetch;
+  let fetched = false;
+  (globalThis as any).fetch = async () => {
+    fetched = true;
+    return new Response(null, { status: 204 });
+  };
+
+  try {
+    await assert.rejects(
+      () => service.testConnector(realConnector.id, 'admin@dgop.local'),
+      BadRequestException,
+    );
+    assert.strictEqual(fetched, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('simulateWriteback sends to configured external catalog instead of only simulating', async () => {
+  const asset = {
+    id: 'asset-1',
+    code: 'AST-1',
+    nameEn: 'Revenue Feed',
+    nameAr: 'Revenue Feed',
+    ownerName: 'Chief Data Owner',
+    ownerStatus: 'assigned',
+    lifecycleStatus: 'active',
+    catalogSyncStatus: DataAssetCatalogSyncStatus.synced,
+    domain: { code: 'finance', nameEn: 'Finance', nameAr: 'Finance' },
+    classification: { code: 'restricted', nameEn: 'Restricted', nameAr: 'Restricted' },
+  };
+  const realConnector = {
+    ...connector,
+    id: 'connector-writeback',
+    code: 'CATALOG-WRITEBACK',
+    sourceTrust: IntegrationSourceTrust.authoritative,
+    configJson: {
+      adapterType: 'webhook_json',
+      writebackUrl: 'https://catalog.example.com/api/writeback',
+      authHeaderName: 'x-api-key',
+      authHeaderValueEnv: 'CATALOG_API_KEY',
+      headers: { 'x-source-system': 'DGOP' },
+    },
+  };
+  let assetUpdate: any;
+  let connectorUpdate: any;
+  let writebackCreate: any;
+  let fetchedUrl = '';
+  let fetchedBody: any;
+  let fetchedHeaders: Record<string, string> = {};
+  const tx = {
+    dataAsset: {
+      update: async (args: any) => {
+        assetUpdate = args.data;
+        return { ...asset, ...args.data };
+      },
+    },
+    integrationConnector: {
+      update: async (args: any) => {
+        connectorUpdate = args.data;
+        return { ...realConnector, ...args.data };
+      },
+    },
+    integrationWritebackLog: {
+      create: async (args: any) => {
+        writebackCreate = args.data;
+        return {
+          id: 'writeback-1',
+          createdAt: new Date(),
+          ...args.data,
+          connector: realConnector,
+          asset,
+        };
+      },
+    },
+  };
+  const prisma = prismaBase(tx) as any;
+  prisma.integrationConnector.findFirst = async () => realConnector;
+  prisma.dataAsset = {
+    findFirst: async () => asset,
+  };
+  const auditLog: unknown[] = [];
+  const service = serviceWith(prisma, auditLog);
+  trustPublicConnectorDns(service);
+  const originalFetch = globalThis.fetch;
+  (globalThis as any).fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    fetchedUrl = String(input);
+    fetchedHeaders = init?.headers as Record<string, string>;
+    fetchedBody = JSON.parse(String(init?.body ?? '{}'));
+    return new Response(JSON.stringify({ accepted: true }), {
+      status: 202,
+      statusText: 'Accepted',
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await withEnv('CATALOG_API_KEY', 'secret-key', () =>
+      service.simulateWriteback(
+        ['system_admin'],
+        asset.id,
+        { connectorId: realConnector.id },
+        'admin@dgop.local',
+      ),
+    ) as any;
+
+    assert.strictEqual(fetchedUrl, 'https://catalog.example.com/api/writeback');
+    assert.strictEqual(fetchedHeaders['x-api-key'], 'secret-key');
+    assert.strictEqual(fetchedHeaders['content-type'], 'application/json');
+    assert.strictEqual(fetchedBody.assetCode, 'AST-1');
+    assert.strictEqual(writebackCreate.simulated, false);
+    assert.strictEqual(writebackCreate.status, IntegrationWritebackStatus.sent);
+    assert.strictEqual(assetUpdate.catalogSyncStatus, DataAssetCatalogSyncStatus.synced);
+    assert.strictEqual(connectorUpdate.status, IntegrationConnectorStatus.healthy);
+    assert.strictEqual(result.status, IntegrationWritebackStatus.sent);
+    assert.ok(auditLog.some((entry: any) => entry.action === 'integration.catalog_writeback.send'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('receiveWebhook rejects requests when no webhook token is configured', async () => {

@@ -10,6 +10,9 @@ export class DataSubjectsService extends BaseCrudService {
       model: 'dataSubject',
       entityType: 'data_subject',
       orderBy: { nameEn: 'asc' },
+      deleteDependencies: [
+        { model: 'assetSubject', field: 'subjectId', label: 'asset subject links' },
+      ],
     });
   }
 }

@@ -33,6 +33,17 @@ interface Workspace {
   architectureReviews: any[];
 }
 
+interface MdmMatchRunResult {
+  threshold: number;
+  limit: number;
+  evaluatedPairs: number;
+  recommendedCount: number;
+  createdCount: number;
+  skippedExistingCount: number;
+  candidates: any[];
+  preview?: any[];
+}
+
 @Component({
   selector: 'app-extended-domains',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -49,7 +60,9 @@ export class ExtendedDomainsPage implements OnInit {
   protected readonly workspace = signal<Workspace | null>(null);
   protected readonly assets = signal<AssetRef[]>([]);
   protected readonly domains = signal<Ref[]>([]);
+  protected readonly matchRunResult = signal<MdmMatchRunResult | null>(null);
 
+  protected matchRunForm = { sourceAssetId: '', threshold: 65, limit: 10 };
   protected matchForm = { sourceAssetId: '', candidateAssetId: '', matchScore: 85 };
   protected referenceForm = { code: '', name: '', version: 'v1', domainId: '', assetId: '', changeSummary: '' };
   protected certForm = {
@@ -82,6 +95,23 @@ export class ExtendedDomainsPage implements OnInit {
     if (!this.matchForm.sourceAssetId || !this.matchForm.candidateAssetId) return;
     this.save('/api/extended-domains/mdm/matches', this.matchForm, () => {
       this.matchForm = { sourceAssetId: '', candidateAssetId: '', matchScore: 85 };
+    });
+  }
+
+  protected runMdmMatching(): void {
+    if (!this.matchRunForm.sourceAssetId) return;
+    this.saving.set(true);
+    this.http.post<MdmMatchRunResult>('/api/extended-domains/mdm/matches/run', {
+      sourceAssetId: this.matchRunForm.sourceAssetId,
+      threshold: Number(this.matchRunForm.threshold),
+      limit: Number(this.matchRunForm.limit),
+    }).subscribe({
+      next: (result) => {
+        this.matchRunResult.set(result);
+        this.saving.set(false);
+        this.loadWorkspace();
+      },
+      error: () => this.saving.set(false),
     });
   }
 
@@ -140,6 +170,15 @@ export class ExtendedDomainsPage implements OnInit {
     if (['rejected', 'needs_remediation'].includes(status)) return 'danger';
     if (['under_review', 'pending', 'candidate'].includes(status)) return 'warning';
     return 'info';
+  }
+
+  protected topMdmFactors(row: any): any[] {
+    const factors = row?.survivorshipRulesJson?.factors;
+    return Array.isArray(factors)
+      ? factors
+          .filter((factor) => Number(factor?.score ?? 0) >= 60)
+          .slice(0, 3)
+      : [];
   }
 
   protected t(key: string): string {

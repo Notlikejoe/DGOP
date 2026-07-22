@@ -31,13 +31,28 @@ interface IntegrationSummary {
   batches: number;
   failedBatches: number;
   openErrors: number;
+  writebacks: number;
   simulatedWritebacks: number;
+  sentWritebacks: number;
+  failedWritebacks: number;
   failedEvents: number;
   deadLetterEvents: number;
   retryReadyEvents: number;
   reconciliationReports: number;
   lastRunAt?: string | null;
   lastRunStatus?: string | null;
+}
+
+type CatalogAdapterType = 'catalog_csv' | 'mock_rest' | 'webhook_json';
+type IntegrationRuntimeMode = 'file' | 'simulated' | 'external_http' | 'webhook_only';
+
+interface IntegrationConnectorRuntime {
+  mode: IntegrationRuntimeMode;
+  canPull: boolean;
+  canWriteback: boolean;
+  canHealthCheck: boolean;
+  configuredEndpoints: string[];
+  timeoutMs: number;
 }
 
 interface IntegrationConnector {
@@ -53,6 +68,7 @@ interface IntegrationConnector {
   lastRunAt?: string | null;
   lastSuccessAt?: string | null;
   lastError?: string | null;
+  runtime?: IntegrationConnectorRuntime;
   _count?: {
     importBatches: number;
     externalReferences: number;
@@ -153,6 +169,7 @@ interface IntegrationReconciliationReport {
 const ADAPTERS = [
   { value: 'catalog_csv', labelKey: 'integrations.adapter.csv' },
   { value: 'mock_rest', labelKey: 'integrations.adapter.mock' },
+  { value: 'webhook_json', labelKey: 'integrations.adapter.real' },
 ] as const;
 
 @Component({
@@ -178,7 +195,7 @@ export class IntegrationsPage implements OnInit {
   protected readonly selectedConnectorId = signal('');
   protected readonly selectedBatchId = signal('');
   protected readonly selectedErrors = signal<IntegrationImportError[]>([]);
-  protected readonly adapterType = signal<'catalog_csv' | 'mock_rest'>('catalog_csv');
+  protected readonly adapterType = signal<CatalogAdapterType>('catalog_csv');
   protected readonly csvText = signal('');
   protected readonly csvFileName = signal('');
   protected readonly preview = signal<MappingPreview | null>(null);
@@ -188,6 +205,7 @@ export class IntegrationsPage implements OnInit {
   protected readonly writeback = signal<WritebackLog | null>(null);
   protected readonly writingBack = signal(false);
   protected readonly retryingEventId = signal('');
+  protected readonly testingConnectorId = signal('');
 
   protected readonly adapters = ADAPTERS;
 
@@ -204,6 +222,8 @@ export class IntegrationsPage implements OnInit {
   protected readonly syncedAssets = computed(() =>
     this.assets().filter((asset) => asset.externalCatalogId || asset.catalogSyncStatus === 'synced'),
   );
+
+  protected readonly selectedConnectorCanWriteback = computed(() => !!this.selectedConnector()?.runtime?.canWriteback);
 
   ngOnInit(): void {
     this.load();
@@ -313,7 +333,7 @@ export class IntegrationsPage implements OnInit {
       .subscribe({
         next: (result) => {
           this.writeback.set(result);
-          this.toast.success(this.t('integrations.writeback.done'));
+          this.toast.success(this.t(result.status === 'sent' ? 'integrations.writeback.sentDone' : 'integrations.writeback.done'));
           this.writingBack.set(false);
           this.load();
         },
@@ -321,6 +341,23 @@ export class IntegrationsPage implements OnInit {
           this.writingBack.set(false);
         },
       });
+  }
+
+  protected testConnector(connector: IntegrationConnector): void {
+    if (!this.canRun || this.testingConnectorId() || !connector.runtime?.canHealthCheck) return;
+    this.testingConnectorId.set(connector.id);
+    this.http.post(`/api/integrations/connectors/${connector.id}/test`, {}).subscribe({
+      next: () => {
+        this.toast.success(this.t('integrations.connectors.testDone'));
+        this.testingConnectorId.set('');
+        this.load();
+      },
+      error: (err) => {
+        this.toast.errorFrom(err, this.t('integrations.error'));
+        this.testingConnectorId.set('');
+        this.load();
+      },
+    });
   }
 
   protected retryEvent(event: IntegrationEvent): void {
@@ -365,7 +402,7 @@ export class IntegrationsPage implements OnInit {
     if (input) input.value = '';
   }
 
-  protected setAdapter(value: 'catalog_csv' | 'mock_rest'): void {
+  protected setAdapter(value: CatalogAdapterType): void {
     this.adapterType.set(value);
     this.preview.set(null);
   }
@@ -386,7 +423,36 @@ export class IntegrationsPage implements OnInit {
   }
 
   protected canPreviewOrRun(): boolean {
-    return this.adapterType() === 'mock_rest' || !!this.csvText().trim();
+    if (this.adapterType() === 'mock_rest') return true;
+    if (this.adapterType() === 'webhook_json') return !!this.selectedConnector()?.runtime?.canPull;
+    return !!this.csvText().trim();
+  }
+
+  protected runtimeMode(connector?: IntegrationConnector | null): IntegrationRuntimeMode {
+    return connector?.runtime?.mode ?? 'webhook_only';
+  }
+
+  protected runtimeEndpoints(connector?: IntegrationConnector | null): string {
+    const endpoints = connector?.runtime?.configuredEndpoints ?? [];
+    return endpoints.length ? endpoints.join(', ') : this.t('integrations.runtime.noEndpoints');
+  }
+
+  protected writebackTitleKey(): string {
+    return this.selectedConnectorCanWriteback()
+      ? 'integrations.writeback.title.send'
+      : 'integrations.writeback.title.simulate';
+  }
+
+  protected writebackSubtitleKey(): string {
+    return this.selectedConnectorCanWriteback()
+      ? 'integrations.writeback.subtitle.send'
+      : 'integrations.writeback.subtitle.simulate';
+  }
+
+  protected writebackActionKey(): string {
+    return this.selectedConnectorCanWriteback()
+      ? 'integrations.writeback.action.send'
+      : 'integrations.writeback.action.simulate';
   }
 
   protected name(item?: { nameEn?: string; nameAr?: string; code?: string } | null): string {
@@ -425,6 +491,12 @@ export class IntegrationsPage implements OnInit {
     if (status === 'healthy') return 'success';
     if (status === 'failed') return 'danger';
     return 'warning';
+  }
+
+  protected writebackKind(status: string): StatusKind {
+    if (status === 'failed') return 'danger';
+    if (status === 'sent') return 'success';
+    return 'info';
   }
 
   protected mappingKind(status: string, required: boolean): StatusKind {

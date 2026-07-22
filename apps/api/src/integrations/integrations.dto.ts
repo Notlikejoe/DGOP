@@ -1,6 +1,7 @@
-import { IsIn, IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
 
-export const CATALOG_ADAPTERS = ['catalog_csv', 'mock_rest'] as const;
+export const CATALOG_ADAPTERS = ['catalog_csv', 'mock_rest', 'webhook_json'] as const;
 export type CatalogAdapter = (typeof CATALOG_ADAPTERS)[number];
 
 export const INTEGRATION_ADAPTERS = [
@@ -70,6 +71,16 @@ export class CreateIntegrationConnectorDto {
   @IsOptional() @IsIn(INTEGRATION_DIRECTIONS) direction?: IntegrationDirectionDto;
   @IsOptional() @IsIn(INTEGRATION_SOURCE_TRUST) sourceTrust?: IntegrationSourceTrustDto;
   @IsOptional() @IsIn(INTEGRATION_ADAPTERS) adapterType?: IntegrationAdapter;
+  @IsOptional() @IsString() baseUrl?: string | null;
+  @IsOptional() @IsString() pullUrl?: string | null;
+  @IsOptional() @IsString() writebackUrl?: string | null;
+  @IsOptional() @IsString() healthUrl?: string | null;
+  @IsOptional() @IsString() authHeaderName?: string | null;
+  @IsOptional() @IsString() authHeaderValueEnv?: string | null;
+  @IsOptional() @IsObject() headers?: Record<string, string>;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1000) @Max(30000) timeoutMs?: number;
+  @IsOptional() @IsBoolean() allowInsecureHttp?: boolean;
+  @IsOptional() @IsBoolean() allowPrivateNetwork?: boolean;
 }
 
 export class ReceiveIntegrationWebhookDto {

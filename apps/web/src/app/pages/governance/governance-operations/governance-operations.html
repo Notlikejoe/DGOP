@@ -280,12 +280,31 @@
             </div>
             <app-status-chip kind="info" [label]="w.notifications.length + ''" />
           </div>
+          @if (w.notificationLayer; as layer) {
+            <div class="notification-layer">
+              <article>
+                <span>{{ t('operations.notifications.immediate') }}</span>
+                <strong>{{ layer.summary.immediate }}</strong>
+              </article>
+              <article>
+                <span>{{ t('operations.notifications.ack') }}</span>
+                <strong>{{ layer.summary.needsAcknowledgement }}</strong>
+              </article>
+              <article>
+                <span>{{ t('operations.notifications.external') }}</span>
+                <strong>{{ layer.summary.externalReady }}</strong>
+              </article>
+            </div>
+          }
           <div class="compact-list">
             @for (row of w.notifications.slice(0, 6); track row.id) {
               <article class="list-row">
                 <div>
                   <strong>{{ row.title }}</strong>
                   <span>{{ row.message }}</span>
+                  <small class="notification-route">
+                    {{ row.deliveryPlan?.priority || '-' }} &middot; {{ channelText(row) }}
+                  </small>
                 </div>
                 <app-status-chip [kind]="statusKind(row.severity)" [label]="row.severity" />
                 @if (row.status === 'unread') {

@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import {
   DataAssetCatalogSyncStatus,
@@ -28,18 +29,26 @@ import {
   catalogStatusAfterImport,
   DEFAULT_INTEGRATION_CONNECTORS,
   adapterMatchesConnectorType,
+  catalogRowsFromExternalPayload,
   defaultAdapterForConnectorType,
+  enterpriseConnectorConfig,
+  enterpriseConnectorRuntime,
+  enterpriseConnectorUrl,
   hasBusinessAssetChanges,
   integrationAdapterProfile,
+  isPrivateConnectorHost,
   MOCK_CATALOG_ROWS,
   nextIntegrationEventStatus,
   normalizeIntegrationEventPayload,
   normalizeCatalogAssetRow,
   reconciliationForIntegrationEvent,
+  validateEnterpriseConnectorUrl,
   type CatalogRowIssue,
+  type EnterpriseConnectorEndpoint,
   type IntegrationAdapterKey,
   type NormalizedCatalogAsset,
 } from './integrations.logic';
+import { isProductionLikeRuntime } from '../common/runtime-safety';
 import {
   CreateIntegrationConnectorDto,
   PreviewCatalogMappingDto,
@@ -54,6 +63,21 @@ type LookupRow = { id: string; code: string };
 type CatalogSyncResult = {
   counter: 'createdRows' | 'updatedRows' | 'unchangedRows';
   warning?: CatalogRowIssue;
+};
+type ExternalConnectorResult = {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  body: unknown;
+  durationMs: number;
+  endpoint: string;
+};
+type ConnectorWithConfig = {
+  id: string;
+  code: string;
+  type: IntegrationConnectorType;
+  sourceTrust: IntegrationSourceTrust;
+  configJson?: Prisma.JsonValue | null;
 };
 
 const DEFAULT_CATALOG_CONNECTOR_CODE = 'CATALOG-MVP';
@@ -343,6 +367,163 @@ export class IntegrationsService implements OnModuleInit {
     return integrationAdapterProfile(this.connectorAdapterType(connector)).defaultEventType;
   }
 
+  private privateNetworkConnectorsAllowed(): boolean {
+    return process.env.DGOP_CONNECTOR_ALLOW_PRIVATE_NETWORKS === 'true';
+  }
+
+  private insecureHttpConnectorsAllowed(): boolean {
+    return process.env.NODE_ENV !== 'production' || process.env.DGOP_CONNECTOR_ALLOW_HTTP === 'true';
+  }
+
+  private connectorAllowedHostPatterns(): string[] {
+    return (process.env.DGOP_CONNECTOR_ALLOWED_HOSTS ?? '')
+      .split(',')
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private connectorHostAllowed(hostname: string): boolean {
+    const host = hostname.trim().replace(/^\[(.*)\]$/u, '$1').toLowerCase();
+    const patterns = this.connectorAllowedHostPatterns();
+    if (!patterns.length) return !isProductionLikeRuntime();
+    return patterns.some((pattern) => {
+      if (pattern === '*' || pattern.includes('://')) return false;
+      if (pattern.startsWith('*.')) {
+        const suffix = pattern.slice(1);
+        return host.endsWith(suffix) && host.length > suffix.length;
+      }
+      return host === pattern;
+    });
+  }
+
+  private buildConnectorConfig(dto: CreateIntegrationConnectorDto, adapterType: IntegrationAdapterKey): Prisma.InputJsonValue {
+    const base: Record<string, unknown> = {
+      adapterType,
+      defaultEventType: integrationAdapterProfile(adapterType).defaultEventType,
+    };
+    for (const key of ['baseUrl', 'pullUrl', 'writebackUrl', 'healthUrl', 'authHeaderName', 'authHeaderValueEnv'] as const) {
+      const value = dto[key]?.trim();
+      if (value) base[key] = value;
+    }
+    if (dto.headers && typeof dto.headers === 'object') base.headers = dto.headers;
+    if (dto.timeoutMs != null) base.timeoutMs = dto.timeoutMs;
+    if (dto.allowInsecureHttp != null) base.allowInsecureHttp = dto.allowInsecureHttp;
+    if (dto.allowPrivateNetwork != null) base.allowPrivateNetwork = dto.allowPrivateNetwork;
+    const normalized = enterpriseConnectorConfig(base);
+    return {
+      adapterType,
+      defaultEventType: integrationAdapterProfile(adapterType).defaultEventType,
+      ...normalized,
+    } as unknown as Prisma.InputJsonValue;
+  }
+
+  private connectorRuntime(connector: {
+    type: IntegrationConnectorType;
+    sourceTrust: IntegrationSourceTrust;
+    configJson?: Prisma.JsonValue | null;
+  }) {
+    return enterpriseConnectorRuntime(
+      this.connectorAdapterType(connector),
+      connector.sourceTrust,
+      connector.configJson,
+    );
+  }
+
+  private connectorRequestHeaders(configJson: Prisma.JsonValue | null | undefined, hasBody: boolean): Record<string, string> {
+    const config = enterpriseConnectorConfig(configJson);
+    const headers: Record<string, string> = {
+      accept: 'application/json, text/csv;q=0.9, */*;q=0.5',
+      ...config.headers,
+    };
+    if (hasBody) headers['content-type'] = 'application/json';
+    if (config.authHeaderName && config.authHeaderValueEnv) {
+      const secret = process.env[config.authHeaderValueEnv]?.trim();
+      if (!secret) throw new BadRequestException('External connector auth environment variable is not configured');
+      headers[config.authHeaderName] = secret;
+    }
+    return headers;
+  }
+
+  private async connectorHostAddresses(hostname: string): Promise<Array<{ address: string; family: number }>> {
+    return lookup(hostname, { all: true, verbatim: true });
+  }
+
+  private async assertEnterpriseConnectorUrl(configJson: Prisma.JsonValue | null | undefined, endpoint: EnterpriseConnectorEndpoint): Promise<string> {
+    const config = enterpriseConnectorConfig(configJson);
+    const url = enterpriseConnectorUrl(config, endpoint);
+    const issues = validateEnterpriseConnectorUrl(url, {
+      allowInsecureHttp: config.allowInsecureHttp || this.insecureHttpConnectorsAllowed(),
+      allowPrivateNetwork: config.allowPrivateNetwork || this.privateNetworkConnectorsAllowed(),
+    });
+    if (issues.length) throw new BadRequestException(issues.join('; '));
+    const parsed = new URL(url as string);
+    if (!this.connectorHostAllowed(parsed.hostname)) {
+      throw new BadRequestException('Connector endpoint host is not allowed by DGOP_CONNECTOR_ALLOWED_HOSTS');
+    }
+    if (!config.allowPrivateNetwork && !this.privateNetworkConnectorsAllowed()) {
+      const addresses = await this.connectorHostAddresses(parsed.hostname);
+      if (addresses.length === 0) {
+        throw new BadRequestException('Connector endpoint host could not be resolved safely');
+      }
+      if (addresses.some((entry) => isPrivateConnectorHost(entry.address))) {
+        throw new BadRequestException('Private connector endpoint requires explicit private-network allowance');
+      }
+    }
+    return url as string;
+  }
+
+  private async callEnterpriseConnector(
+    connector: ConnectorWithConfig,
+    endpoint: EnterpriseConnectorEndpoint,
+    options: { method?: 'GET' | 'POST'; payload?: unknown } = {},
+  ): Promise<ExternalConnectorResult> {
+    const runtime = this.connectorRuntime(connector);
+    if (runtime.mode !== 'external_http') throw new BadRequestException('Connector is not configured for external HTTP calls');
+    const url = await this.assertEnterpriseConnectorUrl(connector.configJson, endpoint);
+    const config = enterpriseConnectorConfig(connector.configJson);
+    const controller = new AbortController();
+    const started = Date.now();
+    const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: options.method ?? (options.payload == null ? 'GET' : 'POST'),
+        headers: this.connectorRequestHeaders(connector.configJson, options.payload != null),
+        body: options.payload == null ? undefined : JSON.stringify(options.payload),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      let body: unknown = text;
+      const contentType = response.headers.get('content-type') ?? '';
+      if (text && contentType.toLowerCase().includes('json')) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = text;
+        }
+      }
+      return {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        body: redactSensitiveJson(body),
+        durationMs: Date.now() - started,
+        endpoint,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'External connector call failed';
+      return {
+        ok: false,
+        status: 0,
+        statusText: message,
+        body: { message },
+        durationMs: Date.now() - started,
+        endpoint,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private webhookTokenIsValid(token?: string | null): boolean {
     const expected = process.env.DGOP_WEBHOOK_TOKEN?.trim();
     const received = token?.trim();
@@ -484,6 +665,8 @@ export class IntegrationsService implements OnModuleInit {
       failedBatches,
       openErrors,
       simulatedWritebacks,
+      sentWritebacks,
+      failedWritebacks,
       failedEvents,
       deadLetterEvents,
       retryReadyEvents,
@@ -514,6 +697,12 @@ export class IntegrationsService implements OnModuleInit {
         }),
         this.prisma.integrationWritebackLog.count({
           where: { status: IntegrationWritebackStatus.simulated, ...this.assetRelationWhere(assetIds) },
+        }),
+        this.prisma.integrationWritebackLog.count({
+          where: { status: IntegrationWritebackStatus.sent, ...this.assetRelationWhere(assetIds) },
+        }),
+        this.prisma.integrationWritebackLog.count({
+          where: { status: IntegrationWritebackStatus.failed, ...this.assetRelationWhere(assetIds) },
         }),
         this.prisma.integrationEvent.count({
           where: { status: { in: [IntegrationEventStatus.failed, IntegrationEventStatus.retry_scheduled] }, ...eventWhere },
@@ -548,7 +737,10 @@ export class IntegrationsService implements OnModuleInit {
       batches,
       failedBatches,
       openErrors,
+      writebacks: simulatedWritebacks + sentWritebacks + failedWritebacks,
       simulatedWritebacks,
+      sentWritebacks,
+      failedWritebacks,
       failedEvents,
       deadLetterEvents,
       retryReadyEvents,
@@ -562,12 +754,13 @@ export class IntegrationsService implements OnModuleInit {
     const assetIds = await this.visibleAssetIds(roleCodes);
     const connectors = await this.prisma.integrationConnector.findMany({
       where: { deletedAt: null },
-      select: connectorSafeSelect,
+      select: { ...connectorSafeSelect, configJson: true },
       orderBy: [{ type: 'asc' }, { code: 'asc' }],
     });
     return Promise.all(
-      connectors.map(async (connector) => ({
+      connectors.map(async ({ configJson, ...connector }) => ({
         ...connector,
+        runtime: this.connectorRuntime({ ...connector, configJson }),
         _count: await this.connectorCounts(connector.id, assetIds),
       })),
     );
@@ -706,6 +899,16 @@ export class IntegrationsService implements OnModuleInit {
     if (!adapterMatchesConnectorType(type, adapterType)) {
       throw new BadRequestException('Integration adapter does not match connector type');
     }
+    const configJson = this.buildConnectorConfig(dto, adapterType);
+    const sourceTrust = (dto.sourceTrust ?? IntegrationSourceTrust.authoritative) as IntegrationSourceTrust;
+    const config = enterpriseConnectorConfig(configJson);
+    for (const endpoint of enterpriseConnectorRuntime(adapterType, sourceTrust, configJson).configuredEndpoints) {
+      const issues = validateEnterpriseConnectorUrl(enterpriseConnectorUrl(config, endpoint), {
+        allowInsecureHttp: config.allowInsecureHttp || this.insecureHttpConnectorsAllowed(),
+        allowPrivateNetwork: config.allowPrivateNetwork || this.privateNetworkConnectorsAllowed(),
+      });
+      if (issues.length) throw new BadRequestException(issues.join('; '));
+    }
     const connector = await this.prisma.integrationConnector.create({
       data: {
         code: dto.code,
@@ -715,11 +918,8 @@ export class IntegrationsService implements OnModuleInit {
         type,
         direction: (dto.direction ?? IntegrationDirection.bidirectional) as IntegrationDirection,
         status: IntegrationConnectorStatus.warning,
-        sourceTrust: (dto.sourceTrust ?? IntegrationSourceTrust.authoritative) as IntegrationSourceTrust,
-        configJson: {
-          adapterType,
-          defaultEventType: integrationAdapterProfile(adapterType).defaultEventType,
-        } as Prisma.InputJsonValue,
+        sourceTrust,
+        configJson,
         createdBy: actor,
       },
       include: connectorInclude,
@@ -734,18 +934,62 @@ export class IntegrationsService implements OnModuleInit {
     return connector;
   }
 
+  async testConnector(id: string, actor: string) {
+    const connector = await this.prisma.integrationConnector.findFirst({
+      where: { id, deletedAt: null, isActive: true },
+      select: { id: true, code: true, type: true, sourceTrust: true, configJson: true },
+    });
+    if (!connector) throw new NotFoundException('integration connector not found');
+    const runtime = this.connectorRuntime(connector);
+    if (!runtime.canHealthCheck) {
+      throw new BadRequestException('Connector does not have a real health endpoint configured');
+    }
+    const result = await this.callEnterpriseConnector(connector, 'health', { method: 'GET' });
+    const status = result.ok ? IntegrationConnectorStatus.healthy : IntegrationConnectorStatus.failed;
+    await this.prisma.integrationConnector.update({
+      where: { id: connector.id },
+      data: {
+        status,
+        lastRunAt: new Date(),
+        lastSuccessAt: result.ok ? new Date() : undefined,
+        lastError: result.ok ? null : `${result.status || 'network'} ${result.statusText}`,
+      },
+    });
+    await this.audit.log({
+      actor,
+      action: 'integration_connector.health_check',
+      entityType: 'integration_connector',
+      entityId: connector.id,
+      metadata: {
+        connectorCode: connector.code,
+        ok: result.ok,
+        status: result.status,
+        durationMs: result.durationMs,
+      },
+    });
+    return {
+      connectorId: connector.id,
+      connectorCode: connector.code,
+      ok: result.ok,
+      status: result.status,
+      statusText: result.statusText,
+      durationMs: result.durationMs,
+      runtime,
+    };
+  }
+
   async previewCatalog(dto: PreviewCatalogMappingDto) {
-    const rows = this.rowsFromAdapter(dto.adapterType, dto.csv);
+    const connector = dto.connectorId ? await this.resolveCatalogConnector(dto.connectorId, 'preview') : null;
+    const rows = await this.rowsFromAdapter(dto.adapterType, dto.csv, connector);
     if (!rows.length) throw new BadRequestException('Catalog source has no data rows');
     return catalogMappingPreview(rows);
   }
 
   async runCatalogSync(roleCodes: string[], dto: RunCatalogSyncDto, actor: string) {
     await this.assertCatalogSyncScope(roleCodes);
-    const rows = this.rowsFromAdapter(dto.adapterType, dto.csv);
-    if (!rows.length) throw new BadRequestException('Catalog source has no data rows');
-
     const connector = await this.resolveCatalogConnector(dto.connectorId, actor);
+    const rows = await this.rowsFromAdapter(dto.adapterType, dto.csv, connector);
+    if (!rows.length) throw new BadRequestException('Catalog source has no data rows');
     const preview = catalogMappingPreview(rows);
     const refs = await this.referenceMaps();
     const now = new Date();
@@ -756,7 +1000,7 @@ export class IntegrationsService implements OnModuleInit {
         data: {
           code: batchCode,
           connectorId: connector.id,
-          sourceName: dto.sourceName ?? (dto.adapterType === 'mock_rest' ? 'Mock catalog REST' : 'Catalog CSV'),
+          sourceName: dto.sourceName ?? this.catalogSourceName(dto.adapterType, connector.code),
           adapterType: dto.adapterType as IntegrationAdapterType,
           status: IntegrationBatchStatus.running,
           triggeredBy: actor,
@@ -915,6 +1159,80 @@ export class IntegrationsService implements OnModuleInit {
     });
     if (!asset) throw new NotFoundException('data asset not found');
     const payload = buildCatalogWritebackPayload(asset);
+    const runtime = this.connectorRuntime(connector);
+    if (runtime.canWriteback) {
+      const result = await this.callEnterpriseConnector(connector, 'writeback', { method: 'POST', payload });
+      const writebackStatus = result.ok ? IntegrationWritebackStatus.sent : IntegrationWritebackStatus.failed;
+      const log = await this.prisma.$transaction(async (tx) => {
+        await tx.dataAsset.update({
+          where: { id: asset.id },
+          data: {
+            catalogSource: connector.code,
+            catalogSyncStatus: result.ok ? DataAssetCatalogSyncStatus.synced : DataAssetCatalogSyncStatus.error,
+            catalogWritebackStatus: writebackStatus,
+            catalogLastSyncedAt: new Date(),
+          },
+        });
+        await tx.integrationConnector.update({
+          where: { id: connector.id },
+          data: {
+            status: result.ok ? IntegrationConnectorStatus.healthy : IntegrationConnectorStatus.failed,
+            lastRunAt: new Date(),
+            lastSuccessAt: result.ok ? new Date() : undefined,
+            lastError: result.ok ? null : `${result.status || 'network'} ${result.statusText}`,
+          },
+        });
+        const log = await tx.integrationWritebackLog.create({
+          data: {
+            connectorId: connector.id,
+            assetId: asset.id,
+            status: writebackStatus,
+            simulated: false,
+            payloadJson: payload as Prisma.InputJsonValue,
+            resultJson: {
+              accepted: result.ok,
+              simulated: false,
+              target: connector.code,
+              httpStatus: result.status,
+              durationMs: result.durationMs,
+              response: result.body,
+            } as Prisma.InputJsonValue,
+            message: result.ok
+              ? dto.message ?? 'Write-back sent to external catalog.'
+              : dto.message ?? `External catalog write-back failed: ${result.statusText}`,
+            actor,
+          },
+          include: writebackInclude,
+        });
+        await this.createReconciliationReport(tx, {
+          connectorId: connector.id,
+          status: result.ok ? IntegrationReconciliationStatus.healthy : IntegrationReconciliationStatus.failed,
+          totalRecords: 1,
+          matchedRecords: result.ok ? 1 : 0,
+          createdRecords: 0,
+          updatedRecords: result.ok ? 1 : 0,
+          failedRecords: result.ok ? 0 : 1,
+          orphanedRecords: 0,
+          missingRecords: 0,
+          summaryJson: {
+            writebackLogId: log.id,
+            assetCode: asset.code,
+            httpStatus: result.status,
+            message: result.statusText,
+          },
+          createdBy: actor,
+        });
+        return log;
+      });
+      await this.audit.log({
+        actor,
+        action: result.ok ? 'integration.catalog_writeback.send' : 'integration.catalog_writeback.failed',
+        entityType: 'data_asset',
+        entityId: asset.id,
+        metadata: { connectorCode: connector.code, assetCode: asset.code, httpStatus: result.status },
+      });
+      return log;
+    }
     const log = await this.prisma.$transaction(async (tx) => {
       await tx.dataAsset.update({
         where: { id: asset.id },
@@ -1077,10 +1395,36 @@ export class IntegrationsService implements OnModuleInit {
     return processed;
   }
 
-  private rowsFromAdapter(adapterType: string, csv?: string | null): Record<string, string>[] {
+  private async rowsFromAdapter(
+    adapterType: string,
+    csv?: string | null,
+    connector?: ConnectorWithConfig | null,
+  ): Promise<Record<string, string>[]> {
     if (adapterType === 'mock_rest') return MOCK_CATALOG_ROWS;
+    if (adapterType === 'webhook_json') {
+      if (!connector) throw new BadRequestException('External catalog connector is required');
+      const result = await this.callEnterpriseConnector(connector, 'pull', { method: 'GET' });
+      if (!result.ok) {
+        await this.prisma.integrationConnector.update({
+          where: { id: connector.id },
+          data: {
+            status: IntegrationConnectorStatus.failed,
+            lastRunAt: new Date(),
+            lastError: `${result.status || 'network'} ${result.statusText}`,
+          },
+        });
+        throw new BadRequestException(`External catalog connector failed: ${result.statusText}`);
+      }
+      return catalogRowsFromExternalPayload(result.body);
+    }
     if (!csv?.trim()) throw new BadRequestException('Catalog CSV is required');
     return parseCsv(csv);
+  }
+
+  private catalogSourceName(adapterType: string, connectorCode: string): string {
+    if (adapterType === 'mock_rest') return 'Mock catalog REST';
+    if (adapterType === 'webhook_json') return `${connectorCode} external HTTP`;
+    return 'Catalog CSV';
   }
 
   private async resolveCatalogConnector(connectorId: string | null | undefined, actor: string) {

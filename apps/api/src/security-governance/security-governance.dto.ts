@@ -8,10 +8,12 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ABAC_ACTIONS, ABAC_NETWORK_ZONES, ABAC_PURPOSES } from './security-governance.logic';
 
 export const MASKING_TECHNIQUES = [
   'static_masking',
@@ -47,7 +49,7 @@ export class CreateRoleDataAccessMapDto {
   @IsOptional() @IsBoolean() personalDataAllowed?: boolean;
   @IsOptional() @IsBoolean() approvalRequired?: boolean;
   @IsOptional() @IsString() businessJustification?: string | null;
-  @IsOptional() @IsInt() @Min(1) reviewCadenceDays?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(366) reviewCadenceDays?: number;
 }
 
 export class AccessReviewItemDraftDto {
@@ -94,7 +96,12 @@ export class CreateClassificationChangeRequestDto {
 export class SimulateAccessDecisionDto {
   @IsString() @IsNotEmpty() roleId!: string;
   @IsString() @IsNotEmpty() assetId!: string;
-  @IsOptional() @IsString() requestedAction?: string;
+  @IsOptional() @IsIn(ABAC_ACTIONS) requestedAction?: (typeof ABAC_ACTIONS)[number];
+  @IsOptional() @IsIn(ABAC_PURPOSES) purpose?: (typeof ABAC_PURPOSES)[number];
+  @IsOptional() @IsIn(ABAC_NETWORK_ZONES) networkZone?: (typeof ABAC_NETWORK_ZONES)[number];
   @IsOptional() @IsBoolean() personalDataRequested?: boolean;
+  @IsOptional() @IsBoolean() legalBasisConfirmed?: boolean;
+  @IsOptional() @IsBoolean() emergencyAccess?: boolean;
+  @IsOptional() @IsString() approvalTicketId?: string | null;
+  @IsOptional() @IsString() businessJustification?: string | null;
 }
-

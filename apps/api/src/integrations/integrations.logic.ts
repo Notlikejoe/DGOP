@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { DataAssetCatalogSyncStatus } from '@prisma/client';
 
 export const CATALOG_REQUIRED_FIELDS = ['code', 'nameEn', 'nameAr'] as const;
@@ -378,6 +379,57 @@ export interface IntegrationAdapterProfile {
   requiredPayloadFields: string[];
 }
 
+export type EnterpriseConnectorEndpoint = 'pull' | 'writeback' | 'health';
+
+export interface EnterpriseConnectorConfig {
+  baseUrl: string | null;
+  pullUrl: string | null;
+  writebackUrl: string | null;
+  healthUrl: string | null;
+  authHeaderName: string | null;
+  authHeaderValueEnv: string | null;
+  timeoutMs: number;
+  allowInsecureHttp: boolean;
+  allowPrivateNetwork: boolean;
+  headers: Record<string, string>;
+}
+
+export interface EnterpriseConnectorRuntime {
+  mode: 'file' | 'simulated' | 'external_http' | 'webhook_only';
+  canPull: boolean;
+  canWriteback: boolean;
+  canHealthCheck: boolean;
+  configuredEndpoints: EnterpriseConnectorEndpoint[];
+  timeoutMs: number;
+}
+
+const DEFAULT_ENTERPRISE_CONNECTOR_TIMEOUT_MS = 10000;
+const MAX_ENTERPRISE_CONNECTOR_TIMEOUT_MS = 30000;
+const SENSITIVE_HEADER_NAMES = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'api-key',
+  'apikey',
+  'x-auth-token',
+  'proxy-authorization',
+]);
+const FORBIDDEN_CONNECTOR_HEADER_NAMES = new Set([
+  ...SENSITIVE_HEADER_NAMES,
+  'host',
+  'connection',
+  'content-length',
+  'transfer-encoding',
+  'upgrade',
+  'expect',
+  'te',
+  'trailer',
+  'proxy-authenticate',
+  'proxy-connection',
+]);
+const PRIVATE_CONNECTOR_HOST_SUFFIXES = ['.localhost', '.local', '.internal', '.lan', '.home'];
+
 const ADAPTER_PROFILES: Record<IntegrationAdapterKey, IntegrationAdapterProfile> = {
   catalog_csv: {
     adapterType: 'catalog_csv',
@@ -476,6 +528,192 @@ export interface IntegrationEventNormalization {
 
 export function integrationAdapterProfile(adapterType: IntegrationAdapterKey): IntegrationAdapterProfile {
   return ADAPTER_PROFILES[adapterType] ?? ADAPTER_PROFILES.webhook_json;
+}
+
+function connectorConfigRecord(configJson: unknown): Record<string, unknown> {
+  return configJson && typeof configJson === 'object' && !Array.isArray(configJson)
+    ? (configJson as Record<string, unknown>)
+    : {};
+}
+
+function stringConfig(config: Record<string, unknown>, key: string): string | null {
+  const value = config[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function booleanConfig(config: Record<string, unknown>, key: string): boolean {
+  return config[key] === true || config[key] === 'true';
+}
+
+function timeoutConfig(config: Record<string, unknown>): number {
+  const raw = Number(config['timeoutMs'] ?? DEFAULT_ENTERPRISE_CONNECTOR_TIMEOUT_MS);
+  if (!Number.isFinite(raw)) return DEFAULT_ENTERPRISE_CONNECTOR_TIMEOUT_MS;
+  return Math.min(Math.max(Math.floor(raw), 1000), MAX_ENTERPRISE_CONNECTOR_TIMEOUT_MS);
+}
+
+function safeConnectorHeaders(config: Record<string, unknown>): Record<string, string> {
+  const headers = config['headers'];
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return {};
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+    const headerName = key.trim();
+    if (!isSafeConnectorHeaderName(headerName)) continue;
+    if (typeof value === 'string' && value.trim()) result[headerName] = value.trim();
+  }
+  return result;
+}
+
+export function enterpriseConnectorConfig(configJson: unknown): EnterpriseConnectorConfig {
+  const config = connectorConfigRecord(configJson);
+  return {
+    baseUrl: stringConfig(config, 'baseUrl'),
+    pullUrl: stringConfig(config, 'pullUrl') ?? stringConfig(config, 'catalogUrl'),
+    writebackUrl: stringConfig(config, 'writebackUrl'),
+    healthUrl: stringConfig(config, 'healthUrl'),
+    authHeaderName: stringConfig(config, 'authHeaderName'),
+    authHeaderValueEnv: stringConfig(config, 'authHeaderValueEnv'),
+    timeoutMs: timeoutConfig(config),
+    allowInsecureHttp: booleanConfig(config, 'allowInsecureHttp'),
+    allowPrivateNetwork: booleanConfig(config, 'allowPrivateNetwork'),
+    headers: safeConnectorHeaders(config),
+  };
+}
+
+export function enterpriseConnectorUrl(
+  config: EnterpriseConnectorConfig,
+  endpoint: EnterpriseConnectorEndpoint,
+): string | null {
+  if (endpoint === 'pull') return config.pullUrl ?? config.baseUrl;
+  if (endpoint === 'writeback') return config.writebackUrl;
+  return config.healthUrl ?? config.baseUrl ?? config.pullUrl ?? config.writebackUrl;
+}
+
+export function isSafeConnectorHeaderName(headerName: string): boolean {
+  const normalized = headerName.trim().toLowerCase();
+  if (!/^[!#$%&'*+\-.^_`|~0-9a-z]+$/iu.test(normalized)) return false;
+  return !FORBIDDEN_CONNECTOR_HEADER_NAMES.has(normalized);
+}
+
+function normalizedConnectorHost(hostname: string): string {
+  return hostname.trim().replace(/^\[(.*)\]$/u, '$1').toLowerCase();
+}
+
+function isPrivateIpv4(host: string): boolean {
+  const parts = host.split('.').map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = parts;
+  if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  return false;
+}
+
+function isPrivateIpv6(host: string): boolean {
+  const value = host.toLowerCase();
+  if (value === '::' || value === '::1') return true;
+  if (value.startsWith('fc') || value.startsWith('fd')) return true;
+  if (value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb')) return true;
+  if (value.startsWith('ff')) return true;
+  if (value.startsWith('2001:db8')) return true;
+  const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/u);
+  return mapped ? isPrivateIpv4(mapped[1]) : false;
+}
+
+export function isPrivateConnectorHost(hostname: string): boolean {
+  const host = normalizedConnectorHost(hostname);
+  if (!host) return true;
+  if (host === 'localhost' || PRIVATE_CONNECTOR_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
+  const ipVersion = isIP(host);
+  if (ipVersion === 4) return isPrivateIpv4(host);
+  if (ipVersion === 6) return isPrivateIpv6(host);
+  return false;
+}
+
+export function validateEnterpriseConnectorUrl(
+  value: string | null,
+  options: { allowInsecureHttp?: boolean; allowPrivateNetwork?: boolean } = {},
+): string[] {
+  if (!value) return ['Missing connector endpoint URL'];
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return ['Invalid connector endpoint URL'];
+  }
+  if (!['https:', 'http:'].includes(parsed.protocol)) return ['Connector endpoint must use HTTP or HTTPS'];
+  if (parsed.protocol === 'http:' && !options.allowInsecureHttp) {
+    return ['Connector endpoint must use HTTPS unless insecure HTTP is explicitly enabled'];
+  }
+  if (isPrivateConnectorHost(parsed.hostname) && !options.allowPrivateNetwork) {
+    return ['Private connector endpoint requires explicit private-network allowance'];
+  }
+  if (parsed.username || parsed.password) return ['Connector endpoint must not include credentials in the URL'];
+  return [];
+}
+
+export function enterpriseConnectorRuntime(
+  adapterType: IntegrationAdapterKey,
+  sourceTrust: string | null | undefined,
+  configJson: unknown,
+): EnterpriseConnectorRuntime {
+  const config = enterpriseConnectorConfig(configJson);
+  const configuredEndpoints: EnterpriseConnectorEndpoint[] = [];
+  if (enterpriseConnectorUrl(config, 'pull')) configuredEndpoints.push('pull');
+  if (enterpriseConnectorUrl(config, 'writeback')) configuredEndpoints.push('writeback');
+  if (enterpriseConnectorUrl(config, 'health')) configuredEndpoints.push('health');
+  const simulated = sourceTrust === 'simulated' || adapterType.startsWith('mock_') || adapterType === 'mock_rest';
+  const mode =
+    adapterType === 'catalog_csv'
+      ? 'file'
+      : simulated
+        ? 'simulated'
+        : configuredEndpoints.length
+          ? 'external_http'
+          : 'webhook_only';
+  return {
+    mode,
+    canPull: mode === 'external_http' && !!enterpriseConnectorUrl(config, 'pull'),
+    canWriteback: mode === 'external_http' && !!enterpriseConnectorUrl(config, 'writeback'),
+    canHealthCheck: mode === 'external_http' && !!enterpriseConnectorUrl(config, 'health'),
+    configuredEndpoints,
+    timeoutMs: config.timeoutMs,
+  };
+}
+
+function normalizeExternalKey(key: string): string {
+  return key.trim().toLowerCase().replace(/[\s-]/g, '');
+}
+
+export function catalogRowsFromExternalPayload(payload: unknown): Record<string, string>[] {
+  const container = payloadRecord(payload);
+  const rows =
+    Array.isArray(payload)
+      ? payload
+      : Array.isArray(container['rows'])
+        ? container['rows']
+        : Array.isArray(container['assets'])
+          ? container['assets']
+          : Array.isArray(container['data'])
+            ? container['data']
+            : Array.isArray(container['items'])
+              ? container['items']
+              : [];
+  return rows
+    .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object' && !Array.isArray(row))
+    .map((row) => {
+      const normalized: Record<string, string> = {};
+      for (const [key, value] of Object.entries(row)) {
+        const normalizedKey = normalizeExternalKey(key);
+        if (!normalizedKey) continue;
+        if (typeof value === 'string') normalized[normalizedKey] = value;
+        else if (typeof value === 'number' || typeof value === 'boolean') normalized[normalizedKey] = String(value);
+        else if (value == null) normalized[normalizedKey] = '';
+      }
+      return normalized;
+    });
 }
 
 function payloadValue(payload: Record<string, unknown>, keys: string[]): string | null {

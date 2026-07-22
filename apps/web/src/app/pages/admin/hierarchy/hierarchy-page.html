@@ -160,7 +160,7 @@
         <label class="field">
           <span class="field__label">{{ t('crud.code') }}<span class="req">*</span></span>
           <input type="text" class="field__input" name="code"
-            [ngModel]="model().code" (ngModelChange)="setField('code', $event)" />
+            [ngModel]="model().code" (ngModelChange)="setField('code', $event)" [readonly]="!!editingId()" />
         </label>
         <label class="field">
           <span class="field__label">{{ t('crud.nameEn') }}<span class="req">*</span></span>
@@ -194,6 +194,16 @@
             [ngModel]="model().isActive" (ngModelChange)="setField('isActive', $event)" />
           <span class="field__label">{{ t('crud.active') }}</span>
         </label>
+        @if (validationErrors().length) {
+          <div class="validation-panel" role="alert">
+            <strong>{{ t('validation.title') }}</strong>
+            <ul>
+              @for (message of validationErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          </div>
+        }
       </form>
 
       <div footer>

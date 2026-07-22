@@ -9,6 +9,7 @@ import {
   DecideArchitectureReviewDto,
   ReferenceDecisionDto,
   ResolveMdmMatchDto,
+  RunMdmMatchingDto,
   SaveMetadataCertificationDto,
 } from './extended-domains.dto';
 import { ExtendedDomainsService } from './extended-domains.service';
@@ -27,6 +28,12 @@ export class ExtendedDomainsController {
   @RequirePermissions('extended_domains.create')
   createMatch(@Body() dto: CreateMdmMatchDto, @CurrentUser() user: AuthUser) {
     return this.service.createMatch(user.roles, dto, user.email);
+  }
+
+  @Post('mdm/matches/run')
+  @RequirePermissions('extended_domains.create')
+  runMdmMatching(@Body() dto: RunMdmMatchingDto, @CurrentUser() user: AuthUser) {
+    return this.service.runMdmMatching(user.roles, dto, user.email);
   }
 
   @Patch('mdm/matches/:id')

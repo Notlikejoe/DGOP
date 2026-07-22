@@ -78,11 +78,11 @@
         <div class="grid-2">
           <label class="field">
             <span class="field__label">{{ t('rule.field.nameEn') }}<span class="req">*</span></span>
-            <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" />
+            <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" [attr.maxlength]="ruleNameMax" />
           </label>
           <label class="field">
             <span class="field__label">{{ t('rule.field.nameAr') }}<span class="req">*</span></span>
-            <input type="text" class="field__input" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" name="nameAr" dir="rtl" />
+            <input type="text" class="field__input" [ngModel]="draft().nameAr" (ngModelChange)="set('nameAr', $event)" name="nameAr" dir="rtl" [attr.maxlength]="ruleNameMax" />
           </label>
           <label class="field">
             <span class="field__label">{{ t('rule.field.scopeType') }}<span class="req">*</span></span>
@@ -113,13 +113,23 @@
           </label>
           <label class="field">
             <span class="field__label">{{ t('rule.field.priority') }}</span>
-            <input type="number" min="1" class="field__input" [ngModel]="draft().priority" (ngModelChange)="set('priority', $event)" name="priority" />
+            <input type="number" min="1" [attr.max]="rulePriorityMax" class="field__input" [ngModel]="draft().priority" (ngModelChange)="set('priority', $event)" name="priority" />
           </label>
         </div>
         <label class="field">
           <span class="field__label">{{ t('rule.field.description') }}</span>
-          <textarea class="field__input" rows="2" [ngModel]="draft().description" (ngModelChange)="set('description', $event)" name="description"></textarea>
+          <textarea class="field__input" rows="2" [ngModel]="draft().description" (ngModelChange)="set('description', $event)" name="description" [attr.maxlength]="ruleDescriptionMax"></textarea>
         </label>
+        @if (validationErrors().length) {
+          <div class="validation-panel" role="alert">
+            <strong>{{ t('rule.validation.title') }}</strong>
+            <ul>
+              @for (message of validationErrors(); track message) {
+                <li>{{ message }}</li>
+              }
+            </ul>
+          </div>
+        }
       </form>
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>

@@ -12,7 +12,9 @@ import {
   clampScore,
   defaultMatchStatus,
   defaultMatchStep,
+  evaluateMdmMatch,
   isArchitectureDecisionFinal,
+  rankMdmMatches,
   referenceVersionStatus,
 } from '../src/extended-domains/extended-domains.logic';
 
@@ -29,6 +31,84 @@ test('match scoring defaults guide the five-step resolution flow', () => {
   assert.equal(defaultMatchStep(96), MdmResolutionStep.survivorship);
   assert.equal(defaultMatchStep(82), MdmResolutionStep.compare);
   assert.equal(defaultMatchStep(40), MdmResolutionStep.identify);
+});
+
+test('MDM matching engine scores identity, context, and survivorship signals', () => {
+  const result = evaluateMdmMatch(
+    {
+      id: 'asset-1',
+      code: 'CUST-MASTER',
+      nameEn: 'Customer Master Records',
+      description: 'Golden customer profile for CRM and onboarding',
+      domainId: 'domain-customer',
+      domainCode: 'CUSTOMER',
+      systemId: 'crm',
+      systemCode: 'CRM',
+      capabilityId: 'cap-onboarding',
+      classificationId: 'restricted',
+      externalCatalogId: 'crm.customer.master',
+      catalogSource: 'catalog-a',
+      catalogTrustLevel: 'authoritative',
+      subjects: ['CUSTOMER'],
+    },
+    {
+      id: 'asset-2',
+      code: 'CUSTOMER-PROFILE',
+      nameEn: 'Customer Profile Master',
+      description: 'CRM customer onboarding profile',
+      domainId: 'domain-customer',
+      domainCode: 'CUSTOMER',
+      systemId: 'crm',
+      systemCode: 'CRM',
+      capabilityId: 'cap-onboarding',
+      classificationId: 'restricted',
+      externalCatalogId: 'crm.customer.master',
+      catalogSource: 'catalog-a',
+      catalogTrustLevel: 'trusted',
+      subjects: ['CUSTOMER'],
+    },
+  );
+
+  assert.ok(result);
+  assert.ok(result.matchScore >= 85);
+  assert.equal(result.status, MdmMatchStatus.under_review);
+  assert.equal(result.resolutionStep, MdmResolutionStep.survivorship);
+  assert.equal(result.proposedGoldenRecordJson['preferredRecordAssetId'], 'asset-1');
+  assert.ok(result.factors.some((factor) => factor.key === 'system_catalog' && factor.score === 100));
+});
+
+test('rankMdmMatches filters below-threshold pairs and ignores self matches', () => {
+  const source = {
+    id: 'asset-1',
+    code: 'FIN-LEDGER',
+    nameEn: 'Finance Ledger',
+    domainId: 'finance',
+    catalogTrustLevel: 'trusted',
+  };
+  const results = rankMdmMatches(
+    [source],
+    [
+      source,
+      {
+        id: 'asset-2',
+        code: 'HR-TRAINING',
+        nameEn: 'Training Attendance',
+        domainId: 'hr',
+        catalogTrustLevel: 'observed',
+      },
+      {
+        id: 'asset-3',
+        code: 'FIN-LEDGER-COPY',
+        nameEn: 'Finance Ledger Extract',
+        domainId: 'finance',
+        catalogTrustLevel: 'observed',
+      },
+    ],
+    { threshold: 60, limit: 5 },
+  );
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].candidateAssetId, 'asset-3');
 });
 
 test('metadata certification requires scores and operating checks', () => {
@@ -133,6 +213,128 @@ test('restricted users cannot create unanchored reference data versions', async 
       ),
     /Reference data versions need a visible asset or domain/,
   );
+  assert.equal(persisted, false);
+});
+
+test('runMdmMatching creates governed candidates with engine explanations', async () => {
+  let assetQuery = 0;
+  let persisted: any;
+  let auditMetadata: any;
+  const assetRow = (id: string, code: string, nameEn: string, different = false) => ({
+    id,
+    code,
+    nameEn,
+    nameAr: nameEn,
+    description: different ? 'Training attendance and course completion log' : 'Customer master profile used by CRM onboarding',
+    ownerName: different ? 'HR Office' : 'Customer Office',
+    domainId: different ? 'domain-hr' : 'domain-customer',
+    orgUnitId: different ? 'org-hr' : 'org-customer',
+    systemId: different ? 'lms' : 'crm',
+    capabilityId: different ? 'cap-training' : 'cap-onboarding',
+    classificationId: different ? 'internal' : 'restricted',
+    externalCatalogId: id === 'asset-1' || id === 'asset-2' ? 'crm.customer.master' : null,
+    catalogSource: different ? 'catalog-b' : 'catalog-a',
+    catalogTrustLevel: id === 'asset-1' ? 'authoritative' : 'trusted',
+    domain: different ? { id: 'domain-hr', code: 'HR' } : { id: 'domain-customer', code: 'CUSTOMER' },
+    system: different ? { id: 'lms', code: 'LMS' } : { id: 'crm', code: 'CRM' },
+    subjects: [{ dataSubject: different ? { code: 'EMPLOYEE', nameEn: 'Employee', nameAr: 'Employee' } : { code: 'CUSTOMER', nameEn: 'Customer', nameAr: 'Customer' } }],
+  });
+  const service = new ExtendedDomainsService(
+    {
+      dataAsset: {
+        findMany: async () => {
+          assetQuery++;
+          return assetQuery === 1
+            ? [assetRow('asset-1', 'CUST-MASTER', 'Customer Master Records')]
+            : [
+                assetRow('asset-2', 'CUSTOMER-PROFILE', 'Customer Profile Master'),
+                assetRow('asset-3', 'HR-TRAINING', 'Training Attendance', true),
+              ];
+        },
+      },
+      mdmMatchCandidate: {
+        findMany: async () => [],
+        count: async () => 0,
+        upsert: async (args: any) => {
+          persisted = args.create;
+          return { id: 'match-1', ...args.create };
+        },
+      },
+    } as never,
+    {
+      log: async (entry: any) => {
+        auditMetadata = entry.metadata;
+      },
+    } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.runMdmMatching(
+    ['system_admin'],
+    { sourceAssetId: 'asset-1', threshold: 60, limit: 5 },
+    'admin@dgop.local',
+  );
+
+  assert.equal(result.createdCount, 1);
+  assert.equal(persisted.sourceAssetId, 'asset-1');
+  assert.equal(persisted.candidateAssetId, 'asset-2');
+  assert.ok(persisted.matchScore >= 85);
+  assert.equal(persisted.survivorshipRulesJson.engine, 'mdm_asset_match_v1');
+  assert.equal(persisted.proposedGoldenRecordJson.preferredRecordAssetId, 'asset-1');
+  assert.equal(auditMetadata.createdCount, 1);
+});
+
+test('runMdmMatching skips existing reverse-direction match candidates', async () => {
+  let persisted = false;
+  const assetRow = (id: string) => ({
+    id,
+    code: id === 'asset-1' ? 'FIN-LEDGER' : 'FIN-LEDGER-COPY',
+    nameEn: id === 'asset-1' ? 'Finance Ledger' : 'Finance Ledger Copy',
+    nameAr: 'Finance Ledger',
+    description: 'Finance ledger master data',
+    ownerName: 'Finance Office',
+    domainId: 'finance',
+    orgUnitId: 'finance-org',
+    systemId: 'erp',
+    capabilityId: 'cap-finance',
+    classificationId: 'restricted',
+    externalCatalogId: null,
+    catalogSource: 'catalog-a',
+    catalogTrustLevel: 'trusted',
+    domain: { id: 'finance', code: 'FIN' },
+    system: { id: 'erp', code: 'ERP' },
+    subjects: [],
+  });
+  let assetQuery = 0;
+  const service = new ExtendedDomainsService(
+    {
+      dataAsset: {
+        findMany: async () => {
+          assetQuery++;
+          return assetQuery === 1 ? [assetRow('asset-1')] : [assetRow('asset-2')];
+        },
+      },
+      mdmMatchCandidate: {
+        findMany: async () => [{ sourceAssetId: 'asset-2', candidateAssetId: 'asset-1' }],
+        upsert: async () => {
+          persisted = true;
+          return {};
+        },
+      },
+    } as never,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.runMdmMatching(
+    ['system_admin'],
+    { sourceAssetId: 'asset-1', threshold: 60, limit: 5 },
+    'admin@dgop.local',
+  );
+
+  assert.equal(result.recommendedCount, 1);
+  assert.equal(result.createdCount, 0);
+  assert.equal(result.skippedExistingCount, 1);
   assert.equal(persisted, false);
 });
 

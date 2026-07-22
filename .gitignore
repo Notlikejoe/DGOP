@@ -17,6 +17,7 @@ coverage/
 __MACOSX/
 .DS_Store
 Thumbs.db
+_analysis/
 storage/
 tools/cloudflared
 tools/cloudflared.exe

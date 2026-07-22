@@ -827,6 +827,11 @@ model WorkflowTemplate {
   trigger        String                       @default("manual")
   domainId       String?
   defaultSlaDays Int                          @default(5)
+  bpmnXml        String?
+  designerJson   Json?
+  designerVersion Int                         @default(1)
+  lastPublishedAt DateTime?
+  lastPublishedBy String?
   isSystem       Boolean                      @default(false)
   isActive       Boolean                      @default(true)
   deletedAt      DateTime?
@@ -837,11 +842,32 @@ model WorkflowTemplate {
   stages         WorkflowTemplateStage[]
   transitions    WorkflowTemplateTransition[]
   cases          WorkflowCase[]
+  versions       WorkflowTemplateVersion[]
 
   @@index([caseType])
   @@index([domainId])
   @@index([isActive])
   @@map("workflow_templates")
+}
+
+/// Versioned BPMN snapshots for workflow templates. Publishing creates an
+/// immutable snapshot so administrators can trace how a route changed.
+model WorkflowTemplateVersion {
+  id             String           @id @default(uuid())
+  templateId     String
+  version        Int
+  source         String           @default("designer")
+  changeSummary  String?
+  bpmnXml        String
+  designerJson   Json?
+  validationJson Json?
+  createdBy      String
+  createdAt      DateTime         @default(now())
+  template       WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@map("workflow_template_versions")
 }
 
 /// A visible node in a workflow route. Stages can create default tasks when a
@@ -854,9 +880,18 @@ model WorkflowTemplateStage {
   nameAr           String
   description      String?
   kind             String                       @default("review")
+  nodeType         String                       @default("user_task")
   taskType         String                       @default("review")
+  assignmentStrategy String                     @default("role")
   assigneeRoleCode String?
   dueDays          Int                          @default(2)
+  formSchemaJson   Json?
+  slaConfigJson    Json?
+  notificationRulesJson Json?
+  evidenceRequirementsJson Json?
+  automationConfigJson Json?
+  gatewayConfigJson Json?
+  parallelGroup    String?
   sortOrder        Int                          @default(0)
   isStart          Boolean                      @default(false)
   isDecision       Boolean                      @default(false)
@@ -882,8 +917,13 @@ model WorkflowTemplateTransition {
   labelEn     String
   labelAr     String
   decision    String?
+  conditionExpression String?
+  conditionJson Json?
   sortOrder   Int                   @default(0)
   isHappyPath Boolean               @default(true)
+  isActive    Boolean               @default(true)
+  retiredAt   DateTime?
+  retiredBy   String?
   template    WorkflowTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
   fromStage   WorkflowTemplateStage @relation("WorkflowTransitionFrom", fields: [fromStageId], references: [id], onDelete: Cascade)
   toStage     WorkflowTemplateStage @relation("WorkflowTransitionTo", fields: [toStageId], references: [id], onDelete: Cascade)
@@ -891,6 +931,7 @@ model WorkflowTemplateTransition {
   @@index([templateId])
   @@index([fromStageId])
   @@index([toStageId])
+  @@index([isActive])
   @@map("workflow_template_transitions")
 }
 

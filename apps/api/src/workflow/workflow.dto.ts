@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -26,6 +27,33 @@ export class WorkflowRoutePreviewDto {
   @IsOptional() @IsString() assetId?: string | null;
   @IsOptional() @IsString() domainId?: string | null;
   @IsOptional() @IsString() templateId?: string | null;
+}
+
+export class CreateWorkflowTemplateDto {
+  @IsOptional() @IsString() code?: string | null;
+  @IsIn(WORKFLOW_CASE_TYPES) caseType!: string;
+  @IsString() @IsNotEmpty() nameEn!: string;
+  @IsOptional() @IsString() nameAr?: string | null;
+  @IsOptional() @IsString() description?: string | null;
+  @IsOptional() @IsString() trigger?: string | null;
+  @IsOptional() @IsString() domainId?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(365) defaultSlaDays?: number;
+  @IsOptional() @IsString() bpmnXml?: string | null;
+}
+
+export class SaveWorkflowBpmnDto {
+  @IsString() @IsNotEmpty() bpmnXml!: string;
+  @IsOptional() @IsString() changeSummary?: string | null;
+}
+
+export class WorkflowDesignerSimulationDto {
+  @IsOptional() @IsString() bpmnXml?: string | null;
+  @IsOptional() @IsObject() decisions?: Record<string, string | null>;
+}
+
+export class WorkflowDesignerMigrationPreviewDto {
+  @IsOptional() @IsString() bpmnXml?: string | null;
+  @IsOptional() @IsString() changeSummary?: string | null;
 }
 
 export class ListWorkflowCasesDto {

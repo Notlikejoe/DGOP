@@ -38,6 +38,15 @@ interface Workspace {
   };
   taskSignals: any[];
   notifications: any[];
+  notificationLayer?: {
+    summary: {
+      immediate: number;
+      needsAcknowledgement: number;
+      externalReady: number;
+      byChannel: Record<string, number>;
+      byPriority: Record<string, number>;
+    };
+  };
   escalations: any[];
   templates: any[];
   occurrences: any[];
@@ -303,6 +312,11 @@ export class GovernanceOperationsPage implements OnInit {
 
   protected markRead(row: any): void {
     this.patch(`/api/governance-operations/notifications/${row.id}/read`, {});
+  }
+
+  protected channelText(row: any): string {
+    const channels = row?.deliveryPlan?.channels;
+    return Array.isArray(channels) && channels.length ? channels.join(', ') : '-';
   }
 
   protected updateEscalation(row: any, status: string): void {

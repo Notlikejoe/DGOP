@@ -14,8 +14,14 @@ import {
 } from './assignments.dto';
 import {
   confidenceLabel,
+  isAssignmentApprovalStatus,
+  isAssignmentStatusFilter,
+  isAssignmentTargetType,
+  normalizeOwnershipText,
   recommendationConfidence,
   recommendationReasons,
+  validateOwnershipText,
+  validateOwnershipWindow,
 } from './assignments.logic';
 
 const DATA_OWNER_CODE = 'data_owner';
@@ -36,6 +42,15 @@ interface NameRef {
   nameAr: string;
 }
 
+interface OwnershipScopeContext {
+  assetIds: Set<string> | 'all';
+  domainIds: Set<string> | 'all';
+  capabilityIds: Set<string> | 'all';
+  subjectIds: Set<string> | 'all';
+  orgUnitIds: Set<string> | 'all';
+  systemIds: Set<string> | 'all';
+}
+
 @Injectable()
 export class AssignmentsService {
   constructor(
@@ -49,13 +64,20 @@ export class AssignmentsService {
    * Resolves the set of asset and domain ids the requester may see. `'all'` means unrestricted
    * on that dimension. Used to keep ownership lists and the exception queue within data scope.
    */
-  private async scopeContext(
-    roleCodes: string[],
-  ): Promise<{ assetIds: Set<string> | 'all'; domainIds: Set<string> | 'all' }> {
+  private async scopeContext(roleCodes: string[]): Promise<OwnershipScopeContext> {
     const scope = await this.scope.resolve(roleCodes);
     const unrestricted =
       scope.orgUnits === 'all' && scope.domains === 'all' && scope.maxClassRank == null;
-    if (unrestricted) return { assetIds: 'all', domainIds: 'all' };
+    if (unrestricted) {
+      return {
+        assetIds: 'all',
+        domainIds: 'all',
+        capabilityIds: 'all',
+        subjectIds: 'all',
+        orgUnitIds: 'all',
+        systemIds: 'all',
+      };
+    }
     const where: Record<string, unknown> = {};
     if (scope.orgUnits !== 'all') where['orgUnitId'] = { in: scope.orgUnits };
     if (scope.domains !== 'all') where['domainId'] = { in: scope.domains };
@@ -67,23 +89,44 @@ export class AssignmentsService {
     }
     const assets = await this.prisma.dataAsset.findMany({
       where: { AND: [{ deletedAt: null }, where] },
-      select: { id: true },
+      select: {
+        id: true,
+        domainId: true,
+        capabilityId: true,
+        orgUnitId: true,
+        systemId: true,
+        subjects: { select: { dataSubjectId: true } },
+      },
     });
+    const fromAssets = (key: 'domainId' | 'capabilityId' | 'orgUnitId' | 'systemId') =>
+      new Set(assets.map((asset) => asset[key]).filter((id): id is string => Boolean(id)));
+    const domainIds = fromAssets('domainId');
+    const orgUnitIds = fromAssets('orgUnitId');
+    if (scope.domains !== 'all') scope.domains.forEach((id) => domainIds.add(id));
+    if (scope.orgUnits !== 'all') scope.orgUnits.forEach((id) => orgUnitIds.add(id));
     return {
       assetIds: new Set(assets.map((a) => a.id)),
-      domainIds: scope.domains === 'all' ? 'all' : new Set(scope.domains),
+      domainIds,
+      capabilityIds: fromAssets('capabilityId'),
+      subjectIds: new Set(assets.flatMap((asset) => asset.subjects.map((subject) => subject.dataSubjectId))),
+      orgUnitIds,
+      systemIds: fromAssets('systemId'),
     };
   }
 
   /** Whether an assignment/conflict target is visible under the resolved scope. */
   private targetInScope(
-    ctx: { assetIds: Set<string> | 'all'; domainIds: Set<string> | 'all' },
+    ctx: OwnershipScopeContext,
     targetType: string,
     targetId: string,
   ): boolean {
     if (targetType === 'asset') return ctx.assetIds === 'all' || ctx.assetIds.has(targetId);
     if (targetType === 'domain') return ctx.domainIds === 'all' || ctx.domainIds.has(targetId);
-    return true;
+    if (targetType === 'capability') return ctx.capabilityIds === 'all' || ctx.capabilityIds.has(targetId);
+    if (targetType === 'subject') return ctx.subjectIds === 'all' || ctx.subjectIds.has(targetId);
+    if (targetType === 'org_unit') return ctx.orgUnitIds === 'all' || ctx.orgUnitIds.has(targetId);
+    if (targetType === 'system') return ctx.systemIds === 'all' || ctx.systemIds.has(targetId);
+    return false;
   }
 
   // ---------- shared lookups ----------
@@ -111,6 +154,23 @@ export class AssignmentsService {
     return maps[type]?.get(id) ?? null;
   }
 
+  private async assertTargetWritableScope(
+    roleCodes: string[] | undefined,
+    targetType: AssignmentTargetType,
+    targetId: string,
+  ): Promise<void> {
+    if (!roleCodes) return;
+    const ctx = await this.scopeContext(roleCodes);
+    if (!this.targetInScope(ctx, targetType, targetId)) {
+      throw new NotFoundException(`${targetType} not found`);
+    }
+  }
+
+  private assertOwnershipText(input: Parameters<typeof validateOwnershipText>[0], requireNames = false): void {
+    const errors = validateOwnershipText(input, requireNames);
+    if (errors.length) throw new BadRequestException(errors.join('; '));
+  }
+
   // ---------- assignments CRUD ----------
   async listAssignments(
     roleCodes: string[],
@@ -124,13 +184,27 @@ export class AssignmentsService {
     },
   ) {
     const where: Record<string, unknown> = { deletedAt: null };
-    if (filters.targetType) where['targetType'] = filters.targetType;
+    if (filters.targetType) {
+      if (!isAssignmentTargetType(filters.targetType)) {
+        throw new BadRequestException('Invalid assignment target type');
+      }
+      where['targetType'] = filters.targetType;
+    }
     if (filters.targetId) where['targetId'] = filters.targetId;
     if (filters.roleTypeId) where['roleTypeId'] = filters.roleTypeId;
     if (filters.personId) where['personId'] = filters.personId;
-    if (filters.approvalStatus) where['approvalStatus'] = filters.approvalStatus;
-    if (filters.status === 'active') where['isActive'] = true;
-    if (filters.status === 'inactive') where['isActive'] = false;
+    if (filters.approvalStatus) {
+      if (!isAssignmentApprovalStatus(filters.approvalStatus)) {
+        throw new BadRequestException('Invalid assignment approval status');
+      }
+      where['approvalStatus'] = filters.approvalStatus;
+    }
+    if (filters.status) {
+      if (!isAssignmentStatusFilter(filters.status)) {
+        throw new BadRequestException('Invalid assignment status filter');
+      }
+      where['isActive'] = filters.status === 'active';
+    }
 
     const [rows, maps, ctx] = await Promise.all([
       this.prisma.stewardshipAssignment.findMany({
@@ -161,20 +235,51 @@ export class AssignmentsService {
     return true;
   }
 
-  async getAssignment(id: string) {
+  async getAssignment(id: string, roleCodes?: string[]) {
     const a = await this.prisma.stewardshipAssignment.findFirst({
       where: { id, deletedAt: null },
       include: { roleType: true, person: true },
     });
     if (!a) throw new NotFoundException('assignment not found');
+    await this.assertTargetWritableScope(roleCodes, a.targetType, a.targetId);
     return a;
   }
 
   /** Rejects an expiry date that is not strictly after the effective date. */
   private validateWindow(effective: Date, expiry: Date | null): void {
-    if (expiry && expiry <= effective) {
-      throw new BadRequestException('Expiry date must be after the effective date');
-    }
+    const errors = validateOwnershipWindow({ effectiveDate: effective, expiryDate: expiry });
+    if (errors.length) throw new BadRequestException(errors.join('; '));
+  }
+
+  private async assertNoPrimaryConflict(
+    input: {
+      targetType: AssignmentTargetType;
+      targetId: string;
+      roleTypeId: string;
+      effectiveDate: Date;
+      expiryDate: Date | null;
+      isPrimary: boolean;
+      isActive: boolean;
+      approvalStatus: ApprovalStatus;
+    },
+    exceptId?: string,
+  ): Promise<string[]> {
+    if (!input.isPrimary || !input.isActive || input.approvalStatus !== ApprovalStatus.approved) return [];
+    const existingPrimary = await this.prisma.stewardshipAssignment.findMany({
+      where: {
+        targetType: input.targetType,
+        targetId: input.targetId,
+        roleTypeId: input.roleTypeId,
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        deletedAt: null,
+        ...(exceptId ? { NOT: { id: exceptId } } : {}),
+      },
+    });
+    return existingPrimary
+      .filter((assignment) => this.windowsOverlap(input, assignment))
+      .map((assignment) => assignment.id);
   }
 
   async createAssignment(
@@ -182,7 +287,10 @@ export class AssignmentsService {
     actor: string,
     source?: string,
     approvalStatus: ApprovalStatus = ApprovalStatus.approved,
+    roleCodes?: string[],
   ) {
+    this.assertOwnershipText({ justification: dto.justification });
+    await this.assertTargetWritableScope(roleCodes, dto.targetType, dto.targetId);
     await this.assertRefsExist(dto.targetType, dto.targetId, dto.roleTypeId, dto.personId);
     const resolvedSource = source ?? (dto.justification ? 'override' : 'manual');
     const isPrimary = dto.isPrimary ?? true;
@@ -190,30 +298,26 @@ export class AssignmentsService {
     const expiryDate = dto.expiryDate ? new Date(dto.expiryDate) : null;
     this.validateWindow(effectiveDate, expiryDate);
 
-    // Integrity: a target+role should have a single authoritative primary owner/steward.
-    if (isPrimary && approvalStatus === ApprovalStatus.approved) {
-      const existingPrimary = await this.prisma.stewardshipAssignment.findMany({
-        where: {
-          targetType: dto.targetType,
-          targetId: dto.targetId,
-          roleTypeId: dto.roleTypeId,
-          isPrimary: true,
-          isActive: true,
-          approvalStatus: ApprovalStatus.approved,
-          deletedAt: null,
-        },
-      });
-      if (existingPrimary.length > 0) {
-        if (!dto.demoteExisting) {
-          throw new BadRequestException(
-            'A primary assignment already exists for this target and role. Demote it or mark this one as backup.',
-          );
-        }
-        await this.prisma.stewardshipAssignment.updateMany({
-          where: { id: { in: existingPrimary.map((a) => a.id) } },
-          data: { isPrimary: false },
-        });
+    const conflicts = await this.assertNoPrimaryConflict({
+      targetType: dto.targetType,
+      targetId: dto.targetId,
+      roleTypeId: dto.roleTypeId,
+      effectiveDate,
+      expiryDate,
+      isPrimary,
+      isActive: true,
+      approvalStatus,
+    });
+    if (conflicts.length > 0) {
+      if (!dto.demoteExisting) {
+        throw new BadRequestException(
+          'A primary assignment already exists for this target and role. Demote it or mark this one as backup.',
+        );
       }
+      await this.prisma.stewardshipAssignment.updateMany({
+        where: { id: { in: conflicts } },
+        data: { isPrimary: false },
+      });
     }
 
     const created = await this.prisma.stewardshipAssignment.create({
@@ -242,8 +346,13 @@ export class AssignmentsService {
     return created;
   }
 
-  async updateAssignment(id: string, dto: UpdateAssignmentDto, actor: string) {
-    const existing = await this.getAssignment(id);
+  async updateAssignment(id: string, dto: UpdateAssignmentDto, actor: string, roleCodes?: string[]) {
+    const existing = await this.getAssignment(id, roleCodes);
+    this.assertOwnershipText({ justification: dto.justification });
+    if (dto.personId !== undefined) {
+      const person = await this.prisma.person.findFirst({ where: { id: dto.personId, deletedAt: null, isActive: true } });
+      if (!person) throw new BadRequestException('Person not found');
+    }
     const data: Record<string, unknown> = {};
     if (dto.personId !== undefined) data['personId'] = dto.personId;
     if (dto.isPrimary !== undefined) data['isPrimary'] = dto.isPrimary;
@@ -256,6 +365,26 @@ export class AssignmentsService {
     const expiry =
       dto.expiryDate !== undefined ? (data['expiryDate'] as Date | null) : existing.expiryDate;
     this.validateWindow(effective, expiry);
+    const isPrimary = (data['isPrimary'] as boolean | undefined) ?? existing.isPrimary;
+    const isActive = (data['isActive'] as boolean | undefined) ?? existing.isActive;
+    const conflicts = await this.assertNoPrimaryConflict(
+      {
+        targetType: existing.targetType,
+        targetId: existing.targetId,
+        roleTypeId: existing.roleTypeId,
+        effectiveDate: effective,
+        expiryDate: expiry,
+        isPrimary,
+        isActive,
+        approvalStatus: existing.approvalStatus,
+      },
+      id,
+    );
+    if (conflicts.length > 0) {
+      throw new BadRequestException(
+        'A primary assignment already exists for this target and role. Demote the other primary first.',
+      );
+    }
 
     const updated = await this.prisma.stewardshipAssignment.update({
       where: { id },
@@ -300,8 +429,8 @@ export class AssignmentsService {
     return updated;
   }
 
-  async removeAssignment(id: string, actor: string) {
-    const existing = await this.getAssignment(id);
+  async removeAssignment(id: string, actor: string, roleCodes?: string[]) {
+    const existing = await this.getAssignment(id, roleCodes);
     await this.prisma.stewardshipAssignment.update({
       where: { id },
       data: { deletedAt: new Date(), isActive: false },
@@ -360,18 +489,23 @@ export class AssignmentsService {
       system: 'systemPlatform',
     };
     const delegate = (this.prisma as unknown as Record<string, any>)[model[targetType]];
-    const target = await delegate.findFirst({ where: { id: targetId, deletedAt: null } });
+    const target = await delegate.findFirst({ where: { id: targetId, deletedAt: null, isActive: true } });
     if (!target) throw new BadRequestException(`Target ${targetType} not found`);
-    const role = await this.prisma.roleType.findFirst({ where: { id: roleTypeId, deletedAt: null } });
+    const role = await this.prisma.roleType.findFirst({ where: { id: roleTypeId, deletedAt: null, isActive: true } });
     if (!role) throw new BadRequestException('Role type not found');
-    const person = await this.prisma.person.findFirst({ where: { id: personId, deletedAt: null } });
+    const person = await this.prisma.person.findFirst({ where: { id: personId, deletedAt: null, isActive: true } });
     if (!person) throw new BadRequestException('Person not found');
   }
 
   // ---------- rules CRUD ----------
-  async listRules(filters: { scopeType?: string; roleTypeId?: string }) {
+  async listRules(filters: { scopeType?: string; roleTypeId?: string }, roleCodes?: string[]) {
     const where: Record<string, unknown> = { deletedAt: null };
-    if (filters.scopeType) where['scopeType'] = filters.scopeType;
+    if (filters.scopeType) {
+      if (!isAssignmentTargetType(filters.scopeType) || !RULE_SCOPES.includes(filters.scopeType)) {
+        throw new BadRequestException('Invalid assignment rule scope');
+      }
+      where['scopeType'] = filters.scopeType;
+    }
     if (filters.roleTypeId) where['roleTypeId'] = filters.roleTypeId;
     const [rows, maps] = await Promise.all([
       this.prisma.assignmentRule.findMany({
@@ -381,7 +515,10 @@ export class AssignmentsService {
       }),
       this.dimensionMaps(),
     ]);
-    return rows.map((r) => ({ ...r, ref: this.targetLabel(maps, r.scopeType, r.refId) }));
+    const ctx = roleCodes ? await this.scopeContext(roleCodes) : null;
+    return rows
+      .filter((r) => !ctx || this.targetInScope(ctx, r.scopeType, r.refId))
+      .map((r) => ({ ...r, ref: this.targetLabel(maps, r.scopeType, r.refId) }));
   }
 
   /** Blocks an ambiguous duplicate rule (same scope + ref + role + priority). */
@@ -410,17 +547,19 @@ export class AssignmentsService {
     }
   }
 
-  async createRule(dto: CreateRuleDto, actor: string) {
+  async createRule(dto: CreateRuleDto, actor: string, roleCodes?: string[]) {
+    this.assertOwnershipText(dto, true);
     if (!RULE_SCOPES.includes(dto.scopeType)) {
       throw new BadRequestException('Rules cannot target an individual asset');
     }
+    await this.assertTargetWritableScope(roleCodes, dto.scopeType, dto.refId);
     await this.assertRefsExist(dto.scopeType, dto.refId, dto.roleTypeId, dto.personId);
     await this.assertRuleUnique(dto.scopeType, dto.refId, dto.roleTypeId, dto.priority ?? 100);
     const created = await this.prisma.assignmentRule.create({
       data: {
-        nameEn: dto.nameEn,
-        nameAr: dto.nameAr,
-        description: dto.description ?? null,
+        nameEn: dto.nameEn.trim(),
+        nameAr: dto.nameAr.trim(),
+        description: normalizeOwnershipText(dto.description) ?? null,
         scopeType: dto.scopeType,
         refId: dto.refId,
         roleTypeId: dto.roleTypeId,
@@ -439,9 +578,11 @@ export class AssignmentsService {
     return created;
   }
 
-  async updateRule(id: string, dto: UpdateRuleDto, actor: string) {
+  async updateRule(id: string, dto: UpdateRuleDto, actor: string, roleCodes?: string[]) {
     const existing = await this.prisma.assignmentRule.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new NotFoundException('rule not found');
+    await this.assertTargetWritableScope(roleCodes, existing.scopeType, existing.refId);
+    this.assertOwnershipText(dto);
     const scopeType = dto.scopeType ?? existing.scopeType;
     const refId = dto.refId ?? existing.refId;
     const roleTypeId = dto.roleTypeId ?? existing.roleTypeId;
@@ -449,6 +590,7 @@ export class AssignmentsService {
     if (dto.scopeType && !RULE_SCOPES.includes(dto.scopeType)) {
       throw new BadRequestException('Rules cannot target an individual asset');
     }
+    await this.assertTargetWritableScope(roleCodes, scopeType, refId);
     if (dto.scopeType || dto.refId || dto.roleTypeId || dto.personId) {
       await this.assertRefsExist(scopeType, refId, roleTypeId, personId);
     }
@@ -459,7 +601,7 @@ export class AssignmentsService {
       data: {
         nameEn: dto.nameEn,
         nameAr: dto.nameAr,
-        description: dto.description,
+        description: normalizeOwnershipText(dto.description),
         scopeType: dto.scopeType,
         refId: dto.refId,
         roleTypeId: dto.roleTypeId,
@@ -474,9 +616,10 @@ export class AssignmentsService {
     return updated;
   }
 
-  async removeRule(id: string, actor: string) {
+  async removeRule(id: string, actor: string, roleCodes?: string[]) {
     const existing = await this.prisma.assignmentRule.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new NotFoundException('rule not found');
+    await this.assertTargetWritableScope(roleCodes, existing.scopeType, existing.refId);
     await this.prisma.assignmentRule.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } });
     await this.audit.log({ actor, action: 'assignment_rule.delete', entityType: 'assignment_rule', entityId: id });
     return { success: true };

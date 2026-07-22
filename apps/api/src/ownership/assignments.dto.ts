@@ -7,9 +7,20 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
+  Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { AssignmentTargetType } from '@prisma/client';
+import { Transform } from 'class-transformer';
+import {
+  OWNERSHIP_DESCRIPTION_MAX,
+  OWNERSHIP_JUSTIFICATION_MAX,
+  OWNERSHIP_NAME_MAX,
+  OWNERSHIP_PRIORITY_MAX,
+  normalizeOwnershipText,
+} from './assignments.logic';
 
 // Rules cannot target an individual asset (asset-level is a direct assignment).
 const RULE_SCOPES: AssignmentTargetType[] = [
@@ -22,64 +33,84 @@ const RULE_SCOPES: AssignmentTargetType[] = [
 
 export class CreateAssignmentDto {
   @IsEnum(AssignmentTargetType) targetType!: AssignmentTargetType;
-  @IsString() @IsNotEmpty() targetId!: string;
-  @IsString() @IsNotEmpty() roleTypeId!: string;
-  @IsString() @IsNotEmpty() personId!: string;
+  @IsUUID('4') targetId!: string;
+  @IsUUID('4') roleTypeId!: string;
+  @IsUUID('4') personId!: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
   @IsOptional() @IsDateString() effectiveDate?: string;
   @IsOptional() @IsDateString() expiryDate?: string | null;
-  @IsOptional() @IsString() justification?: string | null;
+  @Transform(({ value }) => normalizeOwnershipText(value))
+  @IsOptional() @IsString() @MaxLength(OWNERSHIP_JUSTIFICATION_MAX)
+  justification?: string | null;
   /** When creating a primary that collides with an existing one, demote the existing to backup. */
   @IsOptional() @IsBoolean() demoteExisting?: boolean;
 }
 
 export class UpdateAssignmentDto {
-  @IsOptional() @IsString() @IsNotEmpty() personId?: string;
+  @IsOptional() @IsUUID('4') personId?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
   @IsOptional() @IsDateString() effectiveDate?: string;
   @IsOptional() @IsDateString() expiryDate?: string | null;
-  @IsOptional() @IsString() justification?: string | null;
+  @Transform(({ value }) => normalizeOwnershipText(value))
+  @IsOptional() @IsString() @MaxLength(OWNERSHIP_JUSTIFICATION_MAX)
+  justification?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 export class CreateRuleDto {
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() description?: string | null;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString() @IsNotEmpty() @MaxLength(OWNERSHIP_NAME_MAX)
+  nameEn!: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString() @IsNotEmpty() @MaxLength(OWNERSHIP_NAME_MAX)
+  nameAr!: string;
+  @Transform(({ value }) => normalizeOwnershipText(value))
+  @IsOptional() @IsString() @MaxLength(OWNERSHIP_DESCRIPTION_MAX)
+  description?: string | null;
   @IsEnum(AssignmentTargetType)
   @IsNotEmpty()
   scopeType!: AssignmentTargetType;
-  @IsString() @IsNotEmpty() refId!: string;
-  @IsString() @IsNotEmpty() roleTypeId!: string;
-  @IsString() @IsNotEmpty() personId!: string;
+  @IsUUID('4') refId!: string;
+  @IsUUID('4') roleTypeId!: string;
+  @IsUUID('4') personId!: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
-  @IsOptional() @IsInt() @Min(1) priority?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(OWNERSHIP_PRIORITY_MAX) priority?: number;
 }
 
 export class UpdateRuleDto {
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() description?: string | null;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(OWNERSHIP_NAME_MAX)
+  nameEn?: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(OWNERSHIP_NAME_MAX)
+  nameAr?: string;
+  @Transform(({ value }) => normalizeOwnershipText(value))
+  @IsOptional() @IsString() @MaxLength(OWNERSHIP_DESCRIPTION_MAX)
+  description?: string | null;
   @IsOptional() @IsEnum(AssignmentTargetType) scopeType?: AssignmentTargetType;
-  @IsOptional() @IsString() @IsNotEmpty() refId?: string;
-  @IsOptional() @IsString() @IsNotEmpty() roleTypeId?: string;
-  @IsOptional() @IsString() @IsNotEmpty() personId?: string;
+  @IsOptional() @IsUUID('4') refId?: string;
+  @IsOptional() @IsUUID('4') roleTypeId?: string;
+  @IsOptional() @IsUUID('4') personId?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
-  @IsOptional() @IsInt() @Min(1) priority?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(OWNERSHIP_PRIORITY_MAX) priority?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 export class ApplyRecommendationDto {
-  @IsString() @IsNotEmpty() assetId!: string;
-  @IsString() @IsNotEmpty() roleTypeId!: string;
-  @IsOptional() @IsString() justification?: string | null;
+  @IsUUID('4') assetId!: string;
+  @IsUUID('4') roleTypeId!: string;
+  @Transform(({ value }) => normalizeOwnershipText(value))
+  @IsOptional() @IsString() @MaxLength(OWNERSHIP_JUSTIFICATION_MAX)
+  justification?: string | null;
 }
 
 export class RecommendationFeedbackDto {
   @IsIn(['accepted', 'rejected', 'override'])
   decision!: 'accepted' | 'rejected' | 'override';
-  @IsOptional() @IsString() comment?: string | null;
-  @IsOptional() @IsString() selectedPersonId?: string | null;
+  @Transform(({ value }) => normalizeOwnershipText(value))
+  @IsOptional() @IsString() @MaxLength(OWNERSHIP_JUSTIFICATION_MAX)
+  comment?: string | null;
+  @IsOptional() @IsUUID('4') selectedPersonId?: string | null;
 }
 
 export { RULE_SCOPES };

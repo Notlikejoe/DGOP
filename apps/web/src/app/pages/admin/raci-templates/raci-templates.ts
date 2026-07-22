@@ -42,6 +42,7 @@ interface Draft {
   isActive: boolean;
   items: RaciItem[];
 }
+const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
 
 @Component({
   selector: 'app-admin-raci-templates',
@@ -154,8 +155,7 @@ export class RaciTemplatesPage implements OnInit {
   }
 
   protected canSave(): boolean {
-    const d = this.draft();
-    return !!(d.code && d.nameEn && d.nameAr && d.items.length > 0);
+    return this.validationErrors().length === 0;
   }
 
   protected save(): void {
@@ -163,11 +163,11 @@ export class RaciTemplatesPage implements OnInit {
     this.saving.set(true);
     const d = this.draft();
     const body = {
-      code: d.code,
-      nameEn: d.nameEn,
-      nameAr: d.nameAr,
-      description: d.description || null,
-      processType: d.processType || null,
+      code: d.code.trim(),
+      nameEn: d.nameEn.trim(),
+      nameAr: d.nameAr.trim(),
+      description: d.description.trim() || null,
+      processType: d.processType.trim() || null,
       isActive: d.isActive,
       items: d.items.map((i) => ({ roleTypeId: i.roleTypeId, responsibility: i.responsibility })),
     };
@@ -206,5 +206,29 @@ export class RaciTemplatesPage implements OnInit {
 
   protected t(key: string): string {
     return this.i18n.t(key);
+  }
+
+  protected validationErrors(): string[] {
+    const errors: string[] = [];
+    const d = this.draft();
+    const original = this.editingId()
+      ? this.templates().find((template) => template.id === this.editingId())
+      : null;
+    const code = d.code.trim();
+    const nameEn = d.nameEn.trim();
+    const nameAr = d.nameAr.trim();
+    if (!code) errors.push(this.t('validation.codeRequired'));
+    else if (!CODE_PATTERN.test(code)) errors.push(this.t('validation.codeFormat'));
+    if (code.length > 64) errors.push(this.t('validation.codeLength'));
+    if (original && code !== original.code) errors.push(this.t('validation.codeImmutable'));
+    if (!nameEn) errors.push(this.t('validation.nameEnRequired'));
+    if (!nameAr) errors.push(this.t('validation.nameArRequired'));
+    if (nameEn.length > 180 || nameAr.length > 180) errors.push(this.t('validation.nameLength'));
+    if (d.description.trim().length > 1000) errors.push(this.t('validation.descriptionLength'));
+    if (d.processType.trim().length > 80) errors.push(this.t('validation.shortTextLength'));
+    if (d.items.length === 0) errors.push(this.t('validation.raciItemRequired'));
+    const roleIds = d.items.map((item) => item.roleTypeId).filter(Boolean);
+    if (new Set(roleIds).size !== roleIds.length) errors.push(this.t('validation.raciDuplicateRole'));
+    return [...new Set(errors)];
   }
 }

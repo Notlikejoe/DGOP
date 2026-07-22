@@ -22,11 +22,15 @@ import { AuthUser } from '../auth/auth.types';
 import { parsePageParams, toPaged } from '../common/pagination';
 import {
   AddTaskDto,
+  CreateWorkflowTemplateDto,
   CreateCaseDto,
   DecisionDto,
+  SaveWorkflowBpmnDto,
   SubmitAssignmentDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  WorkflowDesignerMigrationPreviewDto,
+  WorkflowDesignerSimulationDto,
   WorkflowRoutePreviewDto,
 } from './workflow.dto';
 import {
@@ -47,6 +51,15 @@ import {
   type WorkflowStageRouteNode,
   type WorkflowTemplateSeed,
 } from './workflow.logic';
+import {
+  parseBpmnXml,
+  simulateWorkflowRoute,
+  templateToBpmnXml,
+  validateWorkflowRoute,
+  type WorkflowBpmnStage,
+  type WorkflowBpmnTemplate,
+  type WorkflowBpmnTransition,
+} from './workflow.bpmn';
 
 export type SlaStatus = 'none' | 'on_track' | 'at_risk' | 'overdue' | 'done';
 
@@ -122,6 +135,7 @@ const templateInclude = {
   domain: { select: { id: true, code: true, nameEn: true, nameAr: true } },
   stages: { orderBy: { sortOrder: 'asc' as const } },
   transitions: {
+    where: { isActive: true },
     include: {
       fromStage: { select: { id: true, code: true } },
       toStage: { select: { id: true, code: true } },
@@ -566,6 +580,297 @@ export class WorkflowService implements OnModuleInit {
     });
   }
 
+  async createDesignerTemplate(dto: CreateWorkflowTemplateDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const code = await this.uniqueTemplateCode(dto.code ?? dto.nameEn);
+    const initialStages = this.initialDesignerStages();
+    const initialTransitions = [
+      {
+        fromStageId: 'intake',
+        toStageId: 'review',
+        labelEn: 'Ready for review',
+        labelAr: 'Ready for review',
+        decision: null,
+        isHappyPath: true,
+        sortOrder: 1,
+      },
+      {
+        fromStageId: 'review',
+        toStageId: 'closure',
+        labelEn: 'Complete route',
+        labelAr: 'Complete route',
+        decision: 'approved',
+        isHappyPath: true,
+        sortOrder: 2,
+      },
+    ];
+    const parsed = dto.bpmnXml ? this.parseDesignerBpmn(dto.bpmnXml) : null;
+    const validation = parsed?.validation ?? validateWorkflowRoute(initialStages, initialTransitions);
+    if (validation.status === 'blocked') {
+      throw new BadRequestException(`BPMN route is not publishable: ${validation.errors.join(' ')}`);
+    }
+    const created = await this.prisma.$transaction(async (tx) => {
+      const template = await tx.workflowTemplate.create({
+        data: {
+          code,
+          caseType: dto.caseType,
+          nameEn: dto.nameEn.trim(),
+          nameAr: (dto.nameAr ?? dto.nameEn).trim(),
+          description: dto.description ?? null,
+          trigger: dto.trigger ?? 'manual',
+          domainId: dto.domainId ?? null,
+          defaultSlaDays: dto.defaultSlaDays ?? 5,
+          createdBy: user.email,
+          lastPublishedAt: new Date(),
+          lastPublishedBy: user.email,
+        },
+      });
+      await this.applyPublishedBpmnRoute(
+        tx,
+        template.id,
+        parsed?.stages ?? initialStages,
+        parsed?.transitions ?? initialTransitions,
+        user.email,
+      );
+      const saved = await tx.workflowTemplate.findUnique({ where: { id: template.id }, include: templateInclude });
+      if (!saved) throw new BadRequestException('Could not create workflow route');
+      const bpmnXml = dto.bpmnXml ?? templateToBpmnXml(this.toBpmnTemplate(saved));
+      await tx.workflowTemplate.update({
+        where: { id: template.id },
+        data: {
+          bpmnXml,
+          designerJson: (parsed?.designerJson ?? { source: 'starter', stages: initialStages }) as Prisma.InputJsonValue,
+        },
+      });
+      await tx.workflowTemplateVersion.create({
+        data: {
+          templateId: template.id,
+          version: 1,
+          source: dto.bpmnXml ? 'import' : 'designer',
+          changeSummary: 'Initial BPMN route',
+          bpmnXml,
+          designerJson: (parsed?.designerJson ?? { source: 'starter', stages: initialStages }) as Prisma.InputJsonValue,
+          validationJson: validation as unknown as Prisma.InputJsonValue,
+          createdBy: user.email,
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'workflow_template.create',
+          entityType: 'workflow_template',
+          entityId: template.id,
+          metadata: { code, caseType: dto.caseType },
+        },
+        tx,
+      );
+      return tx.workflowTemplate.findUnique({ where: { id: template.id }, include: templateInclude });
+    });
+    if (!created) throw new BadRequestException('Could not create workflow route');
+    return this.designerResponse(created);
+  }
+
+  async getTemplateDesigner(id: string, roleCodes: string[]) {
+    const template = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(roleCodes)) },
+      include: templateInclude,
+    });
+    if (!template) throw new NotFoundException('workflow route template not found');
+    return this.designerResponse(template);
+  }
+
+  async saveTemplateBpmnDraft(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const template = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(user.roles)) },
+      include: templateInclude,
+    });
+    if (!template) throw new NotFoundException('workflow route template not found');
+    const parsed = this.parseDesignerBpmn(dto.bpmnXml);
+    const updated = await this.prisma.workflowTemplate.update({
+      where: { id },
+      data: {
+        bpmnXml: dto.bpmnXml,
+        designerJson: parsed.designerJson as Prisma.InputJsonValue,
+      },
+      include: templateInclude,
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_template.bpmn_draft.save',
+      entityType: 'workflow_template',
+      entityId: id,
+      metadata: { status: parsed.validation.status, errors: parsed.validation.errors.length, warnings: parsed.validation.warnings.length },
+    });
+    return this.designerResponse(updated, parsed.validation);
+  }
+
+  async publishTemplateBpmn(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const existing = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(user.roles)) },
+      include: templateInclude,
+    });
+    if (!existing) throw new NotFoundException('workflow route template not found');
+    const parsed = this.parseDesignerBpmn(dto.bpmnXml);
+    if (parsed.validation.status === 'blocked') {
+      throw new BadRequestException(`BPMN route is not publishable: ${parsed.validation.errors.join(' ')}`);
+    }
+    const nextVersion = (existing.designerVersion ?? 1) + 1;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.applyPublishedBpmnRoute(tx, id, parsed.stages, parsed.transitions, user.email);
+      await tx.workflowTemplate.update({
+        where: { id },
+        data: {
+          bpmnXml: dto.bpmnXml,
+          designerJson: parsed.designerJson as Prisma.InputJsonValue,
+          designerVersion: nextVersion,
+          lastPublishedAt: new Date(),
+          lastPublishedBy: user.email,
+          defaultSlaDays: Math.max(
+            1,
+            parsed.stages.reduce((sum, stage) => sum + Math.max(0, stage.dueDays), 0),
+          ),
+        },
+      });
+      await tx.workflowTemplateVersion.create({
+        data: {
+          templateId: id,
+          version: nextVersion,
+          source: 'designer',
+          changeSummary: dto.changeSummary ?? null,
+          bpmnXml: dto.bpmnXml,
+          designerJson: parsed.designerJson as Prisma.InputJsonValue,
+          validationJson: parsed.validation as unknown as Prisma.InputJsonValue,
+          createdBy: user.email,
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'workflow_template.bpmn.publish',
+          entityType: 'workflow_template',
+          entityId: id,
+          metadata: {
+            version: nextVersion,
+            stageCount: parsed.validation.stageCount,
+            transitionCount: parsed.validation.transitionCount,
+            warnings: parsed.validation.warnings,
+          },
+        },
+        tx,
+      );
+      return tx.workflowTemplate.findUnique({ where: { id }, include: templateInclude });
+    });
+    if (!updated) throw new BadRequestException('Could not publish workflow route');
+    return this.designerResponse(updated, parsed.validation);
+  }
+
+  async simulateTemplateDesigner(id: string, dto: WorkflowDesignerSimulationDto, user: AuthUser) {
+    const template = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(user.roles)) },
+      include: templateInclude,
+    });
+    if (!template) throw new NotFoundException('workflow route template not found');
+    const route = dto.bpmnXml?.trim()
+      ? this.parseDesignerBpmn(dto.bpmnXml)
+      : {
+          stages: this.toBpmnTemplate(template).stages,
+          transitions: this.toBpmnTemplate(template).transitions,
+          validation: this.currentRouteValidation(template),
+          designerJson: {},
+        };
+    return simulateWorkflowRoute(route.stages, route.transitions, dto.decisions ?? {});
+  }
+
+  async workflowTemplateMigrationPreview(id: string, dto: WorkflowDesignerMigrationPreviewDto, user: AuthUser) {
+    const template = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(user.roles)) },
+      include: templateInclude,
+    });
+    if (!template) throw new NotFoundException('workflow route template not found');
+    const next = dto.bpmnXml?.trim()
+      ? this.parseDesignerBpmn(dto.bpmnXml)
+      : {
+          stages: this.toBpmnTemplate(template).stages,
+          transitions: this.toBpmnTemplate(template).transitions,
+          validation: this.currentRouteValidation(template),
+          designerJson: {},
+        };
+    const currentStages = new Map(template.stages.map((stage) => [stage.code, stage]));
+    const nextStages = new Map(next.stages.map((stage) => [stage.code, stage]));
+    const currentTransitionKeys = new Set(
+      template.transitions.map((edge) => `${edge.fromStage.code}->${edge.toStage.code}:${edge.decision ?? edge.labelEn}`),
+    );
+    const nextTransitionKeys = new Set(
+      next.transitions.map((edge) => `${edge.fromStageId}->${edge.toStageId}:${edge.decision ?? edge.labelEn}`),
+    );
+    const addedStages = [...nextStages.keys()].filter((code) => !currentStages.has(code));
+    const retiredStages = [...currentStages.keys()].filter((code) => !nextStages.has(code));
+    const addedTransitions = [...nextTransitionKeys].filter((key) => !currentTransitionKeys.has(key));
+    const retiredTransitions = [...currentTransitionKeys].filter((key) => !nextTransitionKeys.has(key));
+    const activeCases = await this.prisma.workflowCase.findMany({
+      where: { templateId: id, status: { notIn: [...FINAL_CASE_STATUSES] } },
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        status: true,
+        tasks: {
+          where: { status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            templateStage: { select: { code: true, nameEn: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+    const caseActions = activeCases.map((wfCase) => {
+      const activeStageCodes = wfCase.tasks
+        .map((task) => task.templateStage?.code)
+        .filter((code): code is string => Boolean(code));
+      const affectedStages = activeStageCodes.filter((code) => !nextStages.has(code));
+      return {
+        id: wfCase.id,
+        code: wfCase.code,
+        title: wfCase.title,
+        status: wfCase.status,
+        openTasks: wfCase.tasks.length,
+        activeStageCodes,
+        action: affectedStages.length ? 'manual_review' : 'continue',
+        reason: affectedStages.length
+          ? `Open task is on a retired stage: ${affectedStages.join(', ')}`
+          : 'Open tasks remain on stages that exist in the new route.',
+      };
+    });
+    const manualReviewCases = caseActions.filter((row) => row.action === 'manual_review').length;
+    const risk = next.validation.status === 'blocked'
+      ? 'blocked'
+      : manualReviewCases > 0 || retiredStages.length > 0 || retiredTransitions.length > 0
+        ? 'caution'
+        : 'safe';
+    return {
+      risk,
+      validation: next.validation,
+      summary: {
+        activeCases: activeCases.length,
+        manualReviewCases,
+        addedStages: addedStages.length,
+        retiredStages: retiredStages.length,
+        addedTransitions: addedTransitions.length,
+        retiredTransitions: retiredTransitions.length,
+      },
+      stageChanges: { added: addedStages, retired: retiredStages },
+      transitionChanges: { added: addedTransitions, retired: retiredTransitions },
+      caseActions,
+    };
+  }
+
   async routePreview(dto: WorkflowRoutePreviewDto, roleCodes: string[]) {
     const { template, domainId } = await this.resolveRouteTemplate(dto, roleCodes);
     return {
@@ -833,6 +1138,352 @@ export class WorkflowService implements OnModuleInit {
           : 'Mapped to backlog; no active route configured yet.',
       })),
     };
+  }
+
+  private assertWorkflowDesignerAdmin(user: AuthUser): void {
+    if (!user.roles.some((role) => ADMIN_ROLES.includes(role))) {
+      throw new ForbiddenException('Only workflow administrators can design workflow routes');
+    }
+  }
+
+  private parseDesignerBpmn(xml: string): ReturnType<typeof parseBpmnXml> {
+    try {
+      return parseBpmnXml(xml);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message || 'Invalid BPMN XML');
+    }
+  }
+
+  private async uniqueTemplateCode(input: string | null | undefined): Promise<string> {
+    const base = String(input ?? 'workflow_route')
+      .trim()
+      .replace(/^WF-/i, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toUpperCase()
+      .slice(0, 48) || 'CUSTOM-ROUTE';
+    let code = `WF-${base}`;
+    let counter = 2;
+    while (await this.prisma.workflowTemplate.findUnique({ where: { code }, select: { id: true } })) {
+      code = `WF-${base}-${counter++}`;
+    }
+    return code;
+  }
+
+  private initialDesignerStages(): WorkflowBpmnStage[] {
+    return [
+      {
+        code: 'intake',
+        nameEn: 'Intake',
+        nameAr: 'Intake',
+        description: 'Capture the request and context.',
+        kind: 'intake',
+        nodeType: 'user_task',
+        taskType: 'information',
+        assignmentStrategy: 'role',
+        assigneeRoleCode: 'dmo_admin',
+        dueDays: 1,
+        formSchemaJson: {
+          fields: ['request_title', 'case_type', 'linked_asset', 'business_reason'],
+          required: ['request_title', 'case_type'],
+        },
+        slaConfigJson: { dueDays: 1, escalationAfterHours: 20 },
+        notificationRulesJson: [{ event: 'created', channel: 'in_app', audience: 'assignee' }],
+        evidenceRequirementsJson: null,
+        automationConfigJson: null,
+        gatewayConfigJson: null,
+        parallelGroup: null,
+        sortOrder: 1,
+        isStart: true,
+        isDecision: false,
+        isFinal: false,
+        isActive: true,
+      },
+      {
+        code: 'review',
+        nameEn: 'Review',
+        nameAr: 'Review',
+        description: 'Review evidence, risk, and ownership.',
+        kind: 'review',
+        nodeType: 'user_task',
+        taskType: 'review',
+        assignmentStrategy: 'role',
+        assigneeRoleCode: 'data_steward',
+        dueDays: 2,
+        formSchemaJson: { fields: ['review_notes', 'risk_level', 'recommendation'], required: ['recommendation'] },
+        slaConfigJson: { dueDays: 2, escalationAfterHours: 36 },
+        notificationRulesJson: [{ event: 'assigned', channel: 'in_app', audience: 'assignee' }],
+        evidenceRequirementsJson: [{ name: 'Review evidence', required: false }],
+        automationConfigJson: null,
+        gatewayConfigJson: { branches: ['approved', 'rejected'] },
+        parallelGroup: null,
+        sortOrder: 2,
+        isStart: false,
+        isDecision: true,
+        isFinal: false,
+        isActive: true,
+      },
+      {
+        code: 'closure',
+        nameEn: 'Closure',
+        nameAr: 'Closure',
+        description: 'Record the result and close the route.',
+        kind: 'closure',
+        nodeType: 'user_task',
+        taskType: 'approval',
+        assignmentStrategy: 'role',
+        assigneeRoleCode: 'dmo_admin',
+        dueDays: 1,
+        formSchemaJson: { fields: ['decision_summary', 'closure_notes'], required: ['decision_summary'] },
+        slaConfigJson: { dueDays: 1, escalationAfterHours: 20 },
+        notificationRulesJson: [{ event: 'completed', channel: 'in_app', audience: 'case_owner' }],
+        evidenceRequirementsJson: [{ name: 'Final decision note', required: true }],
+        automationConfigJson: null,
+        gatewayConfigJson: null,
+        parallelGroup: null,
+        sortOrder: 3,
+        isStart: false,
+        isDecision: false,
+        isFinal: true,
+        isActive: true,
+      },
+    ];
+  }
+
+  private designerResponse(
+    template: WorkflowTemplateWithRoute,
+    validation = this.currentRouteValidation(template),
+  ) {
+    const bpmnXml = template.bpmnXml ?? templateToBpmnXml(this.toBpmnTemplate(template));
+    return {
+      template,
+      bpmnXml,
+      validation,
+      designerJson: template.designerJson ?? {
+        source: template.bpmnXml ? 'saved_bpmn' : 'generated_from_route',
+        stages: template.stages.length,
+        transitions: template.transitions.length,
+      },
+      version: {
+        current: template.designerVersion ?? 1,
+        lastPublishedAt: template.lastPublishedAt,
+        lastPublishedBy: template.lastPublishedBy,
+      },
+      enterprise: this.enterpriseDesignerSummary(template, validation),
+    };
+  }
+
+  private enterpriseDesignerSummary(template: WorkflowTemplateWithRoute, validation: ReturnType<typeof validateWorkflowRoute>) {
+    const stages = this.toBpmnTemplate(template).stages;
+    const countBy = (predicate: (stage: WorkflowBpmnStage) => boolean) => stages.filter(predicate).length;
+    return {
+      readinessScore: validation.readinessScore,
+      checklist: validation.checklist,
+      coverage: {
+        forms: countBy((stage) => Boolean(stage.formSchemaJson)),
+        evidence: countBy((stage) => Boolean(stage.evidenceRequirementsJson)),
+        notifications: countBy((stage) => Boolean(stage.notificationRulesJson)),
+        automation: countBy((stage) => Boolean(stage.automationConfigJson)),
+        roleAssignments: countBy((stage) => Boolean(stage.assigneeRoleCode)),
+      },
+      rulePacks: stages.map((stage) => ({
+        code: stage.code,
+        nameEn: stage.nameEn,
+        nodeType: stage.nodeType ?? 'user_task',
+        assignmentStrategy: stage.assignmentStrategy ?? 'role',
+        assigneeRoleCode: stage.assigneeRoleCode ?? null,
+        hasForm: Boolean(stage.formSchemaJson),
+        hasEvidence: Boolean(stage.evidenceRequirementsJson),
+        hasNotifications: Boolean(stage.notificationRulesJson),
+        hasAutomation: Boolean(stage.automationConfigJson),
+        dueDays: stage.dueDays,
+        isDecision: stage.isDecision,
+        isFinal: stage.isFinal,
+      })),
+    };
+  }
+
+  private toBpmnTemplate(template: WorkflowTemplateWithRoute): WorkflowBpmnTemplate {
+    return {
+      id: template.id,
+      code: template.code,
+      caseType: template.caseType,
+      nameEn: template.nameEn,
+      nameAr: template.nameAr,
+      description: template.description,
+      defaultSlaDays: template.defaultSlaDays,
+      stages: template.stages.map((stage) => ({
+        id: stage.id,
+        code: stage.code,
+        nameEn: stage.nameEn,
+        nameAr: stage.nameAr,
+        description: stage.description,
+        kind: stage.kind,
+        nodeType: stage.nodeType,
+        taskType: stage.taskType,
+        assignmentStrategy: stage.assignmentStrategy,
+        assigneeRoleCode: stage.assigneeRoleCode,
+        dueDays: stage.dueDays,
+        formSchemaJson: stage.formSchemaJson,
+        slaConfigJson: stage.slaConfigJson,
+        notificationRulesJson: stage.notificationRulesJson,
+        evidenceRequirementsJson: stage.evidenceRequirementsJson,
+        automationConfigJson: stage.automationConfigJson,
+        gatewayConfigJson: stage.gatewayConfigJson,
+        parallelGroup: stage.parallelGroup,
+        sortOrder: stage.sortOrder,
+        isStart: stage.isStart,
+        isDecision: stage.isDecision,
+        isFinal: stage.isFinal,
+        isActive: stage.isActive,
+      })),
+      transitions: template.transitions.map((transition) => ({
+        id: transition.id,
+        fromStageId: transition.fromStageId,
+        toStageId: transition.toStageId,
+        labelEn: transition.labelEn,
+        labelAr: transition.labelAr,
+        decision: transition.decision,
+        conditionExpression: transition.conditionExpression,
+        conditionJson: transition.conditionJson,
+        isHappyPath: transition.isHappyPath,
+        sortOrder: transition.sortOrder,
+      })),
+    };
+  }
+
+  private currentRouteValidation(template: WorkflowTemplateWithRoute) {
+    const stageById = new Map(template.stages.map((stage) => [stage.id, stage]));
+    const stages: WorkflowBpmnStage[] = template.stages.map((stage) => ({
+      id: stage.id,
+      code: stage.code,
+      nameEn: stage.nameEn,
+      nameAr: stage.nameAr,
+      description: stage.description,
+      kind: stage.kind,
+      nodeType: stage.nodeType,
+      taskType: stage.taskType,
+      assignmentStrategy: stage.assignmentStrategy,
+      assigneeRoleCode: stage.assigneeRoleCode,
+      dueDays: stage.dueDays,
+      formSchemaJson: stage.formSchemaJson,
+      slaConfigJson: stage.slaConfigJson,
+      notificationRulesJson: stage.notificationRulesJson,
+      evidenceRequirementsJson: stage.evidenceRequirementsJson,
+      automationConfigJson: stage.automationConfigJson,
+      gatewayConfigJson: stage.gatewayConfigJson,
+      parallelGroup: stage.parallelGroup,
+      sortOrder: stage.sortOrder,
+      isStart: stage.isStart,
+      isDecision: stage.isDecision,
+      isFinal: stage.isFinal,
+      isActive: stage.isActive,
+    }));
+    const transitions: WorkflowBpmnTransition[] = template.transitions.map((transition) => ({
+      id: transition.id,
+      fromStageId: stageById.get(transition.fromStageId)?.code ?? transition.fromStageId,
+      toStageId: stageById.get(transition.toStageId)?.code ?? transition.toStageId,
+      labelEn: transition.labelEn,
+      labelAr: transition.labelAr,
+      decision: transition.decision,
+      conditionExpression: transition.conditionExpression,
+      conditionJson: transition.conditionJson,
+      isHappyPath: transition.isHappyPath,
+      sortOrder: transition.sortOrder,
+    }));
+    return validateWorkflowRoute(stages, transitions);
+  }
+
+  private async applyPublishedBpmnRoute(
+    tx: Prisma.TransactionClient,
+    templateId: string,
+    stages: WorkflowBpmnStage[],
+    transitions: WorkflowBpmnTransition[],
+    actor: string,
+  ): Promise<void> {
+    const now = new Date();
+    const activeStageCodes = stages.map((stage) => stage.code);
+    const existingStages = await tx.workflowTemplateStage.findMany({
+      where: { templateId },
+      select: { id: true, code: true },
+    });
+    const existingByCode = new Map(existingStages.map((stage) => [stage.code, stage.id]));
+    const idByCode = new Map<string, string>();
+
+    for (const stage of stages) {
+      const data = {
+        nameEn: stage.nameEn,
+        nameAr: stage.nameAr || stage.nameEn,
+        description: stage.description ?? null,
+        kind: stage.kind,
+        nodeType: stage.nodeType ?? 'user_task',
+        taskType: stage.taskType,
+        assignmentStrategy: stage.assignmentStrategy ?? 'role',
+        assigneeRoleCode: stage.assigneeRoleCode ?? null,
+        dueDays: stage.dueDays,
+        formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        slaConfigJson: (stage.slaConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        notificationRulesJson: (stage.notificationRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        automationConfigJson: (stage.automationConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        gatewayConfigJson: (stage.gatewayConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        parallelGroup: stage.parallelGroup ?? null,
+        sortOrder: stage.sortOrder,
+        isStart: stage.isStart,
+        isDecision: stage.isDecision,
+        isFinal: stage.isFinal,
+        isActive: true,
+      };
+      const existingId = existingByCode.get(stage.code);
+      if (existingId) {
+        const updated = await tx.workflowTemplateStage.update({
+          where: { id: existingId },
+          data,
+          select: { id: true },
+        });
+        idByCode.set(stage.code, updated.id);
+      } else {
+        const created = await tx.workflowTemplateStage.create({
+          data: { templateId, code: stage.code, ...data },
+          select: { id: true },
+        });
+        idByCode.set(stage.code, created.id);
+      }
+    }
+
+    if (activeStageCodes.length) {
+      await tx.workflowTemplateStage.updateMany({
+        where: { templateId, code: { notIn: activeStageCodes } },
+        data: { isActive: false, isStart: false, isDecision: false, isFinal: false },
+      });
+    }
+
+    await tx.workflowTemplateTransition.updateMany({
+      where: { templateId, isActive: true },
+      data: { isActive: false, retiredAt: now, retiredBy: actor },
+    });
+    for (const transition of transitions) {
+      const fromStageId = idByCode.get(transition.fromStageId);
+      const toStageId = idByCode.get(transition.toStageId);
+      if (!fromStageId || !toStageId) continue;
+      await tx.workflowTemplateTransition.create({
+        data: {
+          templateId,
+          fromStageId,
+          toStageId,
+          labelEn: transition.labelEn,
+          labelAr: transition.labelAr || transition.labelEn,
+          decision: transition.decision ?? null,
+          conditionExpression: transition.conditionExpression ?? null,
+          conditionJson: (transition.conditionJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          sortOrder: transition.sortOrder,
+          isHappyPath: transition.isHappyPath,
+          isActive: true,
+          retiredAt: null,
+          retiredBy: null,
+        },
+      });
+    }
   }
 
   // ---------- data scope ----------

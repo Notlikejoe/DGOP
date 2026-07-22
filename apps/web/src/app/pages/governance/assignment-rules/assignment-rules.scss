@@ -21,3 +21,14 @@
 .field__label { font-weight: 600; font-size: var(--font-size-sm); }
 .req { color: var(--danger); margin-inline-start: 2px; }
 .field__input { width: 100%; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--on-surface); font: inherit; }
+.validation-panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+.validation-panel strong { color: var(--warning-strong, var(--warning)); }
+.validation-panel ul { margin: 0; padding-inline-start: var(--space-5); }
+.validation-panel li { margin-block: 2px; }

@@ -3,11 +3,15 @@
  * (no jest dependency). Run with: ts-node test/ownership.service.spec.ts
  */
 import assert from 'node:assert';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ApprovalStatus, AssignmentTargetType } from '@prisma/client';
 import { AssignmentsService } from '../src/ownership/assignments.service';
 import {
   confidenceLabel,
   recommendationConfidence,
   recommendationReasons,
+  validateOwnershipText,
+  validateOwnershipWindow,
 } from '../src/ownership/assignments.logic';
 
 const PAST = new Date('2020-01-01');
@@ -20,21 +24,37 @@ type Over = {
   rules?: any[];
   certificationAttempts?: any[];
   auditLogs?: any[];
+  scope?: any;
+  people?: any[];
 };
 
 // Builds an AssignmentsService backed by canned data. Scope resolves as unrestricted,
 // so scope filtering is a no-op and we exercise the pure recommendation/conflict logic.
 function makeService(over: Over): AssignmentsService {
   const assignmentRows = over.assignments ?? [];
+  const roleTypes = over.roleTypes ?? [];
+  const people = over.people ?? [];
+  const lookup = (rows: any[] | undefined, id: string) => (rows ?? []).find((row) => row.id === id) ?? null;
   const prisma = {
     dataAsset: {
-      findFirst: async () => over.asset ?? null,
+      findFirst: async (args?: any) => {
+        const id = args?.where?.id;
+        if (id && over.assets) return lookup(over.assets, id);
+        return over.asset ?? null;
+      },
       findMany: async () => over.assets ?? [],
+      update: async () => undefined,
     },
-    roleType: { findMany: async () => over.roleTypes ?? [] },
+    roleType: {
+      findMany: async () => roleTypes,
+      findFirst: async (args?: any) => lookup(roleTypes, args?.where?.id),
+    },
+    person: { findFirst: async (args?: any) => lookup(people, args?.where?.id) },
     stewardshipAssignment: {
+      findFirst: async (args?: any) => lookup(assignmentRows, args?.where?.id),
       findMany: async (args?: any) => {
         const where = args?.where ?? {};
+        if (where.NOT?.id) return assignmentRows.filter((assignment) => assignment.id !== where.NOT.id);
         if (where.targetType && where.targetId) {
           return assignmentRows.filter(
             (assignment) =>
@@ -45,18 +65,41 @@ function makeService(over: Over): AssignmentsService {
         }
         return assignmentRows;
       },
+      create: async (args: any) => ({ id: 'created-assignment', ...args.data, roleType: roleTypes[0], person: people[0] }),
+      update: async (args: any) => ({ ...lookup(assignmentRows, args.where.id), ...args.data }),
+      updateMany: async (args: any) => {
+        for (const assignment of assignmentRows) {
+          if (args.where.id.in.includes(assignment.id)) Object.assign(assignment, args.data);
+        }
+        return { count: args.where.id.in.length };
+      },
     },
-    assignmentRule: { findMany: async () => over.rules ?? [] },
+    assignmentRule: {
+      findMany: async () => over.rules ?? [],
+      findFirst: async (args?: any) => {
+        const id = args?.where?.id;
+        if (id) return lookup(over.rules, id);
+        return (over.rules ?? []).find((rule) =>
+          rule.scopeType === args?.where?.scopeType &&
+          rule.refId === args?.where?.refId &&
+          rule.roleTypeId === args?.where?.roleTypeId &&
+          rule.priority === args?.where?.priority &&
+          rule.isActive !== false &&
+          !rule.deletedAt,
+        ) ?? null;
+      },
+      create: async (args: any) => ({ id: 'created-rule', ...args.data, roleType: roleTypes[0], person: people[0] }),
+    },
     certificationAttempt: { findMany: async () => over.certificationAttempts ?? [] },
-    dataDomain: { findMany: async () => [] },
-    businessCapability: { findMany: async () => [] },
-    dataSubject: { findMany: async () => [] },
-    organizationUnit: { findMany: async () => [] },
-    systemPlatform: { findMany: async () => [] },
+    dataDomain: { findMany: async () => [], findFirst: async (args?: any) => lookup(over.assets, args?.where?.id) },
+    businessCapability: { findMany: async () => [], findFirst: async () => null },
+    dataSubject: { findMany: async () => [], findFirst: async () => null },
+    organizationUnit: { findMany: async () => [], findFirst: async () => null },
+    systemPlatform: { findMany: async () => [], findFirst: async () => null },
   };
   const audit = { log: async (entry: any) => { over.auditLogs?.push(entry); } };
   const scope = {
-    resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    resolve: async () => over.scope ?? ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
   };
   return new AssignmentsService(prisma as never, audit as never, scope as never);
 }
@@ -175,6 +218,111 @@ test('recommendation scoring helpers expose explainable confidence levels', () =
   assert.strictEqual(confidenceLabel(score), 'high');
   assert.deepStrictEqual(confidenceLabel(0), 'none');
   assert.ok(recommendationReasons({ scopeType: 'domain', rulePriority: 1 }).length > 0);
+});
+
+test('ownership validation helpers reject unsafe text and date windows', () => {
+  assert.deepStrictEqual(
+    validateOwnershipWindow({
+      effectiveDate: new Date('2026-01-02'),
+      expiryDate: new Date('2026-01-01'),
+    }),
+    ['Expiry date must be after the effective date'],
+  );
+  assert.deepStrictEqual(
+    validateOwnershipText({ nameEn: '', nameAr: 'قاعدة' }),
+    ['English name cannot be blank'],
+  );
+  assert.deepStrictEqual(
+    validateOwnershipText({ description: 'x'.repeat(1001) }),
+    ['Description must be 1000 characters or fewer'],
+  );
+});
+
+test('assignment lists reject invalid filters before Prisma receives them', async () => {
+  const svc = makeService({});
+  await assert.rejects(
+    () => svc.listAssignments(['system_admin'], { targetType: 'bad-target' }),
+    BadRequestException,
+  );
+  await assert.rejects(
+    () => svc.listAssignments(['system_admin'], { approvalStatus: 'half_approved' }),
+    BadRequestException,
+  );
+  await assert.rejects(
+    () => svc.listRules({ scopeType: 'asset' }),
+    BadRequestException,
+  );
+});
+
+test('assignment create hides targets outside the writer data scope', async () => {
+  const svc = makeService({
+    scope: { orgUnits: 'all', domains: ['domain-visible'], maxClassRank: null },
+    assets: [
+      {
+        id: 'asset-visible',
+        domainId: 'domain-visible',
+        capabilityId: null,
+        orgUnitId: null,
+        systemId: null,
+        subjects: [],
+      },
+    ],
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }],
+  });
+  await assert.rejects(
+    () =>
+      svc.createAssignment(
+        {
+          targetType: AssignmentTargetType.asset,
+          targetId: 'asset-hidden',
+          roleTypeId: 'role-owner',
+          personId: 'person-1',
+        },
+        'admin@dgop.local',
+        undefined,
+        ApprovalStatus.approved,
+        ['scoped_role'],
+      ),
+    NotFoundException,
+  );
+});
+
+test('assignment update blocks a new overlapping approved primary', async () => {
+  const svc = makeService({
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }],
+    assignments: [
+      {
+        id: 'a1',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        personId: 'person-1',
+        isPrimary: false,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+      },
+      {
+        id: 'a2',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        personId: 'person-2',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+      },
+    ],
+  });
+  await assert.rejects(
+    () => svc.updateAssignment('a1', { isPrimary: true }, 'admin@dgop.local'),
+    BadRequestException,
+  );
 });
 
 test('recommend: no assignment and no rule is an exception', async () => {

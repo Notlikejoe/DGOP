@@ -10,6 +10,11 @@ export class RoleTypesService extends BaseCrudService {
       model: 'roleType',
       entityType: 'role_type',
       orderBy: { nameEn: 'asc' },
+      deleteDependencies: [
+        { model: 'raciTemplateItem', field: 'roleTypeId', label: 'RACI templates' },
+        { model: 'stewardshipAssignment', field: 'roleTypeId', label: 'ownership assignments', where: { deletedAt: null } },
+        { model: 'assignmentRule', field: 'roleTypeId', label: 'assignment rules', where: { deletedAt: null } },
+      ],
     });
   }
 }

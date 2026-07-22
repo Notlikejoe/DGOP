@@ -27,26 +27,30 @@ export class AssignmentsController {
   // ----- assignment rules (declare before /assignments/:id to avoid route clash) -----
   @Get('assignment-rules')
   @RequirePermissions('assignment_rules.view')
-  listRules(@Query('scopeType') scopeType?: string, @Query('roleTypeId') roleTypeId?: string) {
-    return this.service.listRules({ scopeType, roleTypeId });
+  listRules(
+    @CurrentUser() user: AuthUser,
+    @Query('scopeType') scopeType?: string,
+    @Query('roleTypeId') roleTypeId?: string,
+  ) {
+    return this.service.listRules({ scopeType, roleTypeId }, user.roles);
   }
 
   @Post('assignment-rules')
   @RequirePermissions('assignment_rules.create')
   createRule(@Body() dto: CreateRuleDto, @CurrentUser() user: AuthUser) {
-    return this.service.createRule(dto, user.email);
+    return this.service.createRule(dto, user.email, user.roles);
   }
 
   @Patch('assignment-rules/:id')
   @RequirePermissions('assignment_rules.edit')
   updateRule(@Param('id') id: string, @Body() dto: UpdateRuleDto, @CurrentUser() user: AuthUser) {
-    return this.service.updateRule(id, dto, user.email);
+    return this.service.updateRule(id, dto, user.email, user.roles);
   }
 
   @Delete('assignment-rules/:id')
   @RequirePermissions('assignment_rules.delete')
   removeRule(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.removeRule(id, user.email);
+    return this.service.removeRule(id, user.email, user.roles);
   }
 
   // ----- recommendations / conflicts / exceptions -----
@@ -109,25 +113,25 @@ export class AssignmentsController {
 
   @Get('assignments/:id')
   @RequirePermissions('assignments.view')
-  get(@Param('id') id: string) {
-    return this.service.getAssignment(id);
+  get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.getAssignment(id, user.roles);
   }
 
   @Post('assignments')
   @RequirePermissions('assignments.create')
   create(@Body() dto: CreateAssignmentDto, @CurrentUser() user: AuthUser) {
-    return this.service.createAssignment(dto, user.email);
+    return this.service.createAssignment(dto, user.email, undefined, undefined, user.roles);
   }
 
   @Patch('assignments/:id')
   @RequirePermissions('assignments.edit')
   update(@Param('id') id: string, @Body() dto: UpdateAssignmentDto, @CurrentUser() user: AuthUser) {
-    return this.service.updateAssignment(id, dto, user.email);
+    return this.service.updateAssignment(id, dto, user.email, user.roles);
   }
 
   @Delete('assignments/:id')
   @RequirePermissions('assignments.delete')
   remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.removeAssignment(id, user.email);
+    return this.service.removeAssignment(id, user.email, user.roles);
   }
 }

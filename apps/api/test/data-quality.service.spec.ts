@@ -4,13 +4,15 @@
  */
 import assert from 'node:assert';
 import { BadRequestException } from '@nestjs/common';
-import { DataQualityPriority, DataQualitySeverity } from '@prisma/client';
+import { DataQualityDimension, DataQualityPriority, DataQualitySeverity } from '@prisma/client';
 import { DataQualityService } from '../src/data-quality/data-quality.service';
 import { priorityForSeverity, profileScore, slaDueDates } from '../src/data-quality/data-quality.logic';
 import {
   isAcceptedDataQualityImportFile,
   isSafeDataQualityImportContent,
 } from '../src/data-quality/data-quality.config';
+import { parseCsv } from '../src/common/csv';
+import { profileCsvRows } from '../src/data-quality/data-quality.profiling';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
@@ -528,6 +530,164 @@ test('profileScore converts profiling columns into score and recommendations', (
   assert.strictEqual(result.qualityScore, 90);
   assert.strictEqual(result.anomalyCount, 2);
   assert.strictEqual(result.recommendedRules, 1);
+});
+
+test('native profiling engine analyzes raw CSV across columns, patterns, and relationships', () => {
+  const rows = parseCsv(`patient_id,national_id,episode_date,amount,status
+P-001,1234567890,2026-01-01,120.5,approved
+P-002,,2026-01-02,140.0,approved
+P-003,1234567890,2099-01-01,999999,pending
+P-004,bad-id,2026-01-04,130.0,approved`);
+  const masterRows = parseCsv(`master_patient_id,name
+P-001,A
+P-002,B
+P-003,C
+P-004,D`);
+
+  const report = profileCsvRows(rows, {
+    datasetName: 'Patient revenue extract',
+    relatedDatasets: [{ name: 'Patient master', rows: masterRows }],
+  });
+
+  assert.strictEqual(report.datasetName, 'Patient revenue extract');
+  assert.strictEqual(report.rowCount, 4);
+  assert.strictEqual(report.columnCount, 5);
+  assert.ok(report.qualityScore < 100);
+  assert.ok(report.dimensionScores[DataQualityDimension.completeness].failedChecks > 0);
+  assert.ok(
+    report.dimensionScores[DataQualityDimension.validity].failedChecks > 0 ||
+    report.dimensionScores[DataQualityDimension.timeliness].failedChecks > 0,
+  );
+  const weakRecommendationDimensions: DataQualityDimension[] = [
+    DataQualityDimension.completeness,
+    DataQualityDimension.validity,
+    DataQualityDimension.uniqueness,
+  ];
+  assert.ok(report.recommendations.some((recommendation) => weakRecommendationDimensions.includes(recommendation.dimension)));
+  assert.ok(report.issueRecommendations.length > 0);
+  assert.ok(report.relationships.some((relationship) => relationship.relationshipType === 'candidate_key'));
+  assert.ok(report.relationships.some((relationship) => relationship.targetDataset === 'Patient master'));
+});
+
+test('runProfilingEngine persists a profile, six dimension scores, and draft rule recommendations', async () => {
+  const scores: any[] = [];
+  const rules: any[] = [];
+  const versions: any[] = [];
+  const audits: any[] = [];
+  let profileCreate: any;
+  const tx = {
+    dataQualityProfile: {
+      create: async (args: any) => {
+        profileCreate = args;
+        return { id: 'profile-1' };
+      },
+      findUnique: async () => ({ id: 'profile-1', qualityScore: 82, columns: [] }),
+    },
+    dataQualityScore: {
+      create: async (args: any) => {
+        scores.push(args.data);
+        return { id: `score-${scores.length}` };
+      },
+    },
+    dataQualityRule: {
+      findFirst: async () => null,
+      create: async (args: any) => {
+        const rule = { id: `rule-${rules.length + 1}`, ...args.data };
+        rules.push(rule);
+        return rule;
+      },
+    },
+    dataQualityRuleVersion: {
+      create: async (args: any) => {
+        versions.push(args.data);
+        return { id: `version-${versions.length}` };
+      },
+    },
+  };
+  const service = new DataQualityService(
+    {
+      dataDomain: { findFirst: async () => ({ id: 'domain-finance' }) },
+      $transaction: async (callback: any) => callback(tx),
+    } as never,
+    { log: async (entry: any) => audits.push(entry) } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  const result = await service.runProfilingEngine(
+    ['system_admin'],
+    {
+      datasetName: 'Revenue quality profile',
+      domainId: 'domain-finance',
+      csv: `invoice_id,supplier_tax_number,posting_date,amount
+INV-001,1234567890,2026-01-01,100
+INV-002,,2026-01-02,105
+INV-003,bad-tax,2099-01-01,999999`,
+      createRuleDrafts: true,
+      createIssues: false,
+    },
+    'admin@dgop.local',
+  ) as any;
+
+  assert.strictEqual(profileCreate.data.domainId, 'domain-finance');
+  assert.strictEqual(profileCreate.data.rowCount, 3);
+  assert.strictEqual(profileCreate.data.columnCount, 4);
+  assert.ok(profileCreate.data.summaryJson.recommendations.length > 0);
+  assert.strictEqual(scores.length, 7);
+  assert.strictEqual(scores.filter((score) => !!score.dimension).length, 6);
+  assert.ok(rules.length > 0);
+  assert.strictEqual(versions.length, rules.length);
+  assert.ok(result.draftedRuleIds.length > 0);
+  assert.deepStrictEqual(result.createdIssueIds, []);
+  assert.ok(audits.some((entry) => entry.action === 'data_quality_profile.run'));
+});
+
+test('runProfilingEngine can turn profiling anomalies into data quality issues', async () => {
+  const createdIssues: any[] = [];
+  const tx = {
+    dataQualityProfile: {
+      create: async () => ({ id: 'profile-issue-1' }),
+      findUnique: async () => ({ id: 'profile-issue-1', qualityScore: 71, columns: [] }),
+    },
+    dataQualityScore: { create: async () => ({}) },
+    dataQualityRule: { findFirst: async () => null },
+    dataQualityRuleVersion: { create: async () => ({}) },
+  };
+  const service = new DataQualityService(
+    {
+      dataAsset: { findMany: async () => [], findFirst: async () => ({ id: 'asset-patients' }) },
+      $transaction: async (callback: any) => callback(tx),
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+  const originalCreate = service.create.bind(service);
+  service.create = (async (_roles, dto) => {
+    createdIssues.push(dto);
+    return { id: `dq-profile-${createdIssues.length}` } as never;
+  }) as typeof originalCreate;
+
+  const result = await service.runProfilingEngine(
+    ['system_admin'],
+    {
+      assetId: 'asset-patients',
+      csv: `patient_id,national_id
+P-001,
+P-002,123
+P-003,1234567890`,
+      createRuleDrafts: false,
+      createIssues: true,
+    },
+    'admin@dgop.local',
+  ) as any;
+
+  assert.ok(createdIssues.length > 0);
+  assert.strictEqual(createdIssues[0].assetId, 'asset-patients');
+  assert.strictEqual(createdIssues[0].source, 'profiling_engine');
+  assert.ok(result.createdIssueIds.length > 0);
 });
 
 (async () => {

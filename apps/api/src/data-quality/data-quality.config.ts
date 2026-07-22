@@ -49,6 +49,11 @@ export const DATA_QUALITY_IMPORT_API_MESSAGES = {
 } as const;
 export const DATA_QUALITY_IMPORT_SAMPLE_CSV = `title,description,severity,priority,dimension,assetCode,dueDate
 Missing supplier tax number,Required tax number is empty for a subset of supplier invoices,high,P2,completeness,AST-FIN-INVOICES,`;
+export const DATA_QUALITY_PROFILE_SAMPLE_CSV = `patient_id,national_id,episode_date,amount,status
+P-001,1234567890,2026-01-01,120.5,approved
+P-002,,2026-01-02,140.0,approved
+P-003,1234567890,2099-01-01,999999,pending
+P-004,bad-id,2026-01-04,130.0,approved`;
 
 export type DataQualityImportErrorCode =
   | 'missing_title'
@@ -74,6 +79,16 @@ export function dataQualityImportConfig() {
   };
 }
 
+export function dataQualityProfileConfig() {
+  return {
+    maxFileSizeBytes: DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES,
+    maxFileSizeLabel: DATA_QUALITY_IMPORT_MAX_FILE_SIZE_LABEL,
+    acceptedExtensions: [...DATA_QUALITY_IMPORT_EXTENSIONS],
+    acceptedMimeTypes: [...DATA_QUALITY_IMPORT_MIME_TYPES],
+    sampleCsv: DATA_QUALITY_PROFILE_SAMPLE_CSV,
+  };
+}
+
 export function dataQualityPageConfig() {
   return {
     statuses: [...DQ_STATUSES],
@@ -86,6 +101,7 @@ export function dataQualityPageConfig() {
       dimension: DATA_QUALITY_IMPORT_DEFAULTS.dimension,
     },
     import: dataQualityImportConfig(),
+    profiling: dataQualityProfileConfig(),
   };
 }
 

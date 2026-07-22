@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { ErrorExperienceService } from '../core/error-experience.service';
+import { ErrorExperienceService, UserFacingError } from '../core/error-experience.service';
 import { I18nService } from '../core/i18n.service';
 
 export type ToastKind = 'success' | 'error' | 'info';
@@ -12,6 +12,7 @@ export interface Toast {
 @Injectable({ providedIn: 'root' })
 export class ToastService {
   readonly toasts = signal<Toast[]>([]);
+  readonly activeProblem = signal<UserFacingError | null>(null);
   private seq = 0;
   private readonly errors = inject(ErrorExperienceService);
   private readonly i18n = inject(I18nService);
@@ -32,6 +33,9 @@ export class ToastService {
 
   errorFrom(error: unknown, fallback?: string): void {
     const interpreted = this.errors.interpret(error);
+    if (this.errors.shouldExplain(interpreted)) {
+      this.activeProblem.set(interpreted);
+    }
     const request = interpreted.requestId ? ` ${this.i18n.t('error.requestId')} ${interpreted.requestId}` : '';
     const text = interpreted.message
       ? `${interpreted.title}: ${interpreted.message}${request}`
@@ -41,6 +45,10 @@ export class ToastService {
 
   dismiss(id: number): void {
     this.toasts.update((list) => list.filter((t) => t.id !== id));
+  }
+
+  dismissProblem(): void {
+    this.activeProblem.set(null);
   }
 
 }

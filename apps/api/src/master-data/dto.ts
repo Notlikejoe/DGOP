@@ -1,5 +1,8 @@
 import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
+  ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsIn,
@@ -7,159 +10,228 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
+  Matches,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import {
+  MASTER_CODE_MAX,
+  MASTER_CODE_PATTERN,
+  MASTER_COLOR_PATTERN,
+  MASTER_DESCRIPTION_MAX,
+  MASTER_NAME_MAX,
+  MASTER_PROCESS_TYPE_MAX,
+  MASTER_RANK_MAX,
+  MASTER_SHORT_TEXT_MAX,
+  MASTER_SORT_MAX,
+} from './master-data.logic';
+
+const Trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
+const TrimOptional = () =>
+  Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  });
+
+const CodeField = () => {
+  return function codeDecorators(target: object, propertyKey: string | symbol) {
+    IsString()(target, propertyKey);
+    IsNotEmpty()(target, propertyKey);
+    MaxLength(MASTER_CODE_MAX)(target, propertyKey);
+    Matches(MASTER_CODE_PATTERN)(target, propertyKey);
+    Trim()(target, propertyKey);
+  };
+};
+
+const OptionalCodeField = () => {
+  return function optionalCodeDecorators(target: object, propertyKey: string | symbol) {
+    IsOptional()(target, propertyKey);
+    IsString()(target, propertyKey);
+    IsNotEmpty()(target, propertyKey);
+    MaxLength(MASTER_CODE_MAX)(target, propertyKey);
+    Matches(MASTER_CODE_PATTERN)(target, propertyKey);
+    Trim()(target, propertyKey);
+  };
+};
+
+const NameField = () => {
+  return function nameDecorators(target: object, propertyKey: string | symbol) {
+    IsString()(target, propertyKey);
+    IsNotEmpty()(target, propertyKey);
+    MaxLength(MASTER_NAME_MAX)(target, propertyKey);
+    Trim()(target, propertyKey);
+  };
+};
+
+const OptionalTextField = (max = MASTER_DESCRIPTION_MAX) => {
+  return function optionalTextDecorators(target: object, propertyKey: string | symbol) {
+    IsOptional()(target, propertyKey);
+    IsString()(target, propertyKey);
+    MaxLength(max)(target, propertyKey);
+    TrimOptional()(target, propertyKey);
+  };
+};
+
+const OptionalUuidField = () => {
+  return function optionalUuidDecorators(target: object, propertyKey: string | symbol) {
+    IsOptional()(target, propertyKey);
+    IsUUID()(target, propertyKey);
+    TrimOptional()(target, propertyKey);
+  };
+};
 
 // ---------- Organization Units ----------
 export class CreateOrgUnitDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() parentId?: string | null;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @OptionalUuidField() parentId?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateOrgUnitDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() parentId?: string | null;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @OptionalUuidField() parentId?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- Hierarchical entities: Data Domains & Business Capabilities ----------
 export class CreateHierarchyNodeDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() parentId?: string | null;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @OptionalTextField() description?: string;
+  @OptionalUuidField() parentId?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateHierarchyNodeDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() parentId?: string | null;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @OptionalTextField() description?: string;
+  @OptionalUuidField() parentId?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- Data Subjects (flat) ----------
 export class CreateDataSubjectDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() description?: string;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @OptionalTextField() description?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateDataSubjectDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() description?: string;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @OptionalTextField() description?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- Systems / Platforms ----------
 export class CreateSystemDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() vendor?: string;
-  @IsOptional() @IsString() type?: string;
-  @IsOptional() @IsString() ownerOrgUnitId?: string | null;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @OptionalTextField() description?: string;
+  @OptionalTextField(MASTER_SHORT_TEXT_MAX) vendor?: string;
+  @OptionalTextField(MASTER_SHORT_TEXT_MAX) type?: string;
+  @OptionalUuidField() ownerOrgUnitId?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateSystemDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() vendor?: string;
-  @IsOptional() @IsString() type?: string;
-  @IsOptional() @IsString() ownerOrgUnitId?: string | null;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @OptionalTextField() description?: string;
+  @OptionalTextField(MASTER_SHORT_TEXT_MAX) vendor?: string;
+  @OptionalTextField(MASTER_SHORT_TEXT_MAX) type?: string;
+  @OptionalUuidField() ownerOrgUnitId?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- Classifications ----------
 export class CreateClassificationDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsInt() @Min(1) @Max(99) rank!: number;
-  @IsString() @IsNotEmpty() color!: string;
-  @IsOptional() @IsString() description?: string;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @Type(() => Number) @IsInt() @Min(1) @Max(MASTER_RANK_MAX) rank!: number;
+  @IsString() @IsNotEmpty() @Matches(MASTER_COLOR_PATTERN) @Trim() color!: string;
+  @OptionalTextField() description?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateClassificationDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsInt() @Min(1) @Max(99) rank?: number;
-  @IsOptional() @IsString() @IsNotEmpty() color?: string;
-  @IsOptional() @IsString() description?: string;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(MASTER_RANK_MAX) rank?: number;
+  @IsOptional() @IsString() @IsNotEmpty() @Matches(MASTER_COLOR_PATTERN) @Trim() color?: string;
+  @OptionalTextField() description?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- Role Types ----------
 export class CreateRoleTypeDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() description?: string;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @OptionalTextField() description?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateRoleTypeDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() description?: string;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @OptionalTextField() description?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- Status Values ----------
 export class CreateStatusValueDto {
-  @IsString() @IsNotEmpty() domain!: string;
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsString() @IsNotEmpty() color!: string;
-  @IsOptional() @IsInt() @Min(0) @Max(999) sortOrder?: number;
+  @CodeField() domain!: string;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @IsString() @IsNotEmpty() @Matches(MASTER_COLOR_PATTERN) @Trim() color!: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MASTER_SORT_MAX) sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 export class UpdateStatusValueDto {
-  @IsOptional() @IsString() @IsNotEmpty() domain?: string;
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() @IsNotEmpty() color?: string;
-  @IsOptional() @IsInt() @Min(0) @Max(999) sortOrder?: number;
+  @OptionalCodeField() domain?: string;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @IsOptional() @IsString() @IsNotEmpty() @Matches(MASTER_COLOR_PATTERN) @Trim() color?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(MASTER_SORT_MAX) sortOrder?: number;
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
 // ---------- RACI Templates ----------
 export class RaciItemDto {
-  @IsString() @IsNotEmpty() roleTypeId!: string;
+  @IsUUID() roleTypeId!: string;
   @IsIn(['R', 'A', 'C', 'I']) responsibility!: 'R' | 'A' | 'C' | 'I';
 }
 export class CreateRaciTemplateDto {
-  @IsString() @IsNotEmpty() code!: string;
-  @IsString() @IsNotEmpty() nameEn!: string;
-  @IsString() @IsNotEmpty() nameAr!: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() processType?: string;
+  @CodeField() code!: string;
+  @NameField() nameEn!: string;
+  @NameField() nameAr!: string;
+  @OptionalTextField() description?: string;
+  @OptionalTextField(MASTER_PROCESS_TYPE_MAX) processType?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
-  @IsArray() @ValidateNested({ each: true }) @Type(() => RaciItemDto) items!: RaciItemDto[];
+  @IsArray() @ArrayMinSize(1) @ArrayUnique((item: RaciItemDto) => item.roleTypeId) @ValidateNested({ each: true }) @Type(() => RaciItemDto) items!: RaciItemDto[];
 }
 export class UpdateRaciTemplateDto {
-  @IsOptional() @IsString() @IsNotEmpty() code?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameEn?: string;
-  @IsOptional() @IsString() @IsNotEmpty() nameAr?: string;
-  @IsOptional() @IsString() description?: string;
-  @IsOptional() @IsString() processType?: string;
+  @OptionalCodeField() code?: string;
+  @IsOptional() @NameField() nameEn?: string;
+  @IsOptional() @NameField() nameAr?: string;
+  @OptionalTextField() description?: string;
+  @OptionalTextField(MASTER_PROCESS_TYPE_MAX) processType?: string;
   @IsOptional() @IsBoolean() isActive?: boolean;
-  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => RaciItemDto) items?: RaciItemDto[];
+  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayUnique((item: RaciItemDto) => item.roleTypeId) @ValidateNested({ each: true }) @Type(() => RaciItemDto) items?: RaciItemDto[];
 }

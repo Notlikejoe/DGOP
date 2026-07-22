@@ -10,6 +10,15 @@ export class DataDomainsService extends HierarchyCrudService {
       model: 'dataDomain',
       entityType: 'data_domain',
       orderBy: { nameEn: 'asc' },
+      deleteDependencies: [
+        { model: 'dataDomain', field: 'parentId', label: 'child data domains', where: { deletedAt: null } },
+        { model: 'dataAsset', field: 'domainId', label: 'data assets', where: { deletedAt: null } },
+        { model: 'dataQualityRule', field: 'domainId', label: 'data quality rules' },
+        { model: 'dataQualityProfile', field: 'domainId', label: 'data quality profiles' },
+        { model: 'maskingPolicy', field: 'domainId', label: 'masking policies' },
+        { model: 'roleDataAccessMap', field: 'domainId', label: 'data access maps' },
+        { model: 'roleDataScope', field: 'refId', label: 'role data scopes', where: { scopeType: 'data_domain' } },
+      ],
     });
   }
 }

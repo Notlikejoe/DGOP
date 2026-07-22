@@ -3,10 +3,15 @@
  * Run with: ts-node test/security-governance.service.spec.ts
  */
 import assert from 'node:assert';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AccessDecision } from '@prisma/client';
 import { SecurityGovernanceService } from '../src/security-governance/security-governance.service';
-import { classificationRisk, evaluateAccessDecision } from '../src/security-governance/security-governance.logic';
+import {
+  classificationRisk,
+  evaluateAbacDecision,
+  evaluateAccessDecision,
+  validateRoleDataAccessMapIntegrity,
+} from '../src/security-governance/security-governance.logic';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
@@ -64,6 +69,94 @@ test('classificationRisk maps rank into business risk bands', () => {
   assert.strictEqual(classificationRisk(5), 'critical');
 });
 
+test('evaluateAbacDecision denies unknown access actions', () => {
+  const result = evaluateAbacDecision({
+    hasMapping: true,
+    requestedAction: 'print_everything',
+    purpose: 'governance',
+    networkZone: 'internal',
+    personalDataRequested: false,
+    personalDataAllowed: true,
+    approvalRequired: false,
+    hasMaskingPolicy: false,
+    assetClassificationRank: 2,
+    allowedClassificationRank: 3,
+  });
+
+  assert.strictEqual(result.decision, AccessDecision.deny);
+  assert.ok(result.violations.includes('invalid_action'));
+});
+
+test('evaluateAbacDecision requires legal basis before personal data access', () => {
+  const result = evaluateAbacDecision({
+    hasMapping: true,
+    requestedAction: 'read',
+    purpose: 'privacy',
+    networkZone: 'internal',
+    personalDataRequested: true,
+    legalBasisConfirmed: false,
+    personalDataAllowed: true,
+    approvalRequired: false,
+    hasMaskingPolicy: false,
+    assetClassificationRank: 3,
+    allowedClassificationRank: 3,
+  });
+
+  assert.strictEqual(result.decision, AccessDecision.review_required);
+  assert.ok(result.obligations.includes('verify_legal_basis'));
+});
+
+test('evaluateAbacDecision routes high classification public access to review', () => {
+  const result = evaluateAbacDecision({
+    hasMapping: true,
+    requestedAction: 'read',
+    purpose: 'audit',
+    networkZone: 'public',
+    personalDataRequested: false,
+    personalDataAllowed: true,
+    approvalRequired: false,
+    hasMaskingPolicy: false,
+    assetClassificationRank: 4,
+    allowedClassificationRank: 4,
+  });
+
+  assert.strictEqual(result.decision, AccessDecision.review_required);
+  assert.ok(result.obligations.includes('route_security_network_review'));
+});
+
+test('evaluateAbacDecision always reviews break-glass access', () => {
+  const result = evaluateAbacDecision({
+    hasMapping: true,
+    requestedAction: 'read',
+    purpose: 'break_glass',
+    networkZone: 'trusted',
+    personalDataRequested: false,
+    personalDataAllowed: true,
+    approvalRequired: false,
+    hasMaskingPolicy: false,
+    emergencyAccess: true,
+    approvalTicketId: 'INC-100',
+    businessJustification: 'Emergency data restoration',
+    assetClassificationRank: 2,
+    allowedClassificationRank: 3,
+  });
+
+  assert.strictEqual(result.decision, AccessDecision.review_required);
+  assert.ok(result.obligations.includes('record_break_glass_review'));
+});
+
+test('validateRoleDataAccessMapIntegrity blocks unsafe global and personal-data grants', () => {
+  const errors = validateRoleDataAccessMapIntegrity({
+    personalDataAllowed: true,
+    approvalRequired: false,
+    reviewCadenceDays: 500,
+  });
+
+  assert.ok(errors.some((message) => message.includes('personal data')));
+  assert.ok(errors.some((message) => message.includes('global')));
+  assert.ok(errors.some((message) => message.includes('review cadence')));
+});
+
 test('upsertAccessMap uses a stable scope key and updates an existing active mapping', async () => {
   let updatedData: any;
   let lookupWhere: any;
@@ -106,6 +199,32 @@ test('upsertAccessMap uses a stable scope key and updates an existing active map
 
   assert.strictEqual(lookupWhere.scopeKey, 'domain:domain-1|class:class-1');
   assert.strictEqual(updatedData.scopeKey, 'domain:domain-1|class:class-1');
+});
+
+test('upsertAccessMap rejects unsafe personal-data grants before persistence', async () => {
+  const service = new SecurityGovernanceService(
+    {
+      role: { findFirst: async () => ({ id: 'role-1', code: 'analyst' }) },
+    } as never,
+    { log: async () => undefined } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await assert.rejects(
+    () =>
+      service.upsertAccessMap(
+        ['system_admin'],
+        {
+          roleId: 'role-1',
+          personalDataAllowed: true,
+          approvalRequired: false,
+        },
+        'actor',
+      ),
+    BadRequestException,
+  );
 });
 
 test('createMaskingPolicy rejects global policies for scoped users', async () => {
@@ -279,6 +398,88 @@ test('decisionLog scopes unlinked decisions by allowed domain', async () => {
   assert.ok(text.includes('"assetId":null'));
   assert.ok(text.includes('"domainId":{"in":["domain-1"]}'));
   assert.ok(!text.includes('__no_visible_security_decisions__'));
+});
+
+test('simulateDecision persists ABAC trace metadata for review-required decisions', async () => {
+  let createdDecision: any;
+  let auditMetadata: any;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: {
+        findFirst: async () => ({
+          id: 'asset-1',
+          code: 'AST-1',
+          nameEn: 'Sensitive asset',
+          nameAr: 'Sensitive asset',
+          domainId: 'domain-1',
+          classificationId: 'class-3',
+          domain: { id: 'domain-1', code: 'FIN' },
+          classification: { id: 'class-3', code: 'restricted', rank: 3, color: '#f59e0b' },
+        }),
+      },
+      role: { findFirst: async () => ({ id: 'role-1', code: 'analyst', maxClassificationRank: 3 }) },
+      user: { findUnique: async () => ({ id: 'user-1', email: 'admin@dgop.local' }) },
+      roleDataAccessMap: {
+        findMany: async () => [
+          {
+            id: 'map-1',
+            roleId: 'role-1',
+            domainId: 'domain-1',
+            classificationId: 'class-3',
+            maskingPolicyId: null,
+            personalDataAllowed: true,
+            approvalRequired: true,
+            role: { id: 'role-1', code: 'analyst', nameEn: 'Analyst', nameAr: 'Analyst', maxClassificationRank: 3 },
+            domain: { id: 'domain-1', code: 'FIN', nameEn: 'Finance', nameAr: 'Finance' },
+            classification: { id: 'class-3', code: 'restricted', nameEn: 'Restricted', nameAr: 'Restricted', rank: 3, color: '#f59e0b' },
+            maskingPolicy: null,
+          },
+        ],
+      },
+      abacDecisionLog: {
+        create: async (args: any) => {
+          createdDecision = args.data;
+          return {
+            id: 'decision-1',
+            ...args.data,
+            role: { id: 'role-1', code: 'analyst', nameEn: 'Analyst', nameAr: 'Analyst' },
+            asset: { id: 'asset-1', code: 'AST-1', nameEn: 'Sensitive asset', nameAr: 'Sensitive asset' },
+            classification: { id: 'class-3', code: 'restricted', nameEn: 'Restricted', nameAr: 'Restricted', rank: 3, color: '#f59e0b' },
+            maskingPolicy: null,
+          };
+        },
+      },
+    } as never,
+    {
+      log: async (entry: any) => {
+        auditMetadata = entry.metadata;
+      },
+    } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  const result = await service.simulateDecision(
+    ['system_admin'],
+    {
+      roleId: 'role-1',
+      assetId: 'asset-1',
+      requestedAction: 'export',
+      purpose: 'compliance',
+      networkZone: 'internal',
+      personalDataRequested: false,
+      businessJustification: 'Regulatory evidence export',
+    },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(createdDecision.requestedAction, 'export');
+  assert.strictEqual(createdDecision.decision, AccessDecision.review_required);
+  assert.strictEqual(result.abac.purpose, 'compliance');
+  assert.ok(result.abac.obligations.includes('route_owner_security_review'));
+  assert.ok(auditMetadata.ruleTrace.length > 0);
+  assert.strictEqual(auditMetadata.risk, 'medium');
 });
 
 test('createDlpIncident links new incidents to workflow cases', async () => {

@@ -1,6 +1,7 @@
 import {
   GovernanceEscalationLevel,
   GovernanceNotificationSeverity,
+  GovernanceNotificationStatus,
 } from '@prisma/client';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -9,6 +10,46 @@ const KSA_WEEKEND_DAYS = new Set([5, 6]);
 export type SlaSignal = 'on_track' | 'at_risk' | 'overdue' | 'done' | 'none';
 export type ProductionReadinessStatus = 'ready' | 'watch' | 'blocked';
 export type OperatingModelStatus = ProductionReadinessStatus;
+export type NotificationChannel = 'in_app' | 'email' | 'email_digest' | 'teams' | 'sms' | 'webhook';
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type NotificationDeliveryMode = 'direct' | 'role_queue' | 'broadcast';
+export type NotificationDigestBucket = 'immediate' | 'daily' | 'weekly';
+
+export type NotificationDeliveryInput = {
+  severity: GovernanceNotificationSeverity;
+  status?: GovernanceNotificationStatus | string | null;
+  sourceType?: string | null;
+  targetRoleCode?: string | null;
+  assigneeUserId?: string | null;
+  emailTo?: string | null;
+  workflowCaseId?: string | null;
+  workflowTaskId?: string | null;
+  overdueBusinessDays?: number;
+  externalDeliveryEnabled?: boolean;
+};
+
+export type NotificationDeliveryPlan = {
+  channels: NotificationChannel[];
+  priority: NotificationPriority;
+  deliveryMode: NotificationDeliveryMode;
+  digestBucket: NotificationDigestBucket;
+  action: 'open_workspace' | 'review_task' | 'read_only';
+  route: string;
+  retryPolicy: {
+    maxAttempts: number;
+    backoffMinutes: number[];
+  };
+  requiresAcknowledgement: boolean;
+  externalDeliveryEnabled: boolean;
+};
+
+export type NotificationDigestInput = {
+  severity: GovernanceNotificationSeverity;
+  status: GovernanceNotificationStatus | string;
+  assigneeUserId?: string | null;
+  targetRoleCode?: string | null;
+  deliveryPlan: NotificationDeliveryPlan;
+};
 
 export type OperatingBodyDefinition = {
   code: string;
@@ -690,6 +731,139 @@ export function notificationSeverity(signal: SlaSignal, overdueBusinessDays = 0)
   if (signal === 'overdue' || signal === 'at_risk') return GovernanceNotificationSeverity.warning;
   if (signal === 'done') return GovernanceNotificationSeverity.success;
   return GovernanceNotificationSeverity.info;
+}
+
+export function notificationPriority(
+  severity: GovernanceNotificationSeverity,
+  overdueBusinessDays = 0,
+): NotificationPriority {
+  if (severity === GovernanceNotificationSeverity.critical) return 'urgent';
+  if (severity === GovernanceNotificationSeverity.warning && overdueBusinessDays > 0) return 'high';
+  if (severity === GovernanceNotificationSeverity.warning) return 'normal';
+  if (severity === GovernanceNotificationSeverity.success) return 'low';
+  return 'normal';
+}
+
+export function notificationDeliveryMode(input: {
+  assigneeUserId?: string | null;
+  targetRoleCode?: string | null;
+}): NotificationDeliveryMode {
+  if (input.assigneeUserId) return 'direct';
+  if (input.targetRoleCode) return 'role_queue';
+  return 'broadcast';
+}
+
+export function notificationChannels(input: NotificationDeliveryInput): NotificationChannel[] {
+  if (input.status === GovernanceNotificationStatus.archived) return [];
+  const channels = new Set<NotificationChannel>(['in_app']);
+  if (input.severity === GovernanceNotificationSeverity.critical) {
+    channels.add('email');
+    channels.add('teams');
+    if (input.assigneeUserId || input.emailTo) channels.add('sms');
+  } else if (input.severity === GovernanceNotificationSeverity.warning) {
+    channels.add(input.emailTo || input.assigneeUserId ? 'email' : 'email_digest');
+    channels.add('teams');
+  } else if (input.severity === GovernanceNotificationSeverity.info) {
+    channels.add('email_digest');
+  }
+  return [...channels];
+}
+
+export function notificationRoute(input: NotificationDeliveryInput): string {
+  if (input.workflowTaskId || input.workflowCaseId || input.sourceType === 'workflow_task') return '/governance/workflow';
+  if (input.sourceType?.includes('calendar')) return '/governance/operations';
+  return '/governance/operations';
+}
+
+export function buildNotificationDeliveryPlan(input: NotificationDeliveryInput): NotificationDeliveryPlan {
+  const priority = notificationPriority(input.severity, input.overdueBusinessDays ?? 0);
+  const channels = notificationChannels(input);
+  const retryPolicy =
+    priority === 'urgent'
+      ? { maxAttempts: 4, backoffMinutes: [5, 15, 60, 240] }
+      : priority === 'high'
+        ? { maxAttempts: 3, backoffMinutes: [30, 120, 360] }
+        : priority === 'normal'
+          ? { maxAttempts: 2, backoffMinutes: [240, 1440] }
+          : { maxAttempts: 1, backoffMinutes: [] };
+  return {
+    channels,
+    priority,
+    deliveryMode: notificationDeliveryMode(input),
+    digestBucket:
+      priority === 'urgent'
+        ? 'immediate'
+        : priority === 'high' || input.status === GovernanceNotificationStatus.unread
+          ? 'daily'
+          : 'weekly',
+    action:
+      input.status === GovernanceNotificationStatus.archived || input.status === GovernanceNotificationStatus.read
+        ? 'read_only'
+        : input.workflowTaskId
+          ? 'review_task'
+          : 'open_workspace',
+    route: notificationRoute(input),
+    retryPolicy,
+    requiresAcknowledgement:
+      input.severity === GovernanceNotificationSeverity.critical ||
+      (input.severity === GovernanceNotificationSeverity.warning && (input.overdueBusinessDays ?? 0) > 0),
+    externalDeliveryEnabled:
+      !!input.externalDeliveryEnabled &&
+      channels.some((channel) => channel === 'email' || channel === 'teams' || channel === 'sms' || channel === 'webhook'),
+  };
+}
+
+export function summarizeNotificationLayer(
+  notifications: NotificationDigestInput[],
+  activeEscalations = 0,
+) {
+  const bySeverity: Record<GovernanceNotificationSeverity, number> = {
+    [GovernanceNotificationSeverity.info]: 0,
+    [GovernanceNotificationSeverity.success]: 0,
+    [GovernanceNotificationSeverity.warning]: 0,
+    [GovernanceNotificationSeverity.critical]: 0,
+  };
+  const byStatus: Record<string, number> = {};
+  const byChannel: Record<NotificationChannel, number> = {
+    in_app: 0,
+    email: 0,
+    email_digest: 0,
+    teams: 0,
+    sms: 0,
+    webhook: 0,
+  };
+  const byPriority: Record<NotificationPriority, number> = {
+    low: 0,
+    normal: 0,
+    high: 0,
+    urgent: 0,
+  };
+  const byAudience: Record<NotificationDeliveryMode, number> = {
+    direct: 0,
+    role_queue: 0,
+    broadcast: 0,
+  };
+  for (const notification of notifications) {
+    bySeverity[notification.severity] += 1;
+    byStatus[notification.status] = (byStatus[notification.status] ?? 0) + 1;
+    byPriority[notification.deliveryPlan.priority] += 1;
+    byAudience[notification.deliveryPlan.deliveryMode] += 1;
+    for (const channel of notification.deliveryPlan.channels) byChannel[channel] += 1;
+  }
+  return {
+    total: notifications.length,
+    unread: byStatus[GovernanceNotificationStatus.unread] ?? 0,
+    archived: byStatus[GovernanceNotificationStatus.archived] ?? 0,
+    immediate: notifications.filter((row) => row.deliveryPlan.digestBucket === 'immediate').length,
+    needsAcknowledgement: notifications.filter((row) => row.deliveryPlan.requiresAcknowledgement).length,
+    externalReady: notifications.filter((row) => row.deliveryPlan.externalDeliveryEnabled).length,
+    activeEscalations,
+    bySeverity,
+    byStatus,
+    byChannel,
+    byPriority,
+    byAudience,
+  };
 }
 
 export const ESCALATION_LEVEL_LABELS: Record<GovernanceEscalationLevel, string> = {

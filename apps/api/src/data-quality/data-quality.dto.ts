@@ -1,6 +1,7 @@
 import {
   IsDateString,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -116,6 +117,23 @@ export class ImportDataQualityProfileDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => DataQualityProfileColumnDto)
   columns!: DataQualityProfileColumnDto[];
   @IsOptional() @IsObject() summaryJson?: Record<string, unknown> | null;
+}
+
+export class RelatedDataQualityProfileDatasetDto {
+  @IsString() @IsNotEmpty() name!: string;
+  @IsString() @IsNotEmpty() csv!: string;
+}
+
+export class RunDataQualityProfileDto {
+  @IsOptional() @IsString() assetId?: string | null;
+  @IsOptional() @IsString() domainId?: string | null;
+  @IsOptional() @IsString() source?: string;
+  @IsOptional() @IsString() datasetName?: string;
+  @IsString() @IsNotEmpty() csv!: string;
+  @IsOptional() @IsBoolean() createIssues?: boolean;
+  @IsOptional() @IsBoolean() createRuleDrafts?: boolean;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => RelatedDataQualityProfileDatasetDto)
+  relatedDatasets?: RelatedDataQualityProfileDatasetDto[];
 }
 
 export class UpsertDataQualityRcaDto {

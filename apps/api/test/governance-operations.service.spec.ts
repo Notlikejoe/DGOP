@@ -15,6 +15,7 @@ import {
   SECURITY_CONTROL_CROSSWALK_DEFINITIONS,
   addKsaBusinessDays,
   backlogStatus,
+  buildNotificationDeliveryPlan,
   businessDaysBetween,
   combineReadinessStatus,
   dgpoSizingGuidance,
@@ -26,6 +27,7 @@ import {
   kpiTraceabilityStatus,
   ksaSlaSignal,
   lifecycleReadiness,
+  summarizeNotificationLayer,
   notificationSeverity,
   operatingDefinitionStatus,
   operatingPressureStatus,
@@ -83,6 +85,66 @@ test('notification severity follows SLA risk without color-only meaning', () => 
   assert.equal(notificationSeverity('done'), GovernanceNotificationSeverity.success);
   assert.equal(notificationSeverity('at_risk'), GovernanceNotificationSeverity.warning);
   assert.equal(notificationSeverity('overdue', 7), GovernanceNotificationSeverity.critical);
+});
+
+test('notification delivery plan maps severity to channels, audience, and retry policy', () => {
+  const plan = buildNotificationDeliveryPlan({
+    severity: GovernanceNotificationSeverity.critical,
+    status: GovernanceNotificationStatus.unread,
+    assigneeUserId: 'user-1',
+    emailTo: 'owner@dgop.local',
+    workflowTaskId: 'task-1',
+    overdueBusinessDays: 8,
+    externalDeliveryEnabled: true,
+  });
+  assert.deepEqual(plan.channels, ['in_app', 'email', 'teams', 'sms']);
+  assert.equal(plan.priority, 'urgent');
+  assert.equal(plan.deliveryMode, 'direct');
+  assert.equal(plan.digestBucket, 'immediate');
+  assert.equal(plan.action, 'review_task');
+  assert.equal(plan.requiresAcknowledgement, true);
+  assert.equal(plan.externalDeliveryEnabled, true);
+  assert.equal(plan.retryPolicy.maxAttempts, 4);
+});
+
+test('notification digest summarizes status, channel, priority, and audience counts', () => {
+  const directPlan = buildNotificationDeliveryPlan({
+    severity: GovernanceNotificationSeverity.warning,
+    status: GovernanceNotificationStatus.unread,
+    assigneeUserId: 'user-1',
+    emailTo: 'owner@dgop.local',
+    overdueBusinessDays: 2,
+  });
+  const rolePlan = buildNotificationDeliveryPlan({
+    severity: GovernanceNotificationSeverity.info,
+    status: GovernanceNotificationStatus.read,
+    targetRoleCode: 'dmo_admin',
+  });
+  const summary = summarizeNotificationLayer([
+    {
+      severity: GovernanceNotificationSeverity.warning,
+      status: GovernanceNotificationStatus.unread,
+      assigneeUserId: 'user-1',
+      targetRoleCode: null,
+      deliveryPlan: directPlan,
+    },
+    {
+      severity: GovernanceNotificationSeverity.info,
+      status: GovernanceNotificationStatus.read,
+      assigneeUserId: null,
+      targetRoleCode: 'dmo_admin',
+      deliveryPlan: rolePlan,
+    },
+  ], 1);
+
+  assert.equal(summary.total, 2);
+  assert.equal(summary.unread, 1);
+  assert.equal(summary.activeEscalations, 1);
+  assert.equal(summary.byChannel.in_app, 2);
+  assert.equal(summary.byChannel.email, 1);
+  assert.equal(summary.byPriority.high, 1);
+  assert.equal(summary.byAudience.direct, 1);
+  assert.equal(summary.byAudience.role_queue, 1);
 });
 
 test('production readiness status helpers escalate from ready to watch to blocked', () => {
@@ -723,6 +785,231 @@ test('readNotification marks only visible notifications as read and records audi
   assert.equal(auditEvents[0].action, 'governance_operations.notification.read');
   assert.equal(auditEvents[0].entityId, 'notice-1');
   assert.equal(auditEvents[0].actor, 'dmo@dgop.local');
+});
+
+test('createNotification resolves workflow assignee, prevents duplicate keys, and records audit evidence', async () => {
+  const auditEvents: any[] = [];
+  const createdRows: any[] = [];
+  const task = {
+    id: 'task-1',
+    caseId: 'case-1',
+    assigneeUserId: 'user-1',
+    assignee: { email: 'owner@dgop.local', isActive: true },
+  };
+  const prisma: any = {
+    workflowTask: {
+      findFirst: async ({ where }: any) => {
+        assert.equal(where.id, 'task-1');
+        assert.equal(JSON.stringify(where).includes('case'), true);
+        return task;
+      },
+    },
+    workflowCase: {
+      findFirst: async ({ where }: any) => {
+        assert.equal(where.AND[0].id, 'case-1');
+        return { id: 'case-1' };
+      },
+    },
+    user: {
+      findFirst: async ({ where }: any) => {
+        assert.deepEqual(where, { id: 'user-1', isActive: true });
+        return { id: 'user-1', email: 'owner@dgop.local' };
+      },
+    },
+    governanceNotification: {
+      findUnique: async ({ where }: any) => {
+        assert.equal(where.dedupeKey, 'manual:task-1');
+        return null;
+      },
+      create: async ({ data }: any) => {
+        createdRows.push(data);
+        return {
+          id: 'notice-1',
+          status: GovernanceNotificationStatus.unread,
+          emailSentAt: null,
+          readAt: null,
+          createdAt: new Date('2026-07-22T10:00:00Z'),
+          updatedAt: new Date('2026-07-22T10:00:00Z'),
+          workflowCase: { id: 'case-1', code: 'WFC-1', title: 'Case', status: 'submitted' },
+          workflowTask: { id: 'task-1', title: 'Task', status: 'pending', dueDate: new Date('2026-07-20T10:00:00Z') },
+          ...data,
+        };
+      },
+    },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async (event: any) => auditEvents.push(event) } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.createNotification(
+    {
+      title: ' Review overdue evidence ',
+      message: ' Evidence needs attention. ',
+      severity: GovernanceNotificationSeverity.warning,
+      workflowTaskId: 'task-1',
+      dedupeKey: 'manual:task-1',
+    },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(createdRows.length, 1);
+  assert.equal(createdRows[0].title, 'Review overdue evidence');
+  assert.equal(createdRows[0].message, 'Evidence needs attention.');
+  assert.equal(createdRows[0].assigneeUserId, 'user-1');
+  assert.equal(createdRows[0].emailTo, 'owner@dgop.local');
+  assert.equal(createdRows[0].workflowCaseId, 'case-1');
+  assert.equal(result.deliveryPlan.deliveryMode, 'direct');
+  assert.equal(result.deliveryPlan.action, 'review_task');
+  assert.equal(auditEvents.length, 1);
+  assert.equal(auditEvents[0].action, 'governance_operations.notification.create');
+});
+
+test('createNotification rejects duplicate dedupe keys before inserting', async () => {
+  const prisma: any = {
+    governanceNotification: {
+      findUnique: async ({ where }: any) => {
+        assert.equal(where.dedupeKey, 'manual:dupe');
+        return { id: 'notice-existing' };
+      },
+      create: async () => {
+        throw new Error('duplicate notification inserted');
+      },
+    },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  await assert.rejects(
+    () => service.createNotification(
+      {
+        title: 'Duplicate',
+        message: 'This should be blocked.',
+        dedupeKey: 'manual:dupe',
+      },
+      { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+    ),
+    /governance_notification already exists/,
+  );
+});
+
+test('createNotification honors explicit role target on assigned workflow tasks', async () => {
+  const createdRows: any[] = [];
+  const prisma: any = {
+    workflowTask: {
+      findFirst: async () => ({
+        id: 'task-1',
+        caseId: 'case-1',
+        assigneeUserId: 'user-1',
+        assignee: { email: 'owner@dgop.local', isActive: true },
+      }),
+    },
+    workflowCase: { findFirst: async () => ({ id: 'case-1' }) },
+    user: {
+      findFirst: async () => {
+        throw new Error('explicit role target should not be converted to an assignee');
+      },
+    },
+    role: {
+      findFirst: async ({ where }: any) => {
+        assert.deepEqual(where, { code: 'dmo_admin', isActive: true, deletedAt: null });
+        return { code: 'dmo_admin' };
+      },
+    },
+    governanceNotification: {
+      create: async ({ data }: any) => {
+        createdRows.push(data);
+        return {
+          id: 'notice-1',
+          status: GovernanceNotificationStatus.unread,
+          emailSentAt: null,
+          readAt: null,
+          createdAt: new Date('2026-07-22T10:00:00Z'),
+          updatedAt: new Date('2026-07-22T10:00:00Z'),
+          workflowCase: { id: 'case-1', code: 'WFC-1', title: 'Case', status: 'submitted' },
+          workflowTask: { id: 'task-1', title: 'Task', status: 'pending', dueDate: null },
+          ...data,
+        };
+      },
+    },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async () => {} } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.createNotification(
+    {
+      title: 'Role queue notice',
+      message: 'Review as a governance role.',
+      workflowTaskId: 'task-1',
+      targetRoleCode: 'dmo_admin',
+    },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(createdRows[0].assigneeUserId, null);
+  assert.equal(createdRows[0].targetRoleCode, 'dmo_admin');
+  assert.equal(createdRows[0].emailTo, null);
+  assert.equal(result.deliveryPlan.deliveryMode, 'role_queue');
+});
+
+test('dispatchNotifications returns delivery plans and writes audit without marking fake sends', async () => {
+  const auditEvents: any[] = [];
+  const prisma: any = {
+    governanceNotification: {
+      findMany: async ({ where }: any) => {
+        assert.equal(JSON.stringify(where).includes('"status":"unread"'), true);
+        return [
+          {
+            id: 'notice-1',
+            dedupeKey: 'workflow_task:task-1:notification',
+            title: 'Workflow task overdue',
+            message: 'Needs attention.',
+            severity: GovernanceNotificationSeverity.critical,
+            status: GovernanceNotificationStatus.unread,
+            sourceType: 'workflow_task',
+            sourceId: 'task-1',
+            targetRoleCode: null,
+            assigneeUserId: 'user-1',
+            workflowCaseId: 'case-1',
+            workflowTaskId: 'task-1',
+            emailTo: 'owner@dgop.local',
+            emailSentAt: null,
+            readAt: null,
+            createdBy: 'system',
+            createdAt: new Date('2026-07-22T10:00:00Z'),
+            updatedAt: new Date('2026-07-22T10:00:00Z'),
+            workflowCase: { id: 'case-1', code: 'WFC-1', title: 'Case', status: 'submitted' },
+            workflowTask: { id: 'task-1', title: 'Task', status: 'pending', dueDate: new Date('2026-07-20T10:00:00Z') },
+          },
+        ];
+      },
+    },
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    { log: async (event: any) => auditEvents.push(event) } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.dispatchNotifications(
+    { dryRun: false },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(result.planned, 1);
+  assert.equal(result.dispatched, 0);
+  assert.equal(result.notifications[0].deliveryPlan.priority, 'urgent');
+  assert.equal(result.summary.byChannel.email, 1);
+  assert.equal(auditEvents.length, 1);
+  assert.equal(auditEvents[0].action, 'governance_operations.notification.dispatch_plan');
+  assert.equal(auditEvents[0].metadata.planned, 1);
 });
 
 test('workspace notifications are constrained by linked workflow visibility', async () => {

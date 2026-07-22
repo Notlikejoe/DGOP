@@ -3,9 +3,12 @@ import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
   CreateComplianceCalendarTemplateDto,
+  CreateGovernanceNotificationDto,
   CreateKsaHolidayDto,
+  DispatchNotificationsDto,
   UpdateComplianceCalendarTemplateDto,
   UpdateEscalationDto,
+  UpdateNotificationDto,
 } from './governance-operations.dto';
 import { GovernanceOperationsService } from './governance-operations.service';
 
@@ -85,10 +88,34 @@ export class GovernanceOperationsController {
     return this.service.createHoliday(dto, user.email);
   }
 
+  @Get('notifications/digest')
+  @RequirePermissions('governance_operations.view')
+  notificationDigest(@CurrentUser() user: AuthUser) {
+    return this.service.notificationDigest(user);
+  }
+
+  @Post('notifications')
+  @RequirePermissions('governance_operations.create')
+  createNotification(@Body() dto: CreateGovernanceNotificationDto, @CurrentUser() user: AuthUser) {
+    return this.service.createNotification(dto, user);
+  }
+
+  @Post('notifications/dispatch')
+  @RequirePermissions('governance_operations.run')
+  dispatchNotifications(@Body() dto: DispatchNotificationsDto, @CurrentUser() user: AuthUser) {
+    return this.service.dispatchNotifications(dto, user);
+  }
+
   @Patch('notifications/:id/read')
   @RequirePermissions('governance_operations.view')
   readNotification(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.service.readNotification(id, user);
+  }
+
+  @Patch('notifications/:id')
+  @RequirePermissions('governance_operations.edit')
+  updateNotification(@Param('id') id: string, @Body() dto: UpdateNotificationDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateNotification(id, dto, user);
   }
 
   @Patch('escalations/:id')

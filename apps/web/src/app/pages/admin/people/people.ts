@@ -32,6 +32,7 @@ interface Draft {
   userId: string;
   isActive: boolean;
 }
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 @Component({
   selector: 'app-admin-people',
@@ -153,8 +154,7 @@ export class PeoplePage implements OnInit {
   }
 
   protected canSave(): boolean {
-    const d = this.draft();
-    return !!(d.fullNameEn && d.fullNameAr);
+    return this.validationErrors().length === 0;
   }
 
   protected save(): void {
@@ -162,11 +162,11 @@ export class PeoplePage implements OnInit {
     this.saving.set(true);
     const d = this.draft();
     const body = {
-      fullNameEn: d.fullNameEn,
-      fullNameAr: d.fullNameAr,
-      email: d.email || null,
-      jobTitle: d.jobTitle || null,
-      organization: d.organization || null,
+      fullNameEn: d.fullNameEn.trim(),
+      fullNameAr: d.fullNameAr.trim(),
+      email: d.email.trim() || null,
+      jobTitle: d.jobTitle.trim() || null,
+      organization: d.organization.trim() || null,
       userId: d.userId || null,
       isActive: d.isActive,
     };
@@ -203,5 +203,28 @@ export class PeoplePage implements OnInit {
 
   protected t(key: string): string {
     return this.i18n.t(key);
+  }
+
+  protected validationErrors(): string[] {
+    const errors: string[] = [];
+    const d = this.draft();
+    const nameEn = d.fullNameEn.trim();
+    const nameAr = d.fullNameAr.trim();
+    const email = d.email.trim();
+
+    if (!nameEn) errors.push(this.t('validation.nameEnRequired'));
+    if (!nameAr) errors.push(this.t('validation.nameArRequired'));
+    if (nameEn.length > 180 || nameAr.length > 180) errors.push(this.t('validation.nameLength'));
+    if (email && !EMAIL_PATTERN.test(email)) errors.push(this.t('validation.emailFormat'));
+    if ([email, d.jobTitle.trim(), d.organization.trim()].some((value) => value.length > 160)) {
+      errors.push(this.t('validation.shortTextLength'));
+    }
+    if (d.userId) {
+      const duplicate = this.people().find((person) =>
+        person.userId === d.userId && person.id !== this.editingId(),
+      );
+      if (duplicate) errors.push(this.t('people.validation.userLinked'));
+    }
+    return [...new Set(errors)];
   }
 }

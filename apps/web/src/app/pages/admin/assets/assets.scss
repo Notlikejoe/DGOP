@@ -193,6 +193,29 @@ code { font-family: var(--font-mono, monospace); font-size: var(--font-size-sm);
 .hint { font-size: var(--font-size-sm); color: var(--on-surface-muted); }
 .self-start { align-self: flex-start; }
 
+.validation-panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--on-surface);
+}
+
+.validation-panel strong {
+  color: var(--warning-strong, var(--warning));
+}
+
+.validation-panel ul {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+}
+
+.validation-panel li {
+  margin-block: 2px;
+}
+
 .chips-select { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .chip-check {
   display: inline-flex;

@@ -22,6 +22,7 @@ import {
   DataQualityRuleTransitionDto,
   ImportDataQualityProfileDto,
   ImportDataQualityIssuesDto,
+  RunDataQualityProfileDto,
   UpdateDataQualityIssueDto,
   UpdateDataQualityRuleDto,
   UpsertDataQualityRcaDto,
@@ -33,6 +34,13 @@ import {
   isAcceptedDataQualityImportFile,
   isSafeDataQualityImportContent,
 } from './data-quality.config';
+
+function parseOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (value === true || value === 'true' || value === '1' || value === 'yes') return true;
+  if (value === false || value === 'false' || value === '0' || value === 'no') return false;
+  return undefined;
+}
 
 @Controller('data-quality')
 export class DataQualityController {
@@ -121,6 +129,38 @@ export class DataQualityController {
   @RequirePermissions('data_quality_profiles.create')
   importProfile(@Body() dto: ImportDataQualityProfileDto, @CurrentUser() user: AuthUser) {
     return this.service.importProfile(user.roles, dto, user.email);
+  }
+
+  @Post('profiles/run')
+  @RequirePermissions('data_quality_profiles.create')
+  runProfile(@Body() dto: RunDataQualityProfileDto, @CurrentUser() user: AuthUser) {
+    return this.service.runProfilingEngine(user.roles, dto, user.email);
+  }
+
+  @Post('profiles/run-file')
+  @RequirePermissions('data_quality_profiles.create')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES } }))
+  runProfileFile(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() body: Record<string, string | undefined>,
+    @CurrentUser() user: AuthUser,
+  ) {
+    if (!file) throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.fileRequired);
+    if (!isAcceptedDataQualityImportFile(file.originalname, file.mimetype)) {
+      throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.unsupportedFile);
+    }
+    if (!isSafeDataQualityImportContent(file.buffer)) {
+      throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.invalidText);
+    }
+    return this.service.runProfilingEngine(user.roles, {
+      assetId: body.assetId || null,
+      domainId: body.domainId || null,
+      source: body.source || 'native_csv_profiler',
+      datasetName: body.datasetName || file.originalname,
+      csv: file.buffer.toString('utf8'),
+      createIssues: parseOptionalBoolean(body.createIssues),
+      createRuleDrafts: parseOptionalBoolean(body.createRuleDrafts),
+    }, user.email);
   }
 
   @Get('issues')

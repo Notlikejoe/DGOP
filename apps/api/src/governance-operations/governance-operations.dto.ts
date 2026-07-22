@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import {
   ComplianceCalendarStatus,
   ComplianceCalendarType,
   GovernanceEscalationStatus,
+  GovernanceNotificationSeverity,
+  GovernanceNotificationStatus,
 } from '@prisma/client';
 
 export class CreateComplianceCalendarTemplateDto {
@@ -34,4 +36,27 @@ export class CreateKsaHolidayDto {
 export class UpdateEscalationDto {
   @IsIn(Object.values(GovernanceEscalationStatus))
   status!: GovernanceEscalationStatus;
+}
+
+export class CreateGovernanceNotificationDto {
+  @IsString() @MaxLength(180) title!: string;
+  @IsString() @MaxLength(1200) message!: string;
+  @IsOptional() @IsIn(Object.values(GovernanceNotificationSeverity)) severity?: GovernanceNotificationSeverity;
+  @IsOptional() @IsString() @MaxLength(80) sourceType?: string;
+  @IsOptional() @IsString() @MaxLength(120) sourceId?: string;
+  @IsOptional() @IsString() @MaxLength(160) dedupeKey?: string;
+  @IsOptional() @IsString() targetRoleCode?: string;
+  @IsOptional() @IsString() assigneeUserId?: string;
+  @IsOptional() @IsString() workflowCaseId?: string;
+  @IsOptional() @IsString() workflowTaskId?: string;
+  @IsOptional() @IsEmail() emailTo?: string;
+}
+
+export class UpdateNotificationDto {
+  @IsIn(Object.values(GovernanceNotificationStatus))
+  status!: GovernanceNotificationStatus;
+}
+
+export class DispatchNotificationsDto {
+  @IsOptional() @IsBoolean() dryRun?: boolean;
 }

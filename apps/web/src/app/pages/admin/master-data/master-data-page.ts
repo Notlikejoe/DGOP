@@ -22,6 +22,8 @@ interface Row {
 }
 
 type State = 'loading' | 'ok' | 'error';
+const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
+const COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 @Component({
   selector: 'app-master-data',
@@ -154,10 +156,7 @@ export class MasterDataPage implements OnInit {
   }
 
   protected canSave(): boolean {
-    const m = this.model();
-    return this.config().fields.every(
-      (f) => !f.required || (m[f.key] !== '' && m[f.key] !== null && m[f.key] !== undefined),
-    );
+    return this.validationErrors().length === 0;
   }
 
   protected save(): void {
@@ -186,11 +185,50 @@ export class MasterDataPage implements OnInit {
     const body: Record<string, unknown> = {};
     for (const f of this.config().fields) {
       let v = m[f.key];
+      if (typeof v === 'string') v = v.trim();
       if (f.type === 'number' && v !== null && v !== '') v = Number(v);
       if (f.type === 'select' && v === '') v = null;
+      if (v === '') v = null;
       body[f.key] = v;
     }
     return body;
+  }
+
+  protected validationErrors(): string[] {
+    const errors: string[] = [];
+    const m = this.model();
+    const original = this.editingId()
+      ? this.rows().find((row) => row.id === this.editingId())
+      : null;
+    for (const f of this.config().fields) {
+      const raw = m[f.key];
+      const value = typeof raw === 'string' ? raw.trim() : raw;
+      if (f.required && (value === '' || value === null || value === undefined)) {
+        errors.push(this.t('validation.required'));
+        continue;
+      }
+      if (value === '' || value === null || value === undefined) continue;
+
+      if (f.key === 'code' || f.key === 'domain') {
+        if (typeof value !== 'string' || !CODE_PATTERN.test(value)) errors.push(this.t('validation.codeFormat'));
+        if (typeof value === 'string' && value.length > 64) errors.push(this.t('validation.codeLength'));
+        if (original && original[f.key] !== value) errors.push(this.t('validation.codeImmutable'));
+      }
+      if (f.key === 'nameEn' && typeof value === 'string' && value.length > 180) errors.push(this.t('validation.nameLength'));
+      if (f.key === 'nameAr' && typeof value === 'string' && value.length > 180) errors.push(this.t('validation.nameLength'));
+      if (f.key === 'description' && typeof value === 'string' && value.length > 1000) errors.push(this.t('validation.descriptionLength'));
+      if (f.type === 'text' && !['code', 'domain', 'nameEn', 'nameAr'].includes(f.key) && typeof value === 'string' && value.length > 160) {
+        errors.push(this.t('validation.shortTextLength'));
+      }
+      if (f.type === 'color' && (typeof value !== 'string' || !COLOR_PATTERN.test(value))) errors.push(this.t('validation.colorFormat'));
+      if (f.key === 'rank' && (!Number.isInteger(Number(value)) || Number(value) < 1 || Number(value) > 99)) errors.push(this.t('validation.rankRange'));
+      if (f.key === 'sortOrder' && (!Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > 999)) errors.push(this.t('validation.sortRange'));
+    }
+    return [...new Set(errors)];
+  }
+
+  protected isImmutableField(key: string): boolean {
+    return !!this.editingId() && (key === 'code' || key === 'domain');
   }
 
   protected async deleteRow(row: Row): Promise<void> {

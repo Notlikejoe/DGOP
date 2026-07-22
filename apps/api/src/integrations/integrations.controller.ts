@@ -33,6 +33,12 @@ export class IntegrationsController {
     return this.service.createConnector(dto, user.email);
   }
 
+  @Post('connectors/:id/test')
+  @RequirePermissions('integrations.run')
+  testConnector(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.testConnector(id, user.email);
+  }
+
   @Get('batches')
   @RequirePermissions('integrations.view')
   batches(@CurrentUser() user: AuthUser, @Query('limit') limit?: string) {

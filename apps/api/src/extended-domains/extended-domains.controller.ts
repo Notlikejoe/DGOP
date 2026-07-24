@@ -11,6 +11,8 @@ import {
   ResolveMdmMatchDto,
   RunMdmMatchingDto,
   SaveMetadataCertificationDto,
+  UpdateMdmGoldenRecordDto,
+  UpsertMdmMatchRuleDto,
 } from './extended-domains.dto';
 import { ExtendedDomainsService } from './extended-domains.service';
 
@@ -34,6 +36,30 @@ export class ExtendedDomainsController {
   @RequirePermissions('extended_domains.create')
   runMdmMatching(@Body() dto: RunMdmMatchingDto, @CurrentUser() user: AuthUser) {
     return this.service.runMdmMatching(user.roles, dto, user.email);
+  }
+
+  @Get('mdm/match-rules')
+  @RequirePermissions('extended_domains.view')
+  mdmMatchRules(@CurrentUser() user: AuthUser) {
+    return this.service.listMdmMatchRules(user.roles);
+  }
+
+  @Post('mdm/match-rules')
+  @RequirePermissions('extended_domains.edit')
+  upsertMdmMatchRule(@Body() dto: UpsertMdmMatchRuleDto, @CurrentUser() user: AuthUser) {
+    return this.service.upsertMdmMatchRule(user.roles, dto, user.email);
+  }
+
+  @Get('mdm/golden-records')
+  @RequirePermissions('extended_domains.view')
+  mdmGoldenRecords(@CurrentUser() user: AuthUser) {
+    return this.service.listGoldenRecords(user.roles);
+  }
+
+  @Patch('mdm/golden-records/:id')
+  @RequirePermissions('extended_domains.edit')
+  updateGoldenRecord(@Param('id') id: string, @Body() dto: UpdateMdmGoldenRecordDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateGoldenRecord(user.roles, id, dto, user.email);
   }
 
   @Patch('mdm/matches/:id')

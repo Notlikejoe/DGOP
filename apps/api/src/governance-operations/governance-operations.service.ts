@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   CaseStatus,
   ClassificationRequestStatus,
@@ -8,6 +8,8 @@ import {
   DlpIncidentStatus,
   GovernanceEscalationLevel,
   GovernanceEscalationStatus,
+  GovernanceNotificationChannel,
+  GovernanceNotificationDeliveryStatus,
   GovernanceNotificationSeverity,
   GovernanceNotificationStatus,
   IntegrationBatchStatus,
@@ -30,6 +32,9 @@ import {
   UpdateComplianceCalendarTemplateDto,
   UpdateEscalationDto,
   UpdateNotificationDto,
+  UpdateNotificationDeliveryAttemptDto,
+  UpsertGovernanceNotificationPreferenceDto,
+  UpsertGovernanceNotificationTemplateDto,
 } from './governance-operations.dto';
 import {
   CHARTER_LIFECYCLE_STEPS,
@@ -82,6 +87,7 @@ const taskInclude = {
 const notificationInclude = {
   workflowCase: { select: { id: true, code: true, title: true, status: true } },
   workflowTask: { select: { id: true, title: true, status: true, dueDate: true } },
+  deliveryAttempts: { orderBy: { createdAt: 'desc' as const }, take: 10 },
 } satisfies Prisma.GovernanceNotificationInclude;
 
 type NotificationWithLinks = Prisma.GovernanceNotificationGetPayload<{ include: typeof notificationInclude }>;
@@ -1561,6 +1567,98 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     return this.notificationLayer(notifications, activeEscalations);
   }
 
+  async notificationTemplates() {
+    await this.ensureDefaultNotificationTemplates();
+    return this.prisma.governanceNotificationTemplate.findMany({
+      where: { isActive: true },
+      orderBy: [{ sourceType: 'asc' }, { code: 'asc' }],
+    });
+  }
+
+  async upsertNotificationTemplate(dto: UpsertGovernanceNotificationTemplateDto, user: AuthUser) {
+    await this.ensureDefaultNotificationTemplates();
+    const row = await this.prisma.governanceNotificationTemplate.upsert({
+      where: { code: dto.code },
+      create: {
+        code: dto.code,
+        name: dto.name,
+        sourceType: dto.sourceType ?? null,
+        titleTemplate: dto.titleTemplate,
+        messageTemplate: dto.messageTemplate,
+        severity: dto.severity ?? GovernanceNotificationSeverity.info,
+        defaultChannelsJson: (dto.defaultChannelsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        digestCadence: dto.digestCadence ?? 'immediate',
+        isActive: dto.isActive ?? true,
+        createdBy: user.email,
+      },
+      update: {
+        name: dto.name,
+        sourceType: dto.sourceType ?? null,
+        titleTemplate: dto.titleTemplate,
+        messageTemplate: dto.messageTemplate,
+        severity: dto.severity ?? GovernanceNotificationSeverity.info,
+        defaultChannelsJson: (dto.defaultChannelsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        digestCadence: dto.digestCadence ?? 'immediate',
+        isActive: dto.isActive ?? true,
+        updatedBy: user.email,
+      },
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'governance_operations.notification_template.upsert',
+      entityType: 'governance_notification_template',
+      entityId: row.id,
+      metadata: { code: row.code, sourceType: row.sourceType },
+    });
+    return row;
+  }
+
+  async notificationPreferences(user: AuthUser) {
+    return this.prisma.governanceNotificationPreference.findMany({
+      where: { OR: [{ userId: user.id }, { roleCode: { in: user.roles } }] },
+      orderBy: [{ userId: 'desc' }, { roleCode: 'asc' }, { channel: 'asc' }],
+    });
+  }
+
+  async upsertNotificationPreference(dto: UpsertGovernanceNotificationPreferenceDto, user: AuthUser) {
+    const isAdmin = user.roles.some((role) => ['system_admin', 'dmo_admin'].includes(role));
+    const targetUserId = dto.userId ?? user.id;
+    const roleCode = dto.roleCode ?? null;
+    if (!isAdmin && targetUserId !== user.id) {
+      throw new ForbiddenException('You can only manage your own notification preferences');
+    }
+    if (!isAdmin && roleCode && !user.roles.includes(roleCode)) {
+      throw new ForbiddenException('You can only manage preferences for your own role queues');
+    }
+    const roleCodeForStorage = roleCode ?? '';
+    if (targetUserId) await this.assertActiveUser(targetUserId);
+    if (roleCode) await this.assertActiveRole(roleCode);
+    return this.prisma.governanceNotificationPreference.upsert({
+      where: {
+        userId_roleCode_channel: {
+          userId: targetUserId,
+          roleCode: roleCodeForStorage,
+          channel: dto.channel,
+        },
+      },
+      create: {
+        userId: targetUserId,
+        roleCode: roleCodeForStorage,
+        channel: dto.channel,
+        minimumSeverity: dto.minimumSeverity ?? GovernanceNotificationSeverity.info,
+        digestCadence: dto.digestCadence ?? 'immediate',
+        quietHoursJson: (dto.quietHoursJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        isEnabled: dto.isEnabled ?? true,
+      },
+      update: {
+        minimumSeverity: dto.minimumSeverity ?? GovernanceNotificationSeverity.info,
+        digestCadence: dto.digestCadence ?? 'immediate',
+        quietHoursJson: (dto.quietHoursJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        isEnabled: dto.isEnabled ?? true,
+      },
+    });
+  }
+
   async createNotification(dto: CreateGovernanceNotificationDto, user: AuthUser) {
     const title = this.requireTrimmed(dto.title, 'title');
     const message = this.requireTrimmed(dto.message, 'message');
@@ -1704,14 +1802,229 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         priorities: layer.summary.byPriority,
       },
     });
+    let deliveryAttempts = 0;
+    if (dto.dryRun === false) {
+      for (const notification of notifications) {
+        const plan = await this.planNotificationDeliveryInternal(notification, user);
+        deliveryAttempts += plan.createdAttempts;
+      }
+    }
     return {
       dryRun: dto.dryRun ?? true,
-      dispatched: 0,
+      dispatched: dto.dryRun === false ? deliveryAttempts : 0,
       planned: notifications.length,
       externalDeliveryEnabled: this.externalNotificationDeliveryEnabled(),
       note: 'External channels are planned for connector delivery; in-app notifications remain the persisted system of record.',
       ...layer,
     };
+  }
+
+  async notificationDelivery(id: string, user: AuthUser) {
+    const row = await this.visibleNotification(id, user);
+    const attempts = await this.prisma.governanceNotificationDeliveryAttempt.findMany({
+      where: { notificationId: row.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { notification: this.enrichNotification(row), attempts };
+  }
+
+  async planNotificationDelivery(id: string, user: AuthUser) {
+    const row = await this.visibleNotification(id, user);
+    return this.planNotificationDeliveryInternal(row, user);
+  }
+
+  async updateNotificationDelivery(
+    id: string,
+    attemptId: string,
+    dto: UpdateNotificationDeliveryAttemptDto,
+    user: AuthUser,
+  ) {
+    await this.visibleNotification(id, user);
+    const existing = await this.prisma.governanceNotificationDeliveryAttempt.findFirst({
+      where: { id: attemptId, notificationId: id },
+    });
+    if (!existing) throw new NotFoundException('notification delivery attempt not found');
+    const now = new Date();
+    const row = await this.prisma.governanceNotificationDeliveryAttempt.update({
+      where: { id: attemptId },
+      data: {
+        status: dto.status,
+        provider: dto.provider ?? existing.provider,
+        target: dto.target ?? existing.target,
+        errorMessage: dto.errorMessage ?? null,
+        attemptCount: { increment: 1 },
+        lastAttemptAt: now,
+        deliveredAt: dto.status === GovernanceNotificationDeliveryStatus.sent ? now : existing.deliveredAt,
+        nextRetryAt:
+          dto.status === GovernanceNotificationDeliveryStatus.failed
+            ? new Date(now.getTime() + 30 * 60 * 1000)
+            : null,
+      },
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'governance_operations.notification_delivery.update',
+      entityType: 'governance_notification_delivery_attempt',
+      entityId: row.id,
+      metadata: { notificationId: id, status: row.status, channel: row.channel },
+    });
+    return row;
+  }
+
+  private async visibleNotification(id: string, user: AuthUser): Promise<NotificationWithLinks> {
+    const scope = await this.scope.resolve(user.roles);
+    const assetIds = await this.visibleAssetIds(scope);
+    const row = await this.prisma.governanceNotification.findFirst({
+      where: {
+        AND: [
+          { id },
+          this.notificationVisibilityWhere(assetIds, user),
+        ],
+      },
+      include: notificationInclude,
+    });
+    if (!row) throw new NotFoundException('governance_notification not found');
+    return row;
+  }
+
+  private async planNotificationDeliveryInternal(row: NotificationWithLinks, user: AuthUser) {
+    const enriched = this.enrichNotification(row);
+    const deliveryAttemptClient = (
+      this.prisma as unknown as {
+        governanceNotificationDeliveryAttempt?: {
+          findMany: typeof this.prisma.governanceNotificationDeliveryAttempt.findMany;
+          createMany: typeof this.prisma.governanceNotificationDeliveryAttempt.createMany;
+        };
+      }
+    ).governanceNotificationDeliveryAttempt;
+    const existingAttempts = deliveryAttemptClient
+      ? await deliveryAttemptClient.findMany({
+          where: { notificationId: row.id },
+          select: { channel: true, status: true },
+        })
+      : [];
+    const activeDeliveryStatuses: GovernanceNotificationDeliveryStatus[] = [
+      GovernanceNotificationDeliveryStatus.planned,
+      GovernanceNotificationDeliveryStatus.sent,
+    ];
+    const existingActive = new Set(
+      existingAttempts
+        .filter((attempt) =>
+          activeDeliveryStatuses.includes(attempt.status),
+        )
+        .map((attempt) => attempt.channel),
+    );
+    const rows = enriched.deliveryPlan.channels
+      .map((channel) => this.toDeliveryChannel(channel))
+      .filter((channel): channel is GovernanceNotificationChannel => !!channel)
+      .filter((channel, index, all) => all.indexOf(channel) === index && !existingActive.has(channel))
+      .map((channel) => ({
+        notificationId: row.id,
+        channel,
+        status: GovernanceNotificationDeliveryStatus.planned,
+        provider: this.externalNotificationDeliveryEnabled() ? `dgop_${channel}` : 'in_app_planner',
+        target: this.deliveryTarget(row, channel),
+        attemptCount: 0,
+        payloadJson: {
+          title: row.title,
+          message: row.message,
+          priority: enriched.deliveryPlan.priority,
+          route: enriched.deliveryPlan.route,
+          plannedBy: user.email,
+        },
+      }));
+    if (rows.length && deliveryAttemptClient) {
+      await deliveryAttemptClient.createMany({ data: rows });
+      await this.audit.log({
+        actor: user.email,
+        action: 'governance_operations.notification_delivery.plan',
+        entityType: 'governance_notification',
+        entityId: row.id,
+        metadata: { channels: rows.map((attempt) => attempt.channel) },
+      });
+    }
+    return {
+      notification: enriched,
+      createdAttempts: deliveryAttemptClient ? rows.length : 0,
+      attempts: deliveryAttemptClient
+        ? await deliveryAttemptClient.findMany({
+            where: { notificationId: row.id },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [],
+    };
+  }
+
+  private toDeliveryChannel(channel: string): GovernanceNotificationChannel | null {
+    if (channel === 'email_digest') return GovernanceNotificationChannel.email;
+    if (Object.values(GovernanceNotificationChannel).includes(channel as GovernanceNotificationChannel)) {
+      return channel as GovernanceNotificationChannel;
+    }
+    return null;
+  }
+
+  private deliveryTarget(row: NotificationWithLinks, channel: GovernanceNotificationChannel): string | null {
+    if (channel === GovernanceNotificationChannel.in_app) {
+      return row.assigneeUserId ?? row.targetRoleCode ?? 'broadcast';
+    }
+    if (channel === GovernanceNotificationChannel.email) return row.emailTo ?? row.assigneeUserId ?? row.targetRoleCode ?? null;
+    if (channel === GovernanceNotificationChannel.sms) return row.assigneeUserId ?? row.emailTo ?? null;
+    if (channel === GovernanceNotificationChannel.teams) return row.targetRoleCode ?? row.assigneeUserId ?? 'governance-operations';
+    if (channel === GovernanceNotificationChannel.webhook) return row.sourceType ?? 'governance_notification';
+    return null;
+  }
+
+  private async ensureDefaultNotificationTemplates(): Promise<void> {
+    const existing = await this.prisma.governanceNotificationTemplate.count();
+    if (existing > 0) return;
+    await this.prisma.governanceNotificationTemplate.createMany({
+      data: [
+        {
+          code: 'workflow-task-assigned',
+          name: 'Workflow task assigned',
+          sourceType: 'workflow_task',
+          titleTemplate: 'Workflow task requires action',
+          messageTemplate: '{{taskTitle}} is waiting for {{audience}}.',
+          severity: GovernanceNotificationSeverity.info,
+          defaultChannelsJson: { channels: ['in_app', 'email_digest'] },
+          digestCadence: 'daily',
+          createdBy: 'system',
+        },
+        {
+          code: 'workflow-task-overdue',
+          name: 'Workflow task overdue',
+          sourceType: 'workflow_task',
+          titleTemplate: 'Workflow task is overdue',
+          messageTemplate: '{{taskTitle}} missed its SLA and needs escalation.',
+          severity: GovernanceNotificationSeverity.warning,
+          defaultChannelsJson: { channels: ['in_app', 'email', 'teams'] },
+          digestCadence: 'immediate',
+          createdBy: 'system',
+        },
+        {
+          code: 'critical-governance-risk',
+          name: 'Critical governance risk',
+          sourceType: 'governance_risk',
+          titleTemplate: 'Critical governance risk requires attention',
+          messageTemplate: '{{riskTitle}} needs executive-level acknowledgement.',
+          severity: GovernanceNotificationSeverity.critical,
+          defaultChannelsJson: { channels: ['in_app', 'email', 'sms', 'teams'] },
+          digestCadence: 'immediate',
+          createdBy: 'system',
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+
+  private async assertActiveUser(userId: string): Promise<void> {
+    const row = await this.prisma.user.findFirst({ where: { id: userId, isActive: true }, select: { id: true } });
+    if (!row) throw new BadRequestException('Notification preference user was not found');
+  }
+
+  private async assertActiveRole(roleCode: string): Promise<void> {
+    const row = await this.prisma.role.findFirst({ where: { code: roleCode, isActive: true, deletedAt: null }, select: { id: true } });
+    if (!row) throw new BadRequestException('Notification preference role was not found');
   }
 
   async updateEscalation(id: string, dto: UpdateEscalationDto, user: AuthUser) {

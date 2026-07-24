@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
 import {
   ArchitectureReviewDecision,
+  MdmGoldenRecordStatus,
   MdmMatchStatus,
   MdmResolutionStep,
   MetadataCertificationStatus,
@@ -33,6 +34,24 @@ export class ResolveMdmMatchDto {
   @IsOptional() @IsObject() survivorshipRulesJson?: Record<string, unknown>;
   @IsOptional() @IsObject() proposedGoldenRecordJson?: Record<string, unknown>;
   @IsOptional() @IsString() evidenceId?: string;
+}
+
+export class UpsertMdmMatchRuleDto {
+  @IsString() code!: string;
+  @IsString() name!: string;
+  @IsOptional() @IsString() domainId?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(50) @Max(100) thresholdScore?: number;
+  @IsObject() blockingJson!: Record<string, unknown>;
+  @IsObject() weightsJson!: Record<string, unknown>;
+  @IsOptional() @IsObject() survivorshipJson?: Record<string, unknown>;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class UpdateMdmGoldenRecordDto {
+  @IsOptional() @IsIn(Object.values(MdmGoldenRecordStatus)) status?: MdmGoldenRecordStatus;
+  @IsOptional() @IsObject() masteredRecordJson?: Record<string, unknown>;
+  @IsOptional() @IsObject() survivorshipRulesJson?: Record<string, unknown>;
+  @IsOptional() @IsString() reason?: string;
 }
 
 export class CreateReferenceVersionDto {

@@ -112,6 +112,90 @@
         }
       </nav>
 
+      @if (canUseSearch()) {
+        <div class="topbar-search" (focusin)="searchFocused.set(true)">
+          <label class="topbar-search__box">
+            <span class="sr-only">{{ t('search.title') }}</span>
+            <app-icon name="search" />
+            <input
+              type="search"
+              [value]="searchQuery()"
+              (input)="onGlobalSearchInput($any($event.target).value)"
+              (keydown.escape)="clearGlobalSearch()"
+              [placeholder]="t('ds.console.searchPlaceholder')"
+              autocomplete="off"
+            />
+            @if (searchQuery()) {
+              <button type="button" class="topbar-search__clear" (click)="clearGlobalSearch()" [attr.aria-label]="t('crud.clear')">
+                <app-icon name="x" />
+              </button>
+            }
+          </label>
+
+          @if (searchPanelOpen()) {
+            <div class="topbar-search__panel">
+              <div class="topbar-search__status">
+                @if (searchState() === 'typing' || searchState() === 'loading') {
+                  <span>{{ t('search.loading') }}</span>
+                } @else if (searchState() === 'error') {
+                  <span class="error">{{ t('search.error') }}</span>
+                } @else if (searchResponse()?.total === 0) {
+                  <span>{{ t('search.empty') }}</span>
+                } @else {
+                  <span>{{ searchResponse()?.total }} {{ t('search.results') }}</span>
+                }
+              </div>
+
+              @if (searchResponse(); as response) {
+                @if (response.facets?.length) {
+                  <div class="topbar-search__facets" [attr.aria-label]="t('search.facets')">
+                    @for (facet of response.facets; track facet.key) {
+                      @if (facet.values.length) {
+                        <div class="topbar-search__facet">
+                          <span>{{ searchFacetLabel(facet.key) }}</span>
+                          @for (value of facet.values.slice(0, 4); track value.value) {
+                            <button type="button" (click)="applySearchFacet(facet.key, value.value)">
+                              {{ value.value }} <small>{{ value.count }}</small>
+                            </button>
+                          }
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+                @for (group of response.groups; track group.type) {
+                  <section class="topbar-search__group">
+                    <div class="topbar-search__group-head">
+                      <strong>{{ searchGroupLabel(group.type) }}</strong>
+                      <span>{{ group.count }}</span>
+                    </div>
+                    @for (result of group.results; track result.entityType + result.id) {
+                      <a
+                        class="topbar-search__result"
+                        [routerLink]="result.route.path"
+                        [queryParams]="result.route.queryParams || null"
+                        (click)="recordSearchClick(result)"
+                      >
+                        <span class="topbar-search__type">{{ result.entityType }}</span>
+                        <span class="topbar-search__text">
+                          <b>{{ result.title }}</b>
+                          @if (result.subtitle || result.detail) {
+                            <small>{{ result.subtitle }} @if (result.detail) { &middot; {{ result.detail }} }</small>
+                          }
+                        </span>
+                        @if (result.status) {
+                          <span class="topbar-search__tag">{{ result.status }}</span>
+                        }
+                      </a>
+                    }
+                  </section>
+                }
+              }
+            </div>
+          }
+        </div>
+      }
+
       <div class="topbar__actions">
         <button
           type="button"

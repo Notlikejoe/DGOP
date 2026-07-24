@@ -6,6 +6,8 @@ import {
   GovernanceEscalationStatus,
   GovernanceNotificationSeverity,
   GovernanceNotificationStatus,
+  GovernanceNotificationChannel,
+  GovernanceNotificationDeliveryStatus,
 } from '@prisma/client';
 
 export class CreateComplianceCalendarTemplateDto {
@@ -59,4 +61,34 @@ export class UpdateNotificationDto {
 
 export class DispatchNotificationsDto {
   @IsOptional() @IsBoolean() dryRun?: boolean;
+}
+
+export class UpsertGovernanceNotificationTemplateDto {
+  @IsString() @MaxLength(100) code!: string;
+  @IsString() @MaxLength(180) name!: string;
+  @IsOptional() @IsString() @MaxLength(80) sourceType?: string | null;
+  @IsString() @MaxLength(240) titleTemplate!: string;
+  @IsString() @MaxLength(1200) messageTemplate!: string;
+  @IsOptional() @IsIn(Object.values(GovernanceNotificationSeverity)) severity?: GovernanceNotificationSeverity;
+  @IsOptional() defaultChannelsJson?: unknown;
+  @IsOptional() @IsString() @MaxLength(80) digestCadence?: string;
+  @IsOptional() @IsBoolean() isActive?: boolean;
+}
+
+export class UpsertGovernanceNotificationPreferenceDto {
+  @IsOptional() @IsString() userId?: string | null;
+  @IsOptional() @IsString() @MaxLength(80) roleCode?: string | null;
+  @IsIn(Object.values(GovernanceNotificationChannel)) channel!: GovernanceNotificationChannel;
+  @IsOptional() @IsIn(Object.values(GovernanceNotificationSeverity)) minimumSeverity?: GovernanceNotificationSeverity;
+  @IsOptional() @IsString() @MaxLength(80) digestCadence?: string;
+  @IsOptional() quietHoursJson?: unknown;
+  @IsOptional() @IsBoolean() isEnabled?: boolean;
+}
+
+export class UpdateNotificationDeliveryAttemptDto {
+  @IsIn(Object.values(GovernanceNotificationDeliveryStatus))
+  status!: GovernanceNotificationDeliveryStatus;
+  @IsOptional() @IsString() @MaxLength(120) provider?: string | null;
+  @IsOptional() @IsString() @MaxLength(240) target?: string | null;
+  @IsOptional() @IsString() @MaxLength(1000) errorMessage?: string | null;
 }

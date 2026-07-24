@@ -31,6 +31,7 @@ import { AuditPacksModule } from './audit-packs/audit-packs.module';
 import { ExtendedDomainsModule } from './extended-domains/extended-domains.module';
 import { BusinessValueModule } from './business-value/business-value.module';
 import { GovernanceOperationsModule } from './governance-operations/governance-operations.module';
+import { GovernanceLifecycleModule } from './governance-lifecycle/governance-lifecycle.module';
 import { AccessModule } from './access/access.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { CsrfGuard } from './auth/csrf.guard';
@@ -76,6 +77,7 @@ import { PermissionsGuard } from './access/permissions.guard';
     ExtendedDomainsModule,
     BusinessValueModule,
     GovernanceOperationsModule,
+    GovernanceLifecycleModule,
     HealthModule,
   ],
   providers: [

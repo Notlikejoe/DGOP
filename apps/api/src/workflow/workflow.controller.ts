@@ -10,15 +10,23 @@ import {
 import { WorkflowService } from './workflow.service';
 import {
   AddTaskDto,
+  AddWorkflowAttachmentDto,
+  AddWorkflowCommentDto,
+  CreateWorkflowDelegationDto,
   CreateCaseDto,
   CreateWorkflowTemplateDto,
   DecisionDto,
   ListMyTasksDto,
   ListWorkflowCasesDto,
   SaveWorkflowBpmnDto,
+  SubmitWorkflowTaskFormDto,
   SubmitAssignmentDto,
+  WorkflowTemplateMigrationExecuteDto,
+  WorkflowTemplateRollbackDto,
+  UpdateWorkflowDelegationDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  UpsertWorkflowSlaTemplateDto,
   WorkflowDesignerMigrationPreviewDto,
   WorkflowDesignerSimulationDto,
   WorkflowRoutePreviewDto,
@@ -81,10 +89,40 @@ export class WorkflowController {
     return this.service.workflowTemplateMigrationPreview(id, dto, user);
   }
 
+  @Get('templates/:id/designer/versions')
+  @RequirePermissions('workflow_cases.view')
+  templateVersions(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.listTemplateVersions(id, user);
+  }
+
+  @Get('templates/:id/designer/versions/:version/diff')
+  @RequirePermissions('workflow_cases.view')
+  templateVersionDiff(@Param('id') id: string, @Param('version') version: string, @CurrentUser() user: AuthUser) {
+    return this.service.templateVersionDiff(id, Number(version), user);
+  }
+
+  @Post('templates/:id/designer/rollback')
+  @RequirePermissions('workflow_cases.edit')
+  rollbackTemplateVersion(@Param('id') id: string, @Body() dto: WorkflowTemplateRollbackDto, @CurrentUser() user: AuthUser) {
+    return this.service.rollbackTemplateVersion(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/migrate-active-cases')
+  @RequirePermissions('workflow_cases.edit')
+  migrateTemplateCases(@Param('id') id: string, @Body() dto: WorkflowTemplateMigrationExecuteDto, @CurrentUser() user: AuthUser) {
+    return this.service.migrateTemplateActiveCases(id, dto, user);
+  }
+
   @Get('graph')
   @RequirePermissions('workflow_cases.view')
   graph(@CurrentUser() user: AuthUser) {
     return this.service.graph(user.roles, user);
+  }
+
+  @Get('dashboard')
+  @RequirePermissions('workflow_cases.view')
+  dashboard(@CurrentUser() user: AuthUser) {
+    return this.service.dashboard(user.roles, user);
   }
 
   @Get('configuration')
@@ -111,6 +149,36 @@ export class WorkflowController {
     return this.service.runMaintenance(user);
   }
 
+  @Get('delegations')
+  @RequirePermissions('workflow_tasks.view')
+  delegations(@CurrentUser() user: AuthUser) {
+    return this.service.listDelegations(user);
+  }
+
+  @Post('delegations')
+  @RequirePermissions('workflow_tasks.edit')
+  createDelegation(@Body() dto: CreateWorkflowDelegationDto, @CurrentUser() user: AuthUser) {
+    return this.service.createDelegation(dto, user);
+  }
+
+  @Patch('delegations/:id')
+  @RequirePermissions('workflow_tasks.edit')
+  updateDelegation(@Param('id') id: string, @Body() dto: UpdateWorkflowDelegationDto, @CurrentUser() user: AuthUser) {
+    return this.service.updateDelegationStatus(id, dto, user);
+  }
+
+  @Get('sla-templates')
+  @RequirePermissions('workflow_cases.view')
+  slaTemplates(@CurrentUser() user: AuthUser) {
+    return this.service.listPersistentSlaTemplates(user.roles);
+  }
+
+  @Post('sla-templates')
+  @RequirePermissions('workflow_cases.edit')
+  upsertSlaTemplate(@Body() dto: UpsertWorkflowSlaTemplateDto, @CurrentUser() user: AuthUser) {
+    return this.service.upsertSlaTemplate(dto, user);
+  }
+
   // ----- cases -----
   @Get('cases')
   @RequirePermissions('workflow_cases.view')
@@ -128,6 +196,30 @@ export class WorkflowController {
   @RequirePermissions('workflow_cases.view')
   getCase(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.service.getCase(user.roles, id, user);
+  }
+
+  @Get('cases/:id/comments')
+  @RequirePermissions('workflow_cases.view')
+  caseComments(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.listCaseComments(id, user);
+  }
+
+  @Post('cases/:id/comments')
+  @RequirePermissions('workflow_tasks.edit')
+  addCaseComment(@Param('id') id: string, @Body() dto: AddWorkflowCommentDto, @CurrentUser() user: AuthUser) {
+    return this.service.addCaseComment(id, dto, user);
+  }
+
+  @Get('cases/:id/attachments')
+  @RequirePermissions('workflow_cases.view')
+  caseAttachments(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.listCaseAttachments(id, user);
+  }
+
+  @Post('cases/:id/attachments')
+  @RequirePermissions('workflow_tasks.edit')
+  addCaseAttachment(@Param('id') id: string, @Body() dto: AddWorkflowAttachmentDto, @CurrentUser() user: AuthUser) {
+    return this.service.addCaseAttachment(id, dto, user);
   }
 
   @Patch('cases/:id')
@@ -172,6 +264,12 @@ export class WorkflowController {
   @RequirePermissions('workflow_tasks.edit')
   updateTask(@Param('id') id: string, @Body() dto: UpdateTaskDto, @CurrentUser() user: AuthUser) {
     return this.service.updateTask(id, dto, user.roles, user.email, user);
+  }
+
+  @Post('tasks/:id/form')
+  @RequirePermissions('workflow_tasks.edit')
+  submitTaskForm(@Param('id') id: string, @Body() dto: SubmitWorkflowTaskFormDto, @CurrentUser() user: AuthUser) {
+    return this.service.submitTaskForm(id, dto, user);
   }
 
   @Post('tasks/:id/decision')

@@ -10,12 +10,29 @@ const BPMN_TASK_TAGS = [
   'receiveTask',
   'scriptTask',
   'subProcess',
+  'callActivity',
 ];
 
-const BPMN_GATEWAY_TAGS = ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway'];
+const BPMN_GATEWAY_TAGS = ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway'];
 const VALID_TASK_TYPES = new Set(['approval', 'review', 'information']);
 const VALID_ASSIGNMENT_STRATEGIES = new Set(['role', 'direct_user', 'workload', 'backup', 'manager', 'automation']);
 const AUTOMATED_NODE_TYPES = new Set(['service_task', 'business_rule_task', 'script_task', 'send_task', 'receive_task']);
+const ROUTING_NODE_TYPES = new Set(['exclusive_gateway', 'parallel_gateway', 'inclusive_gateway', 'event_based_gateway']);
+const VALID_NODE_TYPES = new Set([
+  'user_task',
+  'manual_task',
+  'service_task',
+  'business_rule_task',
+  'script_task',
+  'send_task',
+  'receive_task',
+  'sub_process',
+  'call_activity',
+  'exclusive_gateway',
+  'parallel_gateway',
+  'inclusive_gateway',
+  'event_based_gateway',
+]);
 
 export type WorkflowDesignerChecklistItem = {
   code: string;
@@ -369,17 +386,22 @@ export function validateWorkflowRoute(
 
   if (activeStages.length === 0) errors.push('Route must contain at least one workflow task stage.');
   for (const stage of activeStages) {
+    const nodeType = stageNodeType(stage);
     if (!stage.code) errors.push('Every stage needs a stable code.');
     if (stageCodes.has(stage.code)) errors.push(`Duplicate stage code: ${stage.code}.`);
     stageCodes.add(stage.code);
     if (!stage.nameEn?.trim()) errors.push(`Stage ${stage.code} needs a user-readable name.`);
+    if (!VALID_NODE_TYPES.has(nodeType)) errors.push(`Stage ${stage.code} uses an unsupported BPMN node type.`);
     if (!VALID_TASK_TYPES.has(stage.taskType)) errors.push(`Stage ${stage.code} uses an unsupported task type.`);
     if (!VALID_ASSIGNMENT_STRATEGIES.has(stage.assignmentStrategy || 'role')) {
       errors.push(`Stage ${stage.code} uses an unsupported assignment strategy.`);
     }
     if (stage.dueDays < 0 || stage.dueDays > 365) errors.push(`Stage ${stage.code} has an invalid SLA day value.`);
-    if (!stage.assigneeRoleCode && !AUTOMATED_NODE_TYPES.has(stageNodeType(stage)) && !stage.isFinal && !isPassiveRoutingStage(stage)) {
+    if (!stage.assigneeRoleCode && !AUTOMATED_NODE_TYPES.has(nodeType) && !ROUTING_NODE_TYPES.has(nodeType) && !stage.isFinal && !isPassiveRoutingStage(stage)) {
       errors.push(`Stage ${stage.code} needs a responsible role before it can create work.`);
+    }
+    if (ROUTING_NODE_TYPES.has(nodeType) && !hasStructuredRequirement(stage.gatewayConfigJson)) {
+      warnings.push(`Gateway stage ${stage.code} should define branch rules or routing conditions.`);
     }
     if (stage.taskType === 'approval' && !hasStructuredRequirement(stage.evidenceRequirementsJson)) {
       warnings.push(`Approval stage ${stage.code} should define evidence requirements.`);
@@ -401,13 +423,21 @@ export function validateWorkflowRoute(
   }
 
   const outgoingByStage = new Map<string, WorkflowBpmnTransition[]>();
+  const transitionKeys = new Set<string>();
   for (const transition of transitions) {
+    if (transition.fromStageId === transition.toStageId) errors.push(`Transition from ${transition.fromStageId} points back to the same stage.`);
+    const transitionKey = `${transition.fromStageId}->${transition.toStageId}:${transition.decision ?? transition.conditionExpression ?? transition.labelEn}`;
+    if (transitionKeys.has(transitionKey)) warnings.push(`Duplicate transition detected: ${transitionKey}.`);
+    transitionKeys.add(transitionKey);
+    if (!transition.labelEn?.trim()) warnings.push(`Transition from ${transition.fromStageId} to ${transition.toStageId} needs a readable label.`);
     const arr = outgoingByStage.get(transition.fromStageId) ?? [];
     arr.push(transition);
     outgoingByStage.set(transition.fromStageId, arr);
   }
+  const finalCodes = new Set(activeStages.filter((stage) => stage.isFinal).map((stage) => stage.code));
   for (const stage of activeStages) {
     const outgoing = outgoingByStage.get(stage.code) ?? [];
+    if (stage.isFinal && outgoing.length > 0) warnings.push(`Final stage ${stage.code} should not send users to another stage.`);
     if (!stage.isFinal && activeStages.length > 1 && outgoing.length === 0) {
       errors.push(`Stage ${stage.code} is not final and has no next step.`);
     }
@@ -435,6 +465,9 @@ export function validateWorkflowRoute(
   const reachable = reachableStageCodes(activeStages, transitions);
   for (const stage of activeStages) {
     if (!reachable.has(stage.code)) warnings.push(`Stage ${stage.code} is not reachable from the start stage.`);
+    if (!stage.isFinal && finalCodes.size && !canReachAnyFinal(stage.code, finalCodes, outgoingByStage, new Set())) {
+      errors.push(`Stage ${stage.code} cannot reach a final stage.`);
+    }
   }
 
   checklist.push(...buildEnterpriseChecklist(activeStages, transitions, errors, warnings));
@@ -597,6 +630,7 @@ function requirementCount(value: unknown | null | undefined): number {
 }
 
 function isPassiveRoutingStage(stage: WorkflowBpmnStage): boolean {
+  if (ROUTING_NODE_TYPES.has(stageNodeType(stage))) return true;
   return !stage.assigneeRoleCode &&
     !stage.isFinal &&
     (stage.isStart || stage.kind === 'intake') &&
@@ -761,6 +795,21 @@ function reachableStageCodes(stages: WorkflowBpmnStage[], transitions: WorkflowB
   return reachable;
 }
 
+function canReachAnyFinal(
+  stageCode: string,
+  finalCodes: Set<string>,
+  outgoingByStage: Map<string, WorkflowBpmnTransition[]>,
+  seen: Set<string>,
+): boolean {
+  if (finalCodes.has(stageCode)) return true;
+  if (seen.has(stageCode)) return false;
+  seen.add(stageCode);
+  for (const transition of outgoingByStage.get(stageCode) ?? []) {
+    if (canReachAnyFinal(transition.toStageId, finalCodes, outgoingByStage, seen)) return true;
+  }
+  return false;
+}
+
 function dedupeTargets(targets: Array<{ nodeId: string; stage: WorkflowBpmnStage; label: string; flow?: BpmnFlow }>) {
   const seen = new Set<string>();
   return targets.filter((target) => {
@@ -867,6 +916,11 @@ function inferNodeType(tag: string): string {
   if (name === 'sendTask') return 'send_task';
   if (name === 'receiveTask') return 'receive_task';
   if (name === 'subProcess') return 'sub_process';
+  if (name === 'callActivity') return 'call_activity';
+  if (name === 'exclusiveGateway') return 'exclusive_gateway';
+  if (name === 'parallelGateway') return 'parallel_gateway';
+  if (name === 'inclusiveGateway') return 'inclusive_gateway';
+  if (name === 'eventBasedGateway') return 'event_based_gateway';
   return 'user_task';
 }
 
@@ -878,6 +932,8 @@ function bpmnTagForStage(stage: WorkflowBpmnStage): string {
   if (type === 'script_task') return 'scriptTask';
   if (type === 'send_task') return 'sendTask';
   if (type === 'receive_task') return 'receiveTask';
+  if (type === 'sub_process') return 'subProcess';
+  if (type === 'call_activity') return 'callActivity';
   return 'userTask';
 }
 

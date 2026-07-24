@@ -11,10 +11,13 @@ import {
   buildWorkflowEscalationTemplates,
   buildWorkflowNotificationRules,
   buildWorkflowSlaTemplates,
+  buildWorkflowVersionDiff,
+  evaluateWorkflowDmnTable,
   firstActionableWorkflowStage,
   routeGateForOpenStagePeers,
   selectWorkflowTransitionForDecision,
   selectWorkflowTemplate,
+  validateWorkflowFormData,
   workflowTemplateConfigurationStatus,
   workflowHealth,
 } from '../src/workflow/workflow.logic';
@@ -53,6 +56,7 @@ type Over = {
   userRoleCandidates?: any[];
   userRoleCandidatesByRole?: Record<string, any[]>;
   setCalls?: any[][];
+  attachmentCount?: number;
 };
 
 function makeService(over: Over): WorkflowService {
@@ -77,6 +81,9 @@ function makeService(over: Over): WorkflowService {
         (over.createdTasks ??= []).push(data);
         return { id: `task-${over.createdTasks.length}`, ...data, assignee: null };
       },
+    },
+    workflowTaskAttachment: {
+      count: async () => over.attachmentCount ?? 0,
     },
     workflowCase: {
       update: async ({ data }: any) => {
@@ -1029,6 +1036,134 @@ test('recordDomainTaskDecision: auto-assigns next stage only to a scoped role ho
   assert.strictEqual(over.createdTasks?.[0].assigneeUserId, 'u-visible');
 });
 
+test('decideTask: required stage evidence blocks approval until evidence exists', async () => {
+  const svc = makeService({
+    attachmentCount: 0,
+    task: {
+      id: 'task-evidence',
+      assigneeUserId: 'u1',
+      status: 'pending',
+      caseId: 'case-evidence',
+      case: { id: 'case-evidence', type: 'general', status: 'submitted', createdBy: 'x@dgop.local', assetId: null },
+      templateStage: {
+        code: 'approval',
+        nameEn: 'Approval decision',
+        evidenceRequirementsJson: [{ name: 'Signed approval note', required: true }],
+        formSchemaJson: null,
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => svc.decideTask('task-evidence', { decision: 'approved', comment: 'Looks fine' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never),
+    /attach the required evidence/,
+  );
+});
+
+test('workflow routes: automated stages are recorded and skipped to the next human task', async () => {
+  const over: Over = {
+    attachmentCount: 0,
+    createdTasks: [],
+    caseUpdates: [],
+    taskUpdates: [],
+    events: [],
+    task: {
+      id: 'task-review',
+      assigneeUserId: 'u1',
+      status: 'pending',
+      caseId: 'case-auto',
+      templateStageId: 'stage-review',
+      case: {
+        id: 'case-auto',
+        type: 'general',
+        status: 'submitted',
+        createdBy: 'x@dgop.local',
+        assignmentId: null,
+        templateId: 'template-auto',
+        assetId: null,
+      },
+    },
+    template: {
+      stages: [
+        {
+          id: 'stage-review',
+          code: 'review',
+          nameEn: 'Review',
+          nameAr: 'Review',
+          kind: 'review',
+          nodeType: 'user_task',
+          taskType: 'review',
+          assigneeRoleCode: 'data_steward',
+          dueDays: 1,
+          sortOrder: 1,
+          isStart: false,
+          isDecision: false,
+          isFinal: false,
+          isActive: true,
+        },
+        {
+          id: 'stage-score',
+          code: 'score',
+          nameEn: 'Score routing rule',
+          nameAr: 'Score routing rule',
+          kind: 'automation',
+          nodeType: 'business_rule_task',
+          taskType: 'review',
+          assigneeRoleCode: null,
+          dueDays: 0,
+          sortOrder: 2,
+          isStart: false,
+          isDecision: false,
+          isFinal: false,
+          isActive: true,
+        },
+        {
+          id: 'stage-decision',
+          code: 'decision',
+          nameEn: 'Decision',
+          nameAr: 'Decision',
+          kind: 'decision',
+          nodeType: 'user_task',
+          taskType: 'approval',
+          assigneeRoleCode: 'data_owner',
+          dueDays: 1,
+          sortOrder: 3,
+          isStart: false,
+          isDecision: true,
+          isFinal: false,
+          isActive: true,
+        },
+      ],
+      transitions: [
+        {
+          id: 'transition-1',
+          fromStageId: 'stage-review',
+          toStageId: 'stage-score',
+          decision: null,
+          isHappyPath: true,
+          sortOrder: 1,
+          toStage: { id: 'stage-score', code: 'score' },
+        },
+        {
+          id: 'transition-2',
+          fromStageId: 'stage-score',
+          toStageId: 'stage-decision',
+          decision: null,
+          isHappyPath: true,
+          sortOrder: 2,
+          toStage: { id: 'stage-decision', code: 'decision' },
+        },
+      ],
+    },
+  };
+  const svc = makeService(over);
+  await svc.decideTask('task-review', { decision: 'approved', comment: 'Proceed' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never);
+
+  assert.strictEqual(over.createdTasks?.length, 1);
+  assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-decision');
+  assert.ok(over.events?.some((event) => event.action === 'route.automation.completed'));
+});
+
 test('slaOf: open task with no due date is none', () => {
   const svc = makeService({});
   assert.strictEqual(svc.slaOf({ status: 'pending' as never, dueDate: null, completedAt: null }), 'none');
@@ -1285,6 +1420,107 @@ test('decideTask: rejecting an approval task rejects the assignment', async () =
   await svc.decideTask('t1', { decision: 'rejected' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never);
   assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'rejected');
   assert.strictEqual(over.assignmentUpdate?.isActive, false);
+});
+
+test('enterprise workflow helpers: DMN table evaluates a target stage decision', () => {
+  const result = evaluateWorkflowDmnTable(
+    {
+      rules: [
+        { id: 'low-risk', conditions: { risk: 'low' }, result: { targetStageCode: 'auto_close' } },
+        { id: 'high-risk', conditions: { risk: 'high' }, result: { decision: 'approved', targetStageCode: 'owner_review' } },
+      ],
+    },
+    { risk: 'high' },
+  );
+
+  assert.strictEqual(result.matched, true);
+  assert.strictEqual(result.ruleId, 'high-risk');
+  assert.strictEqual(result.decision, 'approved');
+  assert.strictEqual(result.targetStageCode, 'owner_review');
+});
+
+test('enterprise workflow helpers: reusable form schemas enforce required fields', () => {
+  const schema = {
+    fields: [
+      { name: 'businessReason', required: true },
+      { name: 'riskScore', type: 'number', required: true },
+      { name: 'decision', options: ['approve', 'reject'] },
+    ],
+  };
+
+  const missing = validateWorkflowFormData(schema, { businessReason: 'Needed for audit' });
+  assert.strictEqual(missing.valid, false);
+  assert.ok(missing.missing.includes('riskScore'));
+
+  const valid = validateWorkflowFormData(schema, {
+    businessReason: 'Needed for audit',
+    riskScore: 82,
+    decision: 'approve',
+  });
+  assert.strictEqual(valid.valid, true);
+});
+
+test('enterprise workflow helpers: route version diff identifies stage and transition changes', () => {
+  const diff = buildWorkflowVersionDiff(
+    {
+      stages: [
+        { code: 'intake', nameEn: 'Intake', dueDays: 1 },
+        { code: 'approve', nameEn: 'Approve', dueDays: 2 },
+      ],
+      transitions: [{ fromStageId: 'intake', toStageId: 'approve', labelEn: 'Ready' }],
+    },
+    {
+      stages: [
+        { code: 'intake', nameEn: 'Intake', dueDays: 1 },
+        { code: 'review', nameEn: 'Review', dueDays: 2 },
+        { code: 'approve', nameEn: 'Approve', dueDays: 3 },
+      ],
+      transitions: [
+        { fromStageId: 'intake', toStageId: 'review', labelEn: 'Review' },
+        { fromStageId: 'review', toStageId: 'approve', labelEn: 'Approve' },
+      ],
+    },
+  );
+
+  assert.strictEqual(diff.summary.addedStages, 1);
+  assert.strictEqual(diff.summary.changedStages, 1);
+  assert.strictEqual(diff.summary.addedTransitions, 2);
+  assert.strictEqual(diff.summary.removedTransitions, 1);
+});
+
+test('enterprise workflow runtime: parallel approval stage opens one task per approver role', async () => {
+  const over: Over = {
+    createdTasks: [],
+    events: [],
+    userRoleCandidatesByRole: {
+      data_owner: [{ userId: 'owner-user', user: { userRoles: [{ role: { code: 'data_owner', isActive: true, deletedAt: null } }] } }],
+      privacy_officer: [{ userId: 'privacy-user', user: { userRoles: [{ role: { code: 'privacy_officer', isActive: true, deletedAt: null } }] } }],
+    },
+  };
+  const svc = makeService(over);
+  await (svc as any).createStageTask(
+    (svc as any).prisma,
+    'case-parallel',
+    {
+      id: 'stage-approval',
+      code: 'approval',
+      nameEn: 'Enterprise approval',
+      taskType: 'approval',
+      assigneeRoleCode: 'data_owner',
+      dueDays: 2,
+      gatewayConfigJson: { approvalMode: 'parallel', approverRoleCodes: ['data_owner', 'privacy_officer'] },
+      isStart: false,
+      isFinal: false,
+      isActive: true,
+    },
+    'admin@dgop.local',
+    { assetId: null },
+  );
+
+  assert.strictEqual(over.createdTasks?.length, 2);
+  assert.deepStrictEqual(over.createdTasks?.map((task) => task.assigneeRoleCode), ['data_owner', 'privacy_officer']);
+  assert.ok(over.createdTasks?.every((task) => task.approvalMode === 'parallel'));
+  assert.ok(over.events?.some((event) => event.action === 'route.parallel_approval.activated'));
 });
 
 (async () => {

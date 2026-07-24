@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  OnDestroy,
   ViewChild,
   computed,
   inject,
@@ -15,7 +16,7 @@ import {
   RouterLinkActive,
   RouterOutlet,
 } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { I18nService } from '../core/i18n.service';
@@ -28,6 +29,44 @@ interface PagedResponse<T> {
   total: number;
 }
 
+interface SearchRoute {
+  path: string;
+  queryParams?: Record<string, string>;
+}
+
+interface SearchResult {
+  id: string;
+  entityType: string;
+  title: string;
+  subtitle?: string | null;
+  detail?: string | null;
+  status?: string | null;
+  route: SearchRoute;
+}
+
+interface SearchGroup {
+  type: string;
+  count: number;
+  results: SearchResult[];
+}
+
+interface SearchFacetValue {
+  value: string;
+  count: number;
+}
+
+interface SearchFacet {
+  key: string;
+  values: SearchFacetValue[];
+}
+
+interface GlobalSearchResponse {
+  query: string;
+  total: number;
+  groups: SearchGroup[];
+  facets?: SearchFacet[];
+}
+
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,7 +74,7 @@ interface PagedResponse<T> {
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
-export class Shell {
+export class Shell implements OnDestroy {
   @ViewChild('sidebar') private readonly sidebar?: ElementRef<HTMLElement>;
   @ViewChild('navToggle') private readonly navToggle?: ElementRef<HTMLButtonElement>;
 
@@ -51,6 +90,12 @@ export class Shell {
   protected readonly compactNav = signal(false);
   protected readonly openTasks = signal(0);
   protected readonly expandedSections = signal<Record<string, boolean>>({});
+  protected readonly searchQuery = signal('');
+  protected readonly searchState = signal<'idle' | 'typing' | 'loading' | 'ok' | 'error'>('idle');
+  protected readonly searchResponse = signal<GlobalSearchResponse | null>(null);
+  protected readonly searchFocused = signal(false);
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private searchRequestId = 0;
   private readonly compactQuery =
     typeof window === 'undefined' ? null : window.matchMedia('(max-width: 980px)');
 
@@ -76,6 +121,12 @@ export class Shell {
   });
 
   protected readonly sidebarHidden = computed(() => this.compactNav() && !this.mobileNavOpen());
+  protected readonly canUseSearch = computed(() => this.auth.hasPermission('search.view'));
+  protected readonly searchPanelOpen = computed(() =>
+    this.canUseSearch() &&
+    this.searchQuery().trim().length >= 2 &&
+    (this.searchFocused() || this.searchState() === 'loading'),
+  );
 
   constructor() {
     if (this.compactQuery) {
@@ -93,10 +144,15 @@ export class Shell {
       .subscribe((e) => {
         this.url.set(e.urlAfterRedirects);
         this.menuOpen.set(false);
+        this.clearGlobalSearch();
         this.closeMobileNav();
         this.refreshOpenTasks();
       });
     this.refreshOpenTasks();
+  }
+
+  ngOnDestroy(): void {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
   }
 
   /** Loads the count of the user's open workflow tasks for the inbox badge. */
@@ -168,6 +224,62 @@ export class Shell {
     return `${this.t(key)} ${this.t(section.titleKey)}`;
   }
 
+  protected onGlobalSearchInput(value: string): void {
+    this.searchQuery.set(value);
+    this.searchResponse.set(null);
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = null;
+    }
+    const query = value.trim();
+    if (!this.canUseSearch() || query.length < 2) {
+      this.searchRequestId += 1;
+      this.searchState.set('idle');
+      return;
+    }
+    this.searchState.set('typing');
+    this.searchTimer = setTimeout(() => this.runGlobalSearch(query), 220);
+  }
+
+  protected clearGlobalSearch(): void {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = null;
+    }
+    this.searchRequestId += 1;
+    this.searchQuery.set('');
+    this.searchResponse.set(null);
+    this.searchState.set('idle');
+    this.searchFocused.set(false);
+  }
+
+  protected searchGroupLabel(type: string): string {
+    return this.t(`search.group.${type}`);
+  }
+
+  protected searchFacetLabel(key: string): string {
+    return this.t(`search.facet.${key}`);
+  }
+
+  protected applySearchFacet(key: string, value: string): void {
+    const field = key === 'entityType' ? 'type' : key;
+    const token = `${field}:${value}`;
+    const query = this.searchQuery().trim();
+    const next = query.includes(token) ? query : `${query} ${token}`.trim();
+    this.onGlobalSearchInput(next);
+  }
+
+  protected recordSearchClick(result: SearchResult): void {
+    this.http.post('/api/search/analytics/click', {
+      query: this.searchQuery(),
+      resultCount: this.searchResponse()?.total ?? 0,
+      selectedEntityType: result.entityType,
+      selectedEntityId: result.id,
+      source: 'shell_global_search',
+    }).subscribe({ error: () => {} });
+    this.clearGlobalSearch();
+  }
+
   protected initials(): string {
     const name = this.auth.currentUser()?.displayName ?? '';
     return name
@@ -181,5 +293,23 @@ export class Shell {
 
   protected logout(): void {
     void this.auth.logout();
+  }
+
+  private runGlobalSearch(query: string): void {
+    const requestId = ++this.searchRequestId;
+    this.searchState.set('loading');
+    const params = new HttpParams().set('q', query).set('limit', '6');
+    this.http.get<GlobalSearchResponse>('/api/search', { params }).subscribe({
+      next: (response) => {
+        if (requestId !== this.searchRequestId) return;
+        this.searchResponse.set(response);
+        this.searchState.set('ok');
+      },
+      error: () => {
+        if (requestId !== this.searchRequestId) return;
+        this.searchResponse.set(null);
+        this.searchState.set('error');
+      },
+    });
   }
 }

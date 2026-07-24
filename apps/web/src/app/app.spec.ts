@@ -2,9 +2,10 @@ import { TestBed } from '@angular/core/testing';
 import { I18nService } from './core/i18n.service';
 
 describe('I18nService', () => {
-  it('returns English and Arabic translations', () => {
+  it('returns English and Arabic translations', async () => {
     TestBed.configureTestingModule({});
     const i18n = TestBed.inject(I18nService);
+    await i18n.ready();
 
     i18n.setLang('en');
     expect(i18n.t('nav.dashboard')).toBe('Command Center');

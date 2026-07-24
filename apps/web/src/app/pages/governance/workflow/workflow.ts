@@ -28,10 +28,13 @@ import {
   Task,
   WorkflowGraph,
   WorkflowConfiguration,
+  WorkflowDashboard,
   WorkflowDesignerResponse,
   WorkflowDesignerSimulation,
   WorkflowMigrationPreview,
   WorkflowRoutePreview,
+  WorkflowTemplateVersionsResponse,
+  WorkflowVersionDiff,
   WorkflowTemplate,
   WorkflowTemplateStage,
 } from './workflow.types';
@@ -41,7 +44,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule, RouterLink, Modal, StatusChip, AppIcon],
   templateUrl: './workflow.html',
-  styleUrl: './workflow.scss',
+  styleUrls: ['./workflow.scss', './workflow-designer.scss'],
 })
 export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('bpmnCanvas') private bpmnCanvas?: ElementRef<HTMLElement>;
@@ -53,6 +56,8 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly inactiveCaseStatuses = new Set(['closed', 'rejected']);
   private readonly inactiveTaskStatuses = new Set(['completed', 'cancelled']);
   private bpmnModeler: any | null = null;
+  private bpmnStylesLoaded = false;
+  private dashboardTimer: ReturnType<typeof setInterval> | null = null;
 
   protected readonly tab = signal<'map' | 'tasks' | 'cases' | 'designer'>('map');
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
@@ -64,6 +69,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly templates = signal<WorkflowTemplate[]>([]);
   protected readonly graph = signal<WorkflowGraph | null>(null);
   protected readonly configuration = signal<WorkflowConfiguration | null>(null);
+  protected readonly workflowDashboard = signal<WorkflowDashboard | null>(null);
   protected readonly selectedTemplateId = signal<string>('');
   protected readonly designer = signal<WorkflowDesignerResponse | null>(null);
   protected readonly designerTemplateId = signal<string>('');
@@ -72,8 +78,11 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly designerPreviewing = signal(false);
   protected readonly designerSummary = signal('');
   protected readonly designerViewMode = signal<'business' | 'technical'>('business');
+  protected readonly acknowledgeMigrationRisk = signal(false);
   protected readonly designerSimulation = signal<WorkflowDesignerSimulation | null>(null);
   protected readonly designerMigration = signal<WorkflowMigrationPreview | null>(null);
+  protected readonly designerVersions = signal<WorkflowTemplateVersionsResponse['versions']>([]);
+  protected readonly designerDiff = signal<WorkflowVersionDiff | null>(null);
   protected readonly importModalOpen = signal(false);
   protected readonly routeModalOpen = signal(false);
   protected readonly bpmnImportText = signal('');
@@ -167,6 +176,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadAll();
+    this.dashboardTimer = setInterval(() => this.loadWorkflowDashboard(), 60_000);
     if (this.auth.hasPermission('data_assets.view')) {
       this.http.get<Ref[]>('/api/assets').subscribe({
         next: (a) => this.assets.set(a),
@@ -180,6 +190,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.dashboardTimer) clearInterval(this.dashboardTimer);
     this.bpmnModeler?.destroy();
     this.bpmnModeler = null;
   }
@@ -228,11 +239,21 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         next: (configuration) => this.configuration.set(configuration),
         error: (error) => this.handleLoadError(error),
       });
+      this.loadWorkflowDashboard();
     } else {
       this.cases.set([]);
       this.caseTotal.set(0);
       this.configuration.set(null);
+      this.workflowDashboard.set(null);
     }
+  }
+
+  private loadWorkflowDashboard(): void {
+    if (!this.canViewCases) return;
+    this.http.get<WorkflowDashboard>('/api/workflow/dashboard').subscribe({
+      next: (dashboard) => this.workflowDashboard.set(dashboard),
+      error: () => this.workflowDashboard.set(null),
+    });
   }
 
   // ---------- helpers ----------
@@ -436,6 +457,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         this.routeModalOpen.set(false);
         this.designer.set(res);
         this.designerTemplateId.set(res.template.id);
+        this.loadDesignerVersions(res.template.id);
         this.renderBpmn(res.bpmnXml);
         setTimeout(() => this.refreshDesignerPreviews(), 0);
         this.loadAll();
@@ -515,6 +537,14 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     return value ? this.t('wf.designer.configured') : this.t('wf.designer.missing');
   }
 
+  protected signatureShort(value?: string | null): string {
+    return value ? value.slice(0, 12) : '-';
+  }
+
+  protected hasManualMigrationReview(): boolean {
+    return (this.designerMigration()?.summary.manualReviewCases ?? 0) > 0;
+  }
+
   protected nodeTypeLabel(value?: string | null): string {
     return (value ?? 'user_task')
       .replace(/_/g, ' ')
@@ -582,6 +612,58 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  protected loadDesignerDiff(version: number): void {
+    const template = this.designer()?.template;
+    if (!template) return;
+    this.http.get<WorkflowVersionDiff>(`/api/workflow/templates/${template.id}/designer/versions/${version}/diff`).subscribe({
+      next: (diff) => this.designerDiff.set(diff),
+      error: (err) => this.toast.errorFrom(err, this.t('wf.saveError')),
+    });
+  }
+
+  protected rollbackDesignerVersion(version: number): void {
+    const template = this.designer()?.template;
+    if (!template || this.designerSaving()) return;
+    this.designerSaving.set(true);
+    this.http.post<WorkflowDesignerResponse>(`/api/workflow/templates/${template.id}/designer/rollback`, {
+      version,
+      changeSummary: this.designerSummary() || null,
+    }).subscribe({
+      next: (res) => {
+        this.designer.set(res);
+        this.bpmnImportText.set(res.bpmnXml);
+        this.designerDiff.set(null);
+        this.designerSaving.set(false);
+        this.toast.success(this.t('wf.designer.rollbackDone'));
+        this.loadDesignerVersions(res.template.id);
+        this.refreshDesignerPreviews();
+        this.loadAll();
+      },
+      error: (err) => {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+        this.designerSaving.set(false);
+      },
+    });
+  }
+
+  protected migrateDesignerCases(): void {
+    const template = this.designer()?.template;
+    if (!template || this.designerSaving()) return;
+    this.designerSaving.set(true);
+    this.http.post(`/api/workflow/templates/${template.id}/designer/migrate-active-cases`, {}).subscribe({
+      next: () => {
+        this.designerSaving.set(false);
+        this.toast.success(this.t('wf.designer.migrationDone'));
+        this.refreshDesignerPreviews();
+        this.loadAll();
+      },
+      error: (err) => {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+        this.designerSaving.set(false);
+      },
+    });
+  }
+
   protected ensureDesignerLoaded(): void {
     if (!this.canViewCases) return;
     const templates = this.templates();
@@ -603,7 +685,10 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         this.bpmnImportText.set(res.bpmnXml);
         this.designerSimulation.set(null);
         this.designerMigration.set(null);
+        this.designerDiff.set(null);
+        this.acknowledgeMigrationRisk.set(false);
         this.designerState.set('ready');
+        this.loadDesignerVersions(templateId);
         setTimeout(() => {
           this.renderBpmn(res.bpmnXml);
           this.refreshDesignerPreviews();
@@ -616,9 +701,17 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  private loadDesignerVersions(templateId: string): void {
+    this.http.get<WorkflowTemplateVersionsResponse>(`/api/workflow/templates/${templateId}/designer/versions`).subscribe({
+      next: (res) => this.designerVersions.set(res.versions),
+      error: () => this.designerVersions.set([]),
+    });
+  }
+
   private async ensureModeler(): Promise<any | null> {
     const container = this.bpmnCanvas?.nativeElement;
     if (!container) return null;
+    this.ensureBpmnStyles();
     if (!this.bpmnModeler) {
       const module = await import('bpmn-js/lib/Modeler');
       this.bpmnModeler = new module.default({
@@ -628,12 +721,27 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     return this.bpmnModeler;
   }
 
+  private ensureBpmnStyles(): void {
+    if (this.bpmnStylesLoaded || typeof document === 'undefined') return;
+    this.bpmnStylesLoaded = true;
+    for (const href of ['/bpmn-assets/diagram-js.css', '/bpmn-assets/bpmn-font/css/bpmn.css']) {
+      if (document.querySelector(`link[data-dgop-bpmn-style="${href}"]`)) continue;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.dataset['dgopBpmnStyle'] = href;
+      document.head.appendChild(link);
+    }
+  }
+
   private async renderBpmn(xml: string): Promise<void> {
     if (!xml.trim()) return;
     try {
       const modeler = await this.ensureModeler();
       if (!modeler) return;
       const result = await modeler.importXML(xml);
+      const canvas = modeler.get?.('canvas');
+      canvas?.zoom?.('fit-viewport', 'auto');
       const warnings = result?.warnings?.length ?? 0;
       if (warnings > 0) this.toast.show(this.t('wf.designer.importWarnings'), 'info');
     } catch {
@@ -659,6 +767,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         {
           bpmnXml: xml,
           changeSummary: this.designerSummary() || null,
+          acknowledgeMigrationRisk: this.acknowledgeMigrationRisk(),
         },
       ).subscribe({
         next: (res) => {
@@ -666,9 +775,12 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
           this.bpmnImportText.set(res.bpmnXml);
           this.designerSimulation.set(null);
           this.designerMigration.set(null);
+          this.designerDiff.set(null);
+          this.acknowledgeMigrationRisk.set(false);
           this.designerSummary.set('');
           this.designerSaving.set(false);
           this.toast.success(mode === 'publish' ? this.t('wf.designer.published') : this.t('wf.designer.saved'));
+          this.loadDesignerVersions(template.id);
           this.refreshDesignerPreviews();
           if (mode === 'publish') this.loadAll();
         },

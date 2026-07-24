@@ -65,6 +65,58 @@
             </article>
           </div>
 
+          @if (workflowDashboard(); as dash) {
+            <section class="workflow-dashboard" [attr.aria-label]="t('wf.dashboard.title')">
+              <div class="workflow-dashboard__head">
+                <div>
+                  <span class="section-kicker">{{ t('wf.dashboard.eyebrow') }}</span>
+                  <h2>{{ t('wf.dashboard.title') }}</h2>
+                  <p>{{ t('wf.dashboard.subtitle') }}</p>
+                </div>
+                <app-status-chip [kind]="dash.summary.overdueTasks > 0 ? 'warning' : 'success'" [label]="dash.refreshSeconds + 's'" />
+              </div>
+              <div class="workflow-dashboard__grid">
+                <article>
+                  <span>{{ t('wf.dashboard.sla') }}</span>
+                  <strong>{{ dash.summary.slaComplianceRate }}%</strong>
+                  <small>{{ dash.summary.openTasks }} {{ t('wf.graph.openTasks') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.dashboard.avgCycle') }}</span>
+                  <strong>{{ dash.summary.avgCompletionHours }}h</strong>
+                  <small>{{ dash.summary.routesSampled }} {{ t('wf.graph.routes') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.dashboard.bottlenecks') }}</span>
+                  @for (item of dash.bottlenecks.slice(0, 3); track item.stage + item.route) {
+                    <div class="dashboard-list-row">
+                      <strong>{{ item.stage }}</strong>
+                      <small>{{ item.open }} {{ t('wf.graph.openTasks') }} · {{ item.overdue }} {{ t('wf.graph.overdue') }}</small>
+                    </div>
+                  }
+                </article>
+                <article>
+                  <span>{{ t('wf.dashboard.workload') }}</span>
+                  @for (item of dash.workload.slice(0, 3); track item.assignee) {
+                    <div class="dashboard-list-row">
+                      <strong>{{ item.assignee }}</strong>
+                      <small>{{ item.open }} {{ t('wf.graph.openTasks') }} · {{ item.overdue }} {{ t('wf.graph.overdue') }}</small>
+                    </div>
+                  }
+                </article>
+              </div>
+              <div class="workflow-trend">
+                @for (point of dash.trend; track point.date) {
+                  <span
+                    [style.--created]="point.created"
+                    [style.--completed]="point.completed"
+                    [title]="point.date + ': ' + point.created + ' / ' + point.completed"
+                  ></span>
+                }
+              </div>
+            </section>
+          }
+
           @if (configuration(); as cfg) {
             <section class="configuration-card" [attr.aria-label]="t('wf.config.title')">
               <div class="configuration-card__head">
@@ -509,6 +561,20 @@
               <textarea class="field__input" rows="4" [ngModel]="designerSummary()" (ngModelChange)="designerSummary.set($event)" name="designerSummary"></textarea>
             </label>
 
+            @if (hasManualMigrationReview()) {
+              <label class="migration-ack">
+                <input
+                  type="checkbox"
+                  [checked]="acknowledgeMigrationRisk()"
+                  (change)="acknowledgeMigrationRisk.set($any($event.target).checked)"
+                />
+                <span>
+                  <strong>{{ t('wf.designer.ackRiskTitle') }}</strong>
+                  <small>{{ t('wf.designer.ackRiskHelp') }}</small>
+                </span>
+              </label>
+            }
+
             <div class="publish-actions">
               <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving()" (click)="saveDesignerDraft()">
                 {{ designerSaving() ? t('crud.saving') : t('wf.designer.saveDraft') }}
@@ -527,6 +593,55 @@
                 <p>{{ migration.summary.manualReviewCases }} {{ t('wf.designer.manualReviewCases') }}</p>
               </div>
             }
+          </section>
+
+          <section class="designer-panel designer-panel--versions">
+            <div class="designer-panel__head">
+              <span class="section-kicker">{{ t('wf.designer.versionEyebrow') }}</span>
+              <h2>{{ t('wf.designer.versionTitle') }}</h2>
+              <p>{{ t('wf.designer.versionHelp') }}</p>
+            </div>
+
+            @if (designer(); as d) {
+              <div class="security-summary">
+                <span>{{ t('wf.designer.signature') }}</span>
+                <strong>{{ signatureShort(d.security?.modelSignature) }}</strong>
+                <small>{{ d.security?.signatureAlgorithm || '-' }}</small>
+              </div>
+            }
+
+            <div class="version-list">
+              @for (version of designerVersions().slice(0, 5); track version.id) {
+                <article>
+                  <div>
+                    <strong>v{{ version.version }}</strong>
+                    <small>{{ version.source }} · {{ fmtDate(version.createdAt) }}</small>
+                  </div>
+                  <app-status-chip [kind]="version.signatureVerified ? 'success' : 'warning'" [label]="version.signatureVerified ? t('wf.designer.signed') : t('wf.designer.signatureMissing')" />
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="loadDesignerDiff(version.version)">
+                    {{ t('wf.designer.diff') }}
+                  </button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerSaving()" (click)="rollbackDesignerVersion(version.version)">
+                    {{ t('wf.designer.rollback') }}
+                  </button>
+                </article>
+              }
+            </div>
+
+            @if (designerDiff(); as diff) {
+              <div class="diff-summary">
+                <span>{{ t('wf.designer.diffSummary') }} v{{ diff.toVersion }}</span>
+                <div class="migration-grid">
+                  <div><span>{{ t('wf.designer.addedStages') }}</span><strong>{{ diff.diff.summary.addedStages }}</strong></div>
+                  <div><span>{{ t('wf.designer.retiredStages') }}</span><strong>{{ diff.diff.summary.removedStages }}</strong></div>
+                  <div><span>{{ t('wf.designer.changedStages') }}</span><strong>{{ diff.diff.summary.changedStages }}</strong></div>
+                </div>
+              </div>
+            }
+
+            <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving()" (click)="migrateDesignerCases()">
+              {{ t('wf.designer.migrateActiveCases') }}
+            </button>
           </section>
           </aside>
         </div>

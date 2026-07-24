@@ -93,6 +93,8 @@ const permissionCatalog: { resource: string; action: string }[] = [
   { resource: 'dashboard', action: 'view' },
   { resource: 'design_system', action: 'view' },
   { resource: 'search', action: 'view' },
+  { resource: 'search', action: 'create' },
+  { resource: 'search', action: 'analytics' },
   { resource: 'audit', action: 'view' },
   { resource: 'audit', action: 'baseline_accept' },
   // Bulk CSV import is a distinct, higher-privilege action on data assets.
@@ -118,7 +120,7 @@ const permissionCatalog: { resource: string; action: string }[] = [
   ...ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => ({ resource: r, action: a }))),
 ];
 
-const BASE_PERMS = ['dashboard.view', 'design_system.view', 'search.view'];
+const BASE_PERMS = ['dashboard.view', 'design_system.view', 'search.view', 'search.create', 'search.analytics'];
 const ADMIN_ALL = ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => `${r}.${a}`));
 
 // Default role -> permission keys. system_admin receives the full catalog.

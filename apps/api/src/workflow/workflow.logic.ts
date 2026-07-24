@@ -54,6 +54,9 @@ export type WorkflowStageRouteNode = {
   isStart: boolean;
   isFinal: boolean;
   isActive: boolean;
+  nodeType?: string | null;
+  taskType?: string | null;
+  kind?: string | null;
   assigneeRoleCode?: string | null;
 };
 
@@ -114,6 +117,102 @@ export type WorkflowCaseTypeRegistryItem = {
   hasActiveRoute: boolean;
   status: WorkflowConfigurationStatus;
 };
+
+export type WorkflowDmnDecisionResult = {
+  matched: boolean;
+  ruleId: string | null;
+  decision: string | null;
+  targetStageCode: string | null;
+  trace: string[];
+};
+
+export type WorkflowFormValidationResult = {
+  valid: boolean;
+  missing: string[];
+  errors: string[];
+};
+
+export function evaluateWorkflowDmnTable(table: unknown, context: Record<string, unknown>): WorkflowDmnDecisionResult {
+  const source = asRecord(table);
+  const dmn = asRecord(source['dmnTable'] ?? source['decisionTable'] ?? source);
+  const rules = Array.isArray(dmn['rules']) ? dmn['rules'] : [];
+  const trace: string[] = [];
+  for (const [index, rawRule] of rules.entries()) {
+    const rule = asRecord(rawRule);
+    const conditions = normalizeDmnConditions(rule['conditions'] ?? rule['when'] ?? rule['inputs']);
+    const matches = conditions.every((condition) => dmnConditionMatches(condition, context));
+    trace.push(`${String(rule['id'] ?? index + 1)}:${matches ? 'matched' : 'skipped'}`);
+    if (!matches) continue;
+    const result = asRecord(rule['result'] ?? rule['outputs'] ?? rule['then'] ?? rule);
+    return {
+      matched: true,
+      ruleId: String(rule['id'] ?? index + 1),
+      decision: cleanDmnString(result['decision'] ?? result['taskDecision'] ?? rule['decision']),
+      targetStageCode: cleanDmnString(result['targetStageCode'] ?? result['toStageCode'] ?? rule['targetStageCode']),
+      trace,
+    };
+  }
+  return { matched: false, ruleId: null, decision: null, targetStageCode: null, trace };
+}
+
+export function validateWorkflowFormData(schema: unknown, data: unknown): WorkflowFormValidationResult {
+  const formData = asRecord(data);
+  const requiredFields = workflowFormRequiredFields(schema);
+  const missing = requiredFields.filter((field) => !hasPresentValue(readPath(formData, field)));
+  const errors: string[] = [];
+  for (const field of workflowFormFields(schema)) {
+    const value = readPath(formData, field.name);
+    if (!hasPresentValue(value)) continue;
+    if (field.type === 'number' && typeof value !== 'number') errors.push(`${field.label} must be a number`);
+    if (field.type === 'boolean' && typeof value !== 'boolean') errors.push(`${field.label} must be true or false`);
+    if (field.type === 'date' && Number.isNaN(Date.parse(String(value)))) errors.push(`${field.label} must be a valid date`);
+    if (field.allowed.length > 0 && !field.allowed.map(String).includes(String(value))) {
+      errors.push(`${field.label} must use one of the configured allowed values`);
+    }
+  }
+  return { valid: missing.length === 0 && errors.length === 0, missing, errors };
+}
+
+export function workflowFormRequiredFields(schema: unknown): string[] {
+  return workflowFormFields(schema).filter((field) => field.required).map((field) => field.name);
+}
+
+export function buildWorkflowVersionDiff(
+  current: {
+    stages: Array<{ code: string; nameEn?: string | null; assigneeRoleCode?: string | null; dueDays?: number | null; isDecision?: boolean; isFinal?: boolean }>;
+    transitions: Array<{ fromStageId: string; toStageId: string; decision?: string | null; labelEn?: string | null }>;
+  },
+  target: {
+    stages: Array<{ code: string; nameEn?: string | null; assigneeRoleCode?: string | null; dueDays?: number | null; isDecision?: boolean; isFinal?: boolean }>;
+    transitions: Array<{ fromStageId: string; toStageId: string; decision?: string | null; labelEn?: string | null }>;
+  },
+) {
+  const currentStages = new Map(current.stages.map((stage) => [stage.code, stage]));
+  const targetStages = new Map(target.stages.map((stage) => [stage.code, stage]));
+  const addedStages = [...targetStages.keys()].filter((code) => !currentStages.has(code));
+  const removedStages = [...currentStages.keys()].filter((code) => !targetStages.has(code));
+  const changedStages = [...targetStages.entries()]
+    .filter(([code, stage]) => {
+      const before = currentStages.get(code);
+      return before && JSON.stringify(stageComparable(before)) !== JSON.stringify(stageComparable(stage));
+    })
+    .map(([code]) => code);
+  const currentTransitions = new Set(current.transitions.map(transitionKey));
+  const targetTransitions = new Set(target.transitions.map(transitionKey));
+  const addedTransitions = [...targetTransitions].filter((key) => !currentTransitions.has(key));
+  const removedTransitions = [...currentTransitions].filter((key) => !targetTransitions.has(key));
+  return {
+    summary: {
+      addedStages: addedStages.length,
+      removedStages: removedStages.length,
+      changedStages: changedStages.length,
+      addedTransitions: addedTransitions.length,
+      removedTransitions: removedTransitions.length,
+    },
+    stages: { added: addedStages, removed: removedStages, changed: changedStages },
+    transitions: { added: addedTransitions, removed: removedTransitions },
+  };
+}
 
 export type WorkflowSlaTemplateItem = {
   code: string;
@@ -618,8 +717,40 @@ export function routeGateForOpenStagePeers(openPeerTasks: number): WorkflowRoute
   return { allowed: true };
 }
 
+const AUTOMATED_ROUTE_NODE_TYPES = new Set([
+  'service_task',
+  'business_rule_task',
+  'script_task',
+  'send_task',
+  'receive_task',
+]);
+
+const ROUTING_ONLY_NODE_TYPES = new Set([
+  'exclusive_gateway',
+  'parallel_gateway',
+  'inclusive_gateway',
+  'event_based_gateway',
+]);
+
+export function normalizeWorkflowNodeType(value?: string | null): string {
+  return String(value ?? 'user_task')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_') || 'user_task';
+}
+
+export function isAutomatedWorkflowStage(stage: { nodeType?: string | null }): boolean {
+  return AUTOMATED_ROUTE_NODE_TYPES.has(normalizeWorkflowNodeType(stage.nodeType));
+}
+
+export function isRoutingOnlyWorkflowStage(stage: { nodeType?: string | null; taskType?: string | null; kind?: string | null }): boolean {
+  const nodeType = normalizeWorkflowNodeType(stage.nodeType);
+  return ROUTING_ONLY_NODE_TYPES.has(nodeType) || stage.kind === 'gateway' || stage.taskType === 'routing';
+}
+
 export function isActionableWorkflowStage(stage: WorkflowStageRouteNode): boolean {
   if (!stage.isActive) return false;
+  if (isAutomatedWorkflowStage(stage) || isRoutingOnlyWorkflowStage(stage)) return false;
   if (stage.isFinal) return Boolean(stage.assigneeRoleCode);
   if (stage.isStart && !stage.assigneeRoleCode) return false;
   return true;
@@ -755,4 +886,116 @@ export function buildWorkflowEscalationTemplates(templates: WorkflowConfiguratio
           status: stage.assigneeRoleCode ? 'ready' : 'watch' as WorkflowConfigurationStatus,
         })),
     );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function cleanDmnString(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function normalizeDmnConditions(value: unknown): Array<{ path: string; operator: string; value?: unknown }> {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const row = asRecord(item);
+      const path = cleanDmnString(row['path'] ?? row['field'] ?? row['name']);
+      if (!path) return [];
+      return [{ path, operator: cleanDmnString(row['operator'] ?? row['op']) ?? 'eq', value: row['value'] ?? row['equals'] }];
+    });
+  }
+  const row = asRecord(value);
+  return Object.entries(row).map(([path, expected]) => ({ path, operator: 'eq', value: expected }));
+}
+
+function dmnConditionMatches(
+  condition: { path: string; operator: string; value?: unknown },
+  context: Record<string, unknown>,
+): boolean {
+  const actual = readPath(context, condition.path);
+  const expected = condition.value;
+  switch (condition.operator) {
+    case 'neq':
+    case 'ne':
+      return String(actual) !== String(expected);
+    case 'in':
+      return Array.isArray(expected) && expected.map(String).includes(String(actual));
+    case 'not_in':
+      return Array.isArray(expected) && !expected.map(String).includes(String(actual));
+    case 'gt':
+      return Number(actual) > Number(expected);
+    case 'gte':
+      return Number(actual) >= Number(expected);
+    case 'lt':
+      return Number(actual) < Number(expected);
+    case 'lte':
+      return Number(actual) <= Number(expected);
+    case 'exists':
+      return hasPresentValue(actual);
+    case 'contains':
+      return String(actual ?? '').toLowerCase().includes(String(expected ?? '').toLowerCase());
+    case 'eq':
+    default:
+      return String(actual) === String(expected);
+  }
+}
+
+function workflowFormFields(schema: unknown): Array<{ name: string; label: string; type: string; required: boolean; allowed: unknown[] }> {
+  const root = asRecord(schema);
+  const rawFields = [
+    ...(Array.isArray(root['fields']) ? root['fields'] : []),
+    ...(Array.isArray(root['sections'])
+      ? root['sections'].flatMap((section) => Array.isArray(asRecord(section)['fields']) ? asRecord(section)['fields'] as unknown[] : [])
+      : []),
+  ];
+  const required = new Set((Array.isArray(root['required']) ? root['required'] : []).map(String));
+  if (rawFields.length === 0) {
+    return [...required].map((name) => ({ name, label: name, type: 'text', required: true, allowed: [] }));
+  }
+  return rawFields.flatMap((raw) => {
+    if (typeof raw === 'string') {
+      return [{ name: raw, label: raw, type: 'text', required: required.has(raw), allowed: [] }];
+    }
+    const row = asRecord(raw);
+    const name = cleanDmnString(row['name'] ?? row['code'] ?? row['field'] ?? row['key']);
+    if (!name) return [];
+    return [{
+      name,
+      label: cleanDmnString(row['label'] ?? row['title'] ?? name) ?? name,
+      type: cleanDmnString(row['type']) ?? 'text',
+      required: row['required'] === true || required.has(name),
+      allowed: Array.isArray(row['allowed']) ? row['allowed'] : Array.isArray(row['options']) ? row['options'] : [],
+    }];
+  });
+}
+
+function readPath(source: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, part) => {
+    if (!current || typeof current !== 'object') return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, source);
+}
+
+function hasPresentValue(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+function stageComparable(stage: { nameEn?: string | null; assigneeRoleCode?: string | null; dueDays?: number | null; isDecision?: boolean; isFinal?: boolean }) {
+  return {
+    nameEn: stage.nameEn ?? null,
+    assigneeRoleCode: stage.assigneeRoleCode ?? null,
+    dueDays: stage.dueDays ?? null,
+    isDecision: Boolean(stage.isDecision),
+    isFinal: Boolean(stage.isFinal),
+  };
+}
+
+function transitionKey(edge: { fromStageId: string; toStageId: string; decision?: string | null; labelEn?: string | null }): string {
+  return `${edge.fromStageId}->${edge.toStageId}:${edge.decision ?? edge.labelEn ?? 'default'}`;
 }

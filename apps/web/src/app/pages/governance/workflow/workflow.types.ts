@@ -190,6 +190,33 @@ export interface WorkflowConfiguration {
   };
 }
 
+export interface WorkflowDashboard {
+  generatedAt: string;
+  refreshSeconds: number;
+  summary: {
+    activeCases: number;
+    openTasks: number;
+    overdueTasks: number;
+    routesSampled: number;
+    avgCompletionHours: number;
+    slaComplianceRate: number;
+  };
+  bottlenecks: Array<{
+    stage: string;
+    route: string;
+    open: number;
+    overdue: number;
+    avgOverdueHours: number;
+  }>;
+  workload: Array<{
+    assignee: string;
+    roleCode?: string | null;
+    open: number;
+    overdue: number;
+  }>;
+  trend: Array<{ date: string; created: number; completed: number }>;
+}
+
 export interface WorkflowRoutePreview {
   caseType: string;
   domainId?: string | null;
@@ -240,6 +267,44 @@ export interface WorkflowDesignerEnterprise {
   }>;
 }
 
+export interface WorkflowTemplateVersionsResponse {
+  templateId: string;
+  versions: Array<{
+    id: string;
+    version: number;
+    source: string;
+    changeSummary?: string | null;
+    modelSignature?: string | null;
+    signatureAlgorithm?: string | null;
+    securityJson?: Record<string, unknown> | null;
+    signatureVerified: boolean;
+    createdBy: string;
+    createdAt: string;
+  }>;
+}
+
+export interface WorkflowVersionDiff {
+  templateId: string;
+  fromVersion: number;
+  toVersion: number;
+  diff: {
+    summary: {
+      addedStages: number;
+      removedStages: number;
+      changedStages: number;
+      addedTransitions: number;
+      removedTransitions: number;
+    };
+    stages: { added: string[]; removed: string[]; changed: string[] };
+    transitions: { added: string[]; removed: string[] };
+  };
+  security: {
+    modelSignature?: string | null;
+    signatureAlgorithm?: string | null;
+    signedAt: string;
+  };
+}
+
 export interface WorkflowDesignerResponse {
   template: WorkflowTemplate;
   bpmnXml: string;
@@ -249,6 +314,11 @@ export interface WorkflowDesignerResponse {
     current: number;
     lastPublishedAt?: string | null;
     lastPublishedBy?: string | null;
+  };
+  security?: {
+    modelSignature?: string | null;
+    signatureAlgorithm?: string | null;
+    securityJson?: Record<string, unknown> | null;
   };
   enterprise?: WorkflowDesignerEnterprise;
 }

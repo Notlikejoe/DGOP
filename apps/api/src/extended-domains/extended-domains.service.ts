@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import {
   ArchitectureReviewDecision,
   CaseStatus,
+  MdmGoldenRecordStatus,
   MdmMatchStatus,
   MetadataCertificationStatus,
   NdiEvidenceStatus,
@@ -21,6 +22,8 @@ import {
   ResolveMdmMatchDto,
   RunMdmMatchingDto,
   SaveMetadataCertificationDto,
+  UpdateMdmGoldenRecordDto,
+  UpsertMdmMatchRuleDto,
 } from './extended-domains.dto';
 import {
   certificationStatus,
@@ -200,8 +203,12 @@ export class ExtendedDomainsService {
   async summary(roleCodes: string[]) {
     const scope = await this.scope.resolve(roleCodes);
     const assetIds = await this.visibleAssetIds(roleCodes, Promise.resolve(scope));
-    const [matches, referenceVersions, certifications, reviews] = await Promise.all([
+    const [matches, goldenRecords, referenceVersions, certifications, reviews] = await Promise.all([
       this.prisma.mdmMatchCandidate.findMany({ where: this.matchWhere(assetIds), select: { status: true, matchScore: true } }),
+      this.prisma.mdmGoldenRecord.findMany({
+        where: this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
+        select: { status: true },
+      }),
       this.prisma.referenceDataVersion.findMany({ where: this.referenceWhere(scope, assetIds), select: { status: true } }),
       this.prisma.metadataCertification.findMany({
         where: this.assetRecordWhere(assetIds) as Prisma.MetadataCertificationWhereInput,
@@ -215,6 +222,8 @@ export class ExtendedDomainsService {
     return {
       mdmCandidates: matches.length,
       highConfidenceMatches: matches.filter((row) => row.matchScore >= 90).length,
+      goldenRecords: goldenRecords.length,
+      activeGoldenRecords: goldenRecords.filter((row) => row.status === MdmGoldenRecordStatus.active).length,
       referenceVersions: referenceVersions.length,
       referencePending: referenceVersions.filter((row) => ['draft', 'under_review'].includes(row.status)).length,
       certifications: certifications.length,
@@ -227,7 +236,7 @@ export class ExtendedDomainsService {
   async workspace(roleCodes: string[]) {
     const scope = await this.scope.resolve(roleCodes);
     const assetIds = await this.visibleAssetIds(roleCodes, Promise.resolve(scope));
-    const [summary, mdmMatches, referenceVersions, certifications, architectureReviews] = await Promise.all([
+    const [summary, mdmMatches, goldenRecords, referenceVersions, certifications, architectureReviews] = await Promise.all([
       this.summary(roleCodes),
       this.prisma.mdmMatchCandidate.findMany({
         where: this.matchWhere(assetIds),
@@ -237,6 +246,12 @@ export class ExtendedDomainsService {
           evidence: { select: { id: true, title: true, sha256: true, status: true } },
         },
         orderBy: [{ status: 'asc' }, { matchScore: 'desc' }, { updatedAt: 'desc' }],
+        take: 50,
+      }),
+      this.prisma.mdmGoldenRecord.findMany({
+        where: this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
+        include: { mergeSplitEvents: { orderBy: { createdAt: 'desc' }, take: 5 } },
+        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
         take: 50,
       }),
       this.prisma.referenceDataVersion.findMany({
@@ -270,7 +285,7 @@ export class ExtendedDomainsService {
         take: 50,
       }),
     ]);
-    return { summary, mdmMatches, referenceVersions, certifications, architectureReviews };
+    return { summary, mdmMatches, goldenRecords, referenceVersions, certifications, architectureReviews };
   }
 
   async createMatch(roleCodes: string[], dto: CreateMdmMatchDto, actor: string) {
@@ -442,20 +457,123 @@ export class ExtendedDomainsService {
     if (final && existing.createdBy === actor) {
       throw new ForbiddenException('MDM match creators cannot make the final resolution decision');
     }
-    const row = await this.prisma.mdmMatchCandidate.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        resolutionStep: dto.resolutionStep,
-        resolutionNote: dto.resolutionNote,
-        survivorshipRulesJson: dto.survivorshipRulesJson as Prisma.InputJsonValue | undefined,
-        proposedGoldenRecordJson: dto.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
-        evidenceId: dto.evidenceId ?? undefined,
-        decidedBy: final ? actor : undefined,
-        decidedAt: final ? new Date() : undefined,
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.mdmMatchCandidate.update({
+        where: { id },
+        data: {
+          status: dto.status,
+          resolutionStep: dto.resolutionStep,
+          resolutionNote: dto.resolutionNote,
+          survivorshipRulesJson: dto.survivorshipRulesJson as Prisma.InputJsonValue | undefined,
+          proposedGoldenRecordJson: dto.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
+          evidenceId: dto.evidenceId ?? undefined,
+          decidedBy: final ? actor : undefined,
+          decidedAt: final ? new Date() : undefined,
+        },
+        include: {
+          sourceAsset: { select: { id: true, code: true, nameEn: true, domainId: true } },
+          candidateAsset: { select: { id: true, code: true, nameEn: true, domainId: true } },
+        },
+      });
+      if (dto.status === MdmMatchStatus.merged) {
+        await this.publishGoldenRecordForMatch(tx, updated, actor, dto);
+      } else if (final) {
+        await tx.mdmMergeSplitEvent.create({
+          data: {
+            matchCandidateId: updated.id,
+            action: dto.status ?? MdmMatchStatus.rejected,
+            reason: dto.resolutionNote ?? 'Final MDM match decision recorded.',
+            beforeJson: existing.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
+            afterJson: dto.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
+            actor,
+          },
+        });
+      }
+      await this.audit.log(
+        { actor, action: 'extended_domains.mdm_match.resolve', entityType: 'mdm_match_candidate', entityId: id, metadata: { status: dto.status, step: dto.resolutionStep } },
+        tx,
+      );
+      return updated;
+    });
+    return row;
+  }
+
+  async listMdmMatchRules(roleCodes: string[]) {
+    const scope = await this.scope.resolve(roleCodes);
+    const where: Prisma.MdmMatchRuleWhereInput = { isActive: true };
+    if (scope.domains !== 'all') where.OR = [{ domainId: null }, { domainId: { in: scope.domains } }];
+    return this.prisma.mdmMatchRule.findMany({ where, orderBy: [{ domainId: 'asc' }, { code: 'asc' }] });
+  }
+
+  async upsertMdmMatchRule(roleCodes: string[], dto: UpsertMdmMatchRuleDto, actor: string) {
+    await this.assertDomainVisible(roleCodes, dto.domainId);
+    const row = await this.prisma.mdmMatchRule.upsert({
+      where: { code: dto.code },
+      create: {
+        code: dto.code,
+        name: dto.name,
+        domainId: dto.domainId ?? null,
+        thresholdScore: dto.thresholdScore ?? 85,
+        blockingJson: dto.blockingJson as Prisma.InputJsonObject,
+        weightsJson: dto.weightsJson as Prisma.InputJsonObject,
+        survivorshipJson: (dto.survivorshipJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        isActive: dto.isActive ?? true,
+        createdBy: actor,
+      },
+      update: {
+        name: dto.name,
+        domainId: dto.domainId ?? null,
+        thresholdScore: dto.thresholdScore ?? 85,
+        blockingJson: dto.blockingJson as Prisma.InputJsonObject,
+        weightsJson: dto.weightsJson as Prisma.InputJsonObject,
+        survivorshipJson: (dto.survivorshipJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        isActive: dto.isActive ?? true,
+        updatedBy: actor,
       },
     });
-    await this.audit.log({ actor, action: 'extended_domains.mdm_match.resolve', entityType: 'mdm_match_candidate', entityId: id, metadata: { status: dto.status, step: dto.resolutionStep } });
+    await this.audit.log({ actor, action: 'extended_domains.mdm_rule.upsert', entityType: 'mdm_match_rule', entityId: row.id, metadata: { code: row.code } });
+    return row;
+  }
+
+  async listGoldenRecords(roleCodes: string[]) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    return this.prisma.mdmGoldenRecord.findMany({
+      where: this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
+      include: { mergeSplitEvents: { orderBy: { createdAt: 'desc' }, take: 10 } },
+      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+      take: 100,
+    });
+  }
+
+  async updateGoldenRecord(roleCodes: string[], id: string, dto: UpdateMdmGoldenRecordDto, actor: string) {
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    const existing = await this.prisma.mdmGoldenRecord.findFirst({
+      where: { AND: [{ id }, this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput] },
+    });
+    if (!existing) throw new NotFoundException('mdm_golden_record not found');
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.mdmGoldenRecord.update({
+        where: { id },
+        data: {
+          status: dto.status ?? existing.status,
+          masteredRecordJson: (dto.masteredRecordJson ?? existing.masteredRecordJson) as Prisma.InputJsonValue,
+          survivorshipRulesJson: (dto.survivorshipRulesJson ?? existing.survivorshipRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          updatedBy: actor,
+        },
+      });
+      await tx.mdmMergeSplitEvent.create({
+        data: {
+          goldenRecordId: id,
+          action: dto.status ?? 'update',
+          reason: dto.reason ?? 'Golden record updated.',
+          beforeJson: existing.masteredRecordJson as Prisma.InputJsonValue,
+          afterJson: updated.masteredRecordJson as Prisma.InputJsonValue,
+          actor,
+        },
+      });
+      await this.audit.log({ actor, action: 'extended_domains.mdm_golden_record.update', entityType: 'mdm_golden_record', entityId: id, metadata: { status: updated.status } }, tx);
+      return updated;
+    });
     return row;
   }
 
@@ -676,6 +794,71 @@ export class ExtendedDomainsService {
     const row = await this.prisma.mdmMatchCandidate.findFirst({ where: { AND: [{ id }, this.matchWhere(assetIds)] } });
     if (!row) throw new NotFoundException('mdm_match_candidate not found');
     return row;
+  }
+
+  private async publishGoldenRecordForMatch(
+    tx: Prisma.TransactionClient,
+    match: {
+      id: string;
+      code: string;
+      sourceAssetId: string;
+      candidateAssetId: string;
+      sourceAsset: { id: string; code: string; nameEn: string; domainId: string | null };
+      candidateAsset: { id: string; code: string; nameEn: string; domainId: string | null };
+      proposedGoldenRecordJson: Prisma.JsonValue | null;
+      survivorshipRulesJson: Prisma.JsonValue | null;
+    },
+    actor: string,
+    dto: ResolveMdmMatchDto,
+  ) {
+    const orderedIds = [match.sourceAssetId, match.candidateAssetId].sort();
+    const clusterKey = orderedIds.join(':');
+    const code = `GOLD-${match.sourceAsset.code}-${match.candidateAsset.code}`
+      .replace(/[^a-zA-Z0-9-]+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 120);
+    const masteredRecord =
+      dto.proposedGoldenRecordJson ??
+      match.proposedGoldenRecordJson ??
+      {
+        name: match.sourceAsset.nameEn || match.candidateAsset.nameEn,
+        sourceAssetCode: match.sourceAsset.code,
+        candidateAssetCode: match.candidateAsset.code,
+        winningSource: match.sourceAsset.code,
+      };
+    const survivorshipRules = dto.survivorshipRulesJson ?? match.survivorshipRulesJson ?? { strategy: 'source_trust_rank' };
+    const golden = await tx.mdmGoldenRecord.upsert({
+      where: { code },
+      create: {
+        code,
+        assetId: match.sourceAssetId,
+        domainId: match.sourceAsset.domainId ?? match.candidateAsset.domainId,
+        clusterKey,
+        sourceRecordIdsJson: orderedIds,
+        masteredRecordJson: masteredRecord as Prisma.InputJsonValue,
+        survivorshipRulesJson: survivorshipRules as Prisma.InputJsonValue,
+        status: MdmGoldenRecordStatus.active,
+        createdBy: actor,
+      },
+      update: {
+        sourceRecordIdsJson: orderedIds,
+        masteredRecordJson: masteredRecord as Prisma.InputJsonValue,
+        survivorshipRulesJson: survivorshipRules as Prisma.InputJsonValue,
+        status: MdmGoldenRecordStatus.active,
+        updatedBy: actor,
+      },
+    });
+    await tx.mdmMergeSplitEvent.create({
+      data: {
+        goldenRecordId: golden.id,
+        matchCandidateId: match.id,
+        action: 'merge',
+        reason: dto.resolutionNote ?? 'High-confidence MDM match merged into a golden record.',
+        beforeJson: match.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
+        afterJson: golden.masteredRecordJson as Prisma.InputJsonValue,
+        actor,
+      },
+    });
   }
 
   private async findVisibleReference(roleCodes: string[], id: string) {

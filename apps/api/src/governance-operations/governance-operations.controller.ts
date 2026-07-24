@@ -9,6 +9,9 @@ import {
   UpdateComplianceCalendarTemplateDto,
   UpdateEscalationDto,
   UpdateNotificationDto,
+  UpdateNotificationDeliveryAttemptDto,
+  UpsertGovernanceNotificationPreferenceDto,
+  UpsertGovernanceNotificationTemplateDto,
 } from './governance-operations.dto';
 import { GovernanceOperationsService } from './governance-operations.service';
 
@@ -104,6 +107,53 @@ export class GovernanceOperationsController {
   @RequirePermissions('governance_operations.run')
   dispatchNotifications(@Body() dto: DispatchNotificationsDto, @CurrentUser() user: AuthUser) {
     return this.service.dispatchNotifications(dto, user);
+  }
+
+  @Get('notifications/templates')
+  @RequirePermissions('governance_operations.view')
+  notificationTemplates() {
+    return this.service.notificationTemplates();
+  }
+
+  @Post('notifications/templates')
+  @RequirePermissions('governance_operations.edit')
+  upsertNotificationTemplate(@Body() dto: UpsertGovernanceNotificationTemplateDto, @CurrentUser() user: AuthUser) {
+    return this.service.upsertNotificationTemplate(dto, user);
+  }
+
+  @Get('notifications/preferences')
+  @RequirePermissions('governance_operations.view')
+  notificationPreferences(@CurrentUser() user: AuthUser) {
+    return this.service.notificationPreferences(user);
+  }
+
+  @Post('notifications/preferences')
+  @RequirePermissions('governance_operations.view')
+  upsertNotificationPreference(@Body() dto: UpsertGovernanceNotificationPreferenceDto, @CurrentUser() user: AuthUser) {
+    return this.service.upsertNotificationPreference(dto, user);
+  }
+
+  @Get('notifications/:id/delivery')
+  @RequirePermissions('governance_operations.view')
+  notificationDelivery(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.notificationDelivery(id, user);
+  }
+
+  @Post('notifications/:id/delivery-plan')
+  @RequirePermissions('governance_operations.run')
+  planNotificationDelivery(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.planNotificationDelivery(id, user);
+  }
+
+  @Patch('notifications/:id/delivery/:attemptId')
+  @RequirePermissions('governance_operations.edit')
+  updateNotificationDelivery(
+    @Param('id') id: string,
+    @Param('attemptId') attemptId: string,
+    @Body() dto: UpdateNotificationDeliveryAttemptDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.updateNotificationDelivery(id, attemptId, dto, user);
   }
 
   @Patch('notifications/:id/read')

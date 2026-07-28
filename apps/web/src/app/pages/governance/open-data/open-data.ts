@@ -243,6 +243,7 @@ export class OpenDataPage implements OnInit {
   protected readonly publicationDraft = signal<PublicationDraft>(this.emptyPublicationDraft());
   protected readonly reviewDraft = signal<ReviewDraft>(this.emptyReviewDraft());
   protected readonly usageDraft = signal<UsageDraft>(this.emptyUsageDraft());
+  protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly statuses = STATUSES;
   protected readonly frequencies = FREQUENCIES;
@@ -360,6 +361,18 @@ export class OpenDataPage implements OnInit {
     this.filters.set({ search: '', status: '', assetId: '' });
     this.page.set(1);
     this.load();
+  }
+
+  protected isExpandedPanel(panel: string): boolean {
+    return this.expandedPanel() === panel;
+  }
+
+  protected toggleExpandedPanel(panel: string): void {
+    this.expandedPanel.set(this.isExpandedPanel(panel) ? null : panel);
+  }
+
+  protected closeExpandedPanel(): void {
+    this.expandedPanel.set(null);
   }
 
   protected load(): void {

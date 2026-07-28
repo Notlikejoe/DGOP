@@ -1,6 +1,9 @@
 .foi-page {
   display: grid;
   gap: var(--space-5);
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: 0 auto;
 }
 
 .eyebrow {
@@ -95,16 +98,50 @@ textarea {
   resize: vertical;
 }
 
-.foi-workspace {
+.foi-rail-workspace {
   display: grid;
-  grid-template-columns: minmax(360px, 0.78fr) minmax(0, 1.22fr);
+  grid-template-columns: minmax(420px, 0.82fr) minmax(640px, 1.18fr);
   gap: var(--space-5);
   align-items: start;
 }
 
+.foi-left-rail,
+.foi-right-rail,
 .foi-queue,
-.foi-detail {
+.foi-detail,
+.foi-queue-insight {
   min-width: 0;
+}
+
+.foi-left-rail,
+.foi-right-rail {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.foi-queue-insight {
+  display: grid;
+  gap: var(--space-3);
+  align-self: start;
+}
+
+@media (min-width: 1181px) {
+  .foi-detail {
+    max-height: min(620px, calc(100vh - 220px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .foi-queue-insight {
+    max-height: min(360px, calc(100vh - 420px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+}
+
+.review-strip--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .request-list,
@@ -304,7 +341,7 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .foi-workspace,
+  .foi-rail-workspace,
   .two-col {
     grid-template-columns: 1fr;
   }
@@ -324,7 +361,8 @@ textarea {
   .foi-kpis,
   .info-grid,
   .modal-grid,
-  .action-form--compact {
+  .action-form--compact,
+  .review-strip--compact {
     grid-template-columns: 1fr;
   }
 

@@ -765,6 +765,9 @@ export const DICT: Dict = {
   'crud.retry': { en: 'Retry', ar: 'إعادة المحاولة' },
   'crud.view': { en: 'View', ar: 'عرض' },
   'crud.close': { en: 'Close', ar: 'إغلاق' },
+  'ui.expandPanel': { en: 'Expand panel', ar: 'توسيع اللوحة' },
+  'ui.collapsePanel': { en: 'Collapse panel', ar: 'تصغير اللوحة' },
+  'ui.closeExpandedPanel': { en: 'Close expanded panel', ar: 'إغلاق اللوحة الموسعة' },
   'crud.clear': { en: 'Clear', ar: 'مسح' },
   'crud.empty': { en: 'No records yet.', ar: 'لا توجد سجلات بعد.' },
   'crud.created': { en: 'Created successfully.', ar: 'تم الإنشاء بنجاح.' },
@@ -1232,7 +1235,39 @@ export const DICT: Dict = {
   'own.field.expiry': { en: 'Expiry date (optional)', ar: 'تاريخ الانتهاء (اختياري)' },
   'own.field.justification': { en: 'Justification (for overrides)', ar: 'المبرر (للتجاوزات)' },
   'own.primary': { en: 'Primary', ar: 'أساسي' },
+  'own.proposedPrimary': { en: 'Proposed primary', ar: 'أساسي مقترح' },
+  'own.accountableOwner': { en: 'Accountable owner', ar: 'مالك مسؤول' },
+  'own.onePerTarget': { en: 'One per target', ar: 'واحد لكل هدف' },
+  'own.leadSteward': { en: 'Lead steward', ar: 'أمين رئيسي' },
+  'own.proposedOwner': { en: 'Proposed owner', ar: 'مالك مقترح' },
+  'own.proposedLead': { en: 'Proposed lead', ar: 'قائد مقترح' },
   'own.backup': { en: 'Backup', ar: 'احتياطي' },
+  'own.primaryOption': { en: 'Accountable / lead', ar: 'مسؤول / رئيسي' },
+  'own.backupOption': { en: 'Backup / supporting', ar: 'احتياطي / داعم' },
+  'own.primaryMeaning': {
+    en: 'Primary means authoritative for this responsibility only after approval.',
+    ar: 'يعني الأساسي أنه معتمد لهذه المسؤولية فقط بعد الاعتماد.',
+  },
+  'own.saveAsProposal': {
+    en: 'Will save as proposed owner',
+    ar: 'سيتم الحفظ كمالك مقترح',
+  },
+  'own.saveAsProposalHint': {
+    en: 'The current accountable owner stays active. This candidate must be routed for approval before becoming accountable.',
+    ar: 'يبقى المالك المسؤول الحالي نشطًا. يجب تمرير هذا المرشح للاعتماد قبل أن يصبح مسؤولًا.',
+  },
+  'own.separateAssignmentNoticeTitle': {
+    en: 'Will create a new assignment',
+    ar: 'سيتم إنشاء إسناد جديد',
+  },
+  'own.separateAssignmentNoticeHint': {
+    en: 'The approved accountable owner will stay unchanged. These edited values will be saved as a separate stewardship assignment.',
+    ar: 'سيبقى المالك المسؤول المعتمد دون تغيير. سيتم حفظ هذه القيم كإسناد إشراف منفصل.',
+  },
+  'own.editIdentityHint': {
+    en: 'Changing the target or responsibility reruns scope, reference, and primary-conflict checks before saving.',
+    ar: 'تغيير الهدف أو المسؤولية يعيد فحص النطاق والمراجع وتعارض الأساسي قبل الحفظ.',
+  },
   'own.status.active': { en: 'Active', ar: 'نشط' },
   'own.status.inactive': { en: 'Inactive', ar: 'غير نشط' },
   'own.status.expired': { en: 'Expired', ar: 'منتهٍ' },
@@ -1251,6 +1286,7 @@ export const DICT: Dict = {
   'own.noExpiry': { en: 'No expiry', ar: 'بدون انتهاء' },
   'own.created': { en: 'Assignment created.', ar: 'تم إنشاء الإسناد.' },
   'own.updated': { en: 'Assignment updated.', ar: 'تم تحديث الإسناد.' },
+  'own.proposalCreated': { en: 'Proposed owner created. The current accountable owner stayed active.', ar: 'تم إنشاء مالك مقترح وبقي المالك المسؤول الحالي نشطاً.' },
   'own.deleted': { en: 'Assignment removed.', ar: 'تمت إزالة الإسناد.' },
   'own.saveError': { en: 'Could not save. Check the fields and try again.', ar: 'تعذّر الحفظ. تحقق من الحقول وحاول مجددًا.' },
   'own.confirmDelete': { en: 'Remove this assignment?', ar: 'إزالة هذا الإسناد؟' },
@@ -1268,6 +1304,15 @@ export const DICT: Dict = {
   'own.validation.primaryConflict': {
     en: 'Another approved primary assignment already covers this target, responsibility, and date window.',
     ar: 'يوجد إسناد أساسي معتمد آخر يغطي هذا الهدف والمسؤولية وفترة التاريخ.',
+  },
+
+  'own.validation.accountableOwnerConflict': {
+    en: 'This target already has one accountable owner. Save this person as a proposed owner and route it for approval.',
+    ar: 'لهذا الهدف مالك مسؤول واحد بالفعل. احفظ هذا الشخص كمالك مقترح ومرره للاعتماد.',
+  },
+  'own.validation.accountableOwnerReplacement': {
+    en: 'You are changing the approved accountable owner. Save the new person as a proposed owner so approval can promote them safely.',
+    ar: 'أنت تغيّر المالك المسؤول المعتمد. احفظ الشخص الجديد كمالك مقترح حتى تتم ترقيته بأمان بعد الاعتماد.',
   },
 
   // Assignment rules
@@ -1324,6 +1369,17 @@ export const DICT: Dict = {
   'rule.validation.duplicate': {
     en: 'An active rule already uses the same dimension, value, responsibility, and priority.',
     ar: 'توجد قاعدة نشطة تستخدم نفس البُعد والقيمة والمسؤولية والأولوية.',
+  },
+
+  'rule.col.type': { en: 'Recommendation type', ar: 'نوع التوصية' },
+  'rule.field.assignmentType': { en: 'Recommendation type', ar: 'نوع التوصية' },
+  'rule.recommendPrimary': { en: 'Recommend accountable / lead', ar: 'يوصي كمسؤول / رئيسي' },
+  'rule.recommendAccountableOwner': { en: 'Recommend accountable owner', ar: 'يوصي بمالك مسؤول' },
+  'rule.recommendLeadSteward': { en: 'Recommend lead steward', ar: 'يوصي بأمين رئيسي' },
+  'rule.recommendBackup': { en: 'Recommend backup', ar: 'يوصي كاحتياطي' },
+  'rule.typeHint': {
+    en: 'Rules recommend responsibility. Only approved direct assignments become authoritative ownership.',
+    ar: 'القواعد تقدم توصيات للمسؤولية. الإسنادات المباشرة المعتمدة فقط تصبح ملكية رسمية.',
   },
 
   // Exception queue

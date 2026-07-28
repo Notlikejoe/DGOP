@@ -26,6 +26,7 @@ type Over = {
   auditLogs?: any[];
   scope?: any;
   people?: any[];
+  createdAssignments?: any[];
 };
 
 // Builds an AssignmentsService backed by canned data. Scope resolves as unrestricted,
@@ -35,6 +36,14 @@ function makeService(over: Over): AssignmentsService {
   const roleTypes = over.roleTypes ?? [];
   const people = over.people ?? [];
   const lookup = (rows: any[] | undefined, id: string) => (rows ?? []).find((row) => row.id === id) ?? null;
+  const withAssignmentIncludes = (assignment: any) =>
+    assignment
+      ? {
+          ...assignment,
+          roleType: assignment.roleType ?? lookup(roleTypes, assignment.roleTypeId),
+          person: assignment.person ?? lookup(people, assignment.personId),
+        }
+      : null;
   const prisma = {
     dataAsset: {
       findFirst: async (args?: any) => {
@@ -51,22 +60,26 @@ function makeService(over: Over): AssignmentsService {
     },
     person: { findFirst: async (args?: any) => lookup(people, args?.where?.id) },
     stewardshipAssignment: {
-      findFirst: async (args?: any) => lookup(assignmentRows, args?.where?.id),
+      findFirst: async (args?: any) => withAssignmentIncludes(lookup(assignmentRows, args?.where?.id)),
       findMany: async (args?: any) => {
         const where = args?.where ?? {};
-        if (where.NOT?.id) return assignmentRows.filter((assignment) => assignment.id !== where.NOT.id);
+        if (where.NOT?.id) return assignmentRows.filter((assignment) => assignment.id !== where.NOT.id).map(withAssignmentIncludes);
         if (where.targetType && where.targetId) {
           return assignmentRows.filter(
             (assignment) =>
               (!assignment.targetType || assignment.targetType === where.targetType) &&
               (!assignment.targetId || assignment.targetId === where.targetId) &&
               (!where.roleTypeId || assignment.roleTypeId === where.roleTypeId),
-          );
+          ).map(withAssignmentIncludes);
         }
-        return assignmentRows;
+        return assignmentRows.map(withAssignmentIncludes);
       },
-      create: async (args: any) => ({ id: 'created-assignment', ...args.data, roleType: roleTypes[0], person: people[0] }),
-      update: async (args: any) => ({ ...lookup(assignmentRows, args.where.id), ...args.data }),
+      create: async (args: any) => {
+        const created = { id: `created-assignment-${(over.createdAssignments?.length ?? 0) + 1}`, ...args.data, roleType: roleTypes.find((role) => role.id === args.data.roleTypeId) ?? roleTypes[0], person: people.find((person) => person.id === args.data.personId) ?? people[0] };
+        (over.createdAssignments ??= []).push(created);
+        return created;
+      },
+      update: async (args: any) => withAssignmentIncludes({ ...lookup(assignmentRows, args.where.id), ...args.data }),
       updateMany: async (args: any) => {
         for (const assignment of assignmentRows) {
           if (args.where.id.in.includes(assignment.id)) Object.assign(assignment, args.data);
@@ -323,6 +336,266 @@ test('assignment update blocks a new overlapping approved primary', async () => 
     () => svc.updateAssignment('a1', { isPrimary: true }, 'admin@dgop.local'),
     BadRequestException,
   );
+});
+
+test('assignment create auto-saves another accountable owner candidate as a proposal', async () => {
+  const svc = makeService({
+    assets: [{ id: 'asset-1', deletedAt: null, isActive: true }],
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }, { id: 'person-2', isActive: true }],
+    assignments: [
+      {
+        id: 'existing-owner',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        personId: 'person-1',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+      },
+    ],
+  });
+  const created = await svc.createAssignment(
+    {
+      targetType: AssignmentTargetType.asset,
+      targetId: 'asset-1',
+      roleTypeId: 'role-owner',
+      personId: 'person-2',
+      demoteExisting: true,
+    },
+    'admin@dgop.local',
+  );
+  assert.strictEqual((created as any).approvalStatus, ApprovalStatus.draft);
+  assert.strictEqual((created as any).isPrimary, true);
+});
+
+test('assignment create can save a second owner candidate as a non-authoritative proposal', async () => {
+  const svc = makeService({
+    assets: [{ id: 'asset-1', deletedAt: null, isActive: true }],
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }, { id: 'person-2', isActive: true }],
+    assignments: [
+      {
+        id: 'existing-owner',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        personId: 'person-1',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+      },
+    ],
+  });
+  const created = await svc.createAssignment(
+    {
+      targetType: AssignmentTargetType.asset,
+      targetId: 'asset-1',
+      roleTypeId: 'role-owner',
+      personId: 'person-2',
+      saveAsProposal: true,
+    },
+    'admin@dgop.local',
+  );
+  assert.strictEqual((created as any).approvalStatus, ApprovalStatus.draft);
+  assert.strictEqual((created as any).isPrimary, true);
+});
+
+test('assignment update auto-saves approved accountable owner replacement as a proposal', async () => {
+  const over: Over = {
+    assets: [{ id: 'asset-1', deletedAt: null, isActive: true }],
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }, { id: 'person-2', isActive: true }],
+    createdAssignments: [],
+    assignments: [
+      {
+        id: 'current-owner',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        roleType: { id: 'role-owner', code: 'data_owner' },
+        personId: 'person-1',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+        justification: null,
+      },
+    ],
+  };
+  const svc = makeService(over);
+  const proposal = await svc.updateAssignment('current-owner', { personId: 'person-2' }, 'admin@dgop.local');
+  assert.strictEqual((proposal as any).approvalStatus, ApprovalStatus.draft);
+  assert.strictEqual((proposal as any).personId, 'person-2');
+  assert.strictEqual(over.createdAssignments?.length, 1);
+  assert.strictEqual(over.assignments?.[0].personId, 'person-1');
+});
+
+test('assignment update rejects removing an approved accountable owner without an approval path', async () => {
+  const svc = makeService({
+    assets: [{ id: 'asset-1', deletedAt: null, isActive: true }],
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }, { id: 'person-2', isActive: true }],
+    assignments: [
+      {
+        id: 'current-owner',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        roleType: { id: 'role-owner', code: 'data_owner' },
+        personId: 'person-1',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+      },
+    ],
+  });
+  await assert.rejects(
+    () => svc.updateAssignment('current-owner', { isPrimary: false }, 'admin@dgop.local'),
+    /requires a proposed owner approval/,
+  );
+});
+
+test('assignment update creates a separate stewardship assignment when changing an approved owner row to another responsibility', async () => {
+  const over: Over = {
+    assets: [
+      { id: 'asset-owner', deletedAt: null, isActive: true },
+      { id: 'asset-steward', deletedAt: null, isActive: true },
+    ],
+    roleTypes: [
+      { id: 'role-owner', code: 'data_owner', isActive: true },
+      { id: 'role-enterprise-steward', code: 'enterprise_data_steward', isActive: true },
+    ],
+    people: [{ id: 'person-owner', isActive: true }, { id: 'person-steward', isActive: true }],
+    createdAssignments: [],
+    assignments: [
+      {
+        id: 'current-owner',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-owner',
+        roleTypeId: 'role-owner',
+        roleType: { id: 'role-owner', code: 'data_owner' },
+        personId: 'person-owner',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+        justification: null,
+      },
+    ],
+  };
+  const svc = makeService(over);
+  const created = await svc.updateAssignment(
+    'current-owner',
+    {
+      targetType: AssignmentTargetType.asset,
+      targetId: 'asset-steward',
+      roleTypeId: 'role-enterprise-steward',
+      personId: 'person-steward',
+      isPrimary: true,
+      demoteExisting: true,
+    },
+    'admin@dgop.local',
+  );
+  assert.strictEqual((created as any).approvalStatus, ApprovalStatus.approved);
+  assert.strictEqual((created as any).roleTypeId, 'role-enterprise-steward');
+  assert.strictEqual((created as any).personId, 'person-steward');
+  assert.strictEqual(over.createdAssignments?.length, 1);
+  assert.strictEqual(over.assignments?.[0].roleTypeId, 'role-owner');
+  assert.strictEqual(over.assignments?.[0].personId, 'person-owner');
+});
+
+test('assignment update saves an approved accountable owner replacement as a separate proposal', async () => {
+  const over: Over = {
+    assets: [{ id: 'asset-1', deletedAt: null, isActive: true }],
+    roleTypes: [{ id: 'role-owner', code: 'data_owner', isActive: true }],
+    people: [{ id: 'person-1', isActive: true }, { id: 'person-2', isActive: true }],
+    createdAssignments: [],
+    assignments: [
+      {
+        id: 'current-owner',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-owner',
+        roleType: { id: 'role-owner', code: 'data_owner' },
+        personId: 'person-1',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+        justification: null,
+      },
+    ],
+  };
+  const svc = makeService(over);
+  const proposal = await svc.updateAssignment(
+    'current-owner',
+    { personId: 'person-2', saveAsProposal: true, justification: 'Nominate new accountable owner' },
+    'admin@dgop.local',
+  );
+  assert.strictEqual((proposal as any).approvalStatus, ApprovalStatus.draft);
+  assert.strictEqual((proposal as any).personId, 'person-2');
+  assert.strictEqual(over.createdAssignments?.length, 1);
+  assert.strictEqual(over.assignments?.[0].personId, 'person-1');
+});
+
+test('assignment update can change a non-accountable steward assignment when references are valid', async () => {
+  const auditLogs: any[] = [];
+  const svc = makeService({
+    auditLogs,
+    assets: [
+      { id: 'asset-1', deletedAt: null, isActive: true },
+      { id: 'asset-2', deletedAt: null, isActive: true },
+    ],
+    roleTypes: [
+      { id: 'role-technical', code: 'technical_steward', isActive: true },
+      { id: 'role-steward', code: 'business_steward', isActive: true },
+    ],
+    people: [
+      { id: 'person-1', isActive: true },
+      { id: 'person-2', isActive: true },
+    ],
+    assignments: [
+      {
+        id: 'a1',
+        targetType: AssignmentTargetType.asset,
+        targetId: 'asset-1',
+        roleTypeId: 'role-technical',
+        roleType: { id: 'role-technical', code: 'technical_steward' },
+        personId: 'person-1',
+        isPrimary: true,
+        isActive: true,
+        approvalStatus: ApprovalStatus.approved,
+        effectiveDate: new Date('2026-01-01'),
+        expiryDate: null,
+      },
+    ],
+  });
+  const updated = await svc.updateAssignment(
+    'a1',
+    {
+      targetType: AssignmentTargetType.asset,
+      targetId: 'asset-2',
+      roleTypeId: 'role-steward',
+      personId: 'person-2',
+    },
+    'admin@dgop.local',
+  );
+  assert.strictEqual((updated as any).targetId, 'asset-2');
+  assert.strictEqual((updated as any).roleTypeId, 'role-steward');
+  assert.strictEqual((updated as any).personId, 'person-2');
+  assert.strictEqual(auditLogs[0].metadata.from.targetId, 'asset-1');
+  assert.strictEqual(auditLogs[0].metadata.to.roleTypeId, 'role-steward');
 });
 
 test('recommend: no assignment and no rule is an exception', async () => {

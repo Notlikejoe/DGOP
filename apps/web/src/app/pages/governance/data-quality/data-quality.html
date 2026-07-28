@@ -1,4 +1,8 @@
-<section class="page">
+<section class="page dq-page">
+  @if (expandedPanel()) {
+    <button type="button" class="panel-screen-scrim" [attr.aria-label]="t('ui.closeExpandedPanel')" (click)="closeExpandedPanel()"></button>
+  }
+
   <header class="page__header">
     <div>
       <span class="eyebrow">{{ t('dq.eyebrow') }}</span>
@@ -86,7 +90,8 @@
     @if (issues().length === 0) {
       <div class="ds-card"><div class="empty"><p>{{ t('dq.noIssues') }}</p></div></div>
     } @else {
-      <div class="dq-workspace">
+      <div class="dq-command-grid">
+        <div class="dq-left-rail">
         <section class="ds-card issue-list-panel">
           <div class="panel-head compact">
             <div>
@@ -126,14 +131,62 @@
           </div>
         </section>
 
+        <section class="ds-card rule-panel">
+          <div class="panel-head compact">
+            <div>
+              <span class="eyebrow">{{ t('dq.rules.eyebrow') }}</span>
+              <h2>{{ t('dq.rules.title') }}</h2>
+              <p>{{ t('dq.rules.subtitle') }}</p>
+            </div>
+          </div>
+          <div class="rule-list">
+            @for (rule of activeRules(); track rule.id) {
+              <article class="rule-row">
+                <div class="rule-row__main">
+                  <span class="badge-code">{{ rule.code }}</span>
+                  <div>
+                    <strong>{{ name(rule) }}</strong>
+                    <p>{{ rule.thresholdExpression || rule.impactSummary }}</p>
+                  </div>
+                </div>
+                <div class="rule-row__meta">
+                  <app-status-chip [kind]="statusKind(rule.status)" [label]="t('dq.rule.status.' + rule.status)" />
+                  <app-status-chip [kind]="severityKind(rule.severity)" [label]="t('dq.severity.' + rule.severity)" />
+                </div>
+                @if (canEditRules && transitionActions(rule).length) {
+                  <div class="rule-row__actions">
+                    @for (action of transitionActions(rule); track action) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="saving()" (click)="transitionRule(rule, action)">{{ t('dq.rule.action.' + action) }}</button>
+                    }
+                  </div>
+                }
+              </article>
+            } @empty {
+              <div class="empty empty--small"><p>{{ t('dq.rules.empty') }}</p></div>
+            }
+          </div>
+        </section>
+        </div>
+
+        <div class="dq-right-rail">
         @if (selected(); as issue) {
-          <aside class="ds-card detail-panel">
+          <aside class="ds-card detail-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('dq-detail')">
             <div class="detail-head">
               <div>
                 <span class="badge-code">{{ issue.code }}</span>
                 <h2>{{ issue.title }}</h2>
               </div>
               <div class="detail-actions">
+                <button
+                  type="button"
+                  class="panel-expand-toggle"
+                  [attr.aria-label]="isExpandedPanel('dq-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+                  [attr.title]="isExpandedPanel('dq-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+                  [attr.aria-pressed]="isExpandedPanel('dq-detail')"
+                  (click)="toggleExpandedPanel('dq-detail')"
+                >
+                  @if (isExpandedPanel('dq-detail')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+                </button>
                 @if (canEdit) {
                   <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openRca(issue)">{{ t('dq.rca.open') }}</button>
                 }
@@ -208,56 +261,29 @@
             </section>
           </aside>
         }
-      </div>
-    }
 
-    <div class="ops-grid">
-      <section class="ds-card rule-panel">
-        <div class="panel-head compact">
-          <div>
-            <span class="eyebrow">{{ t('dq.rules.eyebrow') }}</span>
-            <h2>{{ t('dq.rules.title') }}</h2>
-            <p>{{ t('dq.rules.subtitle') }}</p>
-          </div>
-        </div>
-        <div class="rule-list">
-          @for (rule of activeRules(); track rule.id) {
-            <article class="rule-row">
-              <div class="rule-row__main">
-                <span class="badge-code">{{ rule.code }}</span>
-                <div>
-                  <strong>{{ name(rule) }}</strong>
-                  <p>{{ rule.thresholdExpression || rule.impactSummary }}</p>
-                </div>
-              </div>
-              <div class="rule-row__meta">
-                <app-status-chip [kind]="statusKind(rule.status)" [label]="t('dq.rule.status.' + rule.status)" />
-                <app-status-chip [kind]="severityKind(rule.severity)" [label]="t('dq.severity.' + rule.severity)" />
-              </div>
-              @if (canEditRules && transitionActions(rule).length) {
-                <div class="rule-row__actions">
-                  @for (action of transitionActions(rule); track action) {
-                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="saving()" (click)="transitionRule(rule, action)">{{ t('dq.rule.action.' + action) }}</button>
-                  }
-                </div>
-              }
-            </article>
-          } @empty {
-            <div class="empty empty--small"><p>{{ t('dq.rules.empty') }}</p></div>
-          }
-        </div>
-      </section>
-
-      <section class="ds-card profile-panel">
+      <section class="ds-card profile-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('dq-profiles')">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('dq.profiles.eyebrow') }}</span>
             <h2>{{ t('dq.profiles.title') }}</h2>
             <p>{{ t('dq.profiles.subtitle') }}</p>
           </div>
-          @if (canProfile) {
-            <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openProfile()">{{ t('dq.profile.runShort') }}</button>
-          }
+          <div class="panel-head-actions">
+            <button
+              type="button"
+              class="panel-expand-toggle"
+              [attr.aria-label]="isExpandedPanel('dq-profiles') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+              [attr.title]="isExpandedPanel('dq-profiles') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+              [attr.aria-pressed]="isExpandedPanel('dq-profiles')"
+              (click)="toggleExpandedPanel('dq-profiles')"
+            >
+              @if (isExpandedPanel('dq-profiles')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+            </button>
+            @if (canProfile) {
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openProfile()">{{ t('dq.profile.runShort') }}</button>
+            }
+          </div>
         </div>
         <div class="profile-list">
           @for (profile of topProfiles(); track profile.id) {
@@ -299,7 +325,9 @@
           }
         </div>
       </section>
-    </div>
+        </div>
+      </div>
+  }
   }
 
   @if (createOpen()) {

@@ -1,3 +1,9 @@
+.dq-page {
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: 0 auto;
+}
+
 .eyebrow {
   display: block;
   margin-bottom: var(--space-2);
@@ -46,18 +52,24 @@
   margin-bottom: var(--space-3);
 }
 
-.dq-workspace {
+.dq-command-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 0.82fr) minmax(420px, 1.18fr);
+  grid-template-columns: minmax(420px, 0.82fr) minmax(640px, 1.18fr);
   gap: var(--space-4);
   align-items: start;
 }
 
-.ops-grid {
+.dq-left-rail,
+.dq-right-rail {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
   gap: var(--space-4);
-  align-items: start;
+  align-content: start;
+  min-width: 0;
+}
+
+.dq-left-rail > .ds-card,
+.dq-right-rail > .ds-card {
+  width: 100%;
 }
 
 .scorecard-panel,
@@ -136,7 +148,7 @@
 
 .issue-list {
   align-content: start;
-  max-height: min(460px, calc(100vh - 360px));
+  max-height: min(520px, calc(100vh - 320px));
   overflow: auto;
   padding-inline-end: var(--space-1);
 }
@@ -350,10 +362,22 @@
 }
 
 .detail-panel {
-  position: sticky;
-  top: var(--space-5);
   display: grid;
   gap: var(--space-4);
+}
+
+@media (min-width: 1101px) {
+  .detail-panel {
+    max-height: min(620px, calc(100vh - 220px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .profile-panel {
+    max-height: min(420px, calc(100vh - 360px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
 }
 
 .detail-head {
@@ -622,15 +646,17 @@ textarea[disabled] {
 
 @media (max-width: 1100px) {
   .dimension-grid,
-  .ops-grid,
-  .dq-workspace,
+  .dq-command-grid,
   .facts,
   .profile-result__sections {
     grid-template-columns: 1fr;
   }
 
-  .detail-panel {
-    position: static;
+  .issue-list-panel,
+  .rule-panel,
+  .detail-panel,
+  .profile-panel {
+    grid-column: auto;
   }
 
   .issue-list {

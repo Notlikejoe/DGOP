@@ -139,6 +139,12 @@ export class AssignmentRulesPage implements OnInit {
     return this.i18n.lang() === 'ar' ? p.fullNameAr : p.fullNameEn;
   }
   protected scopeLabel(s: string): string { return this.t('dim.' + s); }
+  protected recommendationTypeLabel(rule: Pick<Rule, 'isPrimary' | 'roleType'>): string {
+    if (!rule.isPrimary) return this.t('rule.recommendBackup');
+    return rule.roleType?.code === 'data_owner'
+      ? this.t('rule.recommendAccountableOwner')
+      : this.t('rule.recommendLeadSteward');
+  }
 
   private emptyDraft(): Draft {
     return {

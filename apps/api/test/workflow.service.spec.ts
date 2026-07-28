@@ -35,6 +35,7 @@ type Over = {
   case?: any;
   assignment?: any;
   assignmentUpdate?: any;
+  assignmentBulkUpdates?: any[];
   template?: any;
   templates?: any[];
   createdTasks?: any[];
@@ -155,6 +156,10 @@ function makeService(over: Over): WorkflowService {
       update: async (args: any) => {
         over.assignmentUpdate = args.data;
         return { ...(over.assignment ?? {}), ...args.data };
+      },
+      updateMany: async (args: any) => {
+        (over.assignmentBulkUpdates ??= []).push(args);
+        return { count: over.assignmentBulkUpdates.length };
       },
     },
   };
@@ -1365,6 +1370,23 @@ test('submitAssignmentForApproval: approver cannot be the assigned person', asyn
   );
 });
 
+test('submitAssignmentForApproval: approved assignments cannot be resubmitted', async () => {
+  const svc = makeService({
+    assignment: {
+      approvalStatus: 'approved',
+      roleType: { code: 'data_owner', nameEn: 'Data Owner' },
+      targetType: 'asset',
+      targetId: 'a1',
+      person: { fullNameEn: 'Alice', userId: null },
+    },
+    submitter: { id: 'u-sub', email: 'sub@dgop.local' },
+  });
+  await assert.rejects(
+    () => svc.submitAssignmentForApproval({ assignmentId: 'as1', approverUserId: 'u-approver' } as never, ['system_admin'], 'sub@dgop.local'),
+    /Only proposed assignments can be submitted/,
+  );
+});
+
 test('submitAssignmentForApproval: marks pending and opens the case inside the transaction path', async () => {
   const over: Over = {
     assignment: {
@@ -1409,6 +1431,38 @@ test('decideTask: approving an approval task activates the assignment', async ()
   await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never);
   assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'approved');
   assert.strictEqual(over.assignmentUpdate?.isActive, true);
+});
+
+test('decideTask: approving a proposed primary owner demotes the previous accountable owner', async () => {
+  const over: Over = {
+    task: {
+      id: 't1',
+      assigneeUserId: 'u-appr',
+      status: 'pending',
+      caseId: 'c1',
+      case: { type: 'owner_assignment_approval', createdBy: 'sub@dgop.local', assignmentId: 'as-new' },
+    },
+    assignment: {
+      id: 'as-new',
+      targetType: 'asset',
+      targetId: 'asset-1',
+      roleTypeId: 'data-owner-role',
+      isPrimary: true,
+      isActive: true,
+      effectiveDate: new Date('2026-01-01'),
+      expiryDate: null,
+    },
+  };
+  const svc = makeService(over);
+  await svc.decideTask(
+    't1',
+    { decision: 'approved' } as never,
+    { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never,
+  );
+  assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'approved');
+  assert.strictEqual(over.assignmentBulkUpdates?.[0].data.isPrimary, false);
+  assert.strictEqual(over.assignmentBulkUpdates?.[0].where.NOT.id, 'as-new');
+  assert.strictEqual(over.assignmentBulkUpdates?.[0].where.roleTypeId, 'data-owner-role');
 });
 
 test('decideTask: rejecting an approval task rejects the assignment', async () => {

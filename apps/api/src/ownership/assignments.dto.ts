@@ -37,6 +37,8 @@ export class CreateAssignmentDto {
   @IsUUID('4') roleTypeId!: string;
   @IsUUID('4') personId!: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
+  /** Save as a non-authoritative proposal that must go through approval. */
+  @IsOptional() @IsBoolean() saveAsProposal?: boolean;
   @IsOptional() @IsDateString() effectiveDate?: string;
   @IsOptional() @IsDateString() expiryDate?: string | null;
   @Transform(({ value }) => normalizeOwnershipText(value))
@@ -47,14 +49,21 @@ export class CreateAssignmentDto {
 }
 
 export class UpdateAssignmentDto {
+  @IsOptional() @IsEnum(AssignmentTargetType) targetType?: AssignmentTargetType;
+  @IsOptional() @IsUUID('4') targetId?: string;
+  @IsOptional() @IsUUID('4') roleTypeId?: string;
   @IsOptional() @IsUUID('4') personId?: string;
   @IsOptional() @IsBoolean() isPrimary?: boolean;
+  /** Save as a non-authoritative proposal that must go through approval. */
+  @IsOptional() @IsBoolean() saveAsProposal?: boolean;
   @IsOptional() @IsDateString() effectiveDate?: string;
   @IsOptional() @IsDateString() expiryDate?: string | null;
   @Transform(({ value }) => normalizeOwnershipText(value))
   @IsOptional() @IsString() @MaxLength(OWNERSHIP_JUSTIFICATION_MAX)
   justification?: string | null;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  /** When editing a primary into a collision, demote the existing approved primary. */
+  @IsOptional() @IsBoolean() demoteExisting?: boolean;
 }
 
 export class CreateRuleDto {

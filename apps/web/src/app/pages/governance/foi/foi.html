@@ -1,4 +1,8 @@
 <section class="page foi-page">
+  @if (expandedPanel()) {
+    <button type="button" class="panel-screen-scrim" [attr.aria-label]="t('ui.closeExpandedPanel')" (click)="closeExpandedPanel()"></button>
+  }
+
   <header class="page__header foi-hero">
     <div>
       <span class="eyebrow">{{ t('foi.eyebrow') }}</span>
@@ -49,7 +53,8 @@
   } @else if (state() === 'error') {
     <div class="ds-card"><p class="error">{{ t('foi.error.load') }}</p></div>
   } @else {
-    <div class="foi-workspace">
+    <div class="foi-rail-workspace">
+    <div class="foi-left-rail">
       <section class="ds-card foi-queue">
         <div class="panel-head">
           <div>
@@ -79,7 +84,41 @@
         <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" [pageSize]="pageSize()" (pageChange)="goToPage($event)" />
       </section>
 
-      <section class="ds-card foi-detail">
+      <section class="ds-card foi-queue-insight expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('foi-review-path')">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('foi.detail.eyebrow') }}</span>
+            <h2>{{ t('foi.review.title') }}</h2>
+            <p>{{ t('foi.review.help') }}</p>
+          </div>
+          <button
+            type="button"
+            class="panel-expand-toggle"
+            [attr.aria-label]="isExpandedPanel('foi-review-path') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.title]="isExpandedPanel('foi-review-path') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.aria-pressed]="isExpandedPanel('foi-review-path')"
+            (click)="toggleExpandedPanel('foi-review-path')"
+          >
+            @if (isExpandedPanel('foi-review-path')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+          </button>
+        </div>
+        @if (selected(); as request) {
+          <div class="review-strip review-strip--compact">
+            @for (review of request.reviews; track review.id) {
+              <article>
+                <strong>{{ t('foi.reviewType.' + review.reviewType) }}</strong>
+                <app-status-chip [kind]="statusKind(review.status)" [label]="t('foi.reviewStatus.' + review.status)" />
+              </article>
+            }
+          </div>
+        } @else {
+          <div class="empty"><p>{{ t('foi.noSelection') }}</p></div>
+        }
+      </section>
+    </div>
+
+    <div class="foi-right-rail">
+      <section class="ds-card foi-detail expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('foi-detail')">
         @if (selected(); as request) {
           <div class="detail-head">
             <div>
@@ -87,7 +126,19 @@
               <h2>{{ request.requestNumber }}</h2>
               <p>{{ request.subject }}</p>
             </div>
-            <app-status-chip [kind]="statusKind(request.status)" [label]="t('foi.status.' + request.status)" />
+            <div class="panel-head-actions">
+              <app-status-chip [kind]="statusKind(request.status)" [label]="t('foi.status.' + request.status)" />
+              <button
+                type="button"
+                class="panel-expand-toggle"
+                [attr.aria-label]="isExpandedPanel('foi-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+                [attr.title]="isExpandedPanel('foi-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+                [attr.aria-pressed]="isExpandedPanel('foi-detail')"
+                (click)="toggleExpandedPanel('foi-detail')"
+              >
+                @if (isExpandedPanel('foi-detail')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+              </button>
+            </div>
           </div>
 
           <div class="sla-banner sla-banner--{{ request.slaStatus }}">
@@ -219,6 +270,7 @@
           <div class="empty"><p>{{ t('foi.noSelection') }}</p></div>
         }
       </section>
+    </div>
     </div>
   }
 

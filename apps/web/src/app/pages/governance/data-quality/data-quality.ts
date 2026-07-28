@@ -8,6 +8,7 @@ import { AuthService } from '../../../core/auth.service';
 import { ToastService } from '../../../shared/toast.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip, StatusKind } from '../../../shared/status-chip';
+import { AppIcon } from '../../../shared/app-icon';
 
 interface Ref { id: string; code: string; nameEn: string; nameAr: string; }
 interface AssetRef extends Ref {
@@ -240,7 +241,7 @@ const BYTES_PER_MEGABYTE = BYTES_PER_KILOBYTE * 1024;
 @Component({
   selector: 'app-data-quality',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Modal, StatusChip, RouterLink],
+  imports: [FormsModule, Modal, StatusChip, RouterLink, AppIcon],
   templateUrl: './data-quality.html',
   styleUrl: './data-quality.scss',
 })
@@ -259,6 +260,7 @@ export class DataQualityPage implements OnInit {
   protected readonly profiles = signal<DqProfile[]>([]);
   protected readonly assets = signal<AssetRef[]>([]);
   protected readonly selectedId = signal<string | null>(null);
+  protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly search = signal('');
   protected readonly status = signal('');
@@ -420,6 +422,18 @@ export class DataQualityPage implements OnInit {
     if (kind === 'severity') this.severity.set(value);
     if (kind === 'dimension') this.dimension.set(value);
     this.scheduleIssueReload();
+  }
+
+  protected isExpandedPanel(panel: string): boolean {
+    return this.expandedPanel() === panel;
+  }
+
+  protected toggleExpandedPanel(panel: string): void {
+    this.expandedPanel.set(this.isExpandedPanel(panel) ? null : panel);
+  }
+
+  protected closeExpandedPanel(): void {
+    this.expandedPanel.set(null);
   }
 
   private emptyDraft(): IssueDraft {

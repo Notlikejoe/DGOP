@@ -2559,6 +2559,41 @@ export class WorkflowService implements OnModuleInit {
     });
   }
 
+  private async demoteConflictingApprovedPrimary(
+    client: Prisma.TransactionClient,
+    assignment: {
+      id: string;
+      targetType: AssignmentTargetType;
+      targetId: string;
+      roleTypeId: string;
+      isPrimary: boolean;
+      isActive: boolean;
+      effectiveDate: Date;
+      expiryDate: Date | null;
+    },
+  ): Promise<number> {
+    if (!assignment.isPrimary || !assignment.isActive) return 0;
+    const where: Prisma.StewardshipAssignmentWhereInput = {
+      targetType: assignment.targetType,
+      targetId: assignment.targetId,
+      roleTypeId: assignment.roleTypeId,
+      isPrimary: true,
+      isActive: true,
+      approvalStatus: ApprovalStatus.approved,
+      deletedAt: null,
+      NOT: { id: assignment.id },
+      OR: [{ expiryDate: null }, { expiryDate: { gte: assignment.effectiveDate } }],
+    };
+    if (assignment.expiryDate) {
+      where.effectiveDate = { lte: assignment.expiryDate };
+    }
+    const result = await client.stewardshipAssignment.updateMany({
+      where,
+      data: { isPrimary: false },
+    });
+    return result.count;
+  }
+
   // ---------- cases ----------
   async listCases(
     roleCodes: string[],
@@ -3746,6 +3781,9 @@ export class WorkflowService implements OnModuleInit {
           include: { roleType: true, person: true },
         });
         if (!assignment) throw new BadRequestException('assignment not found for approval workflow');
+        const demotedPrimaryCount = approved
+          ? await this.demoteConflictingApprovedPrimary(tx, assignment)
+          : 0;
         await tx.stewardshipAssignment.update({
           where: { id: assignment.id },
           data: {
@@ -3768,7 +3806,9 @@ export class WorkflowService implements OnModuleInit {
             action: 'case.status',
             fromStatus: task.case.status,
             toStatus: finalStatus,
-            comment: approved ? 'Assignment activated' : 'Proposed assignment rejected',
+            comment: approved
+              ? `Assignment activated${demotedPrimaryCount ? `; ${demotedPrimaryCount} previous primary moved to backup` : ''}`
+              : 'Proposed assignment rejected',
           },
         });
         await this.audit.log(
@@ -3835,6 +3875,9 @@ export class WorkflowService implements OnModuleInit {
     }
     if (assignment.approvalStatus === ApprovalStatus.pending) {
       throw new BadRequestException('This assignment is already awaiting approval');
+    }
+    if (assignment.approvalStatus !== ApprovalStatus.draft) {
+      throw new BadRequestException('Only proposed assignments can be submitted for approval');
     }
     await this.assertUser(dto.approverUserId);
 

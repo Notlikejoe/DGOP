@@ -1,4 +1,8 @@
 <section class="page open-data-page">
+  @if (expandedPanel()) {
+    <button type="button" class="panel-screen-scrim" [attr.aria-label]="t('ui.closeExpandedPanel')" (click)="closeExpandedPanel()"></button>
+  }
+
   <header class="page__header od-hero">
     <div>
       <span class="eyebrow">{{ t('openData.eyebrow') }}</span>
@@ -71,7 +75,8 @@
   } @else if (state() === 'error') {
     <div class="ds-card"><p class="error">{{ t('openData.error') }}</p></div>
   } @else {
-    <div class="od-workspace">
+    <div class="od-rail-workspace">
+    <div class="od-left-rail">
       <section class="ds-card od-queue">
         <div class="panel-head">
           <div>
@@ -117,7 +122,30 @@
         }
       </section>
 
-      <aside class="ds-card od-detail">
+      <section class="ds-card od-review-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">{{ t('openData.odiao.eyebrow') }}</span>
+            <h2>{{ t('openData.odiao.title') }}</h2>
+            <p>{{ t('openData.odiao.subtitle') }}</p>
+          </div>
+          <app-icon name="globe" />
+        </div>
+        <div class="mini-queue">
+          @for (candidate of reviewQueue(); track candidate.id) {
+            <button type="button" class="mini-row" (click)="select(candidate)">
+              <span>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</span>
+              <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+            </button>
+          } @empty {
+            <p class="muted">{{ t('openData.odiao.empty') }}</p>
+          }
+        </div>
+      </section>
+    </div>
+
+    <div class="od-right-rail">
+      <aside class="ds-card od-detail expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('open-data-detail')">
         @if (selected(); as candidate) {
           <div class="detail-head">
             <div>
@@ -125,7 +153,19 @@
               <h2>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</h2>
               <p>{{ name(candidate.asset) }}</p>
             </div>
-            <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+            <div class="panel-head-actions">
+              <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
+              <button
+                type="button"
+                class="panel-expand-toggle"
+                [attr.aria-label]="isExpandedPanel('open-data-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+                [attr.title]="isExpandedPanel('open-data-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+                [attr.aria-pressed]="isExpandedPanel('open-data-detail')"
+                (click)="toggleExpandedPanel('open-data-detail')"
+              >
+                @if (isExpandedPanel('open-data-detail')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+              </button>
+            </div>
           </div>
 
           <div class="eligibility-card">
@@ -379,37 +419,24 @@
           <div class="empty"><p>{{ t('openData.noSelection') }}</p></div>
         }
       </aside>
-    </div>
 
-    <div class="od-lower-grid">
-      <section class="ds-card">
-        <div class="panel-head compact">
-          <div>
-            <span class="eyebrow">{{ t('openData.odiao.eyebrow') }}</span>
-            <h2>{{ t('openData.odiao.title') }}</h2>
-            <p>{{ t('openData.odiao.subtitle') }}</p>
-          </div>
-          <app-icon name="globe" />
-        </div>
-        <div class="mini-queue">
-          @for (candidate of reviewQueue(); track candidate.id) {
-            <button type="button" class="mini-row" (click)="select(candidate)">
-              <span>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</span>
-              <app-status-chip [kind]="statusKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
-            </button>
-          } @empty {
-            <p class="muted">{{ t('openData.odiao.empty') }}</p>
-          }
-        </div>
-      </section>
-
-      <section class="ds-card">
+      <section class="ds-card od-published-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('open-data-published')">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('openData.published.eyebrow') }}</span>
             <h2>{{ t('openData.published.title') }}</h2>
             <p>{{ t('openData.published.subtitle') }}</p>
           </div>
+          <button
+            type="button"
+            class="panel-expand-toggle"
+            [attr.aria-label]="isExpandedPanel('open-data-published') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.title]="isExpandedPanel('open-data-published') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.aria-pressed]="isExpandedPanel('open-data-published')"
+            (click)="toggleExpandedPanel('open-data-published')"
+          >
+            @if (isExpandedPanel('open-data-published')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+          </button>
         </div>
         <div class="mini-queue">
           @for (candidate of publishedCandidates(); track candidate.id) {
@@ -422,6 +449,7 @@
           }
         </div>
       </section>
+    </div>
     </div>
   }
 

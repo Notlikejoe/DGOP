@@ -128,7 +128,7 @@ export class GovernanceOperationsController {
   }
 
   @Post('notifications/preferences')
-  @RequirePermissions('governance_operations.view')
+  @RequirePermissions('governance_operations.edit')
   upsertNotificationPreference(@Body() dto: UpsertGovernanceNotificationPreferenceDto, @CurrentUser() user: AuthUser) {
     return this.service.upsertNotificationPreference(dto, user);
   }

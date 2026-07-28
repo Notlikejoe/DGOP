@@ -157,6 +157,7 @@ export class FoiPage implements OnInit {
   protected readonly templates = signal<FoiTemplate[]>([]);
   protected readonly showCreate = signal(false);
   protected readonly saving = signal(false);
+  protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly statuses = signal(STATUSES);
   protected readonly channels = signal(CHANNELS);
@@ -218,6 +219,18 @@ export class FoiPage implements OnInit {
     this.filters.set({ search: '', status: '', channel: '' });
     this.page.set(1);
     this.load();
+  }
+
+  protected isExpandedPanel(panel: string): boolean {
+    return this.expandedPanel() === panel;
+  }
+
+  protected toggleExpandedPanel(panel: string): void {
+    this.expandedPanel.set(this.isExpandedPanel(panel) ? null : panel);
+  }
+
+  protected closeExpandedPanel(): void {
+    this.expandedPanel.set(null);
   }
 
   protected load(): void {

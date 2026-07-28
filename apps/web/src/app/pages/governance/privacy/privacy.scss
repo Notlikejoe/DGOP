@@ -1,6 +1,9 @@
 .privacy-page {
   display: grid;
   gap: var(--space-5);
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: 0 auto;
 }
 
 .eyebrow {
@@ -115,16 +118,41 @@ textarea {
   resize: vertical;
 }
 
-.privacy-workspace {
+.privacy-rail-workspace {
   display: grid;
-  grid-template-columns: minmax(360px, 0.78fr) minmax(0, 1.22fr);
+  grid-template-columns: minmax(420px, 0.82fr) minmax(640px, 1.18fr);
   gap: var(--space-5);
   align-items: start;
 }
 
+.privacy-left-rail,
+.privacy-right-rail,
 .queue-panel,
-.detail-panel {
+.detail-panel,
+.ropa-panel,
+.evidence-panel {
   min-width: 0;
+}
+
+.privacy-left-rail,
+.privacy-right-rail {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+@media (min-width: 1181px) {
+  .detail-panel {
+    max-height: min(620px, calc(100vh - 220px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .evidence-panel {
+    max-height: min(360px, calc(100vh - 420px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
 }
 
 .queue-list,
@@ -299,12 +327,6 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-.lower-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: var(--space-5);
-}
-
 .flow-line {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -347,8 +369,7 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .privacy-workspace,
-  .lower-grid,
+  .privacy-rail-workspace,
   .gate-map {
     grid-template-columns: 1fr;
   }
@@ -356,6 +377,7 @@ textarea {
   .flow-line {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
 }
 
 @media (max-width: 760px) {

@@ -51,6 +51,7 @@ interface Draft {
   roleTypeId: string;
   personId: string;
   isPrimary: boolean;
+  saveAsProposal: boolean;
   effectiveDate: string;
   expiryDate: string;
   justification: string;
@@ -84,6 +85,7 @@ export class OwnershipPage implements OnInit {
   protected readonly targetTypes = TARGET_TYPES;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly assignments = signal<Assignment[]>([]);
+  protected readonly validationAssignments = signal<Assignment[]>([]);
   protected readonly conflictIds = signal<Set<string>>(new Set());
   protected readonly conflictCount = signal(0);
 
@@ -99,6 +101,7 @@ export class OwnershipPage implements OnInit {
 
   protected readonly modalOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
+  protected readonly editingAssignment = signal<Assignment | null>(null);
   protected readonly draft = signal<Draft>(this.emptyDraft());
   protected readonly saving = signal(false);
 
@@ -114,6 +117,7 @@ export class OwnershipPage implements OnInit {
   ngOnInit(): void {
     this.loadLookups();
     this.load();
+    this.loadValidationAssignments();
     this.loadConflicts();
   }
 
@@ -128,8 +132,19 @@ export class OwnershipPage implements OnInit {
     let params = new HttpParams();
     for (const [k, v] of Object.entries(f)) if (v) params = params.set(k, v);
     this.http.get<Assignment[]>('/api/assignments', { params }).subscribe({
-      next: (a) => { this.assignments.set(a); this.state.set('ok'); },
+      next: (a) => {
+        this.assignments.set(a);
+        if (!Object.values(f).some(Boolean)) this.validationAssignments.set(a);
+        this.state.set('ok');
+      },
       error: () => this.state.set('error'),
+    });
+  }
+
+  private loadValidationAssignments(): void {
+    this.http.get<Assignment[]>('/api/assignments').subscribe({
+      next: (a) => this.validationAssignments.set(a),
+      error: () => {},
     });
   }
 
@@ -196,6 +211,8 @@ export class OwnershipPage implements OnInit {
           this.submitting.set(false);
           this.submitTarget.set(null);
           this.load();
+          this.loadValidationAssignments();
+          this.loadConflicts();
         },
         error: (err) => { this.toast.errorFrom(err, this.t('own.saveError')); this.submitting.set(false); },
       });
@@ -226,6 +243,83 @@ export class OwnershipPage implements OnInit {
     return { kind: 'success', key: 'own.status.active' };
   }
 
+  protected assignmentTypeLabel(a: Assignment): string {
+    if (!a.isPrimary) return this.t('own.backup');
+    const isOwner = a.roleType?.code === 'data_owner';
+    if (a.approvalStatus !== 'approved') {
+      return isOwner ? this.t('own.proposedOwner') : this.t('own.proposedLead');
+    }
+    return isOwner ? this.t('own.accountableOwner') : this.t('own.leadSteward');
+  }
+
+  protected isApprovedAccountableOwner(a: Assignment): boolean {
+    return a.roleType?.code === 'data_owner' && a.isPrimary && a.isActive && a.approvalStatus === 'approved';
+  }
+
+  protected selectedRole(): Ref | null {
+    const roleTypeId = this.draft().roleTypeId;
+    return this.roleTypes().find((role) => role.id === roleTypeId) ?? null;
+  }
+
+  protected isAccountableOwnerDraft(): boolean {
+    return this.selectedRole()?.code === 'data_owner';
+  }
+
+  protected isReplacingApprovedAccountableOwner(): boolean {
+    return this.isChangingApprovedAccountableOwnerIdentity() && this.isAccountableOwnerDraft() && this.draft().isPrimary;
+  }
+
+  protected isChangingApprovedAccountableOwnerIdentity(): boolean {
+    const current = this.editingAssignment();
+    const d = this.draft();
+    if (!current || !this.isApprovedAccountableOwner(current)) return false;
+    return (
+      d.targetType !== current.targetType ||
+      d.targetId !== current.targetId ||
+      d.roleTypeId !== current.roleTypeId ||
+      d.personId !== current.personId
+    );
+  }
+
+  protected shouldOfferOwnerProposal(): boolean {
+    return this.willSaveAsOwnerProposal();
+  }
+
+  protected shouldShowSeparateAssignmentNotice(): boolean {
+    return this.isChangingApprovedAccountableOwnerIdentity() && !this.willSaveAsOwnerProposal();
+  }
+
+  protected willSaveAsOwnerProposal(): boolean {
+    return this.isAccountableOwnerDraft() && (this.hasApprovedPrimaryConflict() || this.isReplacingApprovedAccountableOwner());
+  }
+
+  protected isRemovingApprovedAccountableOwner(): boolean {
+    const current = this.editingAssignment();
+    const d = this.draft();
+    if (!current || !this.isApprovedAccountableOwner(current)) return false;
+    if (this.isChangingApprovedAccountableOwnerIdentity()) return false;
+    return !this.isAccountableOwnerDraft() || !d.isPrimary;
+  }
+
+  protected hasApprovedPrimaryConflict(): boolean {
+    const d = this.draft();
+    if (!d.isPrimary || !d.targetId || !d.roleTypeId) return false;
+    const rows = this.validationAssignments().length ? this.validationAssignments() : this.assignments();
+    return rows.some((assignment) =>
+      assignment.id !== this.editingId() &&
+      assignment.targetType === d.targetType &&
+      assignment.targetId === d.targetId &&
+      assignment.roleTypeId === d.roleTypeId &&
+      assignment.isPrimary &&
+      assignment.isActive &&
+      assignment.approvalStatus === 'approved' &&
+      this.windowsOverlap(
+        { effectiveDate: d.effectiveDate, expiryDate: d.expiryDate || null },
+        assignment,
+      ),
+    );
+  }
+
   protected isConflict(a: Assignment): boolean { return this.conflictIds().has(a.id); }
   protected fmtDate(d?: string | null): string { return d ? new Date(d).toISOString().slice(0, 10) : this.t('own.noExpiry'); }
   protected conflictBanner(): string { return this.t('own.conflictBanner').replace('{count}', String(this.conflictCount())); }
@@ -234,8 +328,8 @@ export class OwnershipPage implements OnInit {
   private emptyDraft(): Draft {
     return {
       targetType: 'asset', targetId: '', roleTypeId: '', personId: '',
-      isPrimary: true, effectiveDate: new Date().toISOString().slice(0, 10), expiryDate: '', justification: '',
-      demoteExisting: true,
+      isPrimary: true, saveAsProposal: false, effectiveDate: new Date().toISOString().slice(0, 10), expiryDate: '', justification: '',
+      demoteExisting: false,
     };
   }
   protected personNameByUser(u: UserRef): string { return u.displayName; }
@@ -249,24 +343,29 @@ export class OwnershipPage implements OnInit {
   }
 
   protected openCreate(): void {
+    this.loadValidationAssignments();
     this.draft.set(this.emptyDraft());
     this.editingId.set(null);
+    this.editingAssignment.set(null);
     this.modalOpen.set(true);
   }
 
   protected openEdit(a: Assignment): void {
+    this.loadValidationAssignments();
     this.draft.set({
       targetType: a.targetType,
       targetId: a.targetId,
       roleTypeId: a.roleTypeId,
       personId: a.personId,
       isPrimary: a.isPrimary,
+      saveAsProposal: false,
       effectiveDate: a.effectiveDate ? a.effectiveDate.slice(0, 10) : '',
       expiryDate: a.expiryDate ? a.expiryDate.slice(0, 10) : '',
       justification: a.justification ?? '',
-      demoteExisting: true,
+      demoteExisting: false,
     });
     this.editingId.set(a.id);
+    this.editingAssignment.set(a);
     this.modalOpen.set(true);
   }
 
@@ -280,35 +379,47 @@ export class OwnershipPage implements OnInit {
     this.saving.set(true);
     const d = this.draft();
     const id = this.editingId();
+    const saveAsProposal = d.saveAsProposal || this.willSaveAsOwnerProposal();
+    const createSeparateAssignment = Boolean(id && this.isChangingApprovedAccountableOwnerIdentity());
     const base = {
+      targetType: d.targetType,
+      targetId: d.targetId,
+      roleTypeId: d.roleTypeId,
       personId: d.personId,
       isPrimary: d.isPrimary,
+      saveAsProposal,
       effectiveDate: new Date(d.effectiveDate).toISOString(),
       expiryDate: d.expiryDate ? new Date(d.expiryDate).toISOString() : null,
       justification: d.justification.trim() || null,
+      demoteExisting: d.demoteExisting,
     };
-    const req = id
+    const req = createSeparateAssignment
+      ? this.http.post('/api/assignments', {
+          ...base,
+        })
+      : id
       ? this.http.patch('/api/assignments/' + id, base)
       : this.http.post('/api/assignments', {
           ...base,
-          targetType: d.targetType,
-          targetId: d.targetId,
-          roleTypeId: d.roleTypeId,
-          demoteExisting: d.demoteExisting,
         });
     req.subscribe({
       next: () => {
-        this.toast.success(this.t(id ? 'own.updated' : 'own.created'));
+        this.toast.success(this.t(createSeparateAssignment && saveAsProposal ? 'own.proposalCreated' : createSeparateAssignment ? 'own.created' : id ? 'own.updated' : 'own.created'));
         this.saving.set(false);
         this.modalOpen.set(false);
+        this.editingAssignment.set(null);
         this.load();
+        this.loadValidationAssignments();
         this.loadConflicts();
       },
       error: (err) => { this.toast.errorFrom(err, this.t('own.saveError')); this.saving.set(false); },
     });
   }
 
-  protected close(): void { this.modalOpen.set(false); }
+  protected close(): void {
+    this.modalOpen.set(false);
+    this.editingAssignment.set(null);
+  }
 
   private windowsOverlap(
     a: { effectiveDate: string; expiryDate?: string | null },
@@ -336,22 +447,13 @@ export class OwnershipPage implements OnInit {
       errors.push(this.t('own.validation.window'));
     }
     if (d.isPrimary && d.targetId && d.roleTypeId) {
-      const overlap = this.assignments().some((assignment) =>
-        assignment.id !== this.editingId() &&
-        assignment.targetType === d.targetType &&
-        assignment.targetId === d.targetId &&
-        assignment.roleTypeId === d.roleTypeId &&
-        assignment.isPrimary &&
-        assignment.isActive &&
-        assignment.approvalStatus === 'approved' &&
-        this.windowsOverlap(
-          { effectiveDate: d.effectiveDate, expiryDate: d.expiryDate || null },
-          assignment,
-        ),
-      );
-      if (overlap && (this.editingId() || !d.demoteExisting)) {
+      const overlap = this.hasApprovedPrimaryConflict();
+      if (overlap && !this.isAccountableOwnerDraft() && !d.demoteExisting) {
         errors.push(this.t('own.validation.primaryConflict'));
       }
+    }
+    if (this.isRemovingApprovedAccountableOwner()) {
+      errors.push(this.t('own.validation.accountableOwnerReplacement'));
     }
     return errors;
   }
@@ -360,7 +462,12 @@ export class OwnershipPage implements OnInit {
     const ok = await this.confirm.ask('own.confirmDelete');
     if (!ok) return;
     this.http.delete('/api/assignments/' + a.id).subscribe({
-      next: () => { this.toast.success(this.t('own.deleted')); this.load(); this.loadConflicts(); },
+      next: () => {
+        this.toast.success(this.t('own.deleted'));
+        this.load();
+        this.loadValidationAssignments();
+        this.loadConflicts();
+      },
       error: (err) => this.toast.errorFrom(err, this.t('own.saveError')),
     });
   }

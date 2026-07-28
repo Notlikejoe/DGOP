@@ -33,7 +33,9 @@ for (const file of files) {
 }
 
 const i18nPath = join(appDir, 'core', 'i18n.service.ts');
+const i18nDictionaryPath = join(appDir, 'core', 'i18n.dictionary.ts');
 const i18n = read(i18nPath);
+const i18nDictionary = existsSync(i18nDictionaryPath) ? read(i18nDictionaryPath) : '';
 const sourceIndex = read(join(root, 'apps', 'web', 'src', 'index.html'));
 if (/https:\/\/fonts\.(?:googleapis|gstatic)\.com/iu.test(sourceIndex)) {
   fail('Web index must not load externally hosted fonts; use bundled assets or the system font stack.');
@@ -58,7 +60,7 @@ if (mojibakeFiles.length) {
 }
 
 const dictKeys = new Set();
-for (const match of i18n.matchAll(/['"]([A-Za-z0-9_.-]+)['"]\s*:/gu)) dictKeys.add(match[1]);
+for (const match of `${i18n}\n${i18nDictionary}`.matchAll(/['"]([A-Za-z0-9_.-]+)['"]\s*:/gu)) dictKeys.add(match[1]);
 const missing = [...refs].filter((key) => !dictKeys.has(key)).sort();
 if (missing.length) {
   fail(`Missing i18n keys:\n${missing.map((key) => `- ${key}`).join('\n')}`);

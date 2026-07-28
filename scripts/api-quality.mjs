@@ -788,6 +788,8 @@ const destructiveAllowlist = new Set([
   'apps/api/src/roles/roles.service.ts:rolePermission.deleteMany',
   'apps/api/src/roles/roles.service.ts:roleDataScope.deleteMany',
   'apps/api/src/master-data/raci-templates.service.ts:raciTemplateItem.deleteMany',
+  'apps/api/src/governance-lifecycle/governance-lifecycle.service.ts:dataDomainCouncilMember.deleteMany',
+  'apps/api/src/governance-lifecycle/governance-lifecycle.service.ts:governanceMaturityAssessmentDimension.deleteMany',
   // Training requirement is a role/course policy link and deletion is audited.
   'apps/api/src/training/training.service.ts:trainingRequirement.delete',
 ]);

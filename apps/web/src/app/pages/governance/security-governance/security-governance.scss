@@ -2,6 +2,9 @@
   --risk-panel-gap: var(--space-4);
   display: grid;
   gap: var(--space-4);
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: 0 auto;
 }
 
 .eyebrow {
@@ -100,23 +103,38 @@
   line-height: 1;
 }
 
-.risk-workspace {
-  order: 4;
+.security-command-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 0.78fr) minmax(420px, 1.22fr);
+  grid-template-columns: minmax(420px, 0.82fr) minmax(640px, 1.18fr);
   gap: var(--space-4);
   align-items: start;
+}
+
+.security-left-rail,
+.security-right-rail {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-width: 0;
+}
+
+.security-left-rail > .ds-card,
+.security-right-rail > .ds-card {
+  width: 100%;
 }
 
 .queue-panel,
 .detail-panel,
 .access-panel,
+.masking-panel,
 .decision-panel {
   min-width: 0;
 }
 
 .queue-panel,
-.detail-panel {
+.detail-panel,
+.access-panel,
+.masking-panel {
   min-height: 0;
 }
 
@@ -233,10 +251,24 @@
 }
 
 .detail-panel {
-  position: sticky;
-  top: var(--space-5);
   display: grid;
   gap: var(--space-3);
+}
+
+@media (min-width: 1281px) {
+  .detail-panel,
+  .masking-panel,
+  .decision-panel {
+    max-height: min(860px, calc(100vh - 160px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .access-panel {
+    max-height: min(620px, calc(100vh - 220px));
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
 }
 
 .detail-head {
@@ -293,14 +325,6 @@
   justify-content: flex-start;
   gap: var(--space-2);
   flex-wrap: wrap;
-}
-
-.insight-grid {
-  order: 3;
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: var(--space-4);
-  align-items: start;
 }
 
 .access-row {
@@ -429,24 +453,18 @@
 
 @media (max-width: 1280px) {
   .security-strip,
-  .security-flow,
-  .insight-grid {
+  .security-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .risk-workspace {
+  .security-command-grid {
     grid-template-columns: 1fr;
-  }
-
-  .detail-panel {
-    position: static;
   }
 }
 
 @media (max-width: 860px) {
   .security-strip,
   .security-flow,
-  .insight-grid,
   .facts {
     grid-template-columns: 1fr;
   }

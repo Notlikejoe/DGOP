@@ -168,6 +168,7 @@ export class PrivacyOperationsPage implements OnInit {
   protected readonly totalPages = signal(1);
   protected readonly saving = signal(false);
   protected readonly createMode = signal<CreateMode>(null);
+  protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly gateDraft = signal({ phase: 'requirements', status: 'approved', reviewerPersonId: '', note: '' });
   protected readonly dsrDraftUpdate = signal({ status: 'in_progress', assignedPersonId: '', decisionSummary: '', identityValidated: false });
@@ -297,6 +298,18 @@ export class PrivacyOperationsPage implements OnInit {
     if (kind === 'status') this.status.set(value);
     this.page.set(1);
     this.load();
+  }
+
+  protected isExpandedPanel(panel: string): boolean {
+    return this.expandedPanel() === panel;
+  }
+
+  protected toggleExpandedPanel(panel: string): void {
+    this.expandedPanel.set(this.isExpandedPanel(panel) ? null : panel);
+  }
+
+  protected closeExpandedPanel(): void {
+    this.expandedPanel.set(null);
   }
 
   protected statusOptions(): string[] {

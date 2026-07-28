@@ -1,4 +1,8 @@
 <section class="page privacy-page">
+  @if (expandedPanel()) {
+    <button type="button" class="panel-screen-scrim" [attr.aria-label]="t('ui.closeExpandedPanel')" (click)="closeExpandedPanel()"></button>
+  }
+
   <header class="page__header privacy-hero">
     <div>
       <span class="eyebrow">{{ t('privacy.eyebrow') }}</span>
@@ -48,7 +52,8 @@
   } @else if (state() === 'error') {
     <section class="ds-card"><p class="error">{{ t('privacy.error.load') }}</p></section>
   } @else {
-    <div class="privacy-workspace">
+    <div class="privacy-rail-workspace">
+    <div class="privacy-left-rail">
       <section class="ds-card queue-panel">
         <div class="panel-head">
           <div>
@@ -119,13 +124,46 @@
         <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" [pageSize]="pageSize()" (pageChange)="goToPage($event)" />
       </section>
 
-      <section class="ds-card detail-panel">
+      <article class="ds-card ropa-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('privacy.ropa.eyebrow') }}</span>
+            <h2>{{ t('privacy.ropa.title') }}</h2>
+            <p>{{ t('privacy.ropa.help') }}</p>
+          </div>
+        </div>
+        <div class="mini-list">
+          @for (record of urgentRopa(); track record.id) {
+            <article>
+              <strong>{{ record.processName }}</strong>
+              <span>{{ name(record.asset || record.domain) }} - {{ name(record.legalBasis) }}</span>
+              <app-status-chip [kind]="statusKind(record.status)" [label]="statusLabel('privacy.status', record.status)" />
+            </article>
+          } @empty {
+            <p class="muted">{{ t('privacy.ropa.empty') }}</p>
+          }
+        </div>
+      </article>
+    </div>
+
+    <div class="privacy-right-rail">
+      <section class="ds-card detail-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('privacy-detail')">
         <div class="detail-head">
           <div>
             <span class="eyebrow">{{ t('privacy.detail.eyebrow') }}</span>
             <h2>{{ selectedTitle() }}</h2>
             <p>{{ t('privacy.detail.help') }}</p>
           </div>
+          <button
+            type="button"
+            class="panel-expand-toggle"
+            [attr.aria-label]="isExpandedPanel('privacy-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.title]="isExpandedPanel('privacy-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.aria-pressed]="isExpandedPanel('privacy-detail')"
+            (click)="toggleExpandedPanel('privacy-detail')"
+          >
+            @if (isExpandedPanel('privacy-detail')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+          </button>
         </div>
 
         @if (activeTab() === 'dpia' && selectedDpia(); as dpia) {
@@ -220,32 +258,24 @@
           }
         }
       </section>
-    </div>
 
-    <section class="lower-grid">
-      <article class="ds-card">
-        <div class="panel-head">
+      <article class="ds-card evidence-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('privacy-evidence')">
+        <div class="panel-head compact">
           <div>
-            <span class="eyebrow">{{ t('privacy.ropa.eyebrow') }}</span>
-            <h2>{{ t('privacy.ropa.title') }}</h2>
-            <p>{{ t('privacy.ropa.help') }}</p>
+            <span class="eyebrow">{{ t('privacy.model.eyebrow') }}</span>
+            <h2>{{ t('privacy.model.title') }}</h2>
           </div>
+          <button
+            type="button"
+            class="panel-expand-toggle"
+            [attr.aria-label]="isExpandedPanel('privacy-evidence') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.title]="isExpandedPanel('privacy-evidence') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.aria-pressed]="isExpandedPanel('privacy-evidence')"
+            (click)="toggleExpandedPanel('privacy-evidence')"
+          >
+            @if (isExpandedPanel('privacy-evidence')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+          </button>
         </div>
-        <div class="mini-list">
-          @for (record of urgentRopa(); track record.id) {
-            <article>
-              <strong>{{ record.processName }}</strong>
-              <span>{{ name(record.asset || record.domain) }} · {{ name(record.legalBasis) }}</span>
-              <app-status-chip [kind]="statusKind(record.status)" [label]="statusLabel('privacy.status', record.status)" />
-            </article>
-          } @empty {
-            <p class="muted">{{ t('privacy.ropa.empty') }}</p>
-          }
-        </div>
-      </article>
-      <article class="ds-card evidence-panel">
-        <span class="eyebrow">{{ t('privacy.model.eyebrow') }}</span>
-        <h2>{{ t('privacy.model.title') }}</h2>
         <div class="flow-line">
           <span>{{ t('privacy.model.intake') }}</span>
           <span>{{ t('privacy.model.assess') }}</span>
@@ -253,7 +283,8 @@
           <span>{{ t('privacy.model.evidence') }}</span>
         </div>
       </article>
-    </section>
+    </div>
+    </div>
   }
 
   @if (createMode(); as mode) {

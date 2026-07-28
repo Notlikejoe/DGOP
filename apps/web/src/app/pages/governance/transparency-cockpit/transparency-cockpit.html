@@ -37,6 +37,7 @@
     </section>
 
     <div class="transparency-grid">
+      <div class="transparency-left-rail">
       <section class="ds-card readiness-card">
         <div class="panel-head">
           <div>
@@ -55,6 +56,45 @@
         </div>
       </section>
 
+      <section class="ds-card trend-card">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('transparency.trends') }}</span>
+            <h2>{{ t('transparency.trendTitle') }}</h2>
+          </div>
+          <small>{{ data.generatedAt | date: 'medium' }}</small>
+        </div>
+        <div class="trend-grid">
+          @for (bucket of data.trends; track bucket.label) {
+            <article class="trend-bucket">
+              <strong>{{ bucket.label }}</strong>
+              <div class="trend-line">
+                <span>{{ t('transparency.trend.odCreated') }}</span>
+                <i [style.width.%]="bar(bucket.openDataCreated, data)"></i>
+                <b>{{ bucket.openDataCreated }}</b>
+              </div>
+              <div class="trend-line trend-line--success">
+                <span>{{ t('transparency.trend.odPublished') }}</span>
+                <i [style.width.%]="bar(bucket.openDataPublished, data)"></i>
+                <b>{{ bucket.openDataPublished }}</b>
+              </div>
+              <div class="trend-line trend-line--warning">
+                <span>{{ t('transparency.trend.foiReceived') }}</span>
+                <i [style.width.%]="bar(bucket.foiReceived, data)"></i>
+                <b>{{ bucket.foiReceived }}</b>
+              </div>
+              <div class="trend-line trend-line--info">
+                <span>{{ t('transparency.trend.foiDisclosed') }}</span>
+                <i [style.width.%]="bar(bucket.foiDisclosed, data)"></i>
+                <b>{{ bucket.foiDisclosed }}</b>
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+      </div>
+
+      <div class="transparency-right-rail">
       <section class="ds-card risk-card">
         <div class="panel-head">
           <div>
@@ -78,55 +118,19 @@
           }
         </div>
       </section>
-    </div>
 
-    <section class="ds-card trend-card">
-      <div class="panel-head">
-        <div>
-          <span class="eyebrow">{{ t('transparency.trends') }}</span>
-          <h2>{{ t('transparency.trendTitle') }}</h2>
-        </div>
-        <small>{{ data.generatedAt | date: 'medium' }}</small>
-      </div>
-      <div class="trend-grid">
-        @for (bucket of data.trends; track bucket.label) {
-          <article class="trend-bucket">
-            <strong>{{ bucket.label }}</strong>
-            <div class="trend-line">
-              <span>{{ t('transparency.trend.odCreated') }}</span>
-              <i [style.width.%]="bar(bucket.openDataCreated, data)"></i>
-              <b>{{ bucket.openDataCreated }}</b>
+      <section class="scenario-grid" [attr.aria-label]="t('transparency.scenarios')">
+        @for (scenario of data.scenarios; track scenario.id) {
+          <article class="ds-card scenario-card">
+            <div class="scenario-card__head">
+              <h3>{{ scenario.title }}</h3>
+              <app-status-chip [kind]="statusKind(scenario.status)" [label]="t('transparency.scenario.' + scenario.status)" />
             </div>
-            <div class="trend-line trend-line--success">
-              <span>{{ t('transparency.trend.odPublished') }}</span>
-              <i [style.width.%]="bar(bucket.openDataPublished, data)"></i>
-              <b>{{ bucket.openDataPublished }}</b>
-            </div>
-            <div class="trend-line trend-line--warning">
-              <span>{{ t('transparency.trend.foiReceived') }}</span>
-              <i [style.width.%]="bar(bucket.foiReceived, data)"></i>
-              <b>{{ bucket.foiReceived }}</b>
-            </div>
-            <div class="trend-line trend-line--info">
-              <span>{{ t('transparency.trend.foiDisclosed') }}</span>
-              <i [style.width.%]="bar(bucket.foiDisclosed, data)"></i>
-              <b>{{ bucket.foiDisclosed }}</b>
-            </div>
+            <p>{{ scenario.evidence }}</p>
           </article>
         }
+      </section>
       </div>
-    </section>
-
-    <section class="scenario-grid" [attr.aria-label]="t('transparency.scenarios')">
-      @for (scenario of data.scenarios; track scenario.id) {
-        <article class="ds-card scenario-card">
-          <div class="scenario-card__head">
-            <h3>{{ scenario.title }}</h3>
-            <app-status-chip [kind]="statusKind(scenario.status)" [label]="t('transparency.scenario.' + scenario.status)" />
-          </div>
-          <p>{{ scenario.evidence }}</p>
-        </article>
-      }
-    </section>
+    </div>
   }
 </section>

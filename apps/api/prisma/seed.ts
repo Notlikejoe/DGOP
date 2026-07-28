@@ -1456,7 +1456,7 @@ const assignmentRules: {
   { nameEn: 'Patient Care domain owner', nameAr: 'مالك مجال رعاية المرضى', scopeType: 'domain', refCode: 'patient_care', roleTypeCode: 'data_owner', personEmail: 'sara.alamri@dgop.local' },
   { nameEn: 'Clinical steward', nameAr: 'أمين البيانات السريرية', scopeType: 'domain', refCode: 'clinical', roleTypeCode: 'business_steward', personEmail: 'mona.youssef@dgop.local' },
   { nameEn: 'Clinical DQ steward', nameAr: 'أمين جودة البيانات السريرية', scopeType: 'domain', refCode: 'clinical', roleTypeCode: 'dq_steward', personEmail: 'mona.youssef@dgop.local', priority: 20 },
-  { nameEn: 'Finance DQ steward', nameAr: 'أمين جودة البيانات المالية', scopeType: 'domain', refCode: 'finance', roleTypeCode: 'dq_steward', personEmail: 'khalid.hassan@dgop.local', priority: 20 },
+  { nameEn: 'Finance DQ steward', nameAr: 'أمين جودة البيانات المالية', scopeType: 'domain', refCode: 'finance', roleTypeCode: 'dq_steward', personEmail: 'mona.youssef@dgop.local', priority: 20 },
   { nameEn: 'HR domain owner', nameAr: 'مالك مجال الموارد البشرية', scopeType: 'domain', refCode: 'hr', roleTypeCode: 'data_owner', personEmail: 'layla.nasser@dgop.local' },
 ];
 
@@ -1468,7 +1468,7 @@ const directAssignments: {
   isPrimary?: boolean;
 }[] = [
   { assetCode: 'AST-EMR-PATIENTS', roleTypeCode: 'data_owner', personEmail: 'sara.alamri@dgop.local' },
-  { assetCode: 'AST-EMR-PATIENTS', roleTypeCode: 'technical_steward', personEmail: 'omar.farouk@dgop.local' },
+  { assetCode: 'AST-EMR-PATIENTS', roleTypeCode: 'technical_steward', personEmail: 'omar.farouk@dgop.local', isPrimary: false },
   { assetCode: 'AST-PHARMACY-DISPENSE', roleTypeCode: 'data_owner', personEmail: 'sara.alamri@dgop.local' },
   { assetCode: 'AST-HR-EMPLOYEES', roleTypeCode: 'data_owner', personEmail: 'layla.nasser@dgop.local' },
   { assetCode: 'AST-FIN-REVENUE', roleTypeCode: 'data_owner', personEmail: 'khalid.hassan@dgop.local' },

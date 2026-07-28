@@ -6,6 +6,8 @@ Monorepo for the DGOP application.
 - **apps/api** - Node.js (NestJS 11) backend, REST under `/api`, security headers, rate limiting; also serves the built UI.
 - **PostgreSQL** - local database `dgop_dev` (managed with Prisma).
 
+Database handoff details for another developer are documented in [`docs/DATABASE_HANDOFF.md`](docs/DATABASE_HANDOFF.md).
+
 ## Prerequisites
 
 - Node.js 22.22.3+, 24.15.0+, or 26+ for Angular 22 (tested on Node 24)

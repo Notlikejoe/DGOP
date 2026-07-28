@@ -139,6 +139,7 @@ export class DataSharingPage implements OnInit {
   protected readonly totalPages = signal(1);
   protected readonly saving = signal(false);
   protected readonly createMode = signal<CreateMode>(null);
+  protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly requestDraft = signal({
     requesterOrg: '',
@@ -246,6 +247,18 @@ export class DataSharingPage implements OnInit {
     if (kind === 'status') this.status.set(value);
     this.page.set(1);
     this.load();
+  }
+
+  protected isExpandedPanel(panel: string): boolean {
+    return this.expandedPanel() === panel;
+  }
+
+  protected toggleExpandedPanel(panel: string): void {
+    this.expandedPanel.set(this.isExpandedPanel(panel) ? null : panel);
+  }
+
+  protected closeExpandedPanel(): void {
+    this.expandedPanel.set(null);
   }
 
   protected select(id: string): void {

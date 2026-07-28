@@ -1,6 +1,9 @@
 .transparency-page {
   display: grid;
   gap: var(--space-5);
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: 0 auto;
 }
 
 .eyebrow {
@@ -85,9 +88,17 @@
 
 .transparency-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  grid-template-columns: minmax(420px, 0.82fr) minmax(640px, 1.18fr);
   gap: var(--space-5);
   align-items: start;
+}
+
+.transparency-left-rail,
+.transparency-right-rail {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-width: 0;
 }
 
 .readiness-meter {
@@ -106,10 +117,15 @@
   border-radius: inherit;
 }
 
-.release-breakdown,
-.scenario-grid {
+.release-breakdown {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-3);
 }
 
@@ -175,9 +191,8 @@
 
 .trend-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3);
-  overflow-x: auto;
 }
 
 .trend-bucket {

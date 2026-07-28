@@ -42,6 +42,7 @@
               <th>{{ t('rule.col.scope') }}</th>
               <th>{{ t('rule.col.role') }}</th>
               <th>{{ t('rule.col.person') }}</th>
+              <th>{{ t('rule.col.type') }}</th>
               <th>{{ t('rule.col.priority') }}</th>
               <th>{{ t('rule.col.status') }}</th>
               <th class="actions-col">{{ t('crud.actions') }}</th>
@@ -54,6 +55,7 @@
                 <td><span class="tag">{{ scopeLabel(r.scopeType) }}</span> {{ name(r.ref) }}</td>
                 <td>{{ name(r.roleType) }}</td>
                 <td>{{ personName(r.person) }}</td>
+                <td><span class="tag" [class.tag--primary]="r.isPrimary">{{ recommendationTypeLabel(r) }}</span></td>
                 <td>{{ r.priority }}</td>
                 <td><app-status-chip [kind]="r.isActive ? 'success' : 'muted'" [label]="t(r.isActive ? 'rule.active' : 'rule.inactive')" /></td>
                 <td class="actions-col">
@@ -114,6 +116,14 @@
           <label class="field">
             <span class="field__label">{{ t('rule.field.priority') }}</span>
             <input type="number" min="1" [attr.max]="rulePriorityMax" class="field__input" [ngModel]="draft().priority" (ngModelChange)="set('priority', $event)" name="priority" />
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('rule.field.assignmentType') }}</span>
+            <select class="field__input" [ngModel]="draft().isPrimary" (ngModelChange)="set('isPrimary', $event)" name="isPrimary">
+              <option [ngValue]="true">{{ t('rule.recommendPrimary') }}</option>
+              <option [ngValue]="false">{{ t('rule.recommendBackup') }}</option>
+            </select>
+            <span class="field__hint">{{ t('rule.typeHint') }}</span>
           </label>
         </div>
         <label class="field">

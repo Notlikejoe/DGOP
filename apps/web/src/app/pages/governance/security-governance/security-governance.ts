@@ -141,6 +141,7 @@ export class SecurityGovernancePage implements OnInit {
   protected readonly classificationRequests = signal<ClassificationRequest[]>([]);
   protected readonly decisions = signal<DecisionLog[]>([]);
   protected readonly selectedQueueId = signal<string | null>(null);
+  protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly activeReview = computed(() => this.accessReviews()[0] ?? null);
   protected readonly pendingItems = computed(() =>
@@ -239,6 +240,18 @@ export class SecurityGovernancePage implements OnInit {
 
   protected selectQueueItem(id: string): void {
     this.selectedQueueId.set(id);
+  }
+
+  protected isExpandedPanel(panel: string): boolean {
+    return this.expandedPanel() === panel;
+  }
+
+  protected toggleExpandedPanel(panel: string): void {
+    this.expandedPanel.set(this.isExpandedPanel(panel) ? null : panel);
+  }
+
+  protected closeExpandedPanel(): void {
+    this.expandedPanel.set(null);
   }
 
   protected name(o?: { nameEn?: string; nameAr?: string; fullNameEn?: string; fullNameAr?: string; displayName?: string | null; email?: string } | null): string {

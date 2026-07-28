@@ -1,4 +1,8 @@
 <section class="page dsi-page">
+  @if (expandedPanel()) {
+    <button type="button" class="panel-screen-scrim" [attr.aria-label]="t('ui.closeExpandedPanel')" (click)="closeExpandedPanel()"></button>
+  }
+
   <header class="page__header dsi-hero">
     <div>
       <span class="eyebrow">{{ t('dsi.eyebrow') }}</span>
@@ -51,7 +55,8 @@
   } @else if (state() === 'error') {
     <section class="ds-card"><p class="error">{{ t('dsi.error.load') }}</p></section>
   } @else {
-    <div class="dsi-workspace">
+    <div class="dsi-command-grid">
+      <div class="dsi-left-rail">
       <section class="ds-card queue-panel">
         <div class="panel-head">
           <div>
@@ -102,13 +107,46 @@
         <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" [pageSize]="pageSize()" (pageChange)="goToPage($event)" />
       </section>
 
-      <section class="ds-card detail-panel">
+      <article class="ds-card review-queue-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">{{ t('dsi.reviewQueue.eyebrow') }}</span>
+            <h2>{{ t('dsi.reviewQueue.title') }}</h2>
+            <p>{{ t('dsi.reviewQueue.help') }}</p>
+          </div>
+        </div>
+        <div class="mini-list">
+          @for (request of reviewQueue(); track request.id) {
+            <article>
+              <strong>{{ request.recipientOrg }}</strong>
+              <span>{{ request.requestNumber }} - {{ request.reviewSummary.pending }} {{ t('dsi.reviewQueue.pending') }}</span>
+              <app-status-chip [kind]="riskKind(request.riskScore)" [label]="request.riskScore + ' ' + t('dsi.riskScore')" />
+            </article>
+          } @empty {
+            <p class="muted">{{ t('dsi.reviewQueue.empty') }}</p>
+          }
+        </div>
+      </article>
+      </div>
+
+      <div class="dsi-right-rail">
+      <section class="ds-card detail-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('dsi-detail')">
         <div class="detail-head">
           <div>
             <span class="eyebrow">{{ t('dsi.detail.eyebrow') }}</span>
             <h2>{{ selectedTitle() }}</h2>
             <p>{{ t('dsi.detail.help') }}</p>
           </div>
+          <button
+            type="button"
+            class="panel-expand-toggle"
+            [attr.aria-label]="isExpandedPanel('dsi-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.title]="isExpandedPanel('dsi-detail') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.aria-pressed]="isExpandedPanel('dsi-detail')"
+            (click)="toggleExpandedPanel('dsi-detail')"
+          >
+            @if (isExpandedPanel('dsi-detail')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+          </button>
         </div>
 
         @if (activeTab() === 'requests') {
@@ -219,32 +257,23 @@
           }
         }
       </section>
-    </div>
-
-    <section class="lower-grid">
-      <article class="ds-card">
-        <div class="panel-head">
+      <article class="ds-card evidence-panel expandable-panel" [class.expandable-panel--expanded]="isExpandedPanel('dsi-evidence')">
+        <div class="panel-head compact">
           <div>
-            <span class="eyebrow">{{ t('dsi.reviewQueue.eyebrow') }}</span>
-            <h2>{{ t('dsi.reviewQueue.title') }}</h2>
-            <p>{{ t('dsi.reviewQueue.help') }}</p>
+            <span class="eyebrow">{{ t('dsi.model.eyebrow') }}</span>
+            <h2>{{ t('dsi.model.title') }}</h2>
           </div>
+          <button
+            type="button"
+            class="panel-expand-toggle"
+            [attr.aria-label]="isExpandedPanel('dsi-evidence') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.title]="isExpandedPanel('dsi-evidence') ? t('ui.collapsePanel') : t('ui.expandPanel')"
+            [attr.aria-pressed]="isExpandedPanel('dsi-evidence')"
+            (click)="toggleExpandedPanel('dsi-evidence')"
+          >
+            @if (isExpandedPanel('dsi-evidence')) { <app-icon name="minimize" /> } @else { <app-icon name="maximize" /> }
+          </button>
         </div>
-        <div class="mini-list">
-          @for (request of reviewQueue(); track request.id) {
-            <article>
-              <strong>{{ request.recipientOrg }}</strong>
-              <span>{{ request.requestNumber }} - {{ request.reviewSummary.pending }} {{ t('dsi.reviewQueue.pending') }}</span>
-              <app-status-chip [kind]="riskKind(request.riskScore)" [label]="request.riskScore + ' ' + t('dsi.riskScore')" />
-            </article>
-          } @empty {
-            <p class="muted">{{ t('dsi.reviewQueue.empty') }}</p>
-          }
-        </div>
-      </article>
-      <article class="ds-card evidence-panel">
-        <span class="eyebrow">{{ t('dsi.model.eyebrow') }}</span>
-        <h2>{{ t('dsi.model.title') }}</h2>
         <div class="flow-line">
           <span>{{ t('dsi.model.request') }}</span>
           <span>{{ t('dsi.model.review') }}</span>
@@ -252,7 +281,8 @@
           <span>{{ t('dsi.model.monitor') }}</span>
         </div>
       </article>
-    </section>
+      </div>
+    </div>
   }
 
   @if (createMode(); as mode) {

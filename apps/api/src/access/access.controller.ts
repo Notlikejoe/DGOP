@@ -4,6 +4,7 @@ import { AuthUser } from '../auth/auth.types';
 import { AccessGrantsService } from './access-grants.service';
 import {
   AccessMatrixQueryDto,
+  ApplyAccessGrantRulesDto,
   BulkCreateAccessGrantDto,
   CommitAccessGrantImportDto,
   CreateAccessGrantDto,
@@ -143,6 +144,16 @@ export class AccessController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.grants.dispatchEnforcement(id, dto, user);
+  }
+
+  @Post('grants/:id/enforcement/apply-rules')
+  @RequirePermissions('access_grants.edit')
+  applyGrantRules(
+    @Param('id') id: string,
+    @Body() dto: ApplyAccessGrantRulesDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.grants.applyGrantRules(id, dto, user);
   }
 
   @Post('grants/:id/enforcement/manual-complete')

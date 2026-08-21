@@ -1143,6 +1143,155 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     }).catch((err) => this.toast.errorFrom(err, this.t('wf.saveError')));
   }
 
+  protected createParallelSplit(): void {
+    void this.ensureModeler().then((modeler) => {
+      if (!modeler) return;
+      const selected = this.selectedDesignerShapes(modeler);
+      if (selected.length !== 1 || selected[0].type === 'bpmn:EndEvent') {
+        this.toast.error(this.t('wf.designer.toolbar.selectOneForSplit'));
+        return;
+      }
+
+      const source = selected[0];
+      const modeling = modeler.get?.('modeling');
+      const elementFactory = modeler.get?.('elementFactory');
+      const selection = modeler.get?.('selection');
+      const canvas = modeler.get?.('canvas');
+      if (!modeling || !elementFactory || !source.parent) return;
+      const outgoing = (source.outgoing ?? []).filter((connection: any) => connection.type === 'bpmn:SequenceFlow');
+      if (outgoing.length > 1) {
+        this.toast.error(this.t('wf.designer.toolbar.selectOneForSplit'));
+        return;
+      }
+
+      const previousFlow = outgoing[0] ?? null;
+      const previousTarget = previousFlow?.target ?? null;
+      const sourceCenterY = source.y + source.height / 2;
+      const splitCenter = { x: source.x + source.width + 120, y: sourceCenterY };
+      const taskX = splitCenter.x + 190;
+      const branchOffset = 105;
+      const mergeCenter = { x: taskX + 210, y: sourceCenterY };
+      const parent = source.parent;
+
+      try {
+        const split = modeling.createShape(
+          elementFactory.createShape({ type: 'bpmn:ParallelGateway' }),
+          splitCenter,
+          parent,
+        );
+        const branchA = modeling.createShape(
+          elementFactory.createShape({ type: 'bpmn:UserTask' }),
+          { x: taskX, y: Math.max(80, sourceCenterY - branchOffset) },
+          parent,
+        );
+        const branchB = modeling.createShape(
+          elementFactory.createShape({ type: 'bpmn:UserTask' }),
+          { x: taskX, y: sourceCenterY + branchOffset },
+          parent,
+        );
+        const merge = modeling.createShape(
+          elementFactory.createShape({ type: 'bpmn:ParallelGateway' }),
+          mergeCenter,
+          parent,
+        );
+
+        this.configureDesignerNode(modeling, split, 'parallel_gateway', this.t('wf.designer.branch.parallel'));
+        this.configureDesignerNode(modeling, branchA, 'user_task', `${this.t('wf.designer.branch.parallel')} A`);
+        this.configureDesignerNode(modeling, branchB, 'user_task', `${this.t('wf.designer.branch.parallel')} B`);
+        this.configureDesignerNode(modeling, merge, 'merge_gateway', this.t('wf.designer.branch.merge'));
+
+        const previousName = String(previousFlow?.businessObject?.name ?? '');
+        if (previousFlow) modeling.removeConnection(previousFlow);
+        this.connectDesignerElements(modeling, source, split, 'sequence');
+        this.connectDesignerElements(modeling, split, branchA, 'parallel_split', 'Path A');
+        this.connectDesignerElements(modeling, split, branchB, 'parallel_split', 'Path B');
+        this.connectDesignerElements(modeling, branchA, merge, 'parallel_join');
+        this.connectDesignerElements(modeling, branchB, merge, 'parallel_join');
+        if (previousTarget) this.connectDesignerElements(modeling, merge, previousTarget, 'sequence', previousName);
+
+        selection?.select?.(split);
+        canvas?.scrollToElement?.(split);
+        this.toast.success(this.t('wf.designer.toolbar.parallelCreated'));
+      } catch (err) {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+      }
+    }).catch((err) => this.toast.errorFrom(err, this.t('wf.saveError')));
+  }
+
+  protected createParallelMerge(): void {
+    void this.ensureModeler().then((modeler) => {
+      if (!modeler) return;
+      const branches = this.selectedDesignerShapes(modeler);
+      if (branches.length < 2 || new Set(branches.map((branch: any) => branch.parent?.id)).size !== 1) {
+        this.toast.error(this.t('wf.designer.toolbar.selectBranchesForMerge'));
+        return;
+      }
+      if (branches.some((branch: any) => (branch.outgoing ?? []).some((connection: any) => connection.type === 'bpmn:SequenceFlow'))) {
+        this.toast.error(this.t('wf.designer.toolbar.branchHasContinuation'));
+        return;
+      }
+
+      const modeling = modeler.get?.('modeling');
+      const elementFactory = modeler.get?.('elementFactory');
+      const selection = modeler.get?.('selection');
+      const canvas = modeler.get?.('canvas');
+      if (!modeling || !elementFactory) return;
+      const rightEdge = Math.max(...branches.map((branch: any) => branch.x + branch.width));
+      const centerY = branches.reduce((sum: number, branch: any) => sum + branch.y + branch.height / 2, 0) / branches.length;
+      try {
+        const merge = modeling.createShape(
+          elementFactory.createShape({ type: 'bpmn:ParallelGateway' }),
+          { x: rightEdge + 130, y: centerY },
+          branches[0].parent,
+        );
+        this.configureDesignerNode(modeling, merge, 'merge_gateway', this.t('wf.designer.branch.merge'));
+        for (const branch of branches) this.connectDesignerElements(modeling, branch, merge, 'parallel_join');
+        selection?.select?.(merge);
+        canvas?.scrollToElement?.(merge);
+        this.toast.success(this.t('wf.designer.toolbar.mergeCreated'));
+      } catch (err) {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+      }
+    }).catch((err) => this.toast.errorFrom(err, this.t('wf.saveError')));
+  }
+
+  private selectedDesignerShapes(modeler: any): any[] {
+    return (modeler.get?.('selection')?.get?.() ?? []).filter((element: any) =>
+      element?.businessObject && !element.labelTarget && element.type !== 'bpmn:SequenceFlow',
+    );
+  }
+
+  private configureDesignerNode(modeling: any, element: any, code: string, name: string): void {
+    const defaults = this.nodeDefaults(code);
+    modeling.updateProperties(element, {
+      name,
+      'dgop:code': this.uniqueDesignerCode(code),
+      'dgop:kind': defaults.kind,
+      'dgop:nodeType': code,
+      'dgop:taskType': defaults.taskType,
+      'dgop:assignmentStrategy': defaults.assignmentStrategy,
+      'dgop:dueDays': defaults.dueDays,
+      'dgop:isStart': 'false',
+      'dgop:isDecision': 'false',
+      'dgop:isFinal': 'false',
+    });
+  }
+
+  private connectDesignerElements(
+    modeling: any,
+    source: any,
+    target: any,
+    connectorType: string,
+    name = '',
+  ): any {
+    const connection = modeling.connect(source, target, { type: 'bpmn:SequenceFlow' });
+    modeling.updateProperties(connection, {
+      ...(name ? { name } : {}),
+      'dgop:connectorType': connectorType,
+    });
+    return connection;
+  }
+
   protected updateSelectedDesignerProperty(field: keyof DesignerElementSelection, value: string | number | boolean): void {
     const selected = this.selectedDesignerElement();
     const modeler = this.bpmnModeler;

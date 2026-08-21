@@ -518,6 +518,13 @@
                   <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'" (click)="publishDesigner()">
                     {{ t('wf.designer.toolbar.publish') }}
                   </button>
+                  <span class="designer-command-bar__divider"></span>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canEditDesigner || !selectedDesignerElement()" [title]="t('wf.designer.toolbar.splitHelp')" (click)="createParallelSplit()">
+                    <app-icon name="gitFork" /> {{ t('wf.designer.toolbar.split') }}
+                  </button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canEditDesigner || !selectedDesignerElement()" [title]="t('wf.designer.toolbar.mergeHelp')" (click)="createParallelMerge()">
+                    <app-icon name="gitMerge" /> {{ t('wf.designer.toolbar.merge') }}
+                  </button>
                 </div>
                 <div class="designer-command-bar__group">
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.undo')" [attr.aria-label]="t('wf.designer.toolbar.undo')" [disabled]="!designerCanUndo()" (click)="undoDesigner()"><app-icon name="undo" /></button>

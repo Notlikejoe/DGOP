@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { ForbiddenException } from '@nestjs/common';
 import { AccessGrantsService } from '../src/access/access-grants.service';
 import { AccessService, WILDCARD } from '../src/access/access.service';
 import { OwnerDelegateValidationService } from '../src/access/owner-delegate-validation.service';
@@ -290,6 +291,92 @@ test('access grant state changes reject a stale expected version', async () => {
     ),
     /Grant changed before the operation could be committed/,
   );
+});
+
+test('approved grant rules are applied atomically to the DGOP policy store', async () => {
+  const attempts: any[] = [];
+  const updates: any[] = [];
+  const auditActions: string[] = [];
+  const tx = {
+    accessGrant: {
+      updateMany: async () => ({ count: 1 }),
+      update: async (args: any) => {
+        updates.push(args);
+        return args.data;
+      },
+    },
+    accessEnforcementAttempt: {
+      create: async (args: any) => {
+        const attempt = { id: 'attempt-policy-1', ...args.data };
+        attempts.push(attempt);
+        return attempt;
+      },
+    },
+  };
+  const prisma = {
+    accessEnforcementAttempt: { findUnique: async () => null },
+    $transaction: async (fn: any) => fn(tx),
+  };
+  const service = new AccessGrantsService(
+    prisma as never,
+    { log: async (entry: any) => auditActions.push(entry.action) } as never,
+    {} as never,
+    {} as never,
+  );
+  (service as any).getGrant = async () => ({
+    id: 'grant-1',
+    code: 'AGR-00001',
+    version: 4,
+    assetId: 'asset-1',
+    principalType: 'role',
+    principalId: 'data_steward',
+    profileId: 'profile-1',
+    permissionCode: 'dataset.read',
+    permissions: [
+      { permissionCode: 'dataset.read' },
+      { permissionCode: 'dataset.update' },
+    ],
+    ownerDecision: 'approved',
+    status: 'active',
+  });
+
+  const result = await service.applyGrantRules(
+    'grant-1',
+    { expectedVersion: 4, comment: 'Approved policy activation' },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['dmo_admin'] },
+  );
+
+  assert.equal(result.deduplicated, false);
+  assert.equal(attempts[0].connectorCode, 'dgop_policy_store');
+  assert.deepEqual(attempts[0].requestJson.permissionCodes, ['dataset.read', 'dataset.update']);
+  assert.equal(updates[0].data.enforcementStatus, 'enforced');
+  assert.ok(auditActions.includes('access_grant.rules_applied'));
+});
+
+test('policy-store deduplication still enforces grant visibility', async () => {
+  let lookupAttempted = false;
+  const prisma = {
+    accessEnforcementAttempt: {
+      findUnique: async () => {
+        lookupAttempted = true;
+        return { id: 'hidden-attempt' };
+      },
+    },
+  };
+  const service = new AccessGrantsService(prisma as never, {} as never, {} as never, {} as never);
+  (service as any).getGrant = async () => {
+    throw new ForbiddenException('Grant is outside the actor data scope');
+  };
+
+  await assert.rejects(
+    service.applyGrantRules(
+      'hidden-grant',
+      { expectedVersion: 1 },
+      { id: 'scoped-user', email: 'scoped@dgop.local', roles: ['data_steward'] },
+    ),
+    ForbiddenException,
+  );
+  assert.equal(lookupAttempted, false);
 });
 
 (async () => {

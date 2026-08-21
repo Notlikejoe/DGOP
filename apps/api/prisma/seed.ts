@@ -1699,16 +1699,16 @@ async function seedAccessMatrixDemoData(): Promise<void> {
   ];
   const grants = [
     ['AGR-SAMPLE-001', 'SAMPLE-DS-001', 'role', 'data_owner', 'dataset.analyst', 'enforced'],
-    ['AGR-SAMPLE-002', 'SAMPLE-DS-001', 'group', 'GRP-ANALYTICS', 'dataset.contributor', 'pending'],
+    ['AGR-SAMPLE-002', 'SAMPLE-DS-001', 'group', 'GRP-ANALYTICS', 'dataset.contributor', 'enforced'],
     ['AGR-SAMPLE-003', 'SAMPLE-FL-001', 'group', 'GRP-DATA-CONSUMERS', 'file.downloader', 'enforced'],
-    ['AGR-SAMPLE-004', 'SAMPLE-FL-001', 'role', 'operational_data_steward', 'file.contributor', 'pending'],
+    ['AGR-SAMPLE-004', 'SAMPLE-FL-001', 'role', 'operational_data_steward', 'file.contributor', 'enforced'],
     ['AGR-SAMPLE-005', 'SAMPLE-DR-001', 'role', 'privacy_officer', 'document_record.reader', 'enforced'],
-    ['AGR-SAMPLE-006', 'SAMPLE-DR-001', 'group', 'GRP-PRIVACY-REVIEWERS', 'document_record.records_manager', 'failed'],
-    ['AGR-SAMPLE-007', 'SAMPLE-API-001', 'role', 'technical_steward', 'api_data_feed.api_operator', 'pending'],
+    ['AGR-SAMPLE-006', 'SAMPLE-DR-001', 'group', 'GRP-PRIVACY-REVIEWERS', 'document_record.records_manager', 'enforced'],
+    ['AGR-SAMPLE-007', 'SAMPLE-API-001', 'role', 'technical_steward', 'api_data_feed.api_operator', 'enforced'],
     ['AGR-SAMPLE-008', 'SAMPLE-API-001', 'group', 'GRP-DATA-CONSUMERS', 'api_data_feed.consumer', 'enforced'],
     ['AGR-SAMPLE-009', 'SAMPLE-BI-001', 'role', 'executive', 'bi_report_dashboard.viewer', 'enforced'],
     ['AGR-SAMPLE-010', 'SAMPLE-BI-001', 'group', 'GRP-ANALYTICS', 'bi_report_dashboard.explorer', 'enforced'],
-    ['AGR-SAMPLE-011', 'SAMPLE-AI-001', 'role', 'data_owner', 'ai_data_product.consumer', 'pending'],
+    ['AGR-SAMPLE-011', 'SAMPLE-AI-001', 'role', 'data_owner', 'ai_data_product.consumer', 'enforced'],
     ['AGR-SAMPLE-012', 'SAMPLE-AI-001', 'role', 'auditor', 'ai_data_product.evaluator', 'enforced'],
   ] as const;
 
@@ -1804,28 +1804,92 @@ async function seedAccessMatrixDemoData(): Promise<void> {
         update: { source: 'profile' },
       });
     }
+    const snapshotJson = {
+      code,
+      assetId,
+      principalType,
+      principalId,
+      permissionCodes,
+      profileId: profile.id,
+      status: 'active',
+      startsAt: startsAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      ownerDecision: 'approved',
+      enforcementStatus,
+    };
     await prisma.accessGrantVersion.upsert({
       where: { grantId_version: { grantId: grant.id, version: grant.version } },
       create: {
         grantId: grant.id,
         version: grant.version,
-        snapshotJson: {
-          code,
-          assetId,
-          principalType,
-          principalId,
-          permissionCodes,
-          profileId: profile.id,
-          status: 'active',
-          startsAt: startsAt.toISOString(),
-          expiresAt: expiresAt.toISOString(),
-          ownerDecision: 'approved',
-          enforcementStatus,
-        },
+        snapshotJson,
         changeReason: 'Explicit local access-matrix demo seed',
         changedBy: 'system:seed',
       },
-      update: {},
+      update: {
+        snapshotJson,
+        changeReason: 'Explicit local access-matrix demo seed',
+        changedBy: 'system:seed',
+      },
+    });
+    const completedAt = new Date();
+    await prisma.accessEnforcementAttempt.upsert({
+      where: { idempotencyKey: `access-enforcement:dgop-policy:seed:${code}` },
+      create: {
+        grantId: grant.id,
+        idempotencyKey: `access-enforcement:dgop-policy:seed:${code}`,
+        operation: 'apply_rules',
+        connectorCode: 'dgop_policy_store',
+        status: 'succeeded',
+        attemptCount: 1,
+        maxAttempts: 1,
+        startedAt: completedAt,
+        completedAt,
+        requestJson: {
+          grantCode: code,
+          grantVersion: grant.version,
+          assetId,
+          principalType,
+          principalId,
+          profileId: profile.id,
+          permissionCodes,
+        },
+        responseJson: {
+          policyStore: 'dgop',
+          appliedPermissionCount: permissionCodes.length,
+          appliedBy: 'system:seed',
+          seeded: true,
+        },
+        createdBy: 'system:seed',
+      },
+      update: {
+        grantId: grant.id,
+        operation: 'apply_rules',
+        connectorCode: 'dgop_policy_store',
+        status: 'succeeded',
+        attemptCount: 1,
+        maxAttempts: 1,
+        startedAt: completedAt,
+        completedAt,
+        requestJson: {
+          grantCode: code,
+          grantVersion: grant.version,
+          assetId,
+          principalType,
+          principalId,
+          profileId: profile.id,
+          permissionCodes,
+        },
+        responseJson: {
+          policyStore: 'dgop',
+          appliedPermissionCount: permissionCodes.length,
+          appliedBy: 'system:seed',
+          seeded: true,
+        },
+        errorCode: null,
+        errorMessage: null,
+        createdBy: 'system:seed',
+      },
     });
   }
 }

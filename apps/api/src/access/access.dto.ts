@@ -129,6 +129,11 @@ export class DispatchAccessEnforcementDto {
   @IsOptional() @IsString() @MaxLength(120) connectorCode?: string;
 }
 
+export class ApplyAccessGrantRulesDto {
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
+  @IsOptional() @IsString() @MaxLength(1000) comment?: string;
+}
+
 export class CompleteManualAccessEnforcementDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
   @IsIn(['enforced', 'failed', 'not_enforced']) enforcementStatus!: string;

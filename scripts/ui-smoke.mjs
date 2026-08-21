@@ -139,7 +139,21 @@ try {
       const systemText = await page.locator('.system-panel').innerText({ timeout: 10_000 });
       systemDatabaseStatus = /\b(?:up|down)\b/iu.test(systemText);
     }
-    checks.push({ route: label, title, overflow, rawKey, invalidText, systemDatabaseStatus });
+    let featureControls = true;
+    if (route.startsWith('/governance/workflow/designer')) {
+      const splitButton = page.getByRole('button', { name: 'Split', exact: true });
+      const mergeButton = page.getByRole('button', { name: 'Merge', exact: true });
+      const shapes = page.locator('.bpmn-canvas .djs-shape');
+      await shapes.first().waitFor({ state: 'visible', timeout: 10_000 });
+      const shapeCountBefore = await shapes.count();
+      await shapes.first().click({ force: true });
+      await splitButton.waitFor({ state: 'visible', timeout: 5_000 });
+      const splitEnabled = await splitButton.isEnabled();
+      if (splitEnabled) await splitButton.click();
+      const shapeCountAfter = await shapes.count();
+      featureControls = splitEnabled && (await mergeButton.isVisible()) && shapeCountAfter >= shapeCountBefore + 4;
+    }
+    checks.push({ route: label, title, overflow, rawKey, invalidText, systemDatabaseStatus, featureControls });
   }
 
   for (const route of routes) {
@@ -183,7 +197,7 @@ try {
   }
 
   const badChecks = checks.filter(
-    (check) => check.overflow || check.rawKey || check.invalidText || check.systemDatabaseStatus === false || !check.title,
+    (check) => check.overflow || check.rawKey || check.invalidText || check.systemDatabaseStatus === false || check.featureControls === false || !check.title,
   );
   if (consoleErrors.length || consoleWarnings.length || failedResponses.length || badChecks.length) {
     fail(

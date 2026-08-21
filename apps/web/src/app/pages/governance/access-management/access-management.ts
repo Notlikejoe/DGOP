@@ -668,6 +668,16 @@ export class AccessManagementPage implements OnInit {
     this.mutate(`/api/access/grants/${grant.id}/enforcement/dispatch`, { expectedVersion: grant.version, operation }, this.format('access.toast.handoffAdded', { operation: this.label(operation) }));
   }
 
+  protected applyGrantRules(): void {
+    const grant = this.selected();
+    if (!grant || this.busy()) return;
+    this.mutate(
+      `/api/access/grants/${grant.id}/enforcement/apply-rules`,
+      { expectedVersion: grant.version },
+      this.format('access.toast.rulesApplied', { count: grant.permissions?.length ?? 1 }),
+    );
+  }
+
   protected openManualCompletion(): void {
     const grant = this.selected();
     if (!grant) return;

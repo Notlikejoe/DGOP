@@ -1330,6 +1330,9 @@ export class AccessGrantsService {
 
   async dispatchEnforcement(id: string, dto: DispatchAccessEnforcementDto, user: AuthUser) {
     const grant = await this.getGrant(id, user);
+    if (grant.ownerDecision !== 'approved' || grant.status !== 'active') {
+      throw new BadRequestException('Only active owner-approved grants can be dispatched for enforcement');
+    }
     if (grant.version !== dto.expectedVersion) throw new ConflictException('Grant changed before enforcement could be dispatched');
     const inFlight = await this.prisma.accessEnforcementAttempt.findFirst({
       where: { grantId: grant.id, operation: dto.operation, status: { in: ['queued', 'running', 'retrying'] } },
@@ -1356,6 +1359,82 @@ export class AccessGrantsService {
       return created;
     });
     return { attempt, deduplicated: false, contract: { delivery: 'at_least_once', idempotencyKey, retry: 'bounded exponential backoff', callback: 'provider must return the idempotency key and terminal status' } };
+  }
+
+  async applyGrantRules(
+    id: string,
+    dto: { expectedVersion: number; comment?: string },
+    user: AuthUser,
+  ) {
+    const idempotencyKey = `access-enforcement:dgop-policy:${id}:v${dto.expectedVersion}`;
+    const grant = await this.getGrant(id, user);
+    const previousAttempt = await this.prisma.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+    if (previousAttempt) return { attempt: previousAttempt, deduplicated: true };
+
+    if (grant.version !== dto.expectedVersion) {
+      throw new ConflictException('Grant changed before its access rules could be applied');
+    }
+    if (grant.ownerDecision !== 'approved' || grant.status !== 'active') {
+      throw new BadRequestException('Only active owner-approved grants can be applied to the policy store');
+    }
+    const permissionCodes = this.grantPermissionCodes(grant);
+    if (!permissionCodes.length) throw new BadRequestException('The grant has no permission rules to apply');
+
+    const completedAt = new Date();
+    const attempt = await this.prisma.$transaction(async (tx) => {
+      await this.claimGrantVersion(tx, id, dto.expectedVersion);
+      const created = await tx.accessEnforcementAttempt.create({
+        data: {
+          grantId: grant.id,
+          idempotencyKey,
+          operation: 'apply_rules',
+          connectorCode: 'dgop_policy_store',
+          status: 'succeeded',
+          attemptCount: 1,
+          maxAttempts: 1,
+          startedAt: completedAt,
+          completedAt,
+          requestJson: {
+            grantCode: grant.code,
+            grantVersion: grant.version,
+            assetId: grant.assetId,
+            principalType: grant.principalType,
+            principalId: grant.principalId,
+            profileId: grant.profileId,
+            permissionCodes,
+          } as Prisma.InputJsonValue,
+          responseJson: {
+            policyStore: 'dgop',
+            appliedPermissionCount: permissionCodes.length,
+            comment: dto.comment?.trim() || null,
+            appliedBy: user.email,
+          } as Prisma.InputJsonValue,
+          createdBy: user.email,
+        },
+      });
+      await tx.accessGrant.update({
+        where: { id: grant.id },
+        data: { enforcementStatus: 'enforced', updatedBy: user.email, version: { increment: 1 } },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'access_grant.rules_applied',
+          entityType: 'access_enforcement_attempt',
+          entityId: created.id,
+          metadata: {
+            grantId: grant.id,
+            grantCode: grant.code,
+            profileId: grant.profileId,
+            permissionCodes,
+            policyStore: 'dgop',
+          },
+        },
+        tx,
+      );
+      return created;
+    });
+    return { attempt, deduplicated: false };
   }
 
   async completeManualEnforcement(id: string, dto: CompleteManualAccessEnforcementDto, user: AuthUser) {

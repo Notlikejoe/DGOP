@@ -350,7 +350,14 @@
           <div class="actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="decide('approved')">{{ t('access.action.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="decide('rejected')">{{ t('access.action.reject') }}</button></div>
         }
         @if (canEdit && grant.ownerDecision === 'approved' && grant.status === 'active') {
-          <div class="actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="dispatch('grant')">{{ t('access.action.dispatch') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="dispatch('verify')">{{ t('access.action.verify') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="openManualCompletion()">{{ t('access.action.manualEvidence') }}</button></div>
+          <div class="actions">
+            @if (grant.enforcementStatus !== 'enforced') {
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="applyGrantRules()"><app-icon name="keyRound" /> {{ t('access.action.applyRules') }}</button>
+            }
+            <button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="dispatch('grant')">{{ t('access.action.dispatch') }}</button>
+            <button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="dispatch('verify')">{{ t('access.action.verify') }}</button>
+            <button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="openManualCompletion()">{{ t('access.action.manualEvidence') }}</button>
+          </div>
         }
         @if (canEdit && !['expired', 'rejected', 'revoked'].includes(grant.status)) {
           <div class="actions grant-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="openEdit(grant)">{{ t('access.action.modify') }}</button><button type="button" class="ds-btn ds-btn--danger" [disabled]="busy()" (click)="openRevoke(grant)">{{ t('access.action.revoke') }}</button></div>

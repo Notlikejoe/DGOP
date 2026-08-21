@@ -10,6 +10,9 @@ import { PrismaClient, TaskStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const seedRiskScenario = process.env.DGOP_SEED_RISK_SCENARIO === 'true';
+const seedAccessMatrixSamples = process.env.DGOP_SEED_ACCESS_MATRIX_SAMPLES === 'true';
+const allowDestructiveSeed = process.env.DGOP_ALLOW_DESTRUCTIVE_SEED === 'true';
+const allowProductionSeed = process.env.DGOP_ALLOW_PRODUCTION_SEED === 'true';
 
 const roles = [
   { code: 'system_admin', nameEn: 'System Administrator', nameAr: 'مدير النظام' },
@@ -23,6 +26,9 @@ const roles = [
   { code: 'dq_steward', nameEn: 'Data Quality Steward', nameAr: 'أمين جودة البيانات' },
   { code: 'privacy_officer', nameEn: 'Privacy Officer', nameAr: 'مسؤول الخصوصية' },
   { code: 'security_reviewer', nameEn: 'Security Reviewer', nameAr: 'مراجع الأمن' },
+  { code: 'workflow_designer', nameEn: 'Workflow Designer', nameAr: 'مصمم سير العمل' },
+  { code: 'workflow_reviewer', nameEn: 'Workflow Reviewer', nameAr: 'مراجع سير العمل' },
+  { code: 'workflow_publisher', nameEn: 'Workflow Publisher', nameAr: 'ناشر سير العمل' },
   { code: 'od_officer', nameEn: 'Open Data Officer', nameAr: 'مسؤول البيانات المفتوحة' },
   { code: 'foi_officer', nameEn: 'FOI Officer', nameAr: 'مسؤول حرية المعلومات' },
   { code: 'ndi_evidence_owner', nameEn: 'NDI Evidence Owner', nameAr: 'مالك أدلة المؤشر الوطني' },
@@ -117,6 +123,9 @@ const permissionCatalog: { resource: string; action: string }[] = [
   { resource: 'integrations', action: 'run' },
   { resource: 'integrations', action: 'writeback' },
   { resource: 'governance_operations', action: 'run' },
+  { resource: 'access_grants', action: 'view' },
+  { resource: 'access_grants', action: 'create' },
+  { resource: 'access_grants', action: 'edit' },
   ...ADMIN_RESOURCES.flatMap((r) => CRUD_ACTIONS.map((a) => ({ resource: r, action: a }))),
 ];
 
@@ -141,8 +150,44 @@ const rolePermissionMap: Record<string, string[]> = {
     'integrations.run',
     'integrations.writeback',
     'governance_operations.run',
+    'access_grants.view',
+    'access_grants.create',
+    'access_grants.edit',
     'audit.view',
     'audit.baseline_accept',
+  ],
+  workflow_designer: [
+    ...BASE_PERMS,
+    'workflow_cases.view',
+    'workflow_cases.create',
+    'workflow_cases.edit',
+    'workflow_tasks.view',
+    'workflow_tasks.create',
+    'workflow_tasks.edit',
+    'data_assets.view',
+    'people.view',
+    'assignments.view',
+    'audit.view',
+  ],
+  workflow_reviewer: [
+    ...BASE_PERMS,
+    'workflow_cases.view',
+    'workflow_cases.edit',
+    'workflow_tasks.view',
+    'data_assets.view',
+    'people.view',
+    'assignments.view',
+    'audit.view',
+  ],
+  workflow_publisher: [
+    ...BASE_PERMS,
+    'workflow_cases.view',
+    'workflow_cases.edit',
+    'workflow_tasks.view',
+    'data_assets.view',
+    'people.view',
+    'assignments.view',
+    'audit.view',
   ],
   business_steward: [
     ...BASE_PERMS,
@@ -177,6 +222,9 @@ const rolePermissionMap: Record<string, string[]> = {
     'security_governance.view',
     'access_reviews.view',
     'access_reviews.edit',
+    'access_grants.view',
+    'access_grants.create',
+    'access_grants.edit',
     'open_data_candidates.view',
     'open_data_candidates.create',
     'open_data_candidates.edit',
@@ -373,6 +421,7 @@ const rolePermissionMap: Record<string, string[]> = {
     'masking_policies.view',
     'role_data_access_maps.view',
     'access_reviews.view',
+    'access_grants.view',
     'dlp_incidents.view',
     'classification_change_requests.view',
     'integrations.view',
@@ -403,6 +452,8 @@ const rolePermissionMap: Record<string, string[]> = {
     'role_data_access_maps.view',
     'access_reviews.view',
     'access_reviews.edit',
+    'access_grants.view',
+    'access_grants.edit',
     'dlp_incidents.view',
     'dlp_incidents.create',
     'dlp_incidents.edit',
@@ -734,6 +785,30 @@ const dataDomains: { code: string; nameEn: string; nameAr: string; parentCode?: 
   { code: 'hr', nameEn: 'Human Resources', nameAr: 'الموارد البشرية', parentCode: 'corporate' },
 ];
 
+const organizationUnits: { code: string; nameEn: string; nameAr: string; parentCode?: string }[] = [
+  { code: 'DGOP-HQ', nameEn: 'DGOP Health Authority', nameAr: 'DGOP Health Authority' },
+  { code: 'EXC', nameEn: 'Executive Committee', nameAr: 'Executive Committee', parentCode: 'DGOP-HQ' },
+  { code: 'DGO', nameEn: 'Data Governance Office', nameAr: 'Data Governance Office', parentCode: 'DGOP-HQ' },
+  { code: 'DGO-OWN', nameEn: 'Stewardship and Ownership', nameAr: 'Stewardship and Ownership', parentCode: 'DGO' },
+  { code: 'DGO-DQ', nameEn: 'Data Quality Office', nameAr: 'Data Quality Office', parentCode: 'DGO' },
+  { code: 'DGO-PRIVACY', nameEn: 'Privacy and Transparency', nameAr: 'Privacy and Transparency', parentCode: 'DGO' },
+  { code: 'DGO-COMPLIANCE', nameEn: 'Compliance and Evidence', nameAr: 'Compliance and Evidence', parentCode: 'DGO' },
+  { code: 'CLIN', nameEn: 'Clinical Services', nameAr: 'Clinical Services', parentCode: 'DGOP-HQ' },
+  { code: 'CLIN-CARE', nameEn: 'Care Delivery', nameAr: 'Care Delivery', parentCode: 'CLIN' },
+  { code: 'CLIN-RECORDS', nameEn: 'Health Information Management', nameAr: 'Health Information Management', parentCode: 'CLIN' },
+  { code: 'CLIN-PHARMACY', nameEn: 'Pharmacy Services', nameAr: 'Pharmacy Services', parentCode: 'CLIN' },
+  { code: 'CORP', nameEn: 'Corporate Services', nameAr: 'Corporate Services', parentCode: 'DGOP-HQ' },
+  { code: 'CORP-FIN', nameEn: 'Finance', nameAr: 'Finance', parentCode: 'CORP' },
+  { code: 'CORP-FIN-REV', nameEn: 'Revenue Cycle', nameAr: 'Revenue Cycle', parentCode: 'CORP-FIN' },
+  { code: 'CORP-FIN-PROC', nameEn: 'Procurement and Accounts Payable', nameAr: 'Procurement and Accounts Payable', parentCode: 'CORP-FIN' },
+  { code: 'CORP-HR', nameEn: 'Human Resources', nameAr: 'Human Resources', parentCode: 'CORP' },
+  { code: 'CORP-HR-TALENT', nameEn: 'Talent and Workforce Data', nameAr: 'Talent and Workforce Data', parentCode: 'CORP-HR' },
+  { code: 'DTS', nameEn: 'Digital and Technology Services', nameAr: 'Digital and Technology Services', parentCode: 'DGOP-HQ' },
+  { code: 'DTS-PLATFORM', nameEn: 'Platform Operations', nameAr: 'Platform Operations', parentCode: 'DTS' },
+  { code: 'DTS-SEC', nameEn: 'Cybersecurity and DLP', nameAr: 'Cybersecurity and DLP', parentCode: 'DTS' },
+  { code: 'DTS-INTEGRATION', nameEn: 'Integration Services', nameAr: 'Integration Services', parentCode: 'DTS' },
+];
+
 const dataSubjects = [
   { code: 'patient', nameEn: 'Patient', nameAr: 'مريض' },
   { code: 'employee', nameEn: 'Employee', nameAr: 'موظف' },
@@ -750,6 +825,71 @@ const businessCapabilities: { code: string; nameEn: string; nameAr: string; pare
   { code: 'procurement', nameEn: 'Procurement', nameAr: 'المشتريات', parentCode: 'corporate_services' },
 ];
 
+const systemPlatforms: {
+  code: string;
+  nameEn: string;
+  nameAr: string;
+  description: string;
+  vendor: string;
+  type: string;
+  ownerOrgUnitCode: string;
+}[] = [
+  {
+    code: 'SYS-EMR',
+    nameEn: 'Electronic Medical Record',
+    nameAr: 'Electronic Medical Record',
+    description: 'Primary clinical record platform for patient encounters and care documentation.',
+    vendor: 'DGOP Core',
+    type: 'clinical_application',
+    ownerOrgUnitCode: 'CLIN-RECORDS',
+  },
+  {
+    code: 'SYS-PHARMACY',
+    nameEn: 'Pharmacy Management System',
+    nameAr: 'Pharmacy Management System',
+    description: 'Medication dispensing and pharmacy inventory platform.',
+    vendor: 'DGOP Core',
+    type: 'clinical_application',
+    ownerOrgUnitCode: 'CLIN-PHARMACY',
+  },
+  {
+    code: 'SYS-ERP',
+    nameEn: 'Enterprise Resource Planning',
+    nameAr: 'Enterprise Resource Planning',
+    description: 'Corporate finance, procurement, and accounts payable system.',
+    vendor: 'DGOP Core',
+    type: 'enterprise_application',
+    ownerOrgUnitCode: 'CORP-FIN',
+  },
+  {
+    code: 'SYS-BILLING',
+    nameEn: 'Revenue Cycle Platform',
+    nameAr: 'Revenue Cycle Platform',
+    description: 'Billing, collections, and revenue-cycle transaction platform.',
+    vendor: 'DGOP Core',
+    type: 'enterprise_application',
+    ownerOrgUnitCode: 'CORP-FIN-REV',
+  },
+  {
+    code: 'SYS-HRIS',
+    nameEn: 'Human Resources Information System',
+    nameAr: 'Human Resources Information System',
+    description: 'Employee, workforce, and organization master-data platform.',
+    vendor: 'DGOP Core',
+    type: 'enterprise_application',
+    ownerOrgUnitCode: 'CORP-HR-TALENT',
+  },
+  {
+    code: 'SYS-CATALOG',
+    nameEn: 'Enterprise Data Catalog',
+    nameAr: 'Enterprise Data Catalog',
+    description: 'DGOP catalog, glossary, lineage, and stewardship collaboration platform.',
+    vendor: 'DGOP',
+    type: 'governance_platform',
+    ownerOrgUnitCode: 'DGO',
+  },
+];
+
 // Sample governed data assets (link by reference codes; resolved to ids during seeding).
 const sampleAssets: {
   code: string;
@@ -759,6 +899,8 @@ const sampleAssets: {
   lifecycleStatus: string;
   ownerName?: string;
   domainCode?: string;
+  orgUnitCode?: string;
+  systemCode?: string;
   capabilityCode?: string;
   classificationCode?: string;
   subjectCodes?: string[];
@@ -771,6 +913,8 @@ const sampleAssets: {
     lifecycleStatus: 'active',
     ownerName: 'Dr. Sara Al-Amri',
     domainCode: 'clinical',
+    orgUnitCode: 'CLIN-RECORDS',
+    systemCode: 'SYS-EMR',
     capabilityCode: 'inpatient',
     classificationCode: 'secret',
     subjectCodes: ['patient'],
@@ -783,6 +927,8 @@ const sampleAssets: {
     lifecycleStatus: 'active',
     ownerName: 'Khalid Pharmacy Lead',
     domainCode: 'pharmacy',
+    orgUnitCode: 'CLIN-PHARMACY',
+    systemCode: 'SYS-PHARMACY',
     capabilityCode: 'outpatient',
     classificationCode: 'restricted',
     subjectCodes: ['patient'],
@@ -794,6 +940,8 @@ const sampleAssets: {
     description: 'Master list of employees with HR attributes.',
     lifecycleStatus: 'active',
     domainCode: 'hr',
+    orgUnitCode: 'CORP-HR-TALENT',
+    systemCode: 'SYS-HRIS',
     capabilityCode: 'corporate_services',
     classificationCode: 'internal',
     subjectCodes: ['employee'],
@@ -805,6 +953,8 @@ const sampleAssets: {
     description: 'Accounts payable invoices received from suppliers.',
     lifecycleStatus: 'draft',
     domainCode: 'finance',
+    orgUnitCode: 'CORP-FIN-PROC',
+    systemCode: 'SYS-ERP',
     capabilityCode: 'procurement',
     classificationCode: 'internal',
     subjectCodes: ['supplier'],
@@ -816,6 +966,8 @@ const sampleAssets: {
     description: 'Billing and revenue transactions.',
     lifecycleStatus: 'active',
     domainCode: 'finance',
+    orgUnitCode: 'CORP-FIN-REV',
+    systemCode: 'SYS-BILLING',
     capabilityCode: 'revenue_cycle',
     classificationCode: 'restricted',
     subjectCodes: ['patient', 'supplier'],
@@ -1486,13 +1638,12 @@ async function seedHierarchy(
   items: { code: string; nameEn: string; nameAr: string; parentCode?: string }[],
 ) {
   for (const it of items) {
-    const data = { code: it.code, nameEn: it.nameEn, nameAr: it.nameAr };
-    await model.upsert({ where: { code: it.code }, update: { nameEn: it.nameEn, nameAr: it.nameAr }, create: data });
+    const data = { code: it.code, nameEn: it.nameEn, nameAr: it.nameAr, isActive: true, deletedAt: null };
+    await model.upsert({ where: { code: it.code }, update: data, create: data });
   }
   for (const it of items) {
-    if (!it.parentCode) continue;
-    const parent = await model.findUnique({ where: { code: it.parentCode } });
-    if (parent) await model.update({ where: { code: it.code }, data: { parentId: parent.id } });
+    const parent = it.parentCode ? await model.findUnique({ where: { code: it.parentCode } }) : null;
+    await model.update({ where: { code: it.code }, data: { parentId: parent?.id ?? null } });
   }
 }
 
@@ -1537,7 +1688,161 @@ function seedProfileScore(columns: { completenessPct: number; uniquenessPct: num
   };
 }
 
+async function seedAccessMatrixDemoData(): Promise<void> {
+  const assets = [
+    { id: '79000000-0000-4000-8001-000000000001', code: 'SAMPLE-DS-001', nameEn: 'Customer Master Dataset', nameAr: 'مجموعة بيانات العملاء الرئيسية', assetType: 'dataset' },
+    { id: '79000000-0000-4000-8001-000000000002', code: 'SAMPLE-FL-001', nameEn: 'Monthly Payroll File', nameAr: 'ملف الرواتب الشهري', assetType: 'file' },
+    { id: '79000000-0000-4000-8001-000000000003', code: 'SAMPLE-DR-001', nameEn: 'Employment Contract Records', nameAr: 'سجلات عقود الموظفين', assetType: 'document_record' },
+    { id: '79000000-0000-4000-8001-000000000004', code: 'SAMPLE-API-001', nameEn: 'Employee Verification API', nameAr: 'واجهة التحقق من الموظفين', assetType: 'api_data_feed' },
+    { id: '79000000-0000-4000-8001-000000000005', code: 'SAMPLE-BI-001', nameEn: 'Workforce Performance Dashboard', nameAr: 'لوحة أداء القوى العاملة', assetType: 'bi_report_dashboard' },
+    { id: '79000000-0000-4000-8001-000000000006', code: 'SAMPLE-AI-001', nameEn: 'Skills Recommendation Product', nameAr: 'منتج توصية المهارات', assetType: 'ai_data_product' },
+  ];
+  const grants = [
+    ['AGR-SAMPLE-001', 'SAMPLE-DS-001', 'role', 'data_owner', 'dataset.analyst', 'enforced'],
+    ['AGR-SAMPLE-002', 'SAMPLE-DS-001', 'group', 'GRP-ANALYTICS', 'dataset.contributor', 'pending'],
+    ['AGR-SAMPLE-003', 'SAMPLE-FL-001', 'group', 'GRP-DATA-CONSUMERS', 'file.downloader', 'enforced'],
+    ['AGR-SAMPLE-004', 'SAMPLE-FL-001', 'role', 'operational_data_steward', 'file.contributor', 'pending'],
+    ['AGR-SAMPLE-005', 'SAMPLE-DR-001', 'role', 'privacy_officer', 'document_record.reader', 'enforced'],
+    ['AGR-SAMPLE-006', 'SAMPLE-DR-001', 'group', 'GRP-PRIVACY-REVIEWERS', 'document_record.records_manager', 'failed'],
+    ['AGR-SAMPLE-007', 'SAMPLE-API-001', 'role', 'technical_steward', 'api_data_feed.api_operator', 'pending'],
+    ['AGR-SAMPLE-008', 'SAMPLE-API-001', 'group', 'GRP-DATA-CONSUMERS', 'api_data_feed.consumer', 'enforced'],
+    ['AGR-SAMPLE-009', 'SAMPLE-BI-001', 'role', 'executive', 'bi_report_dashboard.viewer', 'enforced'],
+    ['AGR-SAMPLE-010', 'SAMPLE-BI-001', 'group', 'GRP-ANALYTICS', 'bi_report_dashboard.explorer', 'enforced'],
+    ['AGR-SAMPLE-011', 'SAMPLE-AI-001', 'role', 'data_owner', 'ai_data_product.consumer', 'pending'],
+    ['AGR-SAMPLE-012', 'SAMPLE-AI-001', 'role', 'auditor', 'ai_data_product.evaluator', 'enforced'],
+  ] as const;
+
+  const assetByCode = new Map<string, string>();
+  for (const asset of assets) {
+    const row = await prisma.dataAsset.upsert({
+      where: { code: asset.code },
+      create: {
+        ...asset,
+        description: 'Volume 2 access-matrix sample asset.',
+        assetSubtype: 'sample',
+        v6LifecycleState: 'active',
+        lifecyclePhase: 'operate',
+        lifecycleStatus: 'active',
+        ownerStatus: 'unassigned',
+        isActive: true,
+      },
+      update: {
+        nameEn: asset.nameEn,
+        nameAr: asset.nameAr,
+        assetType: asset.assetType,
+        assetSubtype: 'sample',
+        v6LifecycleState: 'active',
+        lifecyclePhase: 'operate',
+        lifecycleStatus: 'active',
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    assetByCode.set(asset.code, row.id);
+  }
+
+  const profiles = await prisma.accessPermissionProfile.findMany({
+    where: { code: { in: grants.map((row) => row[4]) }, isActive: true, deletedAt: null },
+  });
+  const profileByCode = new Map(profiles.map((profile) => [profile.code, profile]));
+  const startsAt = new Date(Date.now() - 30 * 86_400_000);
+  const expiresAt = new Date(Date.now() + 90 * 86_400_000);
+
+  for (const [code, assetCode, principalType, principalId, profileCode, enforcementStatus] of grants) {
+    const profile = profileByCode.get(profileCode);
+    const assetId = assetByCode.get(assetCode);
+    const permissionCodes = Array.isArray(profile?.permissionCodesJson)
+      ? profile.permissionCodesJson.map(String).filter(Boolean)
+      : [];
+    if (!profile || !assetId || !permissionCodes.length) {
+      throw new Error(`Access-matrix seed reference is unavailable for ${code}`);
+    }
+    const grant = await prisma.accessGrant.upsert({
+      where: { code },
+      create: {
+        code,
+        assetId,
+        principalType,
+        principalId,
+        permissionCode: permissionCodes[0],
+        profileId: profile.id,
+        status: 'active',
+        startsAt,
+        expiresAt,
+        justification: 'Pilot sample authorization for the Volume 2 access matrix.',
+        ownerDecision: 'approved',
+        ownerDecisionBy: 'system:seed',
+        ownerDecisionAt: new Date(),
+        enforcementStatus,
+        createdBy: 'system:seed',
+        updatedBy: 'system:seed',
+      },
+      update: {
+        assetId,
+        principalType,
+        principalId,
+        permissionCode: permissionCodes[0],
+        profileId: profile.id,
+        status: 'active',
+        startsAt,
+        expiresAt,
+        ownerDecision: 'approved',
+        ownerDecisionBy: 'system:seed',
+        ownerDecisionAt: new Date(),
+        enforcementStatus,
+        revokedAt: null,
+        revokedBy: null,
+        revocationReason: null,
+        updatedBy: 'system:seed',
+      },
+    });
+    for (const permissionCode of permissionCodes) {
+      await prisma.accessGrantPermission.upsert({
+        where: { grantId_permissionCode: { grantId: grant.id, permissionCode } },
+        create: { grantId: grant.id, permissionCode, source: 'profile' },
+        update: { source: 'profile' },
+      });
+    }
+    await prisma.accessGrantVersion.upsert({
+      where: { grantId_version: { grantId: grant.id, version: grant.version } },
+      create: {
+        grantId: grant.id,
+        version: grant.version,
+        snapshotJson: {
+          code,
+          assetId,
+          principalType,
+          principalId,
+          permissionCodes,
+          profileId: profile.id,
+          status: 'active',
+          startsAt: startsAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+          ownerDecision: 'approved',
+          enforcementStatus,
+        },
+        changeReason: 'Explicit local access-matrix demo seed',
+        changedBy: 'system:seed',
+      },
+      update: {},
+    });
+  }
+}
+
 async function main() {
+  if (!allowDestructiveSeed) {
+    throw new Error(
+      'Database seed is disabled because it canonicalizes roles, permissions, and sample data. ' +
+      'Set DGOP_ALLOW_DESTRUCTIVE_SEED=true only for an explicitly approved local or disposable database.',
+    );
+  }
+  if (process.env.NODE_ENV === 'production' && !allowProductionSeed) {
+    throw new Error(
+      'Production database seed requires the additional DGOP_ALLOW_PRODUCTION_SEED=true acknowledgement.',
+    );
+  }
+
   for (const r of roles) {
     await prisma.role.upsert({
       where: { code: r.code },
@@ -1667,6 +1972,7 @@ async function main() {
     });
   }
 
+  await seedHierarchy(prisma.organizationUnit, organizationUnits);
   await seedHierarchy(prisma.dataDomain, dataDomains);
   for (const s of dataSubjects) {
     await prisma.dataSubject.upsert({ where: { code: s.code }, update: s, create: s });
@@ -1674,6 +1980,28 @@ async function main() {
   await seedHierarchy(prisma.businessCapability, businessCapabilities);
 
   // Seed sample data assets, their subject links, and relationships.
+  const orgUnitByCode = new Map(
+    (await prisma.organizationUnit.findMany()).map((o) => [o.code, o.id]),
+  );
+  for (const s of systemPlatforms) {
+    const ownerOrgUnitId = orgUnitByCode.get(s.ownerOrgUnitCode) ?? null;
+    const data = {
+      code: s.code,
+      nameEn: s.nameEn,
+      nameAr: s.nameAr,
+      description: s.description,
+      vendor: s.vendor,
+      type: s.type,
+      ownerOrgUnitId,
+      isActive: true,
+      deletedAt: null,
+    };
+    await prisma.systemPlatform.upsert({
+      where: { code: s.code },
+      update: data,
+      create: data,
+    });
+  }
   const domainByCode = new Map(
     (await prisma.dataDomain.findMany()).map((d) => [d.code, d.id]),
   );
@@ -1686,6 +2014,9 @@ async function main() {
   const subjectByCode = new Map(
     (await prisma.dataSubject.findMany()).map((s) => [s.code, s.id]),
   );
+  const systemByCode = new Map(
+    (await prisma.systemPlatform.findMany()).map((s) => [s.code, s.id]),
+  );
 
   for (const a of sampleAssets) {
     const data = {
@@ -1697,6 +2028,8 @@ async function main() {
       ownerName: a.ownerName ?? null,
       ownerStatus: a.ownerName ? 'assigned' : 'unassigned',
       domainId: a.domainCode ? (domainByCode.get(a.domainCode) ?? null) : null,
+      orgUnitId: a.orgUnitCode ? (orgUnitByCode.get(a.orgUnitCode) ?? null) : null,
+      systemId: a.systemCode ? (systemByCode.get(a.systemCode) ?? null) : null,
       capabilityId: a.capabilityCode ? (capabilityByCode.get(a.capabilityCode) ?? null) : null,
       classificationId: a.classificationCode ? (classificationByCode.get(a.classificationCode) ?? null) : null,
     };
@@ -1804,7 +2137,7 @@ async function main() {
       },
       mappingPreviewJson: {
         required: ['code', 'nameEn', 'nameAr'],
-        mappedFields: ['code', 'nameEn', 'nameAr', 'domainCode', 'classificationCode'],
+        mappedFields: ['code', 'nameEn', 'nameAr', 'domainCode', 'orgUnitCode', 'systemCode', 'classificationCode'],
       },
     },
     create: {
@@ -1829,7 +2162,7 @@ async function main() {
       },
       mappingPreviewJson: {
         required: ['code', 'nameEn', 'nameAr'],
-        mappedFields: ['code', 'nameEn', 'nameAr', 'domainCode', 'classificationCode'],
+        mappedFields: ['code', 'nameEn', 'nameAr', 'domainCode', 'orgUnitCode', 'systemCode', 'classificationCode'],
       },
     },
   });
@@ -2035,6 +2368,8 @@ async function main() {
     domain: domainByCode,
     capability: capabilityByCode,
     subject: subjectByCode,
+    org_unit: orgUnitByCode,
+    system: systemByCode,
   };
 
   for (const r of assignmentRules) {
@@ -3540,6 +3875,10 @@ async function main() {
     });
   }
 
+  if (seedAccessMatrixSamples) {
+    await seedAccessMatrixDemoData();
+  }
+
   console.log(
     `Seeded: ${roles.length} roles, ${permissionCatalog.length} permissions, ` +
       `${roleTypes.length} role types, ` +
@@ -3553,6 +3892,7 @@ async function main() {
       `${mentorshipPairs.length} mentorship pairs, ${sampleDataQualityIssues.length} DQ issues. ` +
       `${sampleOpenDataCandidates.length} open data candidates, ${sampleFoiRequests.length} FOI requests, ` +
       `${samplePrivacyDpias.length} privacy DPIAs, ${sampleDataSharingRequests.length} DSI requests. ` +
+      `Access matrix samples: ${seedAccessMatrixSamples ? 'enabled' : 'disabled'}. ` +
       `Admin user: ${adminEmail}`,
   );
 }

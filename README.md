@@ -28,7 +28,7 @@ The `dgop_dev` database, schema, and seed data are created with:
 npm run db:generate   # generate Prisma client
 npm run db:migrate    # create/apply migrations on dgop_dev
 npm run demo:prepare  # create ignored local seed passwords/secrets when needed
-npm run db:seed       # seed roles, classifications, statuses, NDI domains
+npm run db:seed:local # guarded loopback-only seed for local demo data
 ```
 
 ## 3. Run locally
@@ -54,7 +54,7 @@ Client-demo mode uses production security posture, requires non-placeholder
 
 ```bash
 npm run demo:prepare
-npm run db:seed
+npm run db:seed:local
 npm run build
 npm run start:demo
 # open http://localhost:3005
@@ -100,7 +100,7 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | `npm run start:demo` | Run the built API/UI with production demo safeguards |
 | `npm run db:status` | Check Prisma migration status using the root `.env` |
 | `npm run db:migrate` | Apply Prisma migrations to `dgop_dev` |
-| `npm run db:seed` | Seed lookup data |
+| `npm run db:seed:local` | Seed local lookup/demo data after loopback verification |
 | `npm run qa:api` | Run static API authorization and seed-safety checks |
 | `npm run qa:web` | Run static web UX/i18n/route/theme/RTL checks |
 | `npm run qa:ui` | Smoke-test login and key UI routes with Playwright against a running app |
@@ -131,6 +131,6 @@ Detailed per-sprint QA packs are kept where deeper test stories were written:
 - [`QA/Sprint-23/`](QA/Sprint-23/README.md) - data sharing governance: sharing requests, review decisions, agreements, renewal/usage monitoring, workflow creation, and exchange workspace.
 
 Local admin email for demo data: `admin@dgop.local`. Run `npm run demo:prepare`
-and `npm run db:seed`, then use the ignored local `.env` value
+and `npm run db:seed:local`, then use the ignored local `.env` value
 `SEED_ADMIN_PASSWORD` for admin login. Seeded person demo accounts use the ignored
 local `.env` value `SEED_PERSON_PASSWORD`. Do not commit or share these passwords.

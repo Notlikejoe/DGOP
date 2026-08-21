@@ -9,6 +9,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -773,20 +774,28 @@ export class ExtendedDomainsService {
 
   private async nextWorkflowCode(tx: Prisma.TransactionClient, prefix: string): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await tx.workflowCase.count({ where: { code: { startsWith: `${prefix}-${day}` } } });
-    return `${prefix}-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      tx,
+      `workflow_case:${prefix.toLowerCase()}:${day}`,
+      (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(await tx.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextCode(model: 'mdmMatchCandidate' | 'metadataCertification' | 'architectureReview', prefix: string): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const where = { code: { startsWith: `${prefix}-${day}` } };
-    const count =
-      model === 'mdmMatchCandidate'
-        ? await this.prisma.mdmMatchCandidate.count({ where })
-        : model === 'metadataCertification'
-          ? await this.prisma.metadataCertification.count({ where })
-          : await this.prisma.architectureReview.count({ where });
-    return `${prefix}-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      `extended_domains:${model}:${day}`,
+      (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(
+        model === 'mdmMatchCandidate'
+          ? await this.prisma.mdmMatchCandidate.findUnique({ where: { code } })
+          : model === 'metadataCertification'
+            ? await this.prisma.metadataCertification.findUnique({ where: { code } })
+            : await this.prisma.architectureReview.findUnique({ where: { code } })
+      ),
+    );
   }
 
   private async findVisibleMatch(roleCodes: string[], id: string) {

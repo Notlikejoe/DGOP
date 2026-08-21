@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
 import { createCipheriv, createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
@@ -16,6 +17,9 @@ import {
   TaskStatus,
   WorkflowAttachmentKind,
   WorkflowDelegationStatus,
+  GovernanceNotificationChannel,
+  GovernanceNotificationDeliveryStatus,
+  GovernanceNotificationSeverity,
   WorkflowSlaBreachPolicy,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +28,7 @@ import { ScopeService } from '../access/scope.service';
 import { AssignmentsService } from '../ownership/assignments.service';
 import { AuthUser } from '../auth/auth.types';
 import { parsePageParams, toPaged } from '../common/pagination';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import {
   AddTaskDto,
   AddWorkflowAttachmentDto,
@@ -32,39 +37,62 @@ import {
   CreateWorkflowTemplateDto,
   CreateCaseDto,
   DecisionDto,
+  ListWorkflowDesignerTestRunsDto,
   SaveWorkflowBpmnDto,
   SubmitWorkflowTaskFormDto,
   SubmitAssignmentDto,
+  WorkflowCaseControlDto,
+  WorkflowTemplateReviewDto,
+  WorkflowTemplateLifecycleDto,
+  WorkflowDesignerTestRunDto,
   WorkflowTemplateMigrationExecuteDto,
   WorkflowTemplateRollbackDto,
   UpdateWorkflowDelegationDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  UpsertWorkflowVariableDto,
   UpsertWorkflowSlaTemplateDto,
+  WorkflowOperationsReportQueryDto,
   WorkflowDesignerMigrationPreviewDto,
   WorkflowDesignerSimulationDto,
   WorkflowRoutePreviewDto,
 } from './workflow.dto';
 import {
   DEFAULT_WORKFLOW_TEMPLATES,
+  PRODUCTION_PILOT_GUARDRAILS,
+  WORKFLOW_ACCEPTANCE_CRITERIA,
+  WORKFLOW_AUDIT_EVENT_CATALOG,
   buildWorkflowCaseTypeRegistry,
   buildWorkflowEscalationTemplates,
+  buildWorkflowMvpReadinessGate,
   buildWorkflowNotificationRules,
   buildWorkflowSlaTemplates,
   buildWorkflowVersionDiff,
+  buildWorkflowVariableContext,
   evaluateWorkflowDmnTable,
   firstActionableWorkflowStage,
   isAutomatedWorkflowStage,
   isActionableWorkflowStage,
   isRoutingOnlyWorkflowStage,
+  isWorkflowDefaultPath,
+  normalizeWorkflowConnectorType,
   routeGateForOpenStagePeers,
   selectWorkflowTransitionForDecision,
   selectWorkflowTemplate,
   validateWorkflowFormData,
+  workflowFormAttachmentFieldNames,
+  workflowEndOutcomes,
   workflowFormRequiredFields,
+  workflowNodePalette,
+  WORKFLOW_CONNECTOR_TYPES,
   WORKFLOW_CASE_TYPES,
+  WORKFLOW_DEFAULT_VARIABLES,
+  WORKFLOW_DESIGNER_LIFECYCLE,
+  WORKFLOW_RETURN_FOR_CLARIFICATION,
   WORKFLOW_TASK_TYPES,
+  WORKFLOW_VARIABLE_TYPES,
   workflowHealth,
+  type WorkflowDecisionValue,
   type WorkflowRouteCandidate,
   type WorkflowStageRouteNode,
   type WorkflowTemplateSeed,
@@ -74,9 +102,11 @@ import {
   simulateWorkflowRoute,
   templateToBpmnXml,
   validateWorkflowRoute,
+  WORKFLOW_BPMN_LAYOUT_VERSION,
   type WorkflowBpmnStage,
   type WorkflowBpmnTemplate,
   type WorkflowBpmnTransition,
+  type WorkflowBpmnValidation,
 } from './workflow.bpmn';
 
 export type SlaStatus = 'none' | 'on_track' | 'at_risk' | 'overdue' | 'done';
@@ -86,29 +116,69 @@ const DMO_ADMIN_CODE = 'dmo_admin';
 const ADMIN_ROLES = ['system_admin', DMO_ADMIN_CODE];
 const DATA_OWNER_CODE = 'data_owner';
 type PrismaWriter = PrismaService | Prisma.TransactionClient;
+const CASE_STATUS_SUSPENDED = 'suspended' as CaseStatus;
+const CASE_STATUS_CANCELLED = 'cancelled' as CaseStatus;
+const CASE_STATUS_FAILED = 'failed' as CaseStatus;
 const FINAL_CASE_STATUSES: readonly CaseStatus[] = [
   CaseStatus.closed,
   CaseStatus.implemented,
   CaseStatus.rejected,
+  CASE_STATUS_CANCELLED,
+  CASE_STATUS_FAILED,
 ];
 const WORKFLOW_CASE_DEFAULT_PAGE_SIZE = 50;
 const WORKFLOW_TASK_DEFAULT_PAGE_SIZE = 50;
 const WORKFLOW_GRAPH_CASE_LIMIT = 200;
-const CASE_TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
-  [CaseStatus.draft]: [CaseStatus.submitted, CaseStatus.closed],
-  [CaseStatus.submitted]: [CaseStatus.under_review, CaseStatus.awaiting_information, CaseStatus.rejected, CaseStatus.closed],
+const WORKFLOW_TEST_RUN_DEFAULT_PAGE_SIZE = 10;
+const WORKFLOW_REPORT_CASE_LIMIT = 2_000;
+const SYSTEM_ROUTE_GRAPH_REVISIONS: Readonly<Record<string, string>> = Object.fromEntries(
+  DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code, 'v6-volume2-complete-2']),
+);
+const WORKFLOW_ROUTE_TYPE_PRIORITY = [
+  'owner_assignment_approval',
+  'steward_assignment_approval',
+  'data_quality_issue',
+  'metadata_certification',
+  'asset_lifecycle_decision',
+  'business_impact_assessment',
+  'compliance_calendar',
+  'privacy_dpia',
+  'privacy_dsr',
+  'privacy_breach',
+  'foi_request',
+  'foi_appeal',
+  'data_sharing_request',
+  'open_data_publication_approval',
+  'dlp_incident',
+  'classification_change_request',
+  'architecture_review',
+  'business_glossary_term',
+  'general',
+] as const;
+const WORKFLOW_ROUTE_TYPE_RANK = new Map<string, number>(
+  WORKFLOW_ROUTE_TYPE_PRIORITY.map((type, index) => [type, index]),
+);
+const CASE_TRANSITIONS: Record<string, CaseStatus[]> = {
+  [CaseStatus.draft]: [CaseStatus.submitted, CASE_STATUS_CANCELLED, CaseStatus.closed],
+  [CaseStatus.submitted]: [CaseStatus.under_review, CaseStatus.awaiting_information, CaseStatus.rejected, CASE_STATUS_SUSPENDED, CASE_STATUS_CANCELLED, CASE_STATUS_FAILED, CaseStatus.closed],
   [CaseStatus.under_review]: [
     CaseStatus.awaiting_information,
     CaseStatus.decision_made,
     CaseStatus.approved,
     CaseStatus.rejected,
+    CASE_STATUS_SUSPENDED,
+    CASE_STATUS_CANCELLED,
+    CASE_STATUS_FAILED,
     CaseStatus.closed,
   ],
-  [CaseStatus.awaiting_information]: [CaseStatus.under_review, CaseStatus.rejected, CaseStatus.closed],
-  [CaseStatus.decision_made]: [CaseStatus.approved, CaseStatus.rejected, CaseStatus.closed],
-  [CaseStatus.approved]: [CaseStatus.implemented, CaseStatus.closed],
+  [CaseStatus.awaiting_information]: [CaseStatus.under_review, CaseStatus.rejected, CASE_STATUS_SUSPENDED, CASE_STATUS_CANCELLED, CaseStatus.closed],
+  [CaseStatus.decision_made]: [CaseStatus.approved, CaseStatus.rejected, CASE_STATUS_SUSPENDED, CASE_STATUS_CANCELLED, CaseStatus.closed],
+  [CaseStatus.approved]: [CaseStatus.implemented, CASE_STATUS_SUSPENDED, CASE_STATUS_CANCELLED, CaseStatus.closed],
   [CaseStatus.rejected]: [CaseStatus.closed],
   [CaseStatus.implemented]: [CaseStatus.closed],
+  [CASE_STATUS_SUSPENDED]: [CaseStatus.submitted, CaseStatus.under_review, CaseStatus.awaiting_information, CaseStatus.decision_made, CaseStatus.approved, CASE_STATUS_CANCELLED, CASE_STATUS_FAILED],
+  [CASE_STATUS_CANCELLED]: [],
+  [CASE_STATUS_FAILED]: [],
   [CaseStatus.closed]: [],
 };
 
@@ -179,19 +249,37 @@ type WorkflowTemplateWithRoute = Prisma.WorkflowTemplateGetPayload<{ include: ty
 type WorkflowRouteSelection = { template: WorkflowTemplateWithRoute; domainId: string | null };
 type WorkflowStageWithRoute = WorkflowTemplateWithRoute['stages'][number];
 type WorkflowTransitionWithRoute = WorkflowTemplateWithRoute['transitions'][number];
+type WorkflowTokenLineageContext = {
+  parentTokenId?: string | null;
+  rootTokenId?: string | null;
+  sourceTransitionId?: string | null;
+  branchKey?: string | null;
+  branchIndex?: number | null;
+  joinKey?: string | null;
+};
 type RouteAdvancePlan = {
   fromStage: WorkflowStageWithRoute;
   transition?: WorkflowTransitionWithRoute | null;
   passThroughStages?: WorkflowStageWithRoute[];
   nextStage?: WorkflowStageWithRoute | null;
+  parallelBranches?: Array<{
+    stage: WorkflowStageWithRoute;
+    transition: WorkflowTransitionWithRoute;
+    branchKey: string;
+    branchIndex: number;
+    joinKey: string;
+  }>;
+  mergeWaitStage?: WorkflowStageWithRoute | null;
   finalStatus?: CaseStatus | null;
   toStatus?: CaseStatus | null;
 };
 type WorkflowWriter = PrismaService | Prisma.TransactionClient;
 
 @Injectable()
-export class WorkflowService implements OnModuleInit {
+export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowService.name);
+  private executionWorker: ReturnType<typeof setInterval> | null = null;
+  private executionWorkerRunning = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -214,10 +302,23 @@ export class WorkflowService implements OnModuleInit {
         if (result.normalizedSlaTasks > 0) {
           this.logger.log(`Normalized ${result.normalizedSlaTasks} immediate workflow task due dates`);
         }
+        if (result.designerTestRuns > 0) {
+          this.logger.log(`Seeded ${result.designerTestRuns} isolated workflow designer test runs`);
+        }
       }
     } catch (err) {
       this.logger.error('Failed to initialize default workflow templates', err as Error);
     }
+    if (process.env.WORKFLOW_EXECUTION_SCHEDULER !== 'false') {
+      const intervalMs = Math.max(Number(process.env.WORKFLOW_EXECUTION_SCHEDULER_MS ?? 60000), 60000);
+      this.executionWorker = setInterval(() => void this.processRunnableExecutions(), intervalMs);
+      void this.processRunnableExecutions();
+    }
+  }
+
+  onModuleDestroy(): void {
+    if (this.executionWorker) clearInterval(this.executionWorker);
+    this.executionWorker = null;
   }
 
   private shouldRunStartupMaintenance(): boolean {
@@ -231,7 +332,9 @@ export class WorkflowService implements OnModuleInit {
     const reassignedTasks = await this.assignUnownedRoutedTasks();
     const normalizedSlaTasks = await this.normalizeImmediateSlaDueDates();
     const signedTemplates = await this.signUnsignedWorkflowModels();
-    return { unroutedCases, reassignedTasks, normalizedSlaTasks, signedTemplates };
+    const designerTestRuns = await this.seedDesignerTestRunEvidence();
+    const executions = await this.processRunnableExecutions();
+    return { unroutedCases, reassignedTasks, normalizedSlaTasks, signedTemplates, designerTestRuns, executions };
   }
 
   async runMaintenance(user: AuthUser) {
@@ -282,8 +385,269 @@ export class WorkflowService implements OnModuleInit {
           }
           throw err;
         }
+      } else if (SYSTEM_ROUTE_GRAPH_REVISIONS[seed.code]) {
+        await this.reconcileManagedSystemRoute(existing.id, seed, SYSTEM_ROUTE_GRAPH_REVISIONS[seed.code]);
       }
     }
+  }
+
+  private async reconcileManagedSystemRoute(
+    templateId: string,
+    seed: WorkflowTemplateSeed,
+    seedRevision: string,
+  ): Promise<void> {
+    const current = await this.prisma.workflowTemplate.findUnique({
+      where: { id: templateId },
+      include: templateInclude,
+    });
+    if (!current?.isSystem || current.deletedAt || current.createdBy !== 'system') return;
+    const designer = this.jsonRecord(current.designerJson);
+    const activeStages = current.stages.filter((stage) => stage.isActive);
+    const expectedStageTypes = new Map(
+      seed.stages.map((stage) => [
+        stage.code,
+        stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+      ]),
+    );
+    const stageGraphMatches = activeStages.length === seed.stages.length && activeStages.every(
+      (stage) => expectedStageTypes.get(stage.code) === stage.nodeType,
+    );
+    const expectedTransitions = new Set(seed.transitions.map((transition) => [
+      transition.from,
+      transition.to,
+      transition.decision ?? '',
+      normalizeWorkflowConnectorType(transition.connectorType),
+    ].join('|')));
+    const stageCodeById = new Map(activeStages.map((stage) => [stage.id, stage.code]));
+    const transitionGraphMatches = current.transitions.length === seed.transitions.length && current.transitions.every(
+      (transition) => expectedTransitions.has([
+        stageCodeById.get(transition.fromStageId) ?? '',
+        stageCodeById.get(transition.toStageId) ?? '',
+        transition.decision ?? '',
+        normalizeWorkflowConnectorType(transition.connectorType),
+      ].join('|')),
+    );
+    const graphMatches = stageGraphMatches && transitionGraphMatches;
+    const stageLocalizationMatches = activeStages.every((stage) =>
+      seed.stages.some((candidate) => candidate.code === stage.code && candidate.nameAr === stage.nameAr),
+    );
+    const transitionLocalizationMatches = current.transitions.every((transition) => {
+      const from = stageCodeById.get(transition.fromStageId) ?? '';
+      const to = stageCodeById.get(transition.toStageId) ?? '';
+      return seed.transitions.some((candidate) =>
+        candidate.from === from && candidate.to === to &&
+        (candidate.decision ?? null) === (transition.decision ?? null) &&
+        candidate.labelAr === transition.labelAr,
+      );
+    });
+    const localizationMatches = current.nameAr === seed.nameAr && stageLocalizationMatches && transitionLocalizationMatches;
+    if (
+      designer['seedRevision'] === seedRevision &&
+      this.jsonRecord(current.securityJson)['bpmnLayoutVersion'] === WORKFLOW_BPMN_LAYOUT_VERSION &&
+      graphMatches &&
+      localizationMatches
+    ) return;
+    const source = String(designer['source'] ?? 'generated_from_route');
+    const isManagedSource = source.startsWith('route_seed') || ['generated_from_route', 'maintenance_signature'].includes(source);
+    if (!isManagedSource) return;
+    if (current.lastPublishedBy && current.lastPublishedBy !== 'system') return;
+
+    const bpmnTemplate = this.bpmnTemplateFromSeed(seed);
+    const validation = validateWorkflowRoute(bpmnTemplate.stages, bpmnTemplate.transitions);
+    if (validation.status === 'blocked') {
+      this.logger.error(`System route seed ${seed.code} is blocked: ${validation.errors.join(' ')}`);
+      return;
+    }
+    const bpmnXml = templateToBpmnXml(bpmnTemplate);
+    const designerJson = {
+      source: 'route_seed_upgrade',
+      seedRevision,
+      bpmnLayoutVersion: WORKFLOW_BPMN_LAYOUT_VERSION,
+      managedBy: 'system',
+    };
+    const security = this.secureWorkflowModel(bpmnXml, designerJson, 'system');
+    const latestVersion = await this.prisma.workflowTemplateVersion.findFirst({
+      where: { templateId },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    const nextVersion = Math.max(current.designerVersion, latestVersion?.version ?? 0) + 1;
+    const now = new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      const stageByCode = new Map<string, string>();
+      for (const [index, stage] of seed.stages.entries()) {
+        const saved = await tx.workflowTemplateStage.upsert({
+          where: { templateId_code: { templateId, code: stage.code } },
+          create: {
+            templateId,
+            code: stage.code,
+            nameEn: stage.nameEn,
+            nameAr: stage.nameAr,
+            description: stage.description ?? null,
+            kind: stage.kind,
+            nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+            taskType: stage.taskType,
+            assignmentStrategy: stage.assignmentStrategy ?? 'role',
+            assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            assigneeRoleCode: stage.assigneeRoleCode ?? null,
+            dueDays: stage.dueDays,
+            formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            slaConfigJson: (stage.slaConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            notificationRulesJson: (stage.notificationRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            automationConfigJson: (stage.automationConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            gatewayConfigJson: (stage.gatewayConfigJson ?? (stage.isFinal ? { outcomes: workflowEndOutcomes() } : Prisma.JsonNull)) as Prisma.InputJsonValue,
+            parallelGroup: stage.parallelGroup ?? null,
+            sortOrder: index + 1,
+            isStart: stage.isStart ?? false,
+            isDecision: stage.isDecision ?? false,
+            isFinal: stage.isFinal ?? false,
+            isActive: true,
+          },
+          update: {
+            nameEn: stage.nameEn,
+            nameAr: stage.nameAr,
+            description: stage.description ?? null,
+            kind: stage.kind,
+            nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+            taskType: stage.taskType,
+            assignmentStrategy: stage.assignmentStrategy ?? 'role',
+            assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            assigneeRoleCode: stage.assigneeRoleCode ?? null,
+            dueDays: stage.dueDays,
+            formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            slaConfigJson: (stage.slaConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            notificationRulesJson: (stage.notificationRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            automationConfigJson: (stage.automationConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            gatewayConfigJson: (stage.gatewayConfigJson ?? (stage.isFinal ? { outcomes: workflowEndOutcomes() } : Prisma.JsonNull)) as Prisma.InputJsonValue,
+            parallelGroup: stage.parallelGroup ?? null,
+            sortOrder: index + 1,
+            isStart: stage.isStart ?? false,
+            isDecision: stage.isDecision ?? false,
+            isFinal: stage.isFinal ?? false,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        stageByCode.set(stage.code, saved.id);
+      }
+      await tx.workflowTemplateStage.updateMany({
+        where: { templateId, code: { notIn: seed.stages.map((stage) => stage.code) } },
+        data: { isActive: false },
+      });
+
+      const existingTransitions = await tx.workflowTemplateTransition.findMany({ where: { templateId } });
+      await tx.workflowTemplateTransition.updateMany({
+        where: { templateId, isActive: true },
+        data: { isActive: false, retiredAt: now, retiredBy: 'system' },
+      });
+      for (const [index, transition] of seed.transitions.entries()) {
+        const fromStageId = stageByCode.get(transition.from);
+        const toStageId = stageByCode.get(transition.to);
+        if (!fromStageId || !toStageId) continue;
+        const match = existingTransitions.find((candidate) =>
+          candidate.fromStageId === fromStageId &&
+          candidate.toStageId === toStageId &&
+          (candidate.decision ?? null) === (transition.decision ?? null),
+        );
+        const data = {
+          labelEn: transition.labelEn,
+          labelAr: transition.labelAr,
+          connectorType: normalizeWorkflowConnectorType(transition.connectorType),
+          decision: transition.decision ?? null,
+          isDefaultPath: Boolean(transition.isDefaultPath),
+          isHappyPath: transition.isHappyPath ?? true,
+          sortOrder: index + 1,
+          isActive: true,
+          retiredAt: null,
+          retiredBy: null,
+        };
+        if (match) {
+          await tx.workflowTemplateTransition.update({ where: { id: match.id }, data });
+        } else {
+          await tx.workflowTemplateTransition.create({ data: { templateId, fromStageId, toStageId, ...data } });
+        }
+      }
+
+      await tx.workflowTemplate.update({
+        where: { id: templateId },
+        data: {
+          caseType: seed.caseType,
+          nameEn: seed.nameEn,
+          nameAr: seed.nameAr,
+          description: seed.description,
+          trigger: seed.trigger,
+          defaultSlaDays: seed.defaultSlaDays,
+          bpmnXml,
+          designerJson: designerJson as Prisma.InputJsonValue,
+          designerVersion: nextVersion,
+          lastPublishedAt: now,
+          lastPublishedBy: 'system',
+          modelSignature: security.modelSignature,
+          signatureAlgorithm: security.signatureAlgorithm,
+          securityJson: security.securityJson as Prisma.InputJsonValue,
+        },
+      });
+      await tx.workflowTemplateVersion.create({
+        data: {
+          templateId,
+          version: nextVersion,
+          source: 'route_seed_upgrade',
+          changeSummary: `Managed Volume 2 route graph upgrade ${seedRevision}`,
+          bpmnXml,
+          designerJson: designerJson as Prisma.InputJsonValue,
+          validationJson: validation as unknown as Prisma.InputJsonValue,
+          modelSignature: security.modelSignature,
+          signatureAlgorithm: security.signatureAlgorithm,
+          encryptedSnapshotJson: security.encryptedSnapshotJson as Prisma.InputJsonValue,
+          securityJson: security.securityJson as Prisma.InputJsonValue,
+          createdBy: 'system',
+        },
+      });
+      await this.audit.log({
+        actor: 'system',
+        action: 'workflow_template.system_route.upgrade',
+        entityType: 'workflow_template',
+        entityId: templateId,
+        metadata: { code: seed.code, seedRevision, version: nextVersion },
+      }, tx);
+    });
+  }
+
+  private bpmnTemplateFromSeed(seed: WorkflowTemplateSeed): WorkflowBpmnTemplate {
+    return {
+      id: `system-seed:${seed.code}`,
+      code: seed.code,
+      caseType: seed.caseType,
+      nameEn: seed.nameEn,
+      nameAr: seed.nameAr,
+      description: seed.description,
+      defaultSlaDays: seed.defaultSlaDays,
+      stages: seed.stages.map((stage, index) => ({
+        ...stage,
+        nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+        assignmentStrategy: stage.assignmentStrategy ?? 'role',
+        assignmentConfigJson: stage.assignmentConfigJson ?? null,
+        sortOrder: index + 1,
+        isStart: stage.isStart ?? false,
+        isDecision: stage.isDecision ?? false,
+        isFinal: stage.isFinal ?? false,
+        isActive: true,
+      })),
+      transitions: seed.transitions.map((transition, index) => ({
+        fromStageId: transition.from,
+        toStageId: transition.to,
+        labelEn: transition.labelEn,
+        labelAr: transition.labelAr,
+        connectorType: normalizeWorkflowConnectorType(transition.connectorType),
+        decision: transition.decision ?? null,
+        isDefaultPath: Boolean(transition.isDefaultPath),
+        isHappyPath: transition.isHappyPath ?? true,
+        sortOrder: index + 1,
+      })),
+    };
   }
 
   private async createTemplateSeed(seed: WorkflowTemplateSeed): Promise<void> {
@@ -311,9 +675,19 @@ export class WorkflowService implements OnModuleInit {
             nameAr: stage.nameAr,
             description: stage.description ?? null,
             kind: stage.kind,
+            nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
             taskType: stage.taskType,
+            assignmentStrategy: stage.assignmentStrategy ?? 'role',
+            assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
             assigneeRoleCode: stage.assigneeRoleCode ?? null,
             dueDays: stage.dueDays,
+            formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            slaConfigJson: (stage.slaConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            notificationRulesJson: (stage.notificationRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            automationConfigJson: (stage.automationConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            gatewayConfigJson: (stage.gatewayConfigJson ?? (stage.isFinal ? { outcomes: workflowEndOutcomes() } : Prisma.JsonNull)) as Prisma.InputJsonValue,
+            parallelGroup: stage.parallelGroup ?? null,
             sortOrder: index + 1,
             isStart: stage.isStart ?? false,
             isDecision: stage.isDecision ?? false,
@@ -334,7 +708,9 @@ export class WorkflowService implements OnModuleInit {
             toStageId,
             labelEn: transition.labelEn,
             labelAr: transition.labelAr,
+            connectorType: normalizeWorkflowConnectorType(transition.connectorType),
             decision: transition.decision ?? null,
+            isDefaultPath: Boolean(transition.isDefaultPath),
             isHappyPath: transition.isHappyPath ?? true,
             sortOrder: index + 1,
           },
@@ -360,6 +736,7 @@ export class WorkflowService implements OnModuleInit {
       const designerJson = template.designerJson ?? {
         source: template.bpmnXml ? 'saved_bpmn' : 'generated_from_route',
         signedByMaintenance: true,
+        bpmnLayoutVersion: WORKFLOW_BPMN_LAYOUT_VERSION,
       };
       const security = this.secureWorkflowModel(bpmnXml, designerJson, 'system');
       await this.prisma.$transaction(async (tx) => {
@@ -419,6 +796,82 @@ export class WorkflowService implements OnModuleInit {
       signed++;
     }
     return signed;
+  }
+
+  private async seedDesignerTestRunEvidence(limit = 100): Promise<number> {
+    const templates = await this.prisma.workflowTemplate.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        testRuns: { none: { status: { not: 'reset' } } },
+      },
+      include: templateInclude,
+      orderBy: [{ isSystem: 'desc' }, { caseType: 'asc' }, { code: 'asc' }],
+      take: Math.min(Math.max(limit, 1), 250),
+    });
+    let seeded = 0;
+    for (const template of templates) {
+      const route = this.currentDesignerRoute(template);
+      if (route.validation.status === 'blocked') continue;
+      const simulation = simulateWorkflowRoute(route.stages, route.transitions, {});
+      if (simulation.status === 'blocked') continue;
+      await this.prisma.$transaction(async (tx) => {
+        const latest = await tx.workflowDesignerTestRun.aggregate({
+          where: { templateId: template.id },
+          _max: { runNumber: true },
+        });
+        const created = await tx.workflowDesignerTestRun.create({
+          data: {
+            templateId: template.id,
+            runNumber: (latest._max.runNumber ?? 0) + 1,
+            environment: 'demo',
+            status: simulation.status,
+            bpmnXml: route.bpmnXml,
+            validationJson: route.validation as unknown as Prisma.InputJsonValue,
+            inputJson: {
+              environment: 'demo',
+              variables: { source: 'startup_maintenance' },
+              decisions: {},
+              isolation: {
+                mode: 'designer_test_space',
+                productionCasesCreated: 0,
+                productionTasksCreated: 0,
+                productionRuntimeTokensCreated: 0,
+              },
+            } as Prisma.InputJsonValue,
+            simulationJson: simulation as unknown as Prisma.InputJsonValue,
+            executedPathJson: {
+              path: simulation.path,
+              blockers: simulation.blockers,
+              warnings: simulation.warnings,
+              summary: simulation.summary,
+            } as Prisma.InputJsonValue,
+            createdBy: 'system',
+          },
+        });
+        await this.audit.log(
+          {
+            actor: 'system',
+            action: 'workflow_template.test_run.execute',
+            entityType: 'workflow_template',
+            entityId: template.id,
+            metadata: {
+              runId: created.id,
+              runNumber: created.runNumber,
+              status: created.status,
+              environment: created.environment,
+              source: 'startup_maintenance',
+              pathLength: simulation.path.length,
+              productionCasesCreated: 0,
+              productionTasksCreated: 0,
+            },
+          },
+          tx,
+        );
+      });
+      seeded++;
+    }
+    return seeded;
   }
 
   private async backfillUnroutedOpenCases(limit = 250): Promise<number> {
@@ -631,19 +1084,19 @@ export class WorkflowService implements OnModuleInit {
     return tasks.length;
   }
 
-  private templateScopeWhere(roleCodes: string[]): Promise<Prisma.WorkflowTemplateWhereInput> {
+  private templateScopeWhere(roleCodes: string[], activeOnly = false): Promise<Prisma.WorkflowTemplateWhereInput> {
     return this.scope.resolve(roleCodes).then((scope) => {
-      if (scope.domains === 'all') return { deletedAt: null, isActive: true };
+      if (scope.domains === 'all') return { deletedAt: null, ...(activeOnly ? { isActive: true } : {}) };
       return {
         deletedAt: null,
-        isActive: true,
+        ...(activeOnly ? { isActive: true } : {}),
         OR: [{ domainId: null }, { domainId: { in: scope.domains } }],
       };
     });
   }
 
   private async routeCandidates(roleCodes: string[]): Promise<WorkflowRouteCandidate[]> {
-    const where = await this.templateScopeWhere(roleCodes);
+    const where = await this.templateScopeWhere(roleCodes, true);
     const rows = await this.prisma.workflowTemplate.findMany({
       where,
       select: { id: true, code: true, caseType: true, domainId: true, isActive: true },
@@ -665,7 +1118,7 @@ export class WorkflowService implements OnModuleInit {
     );
     if (!selected) throw new BadRequestException('No workflow route template is available for this request');
     const template = await this.prisma.workflowTemplate.findFirst({
-      where: { id: selected.id, ...(await this.templateScopeWhere(roleCodes)) },
+      where: { id: selected.id, ...(await this.templateScopeWhere(roleCodes, true)) },
       include: templateInclude,
     });
     if (!template) throw new NotFoundException('workflow route template not found');
@@ -683,10 +1136,25 @@ export class WorkflowService implements OnModuleInit {
   }
 
   async listTemplates(roleCodes: string[]) {
-    return this.prisma.workflowTemplate.findMany({
+    const templates = await this.prisma.workflowTemplate.findMany({
       where: await this.templateScopeWhere(roleCodes),
       include: templateInclude,
-      orderBy: [{ caseType: 'asc' }, { code: 'asc' }],
+      orderBy: [{ isSystem: 'desc' }, { caseType: 'asc' }, { code: 'asc' }],
+    });
+    return this.sortWorkflowTemplates(templates);
+  }
+
+  private sortWorkflowTemplates<T extends { caseType: string; code: string; nameEn: string; isSystem: boolean }>(
+    templates: T[],
+  ): T[] {
+    return [...templates].sort((a, b) => {
+      const typeDelta = (WORKFLOW_ROUTE_TYPE_RANK.get(a.caseType) ?? 999) - (WORKFLOW_ROUTE_TYPE_RANK.get(b.caseType) ?? 999);
+      if (typeDelta !== 0) return typeDelta;
+      const systemDelta = Number(b.isSystem) - Number(a.isSystem);
+      if (systemDelta !== 0) return systemDelta;
+      const nameDelta = a.nameEn.localeCompare(b.nameEn);
+      if (nameDelta !== 0) return nameDelta;
+      return a.code.localeCompare(b.code);
     });
   }
 
@@ -700,7 +1168,9 @@ export class WorkflowService implements OnModuleInit {
         toStageId: 'review',
         labelEn: 'Ready for review',
         labelAr: 'Ready for review',
+        connectorType: 'sequence',
         decision: null,
+        isDefaultPath: false,
         isHappyPath: true,
         sortOrder: 1,
       },
@@ -709,16 +1179,37 @@ export class WorkflowService implements OnModuleInit {
         toStageId: 'closure',
         labelEn: 'Complete route',
         labelAr: 'Complete route',
+        connectorType: 'success',
         decision: 'approved',
+        isDefaultPath: false,
         isHappyPath: true,
         sortOrder: 2,
+      },
+      {
+        fromStageId: 'review',
+        toStageId: 'intake',
+        labelEn: 'Return for clarification',
+        labelAr: 'Return for clarification',
+        connectorType: 'return',
+        decision: WORKFLOW_RETURN_FOR_CLARIFICATION,
+        isDefaultPath: false,
+        isHappyPath: false,
+        sortOrder: 3,
+      },
+      {
+        fromStageId: 'review',
+        toStageId: 'closure',
+        labelEn: 'Reject and close',
+        labelAr: 'Reject and close',
+        connectorType: 'failure',
+        decision: 'rejected',
+        isDefaultPath: true,
+        isHappyPath: false,
+        sortOrder: 4,
       },
     ];
     const parsed = dto.bpmnXml ? this.parseDesignerBpmn(dto.bpmnXml) : null;
     const validation = parsed?.validation ?? validateWorkflowRoute(initialStages, initialTransitions);
-    if (validation.status === 'blocked') {
-      throw new BadRequestException(`BPMN route is not publishable: ${validation.errors.join(' ')}`);
-    }
     const created = await this.prisma.$transaction(async (tx) => {
       const template = await tx.workflowTemplate.create({
         data: {
@@ -731,8 +1222,7 @@ export class WorkflowService implements OnModuleInit {
           domainId: dto.domainId ?? null,
           defaultSlaDays: dto.defaultSlaDays ?? 5,
           createdBy: user.email,
-          lastPublishedAt: new Date(),
-          lastPublishedBy: user.email,
+          isActive: false,
         },
       });
       await this.applyPublishedBpmnRoute(
@@ -753,22 +1243,30 @@ export class WorkflowService implements OnModuleInit {
           designerJson: (parsed?.designerJson ?? { source: 'starter', stages: initialStages }) as Prisma.InputJsonValue,
           modelSignature: security.modelSignature,
           signatureAlgorithm: security.signatureAlgorithm,
-          securityJson: security.securityJson as Prisma.InputJsonValue,
+          securityJson: this.workflowLifecycleMetadata('draft', user.email, security.securityJson, {
+            createdBy: user.email,
+            changeSummary: 'Initial workflow draft',
+            reviewStatus: 'not_submitted',
+          }) as Prisma.InputJsonValue,
         },
       });
       await tx.workflowTemplateVersion.create({
         data: {
           templateId: template.id,
           version: 1,
-          source: dto.bpmnXml ? 'import' : 'designer',
-          changeSummary: 'Initial BPMN route',
+          source: dto.bpmnXml ? 'import_draft' : 'draft',
+          changeSummary: 'Initial workflow draft',
           bpmnXml,
           designerJson: (parsed?.designerJson ?? { source: 'starter', stages: initialStages }) as Prisma.InputJsonValue,
           validationJson: validation as unknown as Prisma.InputJsonValue,
           modelSignature: security.modelSignature,
           signatureAlgorithm: security.signatureAlgorithm,
           encryptedSnapshotJson: security.encryptedSnapshotJson as Prisma.InputJsonValue,
-          securityJson: security.securityJson as Prisma.InputJsonValue,
+          securityJson: this.workflowLifecycleMetadata('draft', user.email, security.securityJson, {
+            createdBy: user.email,
+            version: 1,
+            reviewStatus: 'not_submitted',
+          }) as Prisma.InputJsonValue,
           createdBy: user.email,
         },
       });
@@ -788,6 +1286,111 @@ export class WorkflowService implements OnModuleInit {
     return this.designerResponse(created);
   }
 
+  async cloneWorkflowTemplate(id: string, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const source = await this.assertTemplateVisible(id, user);
+    const sourceBpmn = this.designerBpmnXmlForTemplate(source);
+    const created = await this.createDesignerTemplate({
+      caseType: source.caseType,
+      nameEn: `${source.nameEn} copy`,
+      nameAr: `${source.nameAr} - copy`,
+      description: source.description,
+      trigger: source.trigger,
+      domainId: source.domainId,
+      defaultSlaDays: source.defaultSlaDays,
+      bpmnXml: sourceBpmn,
+    }, user);
+    const sourceVariables = await this.workflowVariableSnapshot(id);
+    if (sourceVariables.length) {
+      await this.prisma.workflowVariableDefinition.createMany({
+        data: sourceVariables.map((variable) => ({
+          registryKey: `${created.template.id}:${variable.code.toLowerCase()}`,
+          templateId: created.template.id,
+          ...variable,
+          defaultValueJson: variable.defaultValueJson ?? Prisma.JsonNull,
+          allowedValuesJson: variable.allowedValuesJson ?? Prisma.JsonNull,
+          createdBy: user.email,
+        })),
+      });
+      const cloneDesignerJson = { ...this.jsonRecord(created.designerJson), variableDefinitions: sourceVariables };
+      const security = this.secureWorkflowModel(created.bpmnXml, cloneDesignerJson, user.email);
+      await this.prisma.$transaction([
+        this.prisma.workflowTemplate.update({
+          where: { id: created.template.id },
+          data: {
+            designerJson: cloneDesignerJson as Prisma.InputJsonValue,
+            modelSignature: security.modelSignature,
+            signatureAlgorithm: security.signatureAlgorithm,
+          },
+        }),
+        this.prisma.workflowTemplateVersion.update({
+          where: { templateId_version: { templateId: created.template.id, version: 1 } },
+          data: {
+            designerJson: cloneDesignerJson as Prisma.InputJsonValue,
+            modelSignature: security.modelSignature,
+            signatureAlgorithm: security.signatureAlgorithm,
+            encryptedSnapshotJson: security.encryptedSnapshotJson as Prisma.InputJsonValue,
+          },
+        }),
+      ]);
+    }
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_template.clone',
+      entityType: 'workflow_template',
+      entityId: created.template.id,
+      metadata: { sourceTemplateId: id, sourceCode: source.code },
+    });
+    return this.getTemplateDesigner(created.template.id, user.roles);
+  }
+
+  async controlWorkflowTemplateLifecycle(id: string, dto: WorkflowTemplateLifecycleDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const template = await this.assertTemplateVisible(id, user);
+    const lifecycle = this.workflowLifecycle(template.securityJson);
+    const currentState = String(lifecycle['state'] ?? (template.isActive ? 'active' : 'draft'));
+    const reason = dto.reason?.trim() || null;
+    if (dto.action !== 'activate' && !reason) throw new BadRequestException('A reason is required for this lifecycle action');
+    const activeCases = await this.prisma.workflowCase.count({
+      where: { templateId: id, status: { notIn: [...FINAL_CASE_STATUSES] } },
+    });
+    if (dto.action === 'activate' && !template.lastPublishedAt) {
+      throw new BadRequestException('Only a published workflow version can be activated');
+    }
+    if (dto.action === 'suspend' && !template.isActive) throw new BadRequestException('Only an active workflow can be suspended');
+    if (['retire', 'archive', 'delete_draft'].includes(dto.action) && activeCases > 0) {
+      throw new BadRequestException(`Workflow has ${activeCases} active case(s) and cannot be ${dto.action.replace('_', ' ')}`);
+    }
+    if (dto.action === 'archive' && currentState !== 'retired') {
+      throw new BadRequestException('Only a retired workflow can be archived');
+    }
+    if (dto.action === 'delete_draft' && (template.isSystem || currentState !== 'draft')) {
+      throw new BadRequestException('Only a non-system draft workflow can be deleted');
+    }
+    const nextState = dto.action === 'activate' ? 'active' : dto.action === 'delete_draft' ? 'deleted' : dto.action;
+    const updated = await this.prisma.workflowTemplate.update({
+      where: { id },
+      data: {
+        isActive: dto.action === 'activate',
+        deletedAt: dto.action === 'delete_draft' ? new Date() : null,
+        securityJson: this.workflowLifecycleMetadata(nextState, user.email, template.securityJson, {
+          lifecycleReason: reason,
+          lifecycleChangedBy: user.email,
+          lifecycleChangedAt: new Date().toISOString(),
+        }) as Prisma.InputJsonValue,
+      },
+      include: templateInclude,
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: `workflow_template.${dto.action}`,
+      entityType: 'workflow_template',
+      entityId: id,
+      metadata: { fromState: currentState, toState: nextState, reason, activeCases },
+    });
+    return dto.action === 'delete_draft' ? { id, deleted: true } : this.designerResponse(updated);
+  }
+
   async getTemplateDesigner(id: string, roleCodes: string[]) {
     const template = await this.prisma.workflowTemplate.findFirst({
       where: { id, ...(await this.templateScopeWhere(roleCodes)) },
@@ -795,6 +1398,30 @@ export class WorkflowService implements OnModuleInit {
     });
     if (!template) throw new NotFoundException('workflow route template not found');
     return this.designerResponse(template);
+  }
+
+  async layoutTemplateBpmn(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const template = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(user.roles)) },
+      include: templateInclude,
+    });
+    if (!template) throw new NotFoundException('workflow route template not found');
+    const parsed = this.parseDesignerBpmn(dto.bpmnXml);
+    const bpmnXml = templateToBpmnXml({
+      ...this.toBpmnTemplate(template),
+      stages: parsed.stages,
+      transitions: parsed.transitions,
+    });
+    return {
+      bpmnXml,
+      validation: parsed.validation,
+      designerJson: {
+        ...this.jsonRecord(parsed.designerJson),
+        source: 'designer_auto_layout',
+        bpmnLayoutVersion: WORKFLOW_BPMN_LAYOUT_VERSION,
+      },
+    };
   }
 
   async saveTemplateBpmnDraft(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
@@ -810,6 +1437,20 @@ export class WorkflowService implements OnModuleInit {
       data: {
         bpmnXml: dto.bpmnXml,
         designerJson: parsed.designerJson as Prisma.InputJsonValue,
+        securityJson: this.workflowLifecycleMetadata('draft', user.email, template.securityJson, {
+          lastDesignedBy: user.email,
+          changeSummary: dto.changeSummary ?? null,
+          validationStatus: parsed.validation.status,
+          reviewStatus: 'not_submitted',
+          reviewRequestedBy: null,
+          reviewRequestedAt: null,
+          reviewComment: null,
+          reviewModelSignature: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewDecisionComment: null,
+          approvedModelSignature: null,
+        }) as Prisma.InputJsonValue,
       },
       include: templateInclude,
     });
@@ -823,17 +1464,115 @@ export class WorkflowService implements OnModuleInit {
     return this.designerResponse(updated, parsed.validation);
   }
 
+  async submitTemplateReview(id: string, dto: WorkflowTemplateReviewDto, user: AuthUser) {
+    this.assertWorkflowLifecycleRole(user, 'designer', 'Only workflow designers can submit workflow routes for review');
+    const template = await this.assertTemplateVisible(id, user);
+    const route = this.designerRouteFromPayload(template, dto.bpmnXml);
+    route.validation = await this.validateTemplateVariableReferences(id, route.stages, route.transitions, route.validation);
+    if (route.validation.status === 'blocked') {
+      throw new BadRequestException(`Workflow route cannot be submitted for review: ${route.validation.errors.join(' ')}`);
+    }
+    const reviewModelSignature = this.workflowReviewSignature(route.bpmnXml);
+    const updated = await this.prisma.workflowTemplate.update({
+      where: { id },
+      data: {
+        bpmnXml: route.bpmnXml,
+        designerJson: route.designerJson as Prisma.InputJsonValue,
+        securityJson: this.workflowLifecycleMetadata('under_review', user.email, template.securityJson, {
+          lastDesignedBy: user.email,
+          validationStatus: route.validation.status,
+          reviewStatus: 'pending',
+          reviewRequestedBy: user.email,
+          reviewRequestedAt: new Date().toISOString(),
+          reviewComment: dto.comment ?? null,
+          reviewModelSignature,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewDecisionComment: null,
+          approvedModelSignature: null,
+        }) as Prisma.InputJsonValue,
+      },
+      include: templateInclude,
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_template.review.submit',
+      entityType: 'workflow_template',
+      entityId: id,
+      metadata: {
+        status: route.validation.status,
+        warnings: route.validation.warnings.length,
+        reviewModelSignature,
+      },
+    });
+    return this.designerResponse(updated, route.validation);
+  }
+
+  async approveTemplateReview(id: string, dto: WorkflowTemplateReviewDto, user: AuthUser) {
+    this.assertWorkflowLifecycleRole(user, 'reviewer', 'Only workflow reviewers can approve workflow route reviews');
+    const template = await this.assertTemplateVisible(id, user);
+    const route = this.currentDesignerRoute(template);
+    const lifecycle = this.workflowLifecycle(template.securityJson);
+    const reviewModelSignature = String(lifecycle['reviewModelSignature'] ?? '');
+    if (lifecycle['reviewStatus'] !== 'pending' || !reviewModelSignature) {
+      throw new BadRequestException('Workflow route must be submitted for review before approval');
+    }
+    if (reviewModelSignature !== this.workflowReviewSignature(route.bpmnXml)) {
+      throw new BadRequestException('Workflow draft changed after review submission; submit it for review again');
+    }
+    const requestedBy = String(lifecycle['reviewRequestedBy'] ?? '');
+    const sodOverride = this.workflowLifecycleSodOverride(user, requestedBy);
+    const updated = await this.prisma.workflowTemplate.update({
+      where: { id },
+      data: {
+        securityJson: this.workflowLifecycleMetadata('under_review', user.email, template.securityJson, {
+          reviewStatus: 'approved',
+          reviewedBy: user.email,
+          reviewedAt: new Date().toISOString(),
+          reviewDecisionComment: dto.comment ?? null,
+          approvedModelSignature: reviewModelSignature,
+          sodOverride,
+        }) as Prisma.InputJsonValue,
+      },
+      include: templateInclude,
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_template.review.approve',
+      entityType: 'workflow_template',
+      entityId: id,
+      metadata: {
+        requestedBy,
+        approvedModelSignature: reviewModelSignature,
+        sodOverride,
+      },
+    });
+    return this.designerResponse(updated, route.validation);
+  }
+
   async publishTemplateBpmn(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
-    this.assertWorkflowDesignerAdmin(user);
+    this.assertWorkflowLifecycleRole(user, 'publisher', 'Only workflow publishers can publish workflow routes');
     const existing = await this.prisma.workflowTemplate.findFirst({
       where: { id, ...(await this.templateScopeWhere(user.roles)) },
       include: templateInclude,
     });
     if (!existing) throw new NotFoundException('workflow route template not found');
     const parsed = this.parseDesignerBpmn(dto.bpmnXml);
+    parsed.validation = await this.validateTemplateVariableReferences(id, parsed.stages, parsed.transitions, parsed.validation);
     if (parsed.validation.status === 'blocked') {
       throw new BadRequestException(`BPMN route is not publishable: ${parsed.validation.errors.join(' ')}`);
     }
+    const lifecycle = this.workflowLifecycle(existing.securityJson);
+    const approvedModelSignature = String(lifecycle['approvedModelSignature'] ?? '');
+    const candidateModelSignature = this.workflowReviewSignature(dto.bpmnXml);
+    if (lifecycle['reviewStatus'] !== 'approved' || !approvedModelSignature) {
+      throw new BadRequestException('Workflow route must be reviewed and approved before publication');
+    }
+    if (approvedModelSignature !== candidateModelSignature) {
+      throw new BadRequestException('Workflow draft changed after approval; submit it for review again');
+    }
+    const reviewedBy = String(lifecycle['reviewedBy'] ?? '');
+    const sodOverride = this.workflowLifecycleSodOverride(user, reviewedBy);
     const migration = await this.workflowTemplateMigrationPreview(id, dto, user);
     if (migration.summary.manualReviewCases > 0 && !dto.acknowledgeMigrationRisk) {
       throw new BadRequestException(
@@ -841,20 +1580,37 @@ export class WorkflowService implements OnModuleInit {
       );
     }
     const nextVersion = (existing.designerVersion ?? 1) + 1;
-    const security = this.secureWorkflowModel(dto.bpmnXml, parsed.designerJson, user.email);
+    const variableDefinitions = await this.workflowVariableSnapshot(id);
+    const snapshotDesignerJson = { ...this.jsonRecord(parsed.designerJson), variableDefinitions };
+    const security = this.secureWorkflowModel(dto.bpmnXml, snapshotDesignerJson, user.email);
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.applyPublishedBpmnRoute(tx, id, parsed.stages, parsed.transitions, user.email);
       await tx.workflowTemplate.update({
         where: { id },
         data: {
           bpmnXml: dto.bpmnXml,
-          designerJson: parsed.designerJson as Prisma.InputJsonValue,
+          designerJson: snapshotDesignerJson as Prisma.InputJsonValue,
           designerVersion: nextVersion,
           lastPublishedAt: new Date(),
           lastPublishedBy: user.email,
           modelSignature: security.modelSignature,
           signatureAlgorithm: security.signatureAlgorithm,
-          securityJson: security.securityJson as Prisma.InputJsonValue,
+          isActive: true,
+          securityJson: this.workflowLifecycleMetadata('active', user.email, security.securityJson, {
+            lastDesignedBy: this.jsonRecord(this.jsonRecord(existing.securityJson)['workflowLifecycle'])['lastDesignedBy'] ?? existing.lastPublishedBy ?? existing.createdBy ?? null,
+            publishedBy: user.email,
+            version: nextVersion,
+            changeSummary: dto.changeSummary ?? null,
+            reviewStatus: 'published',
+            reviewedBy: lifecycle['reviewedBy'] ?? null,
+            reviewedAt: lifecycle['reviewedAt'] ?? null,
+            reviewRequestedBy: lifecycle['reviewRequestedBy'] ?? null,
+            reviewRequestedAt: lifecycle['reviewRequestedAt'] ?? null,
+            approvedModelSignature,
+            publishedReviewBy: lifecycle['reviewedBy'] ?? null,
+            publishedReviewAt: lifecycle['reviewedAt'] ?? null,
+            sodOverride,
+          }) as Prisma.InputJsonValue,
           defaultSlaDays: Math.max(
             1,
             parsed.stages.reduce((sum, stage) => sum + Math.max(0, stage.dueDays), 0),
@@ -868,16 +1624,28 @@ export class WorkflowService implements OnModuleInit {
           source: 'designer',
           changeSummary: dto.changeSummary ?? null,
           bpmnXml: dto.bpmnXml,
-          designerJson: parsed.designerJson as Prisma.InputJsonValue,
+          designerJson: snapshotDesignerJson as Prisma.InputJsonValue,
           validationJson: parsed.validation as unknown as Prisma.InputJsonValue,
           modelSignature: security.modelSignature,
           signatureAlgorithm: security.signatureAlgorithm,
           encryptedSnapshotJson: security.encryptedSnapshotJson as Prisma.InputJsonValue,
-          securityJson: security.securityJson as Prisma.InputJsonValue,
+          securityJson: this.workflowLifecycleMetadata('published', user.email, security.securityJson, {
+            publishedBy: user.email,
+            version: nextVersion,
+            changeSummary: dto.changeSummary ?? null,
+            reviewStatus: 'published',
+            reviewedBy: lifecycle['reviewedBy'] ?? null,
+            reviewedAt: lifecycle['reviewedAt'] ?? null,
+            reviewRequestedBy: lifecycle['reviewRequestedBy'] ?? null,
+            reviewRequestedAt: lifecycle['reviewRequestedAt'] ?? null,
+            approvedModelSignature,
+            publishedReviewBy: lifecycle['reviewedBy'] ?? null,
+            publishedReviewAt: lifecycle['reviewedAt'] ?? null,
+            sodOverride,
+          }) as Prisma.InputJsonValue,
           createdBy: user.email,
         },
       });
-      const migrationResult = await this.migrateActiveCasesForTemplate(tx, id, user.email, {});
       await this.audit.log(
         {
           actor: user.email,
@@ -889,7 +1657,11 @@ export class WorkflowService implements OnModuleInit {
             stageCount: parsed.validation.stageCount,
             transitionCount: parsed.validation.transitionCount,
             warnings: parsed.validation.warnings,
-            migratedCases: migrationResult.migratedCases,
+            migratedCases: 0,
+            activeCasesPreservedOnOriginalVersion: migration.summary.activeCases,
+            reviewedBy: lifecycle['reviewedBy'] ?? null,
+            approvedModelSignature,
+            sodOverride,
           },
         },
         tx,
@@ -908,13 +1680,140 @@ export class WorkflowService implements OnModuleInit {
     if (!template) throw new NotFoundException('workflow route template not found');
     const route = dto.bpmnXml?.trim()
       ? this.parseDesignerBpmn(dto.bpmnXml)
-      : {
-          stages: this.toBpmnTemplate(template).stages,
-          transitions: this.toBpmnTemplate(template).transitions,
-          validation: this.currentRouteValidation(template),
-          designerJson: {},
-        };
-    return simulateWorkflowRoute(route.stages, route.transitions, dto.decisions ?? {});
+      : this.currentDesignerRoute(template);
+    route.validation = await this.validateTemplateVariableReferences(id, route.stages, route.transitions, route.validation);
+    const simulation = simulateWorkflowRoute(route.stages, route.transitions, dto.decisions ?? {});
+    return route.validation.status === 'blocked'
+      ? { ...simulation, status: 'blocked', blockers: [...new Set([...simulation.blockers, ...route.validation.errors])] }
+      : simulation;
+  }
+
+  async executeDesignerTestRun(id: string, dto: WorkflowDesignerTestRunDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const template = await this.prisma.workflowTemplate.findFirst({
+      where: { id, ...(await this.templateScopeWhere(user.roles)) },
+      include: templateInclude,
+    });
+    if (!template) throw new NotFoundException('workflow route template not found');
+    const route = this.designerRouteFromPayload(template, dto.bpmnXml);
+    route.validation = await this.validateTemplateVariableReferences(id, route.stages, route.transitions, route.validation);
+    if (route.validation.status === 'blocked') {
+      throw new BadRequestException(`Workflow test run cannot start: ${route.validation.errors.join(' ')}`);
+    }
+    const simulation = simulateWorkflowRoute(route.stages, route.transitions, dto.decisions ?? {});
+    if (simulation.status === 'blocked') {
+      throw new BadRequestException(`Workflow test run is blocked: ${simulation.blockers.join(' ')}`);
+    }
+    const inputJson = {
+      environment: dto.environment ?? 'test',
+      variables: dto.variables ?? {},
+      decisions: dto.decisions ?? {},
+      isolation: {
+        mode: 'designer_test_space',
+        productionCasesCreated: 0,
+        productionTasksCreated: 0,
+        productionRuntimeTokensCreated: 0,
+      },
+    };
+    const run = await this.prisma.$transaction(async (tx) => {
+      const latest = await tx.workflowDesignerTestRun.aggregate({
+        where: { templateId: id },
+        _max: { runNumber: true },
+      });
+      const created = await tx.workflowDesignerTestRun.create({
+        data: {
+          templateId: id,
+          runNumber: (latest._max.runNumber ?? 0) + 1,
+          environment: dto.environment ?? 'test',
+          status: simulation.status,
+          bpmnXml: route.bpmnXml,
+          validationJson: route.validation as unknown as Prisma.InputJsonValue,
+          inputJson: inputJson as Prisma.InputJsonValue,
+          simulationJson: simulation as unknown as Prisma.InputJsonValue,
+          executedPathJson: {
+            path: simulation.path,
+            blockers: simulation.blockers,
+            warnings: simulation.warnings,
+            summary: simulation.summary,
+          } as Prisma.InputJsonValue,
+          createdBy: user.email,
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'workflow_template.test_run.execute',
+          entityType: 'workflow_template',
+          entityId: id,
+          metadata: {
+            runId: created.id,
+            runNumber: created.runNumber,
+            status: created.status,
+            environment: created.environment,
+            pathLength: simulation.path.length,
+            productionCasesCreated: 0,
+            productionTasksCreated: 0,
+          },
+        },
+        tx,
+      );
+      return created;
+    });
+    return this.designerTestRunResponse(run);
+  }
+
+  async listDesignerTestRuns(id: string, query: ListWorkflowDesignerTestRunsDto, user: AuthUser) {
+    await this.assertTemplateVisible(id, user);
+    const page = parsePageParams(query.page ?? 1, query.pageSize ?? WORKFLOW_TEST_RUN_DEFAULT_PAGE_SIZE)!;
+    const where: Prisma.WorkflowDesignerTestRunWhereInput = { templateId: id };
+    if (query.status) where.status = query.status;
+    const [rows, total] = await Promise.all([
+      this.prisma.workflowDesignerTestRun.findMany({
+        where,
+        orderBy: [{ runNumber: 'desc' }],
+        skip: page.skip,
+        take: page.take,
+      }),
+      this.prisma.workflowDesignerTestRun.count({ where }),
+    ]);
+    return toPaged(rows.map((row) => this.designerTestRunResponse(row)), total, page);
+  }
+
+  async resetDesignerTestRun(templateId: string, runId: string, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    await this.assertTemplateVisible(templateId, user);
+    const existing = await this.prisma.workflowDesignerTestRun.findFirst({
+      where: { id: runId, templateId },
+    });
+    if (!existing) throw new NotFoundException('workflow test run not found');
+    if (existing.status === 'reset') return this.designerTestRunResponse(existing);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.workflowDesignerTestRun.update({
+        where: { id: runId },
+        data: {
+          status: 'reset',
+          resetAt: new Date(),
+          resetBy: user.email,
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'workflow_template.test_run.reset',
+          entityType: 'workflow_template',
+          entityId: templateId,
+          metadata: {
+            runId,
+            runNumber: existing.runNumber,
+            previousStatus: existing.status,
+            newStatus: row.status,
+          },
+        },
+        tx,
+      );
+      return row;
+    });
+    return this.designerTestRunResponse(updated);
   }
 
   async workflowTemplateMigrationPreview(id: string, dto: WorkflowDesignerMigrationPreviewDto, user: AuthUser) {
@@ -925,12 +1824,7 @@ export class WorkflowService implements OnModuleInit {
     if (!template) throw new NotFoundException('workflow route template not found');
     const next = dto.bpmnXml?.trim()
       ? this.parseDesignerBpmn(dto.bpmnXml)
-      : {
-          stages: this.toBpmnTemplate(template).stages,
-          transitions: this.toBpmnTemplate(template).transitions,
-          validation: this.currentRouteValidation(template),
-          designerJson: {},
-        };
+      : this.currentDesignerRoute(template);
     const currentStages = new Map(template.stages.map((stage) => [stage.code, stage]));
     const nextStages = new Map(next.stages.map((stage) => [stage.code, stage]));
     const currentTransitionKeys = new Set(
@@ -1078,14 +1972,20 @@ export class WorkflowService implements OnModuleInit {
     const existing = await this.prisma.workflowTemplate.findUnique({ where: { id }, include: templateInclude });
     if (!existing) throw new NotFoundException('workflow route template not found');
     const nextVersion = (existing.designerVersion ?? 1) + 1;
-    const security = this.secureWorkflowModel(version.bpmnXml, parsed.designerJson, user.email);
+    const versionDesignerJson = this.jsonRecord(version.designerJson);
+    const snapshotVariables = Array.isArray(versionDesignerJson['variableDefinitions'])
+      ? versionDesignerJson['variableDefinitions'] as Array<Record<string, unknown>>
+      : null;
+    const rollbackDesignerJson = { ...this.jsonRecord(parsed.designerJson), ...(snapshotVariables ? { variableDefinitions: snapshotVariables } : {}) };
+    const security = this.secureWorkflowModel(version.bpmnXml, rollbackDesignerJson, user.email);
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.applyPublishedBpmnRoute(tx, id, parsed.stages, parsed.transitions, user.email);
+      if (snapshotVariables) await this.restoreWorkflowVariableSnapshot(tx, id, snapshotVariables, user.email);
       await tx.workflowTemplate.update({
         where: { id },
         data: {
           bpmnXml: version.bpmnXml,
-          designerJson: parsed.designerJson as Prisma.InputJsonValue,
+          designerJson: rollbackDesignerJson as Prisma.InputJsonValue,
           designerVersion: nextVersion,
           lastPublishedAt: new Date(),
           lastPublishedBy: user.email,
@@ -1101,7 +2001,7 @@ export class WorkflowService implements OnModuleInit {
           source: 'rollback',
           changeSummary: dto.changeSummary ?? `Rollback to version ${dto.version}`,
           bpmnXml: version.bpmnXml,
-          designerJson: parsed.designerJson as Prisma.InputJsonValue,
+          designerJson: rollbackDesignerJson as Prisma.InputJsonValue,
           validationJson: parsed.validation as unknown as Prisma.InputJsonValue,
           modelSignature: security.modelSignature,
           signatureAlgorithm: security.signatureAlgorithm,
@@ -1110,14 +2010,13 @@ export class WorkflowService implements OnModuleInit {
           createdBy: user.email,
         },
       });
-      const migration = await this.migrateActiveCasesForTemplate(tx, id, user.email, {});
       await this.audit.log(
         {
           actor: user.email,
           action: 'workflow_template.version.rollback',
           entityType: 'workflow_template',
           entityId: id,
-          metadata: { rollbackTo: dto.version, newVersion: nextVersion, migratedCases: migration.migratedCases },
+          metadata: { rollbackTo: dto.version, newVersion: nextVersion, migratedCases: 0, migrationMode: 'explicit_only' },
         },
         tx,
       );
@@ -1317,10 +2216,25 @@ export class WorkflowService implements OnModuleInit {
   }
 
   async configuration(roleCodes: string[], viewer?: AuthUser) {
-    const [templates, casesResult] = await Promise.all([
+    const [templates, casesResult, variableRegistry] = await Promise.all([
       this.listTemplates(roleCodes),
       this.listCases(roleCodes, { page: 1, pageSize: 500 }, viewer),
+      this.workflowVariableRegistry(),
     ]);
+    const visibleTemplateIds = templates.map((template) => template.id);
+    const [testRunCount, automatedExecutionCount] = visibleTemplateIds.length
+      ? await Promise.all([
+          this.prisma.workflowDesignerTestRun.count({
+            where: { templateId: { in: visibleTemplateIds }, status: { not: 'reset' } },
+          }),
+          this.prisma.workflowEvent.count({
+            where: {
+              action: 'route.automation.completed',
+              case: { templateId: { in: visibleTemplateIds } },
+            },
+          }),
+        ])
+      : [0, 0];
     const cases = Array.isArray(casesResult) ? casesResult : casesResult.data;
     const totalCases = Array.isArray(casesResult) ? cases.length : casesResult.total;
     const openStatuses = new Set<CaseStatus>([
@@ -1341,12 +2255,18 @@ export class WorkflowService implements OnModuleInit {
     const slaTemplates = buildWorkflowSlaTemplates(templates);
     const notificationRules = buildWorkflowNotificationRules(templates);
     const escalationTemplates = buildWorkflowEscalationTemplates(templates);
+    const workflowCanvasMvp = buildWorkflowMvpReadinessGate(templates, {
+      testRunCount,
+      automatedExecutionCount,
+      operationalReportReady: true,
+      timerNotificationConfigured: slaTemplates.length > 0 && notificationRules.length > 0,
+    });
     const blockedRoutes = caseTypeRegistry.filter((row) => row.status === 'blocked').length;
     const watchRoutes = caseTypeRegistry.filter((row) => row.status === 'watch').length;
     const status =
-      blockedRoutes > 0
+      workflowCanvasMvp.status === 'blocked' || blockedRoutes > 0
         ? 'blocked'
-        : overdueTasks > 0 || unassignedTasks > 0 || watchRoutes > 0
+        : overdueTasks > 0 || unassignedTasks > 0 || watchRoutes > 0 || workflowCanvasMvp.status === 'watch'
           ? 'watch'
           : 'ready';
 
@@ -1365,8 +2285,27 @@ export class WorkflowService implements OnModuleInit {
         unassignedTasks,
         notificationRules: notificationRules.length,
         escalationTemplates: escalationTemplates.length,
+        designerTestRuns: testRunCount,
+        automatedExecutionEvents: automatedExecutionCount,
+        workflowMvpReady: workflowCanvasMvp.status === 'ready',
+        workflowMvpBlocked: workflowCanvasMvp.summary.blocked,
       },
       caseTypeRegistry,
+      workflowCanvasMvp,
+      nodePalette: workflowNodePalette(),
+      connectorTypes: WORKFLOW_CONNECTOR_TYPES,
+      variableRegistry: variableRegistry.variables,
+      variableTypes: variableRegistry.variableTypes,
+      auditEventCatalog: WORKFLOW_AUDIT_EVENT_CATALOG,
+      acceptanceCriteria: WORKFLOW_ACCEPTANCE_CRITERIA.map(([code, label, trace, priority]) => ({ code, label, trace, priority })),
+      designerLifecycle: WORKFLOW_DESIGNER_LIFECYCLE,
+      productionPilotGuardrails: PRODUCTION_PILOT_GUARDRAILS,
+      testIsolation: {
+        status: testRunCount > 0 ? 'ready' : 'watch',
+        testRuns: testRunCount,
+        productionTablesTouched: false,
+        evidence: 'Designer test runs persist in workflow_designer_test_runs and do not create workflow_cases, workflow_tasks, or workflow_runtime_tokens.',
+      },
       slaTemplates,
       notificationRules,
       escalationTemplates,
@@ -1523,6 +2462,143 @@ export class WorkflowService implements OnModuleInit {
         .sort((a, b) => b.overdue - a.overdue || b.open - a.open)
         .slice(0, 8),
       trend,
+    };
+  }
+
+  async workflowOperationsReport(
+    roleCodes: string[],
+    query: WorkflowOperationsReportQueryDto,
+    viewer?: AuthUser,
+  ) {
+    const now = new Date();
+    const periodDays = Math.max(1, Math.min(366, Math.floor(Number(query.periodDays ?? 30)) || 30));
+    const periodStart = new Date(now);
+    periodStart.setDate(periodStart.getDate() - periodDays + 1);
+    periodStart.setHours(0, 0, 0, 0);
+    const filters: Prisma.WorkflowCaseWhereInput[] = [
+      await this.workflowCaseVisibilityWhere(roleCodes, viewer),
+      { createdAt: { gte: periodStart } },
+    ];
+    if (query.templateId) filters.push({ templateId: query.templateId });
+    if (query.caseType) filters.push({ type: this.assertKnownCaseType(query.caseType) });
+    if (query.status) filters.push({ status: this.assertKnownCaseStatus(String(query.status)) });
+    if (query.ownerEmail?.trim()) filters.push({ createdBy: query.ownerEmail.trim() });
+    if (query.orgUnitId) filters.push({ asset: { orgUnitId: query.orgUnitId } });
+
+    const where: Prisma.WorkflowCaseWhereInput = { AND: filters };
+    const rows = await this.prisma.workflowCase.findMany({
+      where,
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        status: true,
+        type: true,
+        createdBy: true,
+        createdAt: true,
+        updatedAt: true,
+        templateId: true,
+        template: { select: { id: true, code: true, nameEn: true, nameAr: true } },
+        asset: { select: { orgUnitId: true, orgUnit: { select: { id: true, code: true, nameEn: true, nameAr: true } } } },
+        tasks: {
+          select: {
+            id: true,
+            status: true,
+            type: true,
+            dueDate: true,
+            createdAt: true,
+            completedAt: true,
+            templateStage: { select: { code: true, nameEn: true, nameAr: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: WORKFLOW_REPORT_CASE_LIMIT + 1,
+    });
+    const truncated = rows.length > WORKFLOW_REPORT_CASE_LIMIT;
+    const cases = truncated ? rows.slice(0, WORKFLOW_REPORT_CASE_LIMIT) : rows;
+    const activeStatuses = new Set<CaseStatus>([
+      CaseStatus.draft,
+      CaseStatus.submitted,
+      CaseStatus.under_review,
+      CaseStatus.awaiting_information,
+      CaseStatus.decision_made,
+      CaseStatus.approved,
+    ]);
+    const completedCases = cases.filter((wfCase) => FINAL_CASE_STATUSES.includes(wfCase.status));
+    const failedCases = cases.filter(
+      (wfCase) =>
+        wfCase.status === CaseStatus.rejected ||
+        wfCase.status === CASE_STATUS_FAILED ||
+        wfCase.status === CASE_STATUS_CANCELLED,
+    );
+    const tasks = cases.flatMap((wfCase) => wfCase.tasks.map((task) => ({ ...task, wfCase })));
+    const completedTasks = tasks.filter((task) => task.completedAt);
+    const openTasks = tasks.filter((task) => task.status === TaskStatus.pending || task.status === TaskStatus.in_progress);
+    const overdueTasks = openTasks.filter((task) => task.dueDate && task.dueDate.getTime() < now.getTime());
+    const workflowCompletionHours = this.averageHours(
+      completedCases.map((wfCase) => ({ start: wfCase.createdAt, end: wfCase.updatedAt })),
+    );
+    const taskCompletionHours = this.averageHours(
+      completedTasks.flatMap((task) => task.completedAt ? [{ start: task.createdAt, end: task.completedAt }] : []),
+    );
+    const volumeByStatus = this.countBy(cases, (wfCase) => wfCase.status);
+    const volumeByType = this.countBy(cases, (wfCase) => wfCase.type);
+    const volumeByWorkflow = this.countBy(cases, (wfCase) => wfCase.template?.nameEn ?? wfCase.type);
+    const volumeByOrgUnit = this.countBy(
+      cases,
+      (wfCase) => wfCase.asset?.orgUnit?.nameEn ?? (wfCase.asset?.orgUnitId ? 'Unmapped org unit' : 'No linked org unit'),
+    );
+    const stagePerformance = [...this.countTasksByStage(tasks).values()]
+      .map(({ completedSpans, ...row }) => ({
+        ...row,
+        averageCompletionHours: this.averageHours(completedSpans),
+        slaCompliancePercentage: row.open ? Math.round(((row.open - row.overdue) / row.open) * 100) : 100,
+      }))
+      .sort((a, b) => b.overdue - a.overdue || b.open - a.open)
+      .slice(0, 12);
+
+    return {
+      generatedAt: now.toISOString(),
+      period: {
+        days: periodDays,
+        start: periodStart.toISOString(),
+        end: now.toISOString(),
+      },
+      filters: {
+        templateId: query.templateId ?? null,
+        caseType: query.caseType ?? null,
+        status: query.status ?? null,
+        ownerEmail: query.ownerEmail ?? null,
+        orgUnitId: query.orgUnitId ?? null,
+      },
+      sample: {
+        limit: WORKFLOW_REPORT_CASE_LIMIT,
+        returnedCases: cases.length,
+        truncated,
+      },
+      summary: {
+        initiatedWorkflows: cases.length,
+        completedWorkflows: completedCases.length,
+        activeWorkflows: cases.filter((wfCase) => activeStatuses.has(wfCase.status)).length,
+        failedWorkflows: failedCases.length,
+        openTasks: openTasks.length,
+        overdueTasks: overdueTasks.length,
+        averageWorkflowCompletionHours: workflowCompletionHours,
+        averageTaskCompletionHours: taskCompletionHours,
+        slaCompliancePercentage: openTasks.length ? Math.round(((openTasks.length - overdueTasks.length) / openTasks.length) * 100) : 100,
+      },
+      volumeByStatus,
+      volumeByType,
+      volumeByWorkflow,
+      volumeByOrgUnit,
+      stagePerformance,
+      acceptanceEvidence: {
+        criterion: 'AC-WF-17',
+        trace: 'Volume 2 section 23.11',
+        filtersSupported: ['workflow', 'period', 'owner', 'department', 'status', 'caseType'],
+        scoped: true,
+      },
     };
   }
 
@@ -1807,9 +2883,33 @@ export class WorkflowService implements OnModuleInit {
   }
 
   private assertWorkflowDesignerAdmin(user: AuthUser): void {
-    if (!user.roles.some((role) => ADMIN_ROLES.includes(role))) {
+    if (!this.hasWorkflowLifecycleRole(user, 'designer')) {
       throw new ForbiddenException('Only workflow administrators can design workflow routes');
     }
+  }
+
+  private assertWorkflowLifecycleRole(
+    user: AuthUser,
+    role: keyof typeof WORKFLOW_DESIGNER_LIFECYCLE.roles,
+    message: string,
+  ): void {
+    if (!this.hasWorkflowLifecycleRole(user, role)) {
+      throw new ForbiddenException(message);
+    }
+  }
+
+  private hasWorkflowLifecycleRole(user: AuthUser, role: keyof typeof WORKFLOW_DESIGNER_LIFECYCLE.roles): boolean {
+    const allowed = WORKFLOW_DESIGNER_LIFECYCLE.roles[role];
+    return user.roles.some((code) => allowed.includes(code));
+  }
+
+  private workflowLifecycleSodOverride(user: AuthUser, previousActor?: string | null): boolean {
+    if (!previousActor || previousActor !== user.email) return false;
+    const adminOverride = user.roles.some((role) => ADMIN_ROLES.includes(role));
+    if (!adminOverride || process.env.DGOP_STRICT_WORKFLOW_SOD === 'true' || process.env.NODE_ENV === 'production') {
+      throw new ForbiddenException('Segregation of duties requires a different workflow actor for this action');
+    }
+    return true;
   }
 
   private parseDesignerBpmn(xml: string): ReturnType<typeof parseBpmnXml> {
@@ -1818,6 +2918,72 @@ export class WorkflowService implements OnModuleInit {
     } catch (error) {
       throw new BadRequestException((error as Error).message || 'Invalid BPMN XML');
     }
+  }
+
+  private designerRouteFromPayload(template: WorkflowTemplateWithRoute, bpmnXml?: string | null) {
+    if (bpmnXml?.trim()) {
+      const parsed = this.parseDesignerBpmn(bpmnXml);
+      return { ...parsed, bpmnXml };
+    }
+    return this.currentDesignerRoute(template);
+  }
+
+  private currentDesignerRoute(template: WorkflowTemplateWithRoute) {
+    const current = this.toBpmnTemplate(template);
+    const codeByRef = new Map(current.stages.map((stage) => [stage.id ?? stage.code, stage.code]));
+    return {
+      stages: current.stages,
+      transitions: current.transitions.map((transition) => ({
+        ...transition,
+        fromStageId: codeByRef.get(transition.fromStageId) ?? transition.fromStageId,
+        toStageId: codeByRef.get(transition.toStageId) ?? transition.toStageId,
+      })),
+      validation: this.currentRouteValidation(template),
+      designerJson: this.jsonRecord(template.designerJson),
+      bpmnXml: this.designerBpmnXmlForTemplate(template),
+    };
+  }
+
+  private designerTestRunResponse(run: {
+    id: string;
+    templateId: string;
+    runNumber: number;
+    environment: string;
+    status: string;
+    validationJson: unknown;
+    inputJson: unknown;
+    simulationJson: unknown;
+    executedPathJson: unknown;
+    resetAt?: Date | null;
+    resetBy?: string | null;
+    createdBy: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    const input = this.jsonRecord(run.inputJson);
+    const isolation = this.jsonRecord(input['isolation']);
+    return {
+      id: run.id,
+      templateId: run.templateId,
+      runNumber: run.runNumber,
+      environment: run.environment,
+      status: run.status,
+      validation: run.validationJson,
+      input: input,
+      simulation: run.simulationJson,
+      executedPath: run.executedPathJson,
+      isolation: {
+        mode: String(isolation['mode'] ?? 'designer_test_space'),
+        productionCasesCreated: Number(isolation['productionCasesCreated'] ?? 0),
+        productionTasksCreated: Number(isolation['productionTasksCreated'] ?? 0),
+        productionRuntimeTokensCreated: Number(isolation['productionRuntimeTokensCreated'] ?? 0),
+      },
+      resetAt: run.resetAt ?? null,
+      resetBy: run.resetBy ?? null,
+      createdBy: run.createdBy,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+    };
   }
 
   private async assertTemplateVisible(id: string, user: AuthUser): Promise<WorkflowTemplateWithRoute> {
@@ -1843,16 +3009,332 @@ export class WorkflowService implements OnModuleInit {
         signedAt: new Date().toISOString(),
         keyRef: process.env.DGOP_BPMN_SIGNING_KEY_REF || 'DGOP_BPMN_SIGNING_SECRET',
         encryptedSnapshot: true,
+        bpmnLayoutVersion: WORKFLOW_BPMN_LAYOUT_VERSION,
         controls: ['signed_model', 'encrypted_snapshot', 'publish_audit', 'version_immutability'],
       },
     };
   }
 
-  private verifyWorkflowSnapshotSignature(bpmnXml: string, designerJson: unknown, signature?: string | null): boolean {
-    if (!signature) return false;
-    const expected = createHmac('sha256', this.workflowSigningSecret())
+  async workflowVariableRegistry() {
+    const rows = await this.prisma.workflowVariableDefinition.findMany({
+      where: { deletedAt: null, isActive: true },
+      orderBy: [{ templateId: 'asc' }, { scope: 'asc' }, { code: 'asc' }],
+    });
+    const persistedCodes = new Set(rows.map((row) => row.code));
+    const defaults = WORKFLOW_DEFAULT_VARIABLES
+      .filter((row) => !persistedCodes.has(row.code))
+      .map((row) => ({
+        id: `default:${row.code}`,
+        registryKey: `default:${row.code}`,
+        templateId: null,
+        code: row.code,
+        nameEn: row.nameEn,
+        nameAr: null,
+        description: null,
+        variableType: row.variableType,
+        scope: row.scope,
+        source: row.source,
+        defaultValueJson: null,
+        allowedValuesJson: null,
+        isRequired: row.required,
+        isActive: true,
+        deletedAt: null,
+        createdBy: 'system',
+      }));
+    return {
+      variableTypes: WORKFLOW_VARIABLE_TYPES,
+      variables: [...rows, ...defaults],
+      defaults: WORKFLOW_DEFAULT_VARIABLES,
+    };
+  }
+
+  private async workflowVariableSnapshot(templateId: string) {
+    return this.prisma.workflowVariableDefinition.findMany({
+      where: { templateId, deletedAt: null, isActive: true },
+      select: {
+        code: true,
+        nameEn: true,
+        nameAr: true,
+        description: true,
+        variableType: true,
+        scope: true,
+        source: true,
+        defaultValueJson: true,
+        allowedValuesJson: true,
+        isRequired: true,
+      },
+      orderBy: [{ scope: 'asc' }, { code: 'asc' }],
+    });
+  }
+
+  private async restoreWorkflowVariableSnapshot(
+    tx: Prisma.TransactionClient,
+    templateId: string,
+    snapshot: Array<Record<string, unknown>>,
+    actor: string,
+  ) {
+    await tx.workflowVariableDefinition.updateMany({
+      where: { templateId, deletedAt: null },
+      data: { isActive: false, deletedAt: new Date() },
+    });
+    for (const row of snapshot) {
+      const code = String(row['code'] ?? '').trim();
+      const nameEn = String(row['nameEn'] ?? '').trim();
+      if (!code || !nameEn) continue;
+      const registryKey = `${templateId}:${code.toLowerCase()}`;
+      await tx.workflowVariableDefinition.upsert({
+        where: { registryKey },
+        create: {
+          registryKey,
+          templateId,
+          code,
+          nameEn,
+          nameAr: String(row['nameAr'] ?? '').trim() || null,
+          description: String(row['description'] ?? '').trim() || null,
+          variableType: String(row['variableType'] ?? 'text'),
+          scope: String(row['scope'] ?? 'case'),
+          source: String(row['source'] ?? 'designer'),
+          defaultValueJson: row['defaultValueJson'] == null ? Prisma.JsonNull : row['defaultValueJson'] as Prisma.InputJsonValue,
+          allowedValuesJson: row['allowedValuesJson'] == null ? Prisma.JsonNull : row['allowedValuesJson'] as Prisma.InputJsonValue,
+          isRequired: row['isRequired'] === true,
+          createdBy: actor,
+        },
+        update: {
+          code,
+          nameEn,
+          nameAr: String(row['nameAr'] ?? '').trim() || null,
+          description: String(row['description'] ?? '').trim() || null,
+          variableType: String(row['variableType'] ?? 'text'),
+          scope: String(row['scope'] ?? 'case'),
+          source: String(row['source'] ?? 'designer'),
+          defaultValueJson: row['defaultValueJson'] == null ? Prisma.JsonNull : row['defaultValueJson'] as Prisma.InputJsonValue,
+          allowedValuesJson: row['allowedValuesJson'] == null ? Prisma.JsonNull : row['allowedValuesJson'] as Prisma.InputJsonValue,
+          isRequired: row['isRequired'] === true,
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+    }
+  }
+
+  private async validateTemplateVariableReferences(
+    templateId: string,
+    stages: WorkflowBpmnStage[],
+    transitions: WorkflowBpmnTransition[],
+    validation: WorkflowBpmnValidation,
+  ): Promise<WorkflowBpmnValidation> {
+    const definitions = await this.prisma.workflowVariableDefinition.findMany({
+      where: { templateId, deletedAt: null, isActive: true },
+      select: { code: true },
+    });
+    const registered = new Set([
+      ...WORKFLOW_DEFAULT_VARIABLES.map((item) => item.code),
+      ...definitions.map((item) => item.code),
+    ]);
+    const references = new Set<string>();
+    for (const stage of stages) {
+      this.collectWorkflowVariableReferences(stage.gatewayConfigJson, references);
+      const assignment = this.jsonRecord(stage.assignmentConfigJson);
+      const variablePath = String(assignment['variablePath'] ?? '').trim();
+      if (variablePath) references.add(variablePath);
+    }
+    for (const transition of transitions) {
+      this.collectWorkflowVariableReferences(transition.conditionJson, references);
+      for (const match of String(transition.conditionExpression ?? '').matchAll(/\$\{\s*([A-Za-z][A-Za-z0-9_.-]*)\s*\}/g)) {
+        references.add(match[1]);
+      }
+    }
+    const undefinedVariables = [...references]
+      .filter((code) => !registered.has(code))
+      .sort((a, b) => a.localeCompare(b));
+    if (!undefinedVariables.length) return validation;
+    const errors = [
+      ...validation.errors,
+      ...undefinedVariables.map((code) => `Workflow variable ${code} is used by this route but is not registered.`),
+    ];
+    return {
+      ...validation,
+      status: 'blocked',
+      errors: [...new Set(errors)],
+      readinessScore: Math.max(0, validation.readinessScore - undefinedVariables.length * 8),
+    };
+  }
+
+  private collectWorkflowVariableReferences(value: unknown, target: Set<string>): void {
+    if (Array.isArray(value)) {
+      value.forEach((item) => this.collectWorkflowVariableReferences(item, target));
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (['variable', 'path', 'field'].includes(key) && typeof child === 'string' && /^[A-Za-z][A-Za-z0-9_.-]*$/.test(child)) {
+        target.add(child);
+      } else {
+        this.collectWorkflowVariableReferences(child, target);
+      }
+    }
+  }
+
+  async listTemplateVariables(templateId: string, user: AuthUser) {
+    await this.assertTemplateVisible(templateId, user);
+    return this.prisma.workflowVariableDefinition.findMany({
+      where: { templateId, deletedAt: null, isActive: true },
+      orderBy: [{ scope: 'asc' }, { code: 'asc' }],
+    });
+  }
+
+  async upsertTemplateVariable(templateId: string, dto: UpsertWorkflowVariableDto, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const template = await this.assertTemplateVisible(templateId, user);
+    const code = dto.code.trim();
+    const registryKey = `${templateId}:${code.toLowerCase()}`;
+    const existing = await this.prisma.workflowVariableDefinition.findFirst({
+      where: { templateId, code: { equals: code, mode: 'insensitive' } },
+    });
+    const variable = await this.prisma.$transaction(async (tx) => {
+      const saved = existing
+        ? await tx.workflowVariableDefinition.update({
+            where: { id: existing.id },
+            data: {
+              registryKey,
+              code,
+              nameEn: dto.nameEn.trim(),
+              nameAr: dto.nameAr?.trim() || null,
+              description: dto.description?.trim() || null,
+              variableType: dto.variableType,
+              scope: dto.scope ?? 'case',
+              source: dto.source ?? 'designer',
+              defaultValueJson: dto.defaultValue === undefined ? Prisma.JsonNull : dto.defaultValue as Prisma.InputJsonValue,
+              allowedValuesJson: dto.allowedValues === undefined ? Prisma.JsonNull : dto.allowedValues as Prisma.InputJsonValue,
+              isRequired: dto.isRequired ?? false,
+              isActive: true,
+              deletedAt: null,
+              createdBy: existing.createdBy ?? user.email,
+            },
+          })
+        : await tx.workflowVariableDefinition.create({
+            data: {
+              registryKey,
+              templateId,
+              code,
+              nameEn: dto.nameEn.trim(),
+              nameAr: dto.nameAr?.trim() || null,
+              description: dto.description?.trim() || null,
+              variableType: dto.variableType,
+              scope: dto.scope ?? 'case',
+              source: dto.source ?? 'designer',
+              defaultValueJson: dto.defaultValue === undefined ? Prisma.JsonNull : dto.defaultValue as Prisma.InputJsonValue,
+              allowedValuesJson: dto.allowedValues === undefined ? Prisma.JsonNull : dto.allowedValues as Prisma.InputJsonValue,
+              isRequired: dto.isRequired ?? false,
+              createdBy: user.email,
+            },
+          });
+      await tx.workflowTemplate.update({
+        where: { id: templateId },
+        data: {
+          securityJson: this.workflowLifecycleMetadata('draft', user.email, template.securityJson, {
+            reviewStatus: 'not_submitted',
+            reviewModelSignature: null,
+            approvedModelSignature: null,
+            variableDefinitionChangedAt: new Date().toISOString(),
+          }) as Prisma.InputJsonValue,
+        },
+      });
+      return saved;
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: existing ? 'workflow_variable.update' : 'workflow_variable.create',
+      entityType: 'workflow_variable_definition',
+      entityId: variable.id,
+      metadata: { templateId, code, variableType: dto.variableType, scope: dto.scope ?? 'case' },
+    });
+    return variable;
+  }
+
+  async archiveTemplateVariable(templateId: string, variableId: string, user: AuthUser) {
+    this.assertWorkflowDesignerAdmin(user);
+    const template = await this.assertTemplateVisible(templateId, user);
+    const existing = await this.prisma.workflowVariableDefinition.findFirst({
+      where: { id: variableId, templateId, deletedAt: null },
+    });
+    if (!existing) throw new NotFoundException('workflow variable definition not found');
+    const archived = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.workflowVariableDefinition.update({
+        where: { id: variableId },
+        data: { isActive: false, deletedAt: new Date() },
+      });
+      await tx.workflowTemplate.update({
+        where: { id: templateId },
+        data: {
+          securityJson: this.workflowLifecycleMetadata('draft', user.email, template.securityJson, {
+            reviewStatus: 'not_submitted',
+            reviewModelSignature: null,
+            approvedModelSignature: null,
+            variableDefinitionChangedAt: new Date().toISOString(),
+          }) as Prisma.InputJsonValue,
+        },
+      });
+      return row;
+    });
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_variable.archive',
+      entityType: 'workflow_variable_definition',
+      entityId: variableId,
+      metadata: { templateId, code: existing.code },
+    });
+    return archived;
+  }
+
+  workflowAuditEventCatalog() {
+    return WORKFLOW_AUDIT_EVENT_CATALOG;
+  }
+
+  private workflowLifecycleMetadata(
+    state: string,
+    actor: string,
+    previous?: unknown,
+    extra: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    const current = this.jsonRecord(previous);
+    const existing = this.jsonRecord(current['workflowLifecycle']);
+    return {
+      ...current,
+      workflowLifecycle: {
+        ...existing,
+        state,
+        lastActor: actor,
+        lastChangedAt: new Date().toISOString(),
+        allowedStates: WORKFLOW_DESIGNER_LIFECYCLE.states,
+        designerRoles: WORKFLOW_DESIGNER_LIFECYCLE.roles.designer,
+        reviewerRoles: WORKFLOW_DESIGNER_LIFECYCLE.roles.reviewer,
+        publisherRoles: WORKFLOW_DESIGNER_LIFECYCLE.roles.publisher,
+        segregationOfDuties: WORKFLOW_DESIGNER_LIFECYCLE.segregationOfDuties,
+        ...extra,
+      },
+    };
+  }
+
+  private workflowLifecycle(previous?: unknown): Record<string, unknown> {
+    return this.jsonRecord(this.jsonRecord(previous)['workflowLifecycle']);
+  }
+
+  private workflowSnapshotSignature(bpmnXml: string, designerJson: unknown): string {
+    return createHmac('sha256', this.workflowSigningSecret())
       .update(this.canonicalWorkflowSnapshot(bpmnXml, designerJson))
       .digest('hex');
+  }
+
+  private workflowReviewSignature(bpmnXml: string): string {
+    return createHmac('sha256', this.workflowSigningSecret())
+      .update(JSON.stringify({ bpmnXml }))
+      .digest('hex');
+  }
+
+  private verifyWorkflowSnapshotSignature(bpmnXml: string, designerJson: unknown, signature?: string | null): boolean {
+    if (!signature) return false;
+    const expected = this.workflowSnapshotSignature(bpmnXml, designerJson);
     return expected === signature;
   }
 
@@ -1927,6 +3409,7 @@ export class WorkflowService implements OnModuleInit {
         code: true,
         title: true,
         assetId: true,
+        templateVersion: true,
         tasks: {
           where: { status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
           select: {
@@ -1991,6 +3474,21 @@ export class WorkflowService implements OnModuleInit {
         migratedTasks++;
       }
       if (caseTouched) migratedCases++;
+      if (!options.dryRun && wfCase.templateVersion !== template.designerVersion) {
+        await client.workflowCase.update({
+          where: { id: wfCase.id },
+          data: { templateVersion: template.designerVersion },
+        });
+        if (!caseTouched) migratedCases++;
+        await client.workflowEvent.create({
+          data: {
+            caseId: wfCase.id,
+            actor,
+            action: 'route.version_migration',
+            comment: `Workflow version ${wfCase.templateVersion} -> ${template.designerVersion}`,
+          },
+        });
+      }
       if (caseNeedsManualReview) manualReviewCases++;
     }
     return {
@@ -2024,7 +3522,7 @@ export class WorkflowService implements OnModuleInit {
       {
         code: 'intake',
         nameEn: 'Intake',
-        nameAr: 'Intake',
+        nameAr: 'الاستلام',
         description: 'Capture the request and context.',
         kind: 'intake',
         nodeType: 'user_task',
@@ -2051,7 +3549,7 @@ export class WorkflowService implements OnModuleInit {
       {
         code: 'review',
         nameEn: 'Review',
-        nameAr: 'Review',
+        nameAr: 'المراجعة',
         description: 'Review evidence, risk, and ownership.',
         kind: 'review',
         nodeType: 'user_task',
@@ -2064,7 +3562,7 @@ export class WorkflowService implements OnModuleInit {
         notificationRulesJson: [{ event: 'assigned', channel: 'in_app', audience: 'assignee' }],
         evidenceRequirementsJson: [{ name: 'Review evidence', required: false }],
         automationConfigJson: null,
-        gatewayConfigJson: { branches: ['approved', 'rejected'] },
+        gatewayConfigJson: { branches: ['approved', 'rejected', WORKFLOW_RETURN_FOR_CLARIFICATION], defaultPath: WORKFLOW_RETURN_FOR_CLARIFICATION },
         parallelGroup: null,
         sortOrder: 2,
         isStart: false,
@@ -2075,7 +3573,7 @@ export class WorkflowService implements OnModuleInit {
       {
         code: 'closure',
         nameEn: 'Closure',
-        nameAr: 'Closure',
+        nameAr: 'الإغلاق',
         description: 'Record the result and close the route.',
         kind: 'closure',
         nodeType: 'user_task',
@@ -2088,7 +3586,7 @@ export class WorkflowService implements OnModuleInit {
         notificationRulesJson: [{ event: 'completed', channel: 'in_app', audience: 'case_owner' }],
         evidenceRequirementsJson: [{ name: 'Final decision note', required: true }],
         automationConfigJson: null,
-        gatewayConfigJson: null,
+        gatewayConfigJson: { outcomes: workflowEndOutcomes() },
         parallelGroup: null,
         sortOrder: 3,
         isStart: false,
@@ -2103,7 +3601,7 @@ export class WorkflowService implements OnModuleInit {
     template: WorkflowTemplateWithRoute,
     validation = this.currentRouteValidation(template),
   ) {
-    const bpmnXml = template.bpmnXml ?? templateToBpmnXml(this.toBpmnTemplate(template));
+    const bpmnXml = this.designerBpmnXmlForTemplate(template);
     return {
       template,
       bpmnXml,
@@ -2127,12 +3625,36 @@ export class WorkflowService implements OnModuleInit {
     };
   }
 
+  private designerBpmnXmlForTemplate(template: WorkflowTemplateWithRoute): string {
+    if (this.shouldRegenerateSystemBpmnLayout(template)) {
+      return templateToBpmnXml(this.toBpmnTemplate(template));
+    }
+    return template.bpmnXml ?? templateToBpmnXml(this.toBpmnTemplate(template));
+  }
+
+  private shouldRegenerateSystemBpmnLayout(template: WorkflowTemplateWithRoute): boolean {
+    if (!template.isSystem || !template.bpmnXml) return false;
+    const security = this.jsonRecord(template.securityJson);
+    const designer = this.jsonRecord(template.designerJson);
+    const layoutVersion = String(security['bpmnLayoutVersion'] ?? designer['bpmnLayoutVersion'] ?? '');
+    if (layoutVersion === WORKFLOW_BPMN_LAYOUT_VERSION) return false;
+    const source = String(designer['source'] ?? '');
+    return !source || source.startsWith('route_seed') || ['generated_from_route', 'maintenance_signature', 'saved_bpmn'].includes(source);
+  }
+
   private enterpriseDesignerSummary(template: WorkflowTemplateWithRoute, validation: ReturnType<typeof validateWorkflowRoute>) {
     const stages = this.toBpmnTemplate(template).stages;
     const countBy = (predicate: (stage: WorkflowBpmnStage) => boolean) => stages.filter(predicate).length;
+    const finalStage = template.stages.find((stage) => stage.isActive && stage.isFinal) ?? null;
     return {
       readinessScore: validation.readinessScore,
       checklist: validation.checklist,
+      nodePalette: workflowNodePalette(),
+      connectorTypes: WORKFLOW_CONNECTOR_TYPES,
+      variableTypes: WORKFLOW_VARIABLE_TYPES,
+      defaultVariables: WORKFLOW_DEFAULT_VARIABLES,
+      endOutcomes: workflowEndOutcomes(finalStage),
+      designerLifecycle: WORKFLOW_DESIGNER_LIFECYCLE,
       coverage: {
         forms: countBy((stage) => Boolean(stage.formSchemaJson)),
         evidence: countBy((stage) => Boolean(stage.evidenceRequirementsJson)),
@@ -2143,8 +3665,9 @@ export class WorkflowService implements OnModuleInit {
       rulePacks: stages.map((stage) => ({
         code: stage.code,
         nameEn: stage.nameEn,
-        nodeType: stage.nodeType ?? 'user_task',
+        nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
         assignmentStrategy: stage.assignmentStrategy ?? 'role',
+        assignmentConfigured: Boolean(stage.assignmentConfigJson),
         assigneeRoleCode: stage.assigneeRoleCode ?? null,
         hasForm: Boolean(stage.formSchemaJson),
         hasEvidence: Boolean(stage.evidenceRequirementsJson),
@@ -2176,6 +3699,7 @@ export class WorkflowService implements OnModuleInit {
         nodeType: stage.nodeType,
         taskType: stage.taskType,
         assignmentStrategy: stage.assignmentStrategy,
+        assignmentConfigJson: stage.assignmentConfigJson,
         assigneeRoleCode: stage.assigneeRoleCode,
         dueDays: stage.dueDays,
         formSchemaJson: stage.formSchemaJson,
@@ -2197,9 +3721,12 @@ export class WorkflowService implements OnModuleInit {
         toStageId: transition.toStageId,
         labelEn: transition.labelEn,
         labelAr: transition.labelAr,
+        connectorType: normalizeWorkflowConnectorType(transition.connectorType),
         decision: transition.decision,
         conditionExpression: transition.conditionExpression,
         conditionJson: transition.conditionJson,
+        isDefaultPath: Boolean(transition.isDefaultPath) || isWorkflowDefaultPath(transition),
+        timeoutAfterSeconds: transition.timeoutAfterSeconds,
         isHappyPath: transition.isHappyPath,
         sortOrder: transition.sortOrder,
       })),
@@ -2218,6 +3745,7 @@ export class WorkflowService implements OnModuleInit {
       nodeType: stage.nodeType,
       taskType: stage.taskType,
       assignmentStrategy: stage.assignmentStrategy,
+      assignmentConfigJson: stage.assignmentConfigJson,
       assigneeRoleCode: stage.assigneeRoleCode,
       dueDays: stage.dueDays,
       formSchemaJson: stage.formSchemaJson,
@@ -2239,9 +3767,12 @@ export class WorkflowService implements OnModuleInit {
       toStageId: stageById.get(transition.toStageId)?.code ?? transition.toStageId,
       labelEn: transition.labelEn,
       labelAr: transition.labelAr,
+      connectorType: normalizeWorkflowConnectorType(transition.connectorType),
       decision: transition.decision,
       conditionExpression: transition.conditionExpression,
       conditionJson: transition.conditionJson,
+      isDefaultPath: Boolean(transition.isDefaultPath) || isWorkflowDefaultPath(transition),
+      timeoutAfterSeconds: transition.timeoutAfterSeconds,
       isHappyPath: transition.isHappyPath,
       sortOrder: transition.sortOrder,
     }));
@@ -2273,6 +3804,7 @@ export class WorkflowService implements OnModuleInit {
         nodeType: stage.nodeType ?? 'user_task',
         taskType: stage.taskType,
         assignmentStrategy: stage.assignmentStrategy ?? 'role',
+        assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         assigneeRoleCode: stage.assigneeRoleCode ?? null,
         dueDays: stage.dueDays,
         formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
@@ -2327,9 +3859,12 @@ export class WorkflowService implements OnModuleInit {
           toStageId,
           labelEn: transition.labelEn,
           labelAr: transition.labelAr || transition.labelEn,
+          connectorType: normalizeWorkflowConnectorType(transition.connectorType),
           decision: transition.decision ?? null,
           conditionExpression: transition.conditionExpression ?? null,
           conditionJson: (transition.conditionJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          isDefaultPath: Boolean(transition.isDefaultPath) || isWorkflowDefaultPath(transition),
+          timeoutAfterSeconds: transition.timeoutAfterSeconds ?? null,
           sortOrder: transition.sortOrder,
           isHappyPath: transition.isHappyPath,
           isActive: true,
@@ -2469,7 +4004,10 @@ export class WorkflowService implements OnModuleInit {
 
   private assertCaseCanChange(status: CaseStatus): void {
     if (FINAL_CASE_STATUSES.includes(status)) {
-      throw new BadRequestException('Closed, implemented, or rejected cases cannot be modified');
+      throw new BadRequestException('Closed, implemented, rejected, cancelled, or failed cases cannot be modified');
+    }
+    if (status === CASE_STATUS_SUSPENDED) {
+      throw new BadRequestException('Suspended workflow cases must be resumed before task decisions or edits');
     }
   }
 
@@ -2481,10 +4019,23 @@ export class WorkflowService implements OnModuleInit {
   }
 
   private assertKnownCaseStatus(status: string): CaseStatus {
-    if (!Object.values(CaseStatus).includes(status as CaseStatus)) {
+    if (!Object.values(CaseStatus).includes(status as CaseStatus) && ![CASE_STATUS_SUSPENDED, CASE_STATUS_CANCELLED, CASE_STATUS_FAILED].includes(status as CaseStatus)) {
       throw new BadRequestException('Invalid workflow case status');
     }
     return status as CaseStatus;
+  }
+
+  private resumeStatusFromSuspension(status?: CaseStatus | string | null): CaseStatus {
+    const candidate = String(status ?? '');
+    if (
+      candidate &&
+      candidate !== CASE_STATUS_SUSPENDED &&
+      !FINAL_CASE_STATUSES.includes(candidate as CaseStatus) &&
+      (Object.values(CaseStatus).includes(candidate as CaseStatus) || CASE_TRANSITIONS[candidate])
+    ) {
+      return candidate as CaseStatus;
+    }
+    return CaseStatus.submitted;
   }
 
   private assertKnownCaseType(type: string): string {
@@ -2643,15 +4194,138 @@ export class WorkflowService implements OnModuleInit {
     };
   }
 
-  /** Generates the next human-friendly case code, retrying on the rare collision. */
-  private async nextCaseCode(): Promise<string> {
-    const count = await this.prisma.workflowCase.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `WFC-${String(count + i).padStart(4, '0')}`;
-      const exists = await this.prisma.workflowCase.findUnique({ where: { code } });
-      if (!exists) return code;
+  async getCaseTokenTrace(roleCodes: string[], id: string, viewer?: AuthUser) {
+    const wfCase = await this.prisma.workflowCase.findUnique({ where: { id } });
+    if (!wfCase) throw new NotFoundException('workflow case not found');
+    await this.assertCaseVisible(roleCodes, wfCase, viewer ?? wfCase.createdBy);
+    const tokens = await this.prisma.workflowRuntimeToken.findMany({
+      where: { caseId: id },
+      include: {
+        templateStage: { select: { id: true, code: true, nameEn: true, nodeType: true, isDecision: true, isFinal: true } },
+        task: { select: { id: true, title: true, status: true, decision: true, completedAt: true } },
+      },
+      orderBy: [{ activatedAt: 'asc' }, { createdAt: 'asc' }],
+    });
+    const executions = await this.prisma.workflowExecutionAttempt.findMany({
+      where: { caseId: id },
+      select: {
+        id: true, taskId: true, executionKind: true, status: true, attemptCount: true, maxAttempts: true,
+        nextAttemptAt: true, outcome: true, errorCode: true, errorMessage: true, resultJson: true,
+        startedAt: true, completedAt: true, createdAt: true,
+      },
+      orderBy: [{ createdAt: 'asc' }],
+    });
+    const byId = new Map(tokens.map((token) => [token.id, token]));
+    return {
+      caseId: id,
+      tokens: tokens.map((token) => ({
+        id: token.id,
+        instanceKey: token.instanceKey,
+        state: token.state,
+        tokenType: token.tokenType,
+        parentTokenId: token.parentTokenId,
+        rootTokenId: token.rootTokenId,
+        branchKey: token.branchKey,
+        branchIndex: token.branchIndex,
+        joinKey: token.joinKey,
+        sourceTransitionId: token.sourceTransitionId,
+        parallelGroup: token.parallelGroup,
+        stage: token.templateStage,
+        task: token.task,
+        dataJson: token.dataJson,
+        activatedAt: token.activatedAt,
+        completedAt: token.completedAt,
+        parentStageCode: token.parentTokenId ? byId.get(token.parentTokenId)?.templateStage?.code ?? null : null,
+      })),
+      lineage: tokens.map((token) => ({
+        id: token.id,
+        parentTokenId: token.parentTokenId,
+        rootTokenId: token.rootTokenId ?? token.id,
+        branchKey: token.branchKey,
+        joinKey: token.joinKey,
+        state: token.state,
+      })),
+      executions,
+    };
+  }
+
+  async retryExecutionAttempt(id: string, user: AuthUser) {
+    const attempt = await this.prisma.workflowExecutionAttempt.findUnique({
+      where: { id },
+      include: { case: true, task: true, templateStage: { select: { code: true, nameEn: true } } },
+    });
+    if (!attempt) throw new NotFoundException('workflow execution attempt not found');
+    await this.assertCaseVisible(user.roles, attempt.case, user);
+    this.assertCaseCanChange(attempt.case.status as CaseStatus);
+    if (!['failed', 'cancelled'].includes(attempt.status)) {
+      throw new BadRequestException('Only failed or cancelled workflow execution attempts can be retried');
     }
-    return `WFC-${Date.now()}`;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.workflowTask.update({
+        where: { id: attempt.taskId },
+        data: {
+          status: TaskStatus.pending,
+          decision: null,
+          decisionComment: null,
+          completedAt: null,
+        },
+      });
+      const row = await tx.workflowExecutionAttempt.update({
+        where: { id },
+        data: {
+          status: 'queued',
+          nextAttemptAt: new Date(),
+          startedAt: null,
+          completedAt: null,
+          outcome: null,
+          errorCode: null,
+          errorMessage: null,
+          resultJson: {
+            retryRequestedBy: user.email,
+            retryRequestedAt: new Date().toISOString(),
+            previousStatus: attempt.status,
+            previousErrorCode: attempt.errorCode ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.workflowEvent.create({
+        data: {
+          caseId: attempt.caseId,
+          taskId: attempt.taskId,
+          actor: user.email,
+          action: 'route.automation.retry_requested',
+          comment: attempt.errorMessage ?? attempt.templateStage.nameEn,
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'workflow_execution.retry',
+          entityType: 'workflow_execution_attempt',
+          entityId: id,
+          metadata: {
+            caseId: attempt.caseId,
+            taskId: attempt.taskId,
+            templateStageCode: attempt.templateStage.code,
+            previousStatus: attempt.status,
+            previousErrorCode: attempt.errorCode ?? null,
+          },
+        },
+        tx,
+      );
+      return row;
+    });
+    return updated;
+  }
+
+  /** Generates a human-friendly case code with an atomic database counter. */
+  private async nextCaseCode(): Promise<string> {
+    return nextAvailableBusinessCode(
+      this.prisma,
+      'workflow_case',
+      (value) => `WFC-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await this.prisma.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextCaseCodeForClient(
@@ -2659,16 +4333,19 @@ export class WorkflowService implements OnModuleInit {
     preferredCode?: string | null,
   ): Promise<string> {
     if (preferredCode) {
-      const existing = await client.workflowCase.findUnique({ where: { code: preferredCode } });
-      if (!existing) return preferredCode;
+      return nextAvailableBusinessCode(
+        client,
+        `workflow_case:preferred:${preferredCode}`,
+        (value) => value === 1n ? preferredCode : `${preferredCode}-${formatBusinessSequence(value, 4)}`,
+        async (code) => !(await client.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+      );
     }
-    const count = await client.workflowCase.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `WFC-${String(count + i).padStart(4, '0')}`;
-      const exists = await client.workflowCase.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `WFC-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      client,
+      'workflow_case',
+      (value) => `WFC-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await client.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private dueDateForStage(stage: WorkflowStageRouteNode, override?: Date | null): Date | null {
@@ -2685,7 +4362,13 @@ export class WorkflowService implements OnModuleInit {
     caseId: string,
     stage: WorkflowStageWithRoute,
     actor: string,
-    options: { assetId?: string | null; assigneeUserId?: string | null; dueDate?: Date | null; title?: string | null } = {},
+    options: {
+      assetId?: string | null;
+      assigneeUserId?: string | null;
+      dueDate?: Date | null;
+      title?: string | null;
+      tokenLineage?: WorkflowTokenLineageContext;
+    } = {},
   ) {
     const approvalConfig = this.approvalExecutionConfig(stage);
     if (options.assigneeUserId === undefined && approvalConfig.mode === 'parallel' && approvalConfig.roleCodes.length > 1) {
@@ -2698,6 +4381,7 @@ export class WorkflowService implements OnModuleInit {
           assigneeRoleCode: roleCode,
           approvalGroupId: groupId,
           approvalMode: 'parallel',
+          tokenLineage: options.tokenLineage,
         }));
       }
       await client.workflowEvent.create({
@@ -2716,6 +4400,7 @@ export class WorkflowService implements OnModuleInit {
         assigneeRoleCode: approvalConfig.roleCodes[0],
         approvalGroupId: randomUUID(),
         approvalMode: 'sequential',
+        tokenLineage: options.tokenLineage,
       });
     }
     return this.createSingleStageTask(client, caseId, stage, actor, options);
@@ -2734,13 +4419,14 @@ export class WorkflowService implements OnModuleInit {
       assigneeRoleCode?: string | null;
       approvalGroupId?: string | null;
       approvalMode?: string | null;
+      tokenLineage?: WorkflowTokenLineageContext;
     } = {},
   ) {
     const targetRoleCode = options.assigneeRoleCode ?? stage.assigneeRoleCode ?? null;
     const assigneeUserId =
       options.assigneeUserId !== undefined
         ? options.assigneeUserId
-        : await this.assigneeForRole(client, targetRoleCode, options.assetId ?? null);
+        : await this.resolveStageAssignee(client, caseId, stage, targetRoleCode, options.assetId ?? null);
     const task = await client.workflowTask.create({
       data: {
         caseId,
@@ -2764,8 +4450,275 @@ export class WorkflowService implements OnModuleInit {
         comment: stage.nameEn,
       },
     });
-    await this.recordRuntimeTokenForTask(client, task, stage, actor, options.approvalMode ?? null, options.approvalGroupId ?? null);
+    if ((stage.assignmentStrategy ?? 'role') !== 'role') {
+      await client.workflowEvent.create({
+        data: {
+          caseId,
+          taskId: task.id,
+          actor,
+          action: 'route.stage.assignment.resolved',
+          comment: `${stage.assignmentStrategy}:${assigneeUserId ?? targetRoleCode ?? 'unassigned'}`,
+        },
+      });
+    }
+    await this.recordRuntimeTokenForTask(
+      client,
+      task,
+      stage,
+      actor,
+      options.approvalMode ?? null,
+      options.approvalGroupId ?? null,
+      options.tokenLineage,
+    );
+    if (isAutomatedWorkflowStage(stage)) {
+      await this.enqueueStageExecution(client, task, stage, actor);
+    }
     return task;
+  }
+
+  private executionKindForStage(stage: { nodeType?: string | null }): string {
+    return String(stage.nodeType ?? 'automated_task').trim().toLowerCase() || 'automated_task';
+  }
+
+  private executionScheduleForStage(stage: { nodeType?: string | null; automationConfigJson?: unknown | null }): Date {
+    const config = this.jsonRecord(stage.automationConfigJson);
+    const explicitDueAt = typeof config['dueAt'] === 'string' ? new Date(config['dueAt']) : null;
+    if (explicitDueAt && !Number.isNaN(explicitDueAt.getTime())) return explicitDueAt;
+    const delaySeconds = Math.min(Math.max(Number(config['delaySeconds'] ?? 0), 0), 31_536_000);
+    return new Date(Date.now() + delaySeconds * 1000);
+  }
+
+  private async enqueueStageExecution(
+    client: Prisma.TransactionClient,
+    task: { id: string; caseId: string },
+    stage: WorkflowStageWithRoute,
+    actor: string,
+  ): Promise<void> {
+    const config = this.jsonRecord(stage.automationConfigJson);
+    const maxAttempts = Math.min(Math.max(Number(config['maxAttempts'] ?? 3), 1), 8);
+    await client.workflowExecutionAttempt.create({
+      data: {
+        idempotencyKey: `workflow:${task.caseId}:${stage.id}:${task.id}`,
+        caseId: task.caseId,
+        taskId: task.id,
+        templateStageId: stage.id,
+        executionKind: this.executionKindForStage(stage),
+        maxAttempts,
+        nextAttemptAt: this.executionScheduleForStage(stage),
+        inputJson: config as Prisma.InputJsonValue,
+        createdBy: actor,
+      },
+    });
+    await client.workflowEvent.create({
+      data: {
+        caseId: task.caseId,
+        taskId: task.id,
+        actor,
+        action: 'route.automation.queued',
+        comment: `${stage.nameEn} (${this.executionKindForStage(stage)})`,
+      },
+    });
+  }
+
+  /** Executes a bounded batch of durable system-node attempts. Claiming is
+   * conditional, so concurrent API instances cannot process the same attempt. */
+  async processRunnableExecutions(limit = 50): Promise<{ processed: number; succeeded: number; retried: number; failed: number; waiting: number }> {
+    if (this.executionWorkerRunning) return { processed: 0, succeeded: 0, retried: 0, failed: 0, waiting: 0 };
+    this.executionWorkerRunning = true;
+    const summary = { processed: 0, succeeded: 0, retried: 0, failed: 0, waiting: 0 };
+    try {
+      const now = new Date();
+      const attempts = await this.prisma.workflowExecutionAttempt.findMany({
+        where: {
+          OR: [
+            { status: { in: ['queued', 'retrying'] }, nextAttemptAt: { lte: now } },
+            { status: 'waiting_child' },
+          ],
+        },
+        orderBy: [{ nextAttemptAt: 'asc' }, { createdAt: 'asc' }],
+        take: Math.min(Math.max(limit, 1), 100),
+        select: { id: true, status: true },
+      });
+      for (const attempt of attempts) {
+        const result = attempt.status === 'waiting_child'
+          ? await this.resumeSubWorkflowAttempt(attempt.id)
+          : await this.claimAndExecuteAttempt(attempt.id);
+        summary.processed += result.processed;
+        summary.succeeded += result.succeeded;
+        summary.retried += result.retried;
+        summary.failed += result.failed;
+        summary.waiting += result.waiting;
+      }
+    } catch (error) {
+      this.logger.warn(`Workflow execution runner failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.executionWorkerRunning = false;
+    }
+    return summary;
+  }
+
+  private async claimAndExecuteAttempt(id: string): Promise<{ processed: number; succeeded: number; retried: number; failed: number; waiting: number }> {
+    const claimed = await this.prisma.workflowExecutionAttempt.updateMany({
+      where: { id, status: { in: ['queued', 'retrying'] }, nextAttemptAt: { lte: new Date() } },
+      data: { status: 'running', startedAt: new Date(), attemptCount: { increment: 1 } },
+    });
+    if (!claimed.count) return { processed: 0, succeeded: 0, retried: 0, failed: 0, waiting: 0 };
+    const attempt = await this.prisma.workflowExecutionAttempt.findUnique({
+      where: { id },
+      include: { task: { include: { case: true, templateStage: true } }, templateStage: true },
+    });
+    if (!attempt || !attempt.task.templateStage) return { processed: 1, succeeded: 0, retried: 0, failed: 1, waiting: 0 };
+    if ((attempt.task.case.status as CaseStatus) === CASE_STATUS_SUSPENDED) {
+      await this.prisma.workflowExecutionAttempt.update({
+        where: { id },
+        data: { status: 'paused', startedAt: null },
+      });
+      return { processed: 1, succeeded: 0, retried: 0, failed: 0, waiting: 1 };
+    }
+    const config = this.jsonRecord(attempt.inputJson);
+    try {
+      if (attempt.executionKind === 'sub_workflow') {
+        const childTemplateId = typeof config['templateId'] === 'string' ? config['templateId'].trim() : '';
+        if (!childTemplateId) throw new BadRequestException('Sub-workflow node requires automationConfig.templateId');
+        const childTemplate = await this.prisma.workflowTemplate.findFirst({
+          where: { id: childTemplateId, isActive: true, deletedAt: null },
+          select: { id: true, caseType: true, nameEn: true },
+        });
+        if (!childTemplate) throw new BadRequestException('Configured sub-workflow template is not published');
+        const child = await this.prisma.$transaction((tx) => this.openRoutedCaseWithClient(tx, {
+          roleCodes: ADMIN_ROLES,
+          actor: 'system@workflow.dgop.local',
+          title: `${attempt.task.case.title}: ${childTemplate.nameEn}`,
+          description: `Invoked by ${attempt.task.case.code} at stage ${attempt.templateStage.code}`,
+          type: childTemplate.caseType,
+          assetId: attempt.task.case.assetId,
+          templateId: childTemplate.id,
+          status: CaseStatus.submitted,
+        }));
+        await this.prisma.$transaction(async (tx) => {
+          await tx.workflowExecutionAttempt.update({
+            where: { id },
+            data: { status: 'waiting_child', resultJson: { childCaseId: child.id, childCaseCode: child.code, parentCaseId: attempt.caseId, variableMapping: config['variableMapping'] ?? {} } as Prisma.InputJsonValue },
+          });
+          await tx.workflowEvent.create({ data: { caseId: attempt.caseId, taskId: attempt.taskId, actor: 'system@workflow.dgop.local', action: 'route.sub_workflow.started', comment: child.code } });
+        });
+        return { processed: 1, succeeded: 0, retried: 0, failed: 0, waiting: 1 };
+      }
+      const forcedFailure = config['simulateFailure'] === true || Number(config['failUntilAttempt'] ?? 0) >= attempt.attemptCount;
+      if (forcedFailure) throw new Error('Configured automation failure for resilience validation');
+      if (attempt.executionKind === 'notification_task') await this.persistNodeNotification(attempt.id, attempt.caseId, attempt.taskId, attempt.templateStage, config);
+      const outcome = attempt.executionKind === 'timer_event' ? 'timeout' : 'approved';
+      await this.completeExecutionAttempt(id, outcome, { nodeType: attempt.executionKind, configurationAction: config['action'] ?? 'noop' });
+      return { processed: 1, succeeded: 1, retried: 0, failed: 0, waiting: 0 };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const retry = attempt.attemptCount < attempt.maxAttempts;
+      const nextAttemptAt = new Date(Date.now() + Math.min(60_000 * 2 ** Math.max(attempt.attemptCount - 1, 0), 15 * 60_000));
+      await this.prisma.$transaction(async (tx) => {
+        await tx.workflowExecutionAttempt.update({
+          where: { id },
+          data: retry
+            ? { status: 'retrying', nextAttemptAt, errorCode: 'execution_failed', errorMessage: message }
+            : { status: 'failed', completedAt: new Date(), outcome: 'failed', errorCode: 'execution_failed', errorMessage: message },
+        });
+        await tx.workflowEvent.create({ data: { caseId: attempt.caseId, taskId: attempt.taskId, actor: 'system@workflow.dgop.local', action: retry ? 'route.automation.retry_scheduled' : 'route.automation.failed', comment: message } });
+      });
+      if (!retry) await this.completeExecutionAttempt(id, 'rejected', { errorCode: 'execution_failed' }, ['failed']);
+      return { processed: 1, succeeded: 0, retried: retry ? 1 : 0, failed: retry ? 0 : 1, waiting: 0 };
+    }
+  }
+
+  private async resumeSubWorkflowAttempt(id: string): Promise<{ processed: number; succeeded: number; retried: number; failed: number; waiting: number }> {
+    const attempt = await this.prisma.workflowExecutionAttempt.findUnique({ where: { id } });
+    const result = this.jsonRecord(attempt?.resultJson);
+    const childCaseId = typeof result['childCaseId'] === 'string' ? result['childCaseId'] : null;
+    if (!attempt || !childCaseId) return { processed: 0, succeeded: 0, retried: 0, failed: 0, waiting: 0 };
+    const child = await this.prisma.workflowCase.findUnique({ where: { id: childCaseId }, select: { status: true } });
+    if (!child || !FINAL_CASE_STATUSES.includes(child.status)) return { processed: 1, succeeded: 0, retried: 0, failed: 0, waiting: 1 };
+    const outcome = child.status === CaseStatus.rejected ? 'rejected' : 'approved';
+    const completed = await this.completeExecutionAttempt(
+      id,
+      outcome,
+      { childCaseId, childStatus: child.status },
+      ['waiting_child'],
+    );
+    if (!completed) return { processed: 0, succeeded: 0, retried: 0, failed: 0, waiting: 0 };
+    return { processed: 1, succeeded: outcome === 'approved' ? 1 : 0, retried: 0, failed: outcome === 'rejected' ? 1 : 0, waiting: 0 };
+  }
+
+  private async persistNodeNotification(
+    attemptId: string,
+    caseId: string,
+    taskId: string,
+    stage: { nameEn: string; notificationRulesJson?: unknown | null },
+    config: Record<string, unknown>,
+  ): Promise<void> {
+    const rules = Array.isArray(stage.notificationRulesJson) ? stage.notificationRulesJson : [];
+    const firstRule = this.jsonRecord(rules[0]);
+    const channels = Array.isArray(firstRule['channels']) ? firstRule['channels'] : [firstRule['channel'] ?? config['channel'] ?? 'in_app'];
+    const validChannels = channels.map(String).filter((channel) => Object.values(GovernanceNotificationChannel).includes(channel as GovernanceNotificationChannel));
+    await this.prisma.governanceNotification.create({
+      data: {
+        dedupeKey: `workflow-execution:${attemptId}`,
+        title: String(config['title'] ?? `${stage.nameEn} completed`),
+        message: String(config['message'] ?? `Workflow node ${stage.nameEn} completed successfully.`),
+        severity: GovernanceNotificationSeverity.info,
+        sourceType: 'workflow_execution',
+        sourceId: attemptId,
+        workflowCaseId: caseId,
+        workflowTaskId: taskId,
+        createdBy: 'system@workflow.dgop.local',
+        deliveryAttempts: { create: (validChannels.length ? validChannels : ['in_app']).map((channel) => ({ channel: channel as GovernanceNotificationChannel, status: GovernanceNotificationDeliveryStatus.planned, provider: 'workflow_node', target: String(firstRule['audience'] ?? 'case_owner'), attemptCount: 0 })) },
+      },
+    });
+  }
+
+  private async completeExecutionAttempt(
+    id: string,
+    outcome: 'approved' | 'rejected' | 'timeout',
+    result: Record<string, unknown>,
+    expectedStatuses: string[] = ['running'],
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.workflowExecutionAttempt.updateMany({
+        where: { id, status: { in: expectedStatuses } },
+        data: { status: 'completing' },
+      });
+      if (claimed.count !== 1) return false;
+      const attempt = await tx.workflowExecutionAttempt.findUnique({
+        where: { id },
+        include: { task: { include: { case: true, templateStage: true } }, templateStage: true },
+      });
+      if (!attempt || !attempt.task.templateStage) {
+        throw new Error(`Workflow execution attempt ${id} is missing its routed task or template stage`);
+      }
+      if (attempt.task.status === TaskStatus.completed) {
+        await tx.workflowExecutionAttempt.update({
+          where: { id },
+          data: {
+            status: outcome === 'rejected' ? 'failed' : 'succeeded',
+            completedAt: new Date(),
+            outcome,
+            resultJson: result as Prisma.InputJsonValue,
+          },
+        });
+        return true;
+      }
+      const routePlan = await this.planRouteAdvance(tx, attempt.task, outcome as WorkflowDecisionValue);
+      await tx.workflowTask.update({
+        where: { id: attempt.taskId },
+        data: { status: TaskStatus.completed, decision: outcome === 'timeout' ? null : outcome as TaskDecision, decisionComment: `System execution outcome: ${outcome}`, completedAt: new Date() },
+      });
+      await tx.workflowExecutionAttempt.update({
+        where: { id },
+        data: { status: outcome === 'rejected' ? 'failed' : 'succeeded', completedAt: new Date(), outcome, resultJson: result as Prisma.InputJsonValue },
+      });
+      await tx.workflowEvent.create({ data: { caseId: attempt.caseId, taskId: attempt.taskId, actor: 'system@workflow.dgop.local', action: `route.automation.${outcome}`, comment: attempt.templateStage.nameEn } });
+      await this.completeRuntimeTokensForTask(tx, attempt.taskId);
+      await this.applyRouteAdvance(tx, attempt.task, routePlan, 'system@workflow.dgop.local', outcome as WorkflowDecisionValue);
+      await this.audit.log({ actor: 'system@workflow.dgop.local', action: 'workflow_execution.completed', entityType: 'workflow_execution_attempt', entityId: id, metadata: { caseId: attempt.caseId, taskId: attempt.taskId, outcome } }, tx);
+      return true;
+    });
   }
 
   private approvalExecutionConfig(stage: { gatewayConfigJson?: unknown | null; parallelGroup?: string | null; assigneeRoleCode?: string | null }) {
@@ -2794,6 +4747,7 @@ export class WorkflowService implements OnModuleInit {
     actor: string,
     approvalMode?: string | null,
     approvalGroupId?: string | null,
+    lineage: WorkflowTokenLineageContext = {},
   ): Promise<void> {
     const runtimeToken = (client as unknown as { workflowRuntimeToken?: { create: (args: unknown) => Promise<unknown> } }).workflowRuntimeToken;
     if (!runtimeToken) return;
@@ -2804,13 +4758,25 @@ export class WorkflowService implements OnModuleInit {
           caseId: task.caseId,
           taskId: task.id,
           templateStageId: stage.id,
+          parentTokenId: lineage.parentTokenId ?? null,
+          rootTokenId: lineage.rootTokenId ?? lineage.parentTokenId ?? null,
+          branchKey: lineage.branchKey ?? null,
+          branchIndex: lineage.branchIndex ?? null,
+          joinKey: lineage.joinKey ?? null,
+          sourceTransitionId: lineage.sourceTransitionId ?? null,
           state: 'active',
           tokenType: approvalMode ? 'approval' : 'stage',
-          parallelGroup: approvalGroupId ?? stage.parallelGroup ?? null,
+          parallelGroup: approvalGroupId ?? lineage.joinKey ?? stage.parallelGroup ?? null,
           dataJson: {
             stageCode: stage.code,
             actor,
             approvalMode: approvalMode ?? null,
+            parentTokenId: lineage.parentTokenId ?? null,
+            rootTokenId: lineage.rootTokenId ?? lineage.parentTokenId ?? null,
+            branchKey: lineage.branchKey ?? null,
+            branchIndex: lineage.branchIndex ?? null,
+            joinKey: lineage.joinKey ?? null,
+            sourceTransitionId: lineage.sourceTransitionId ?? null,
           } as Prisma.InputJsonValue,
         },
       });
@@ -2826,6 +4792,90 @@ export class WorkflowService implements OnModuleInit {
       where: { taskId, state: 'active' },
       data: { state: 'completed', completedAt: new Date() },
     });
+  }
+
+  private async latestRuntimeTokenForTask(
+    client: Prisma.TransactionClient,
+    taskId?: string | null,
+  ): Promise<{ id: string; rootTokenId: string | null; branchKey: string | null; joinKey: string | null } | null> {
+    if (!taskId) return null;
+    const runtimeToken = (
+      client as unknown as {
+        workflowRuntimeToken?: {
+          findFirst: (args: unknown) => Promise<{ id: string; rootTokenId: string | null; branchKey: string | null; joinKey: string | null } | null>;
+        };
+      }
+    ).workflowRuntimeToken;
+    if (!runtimeToken?.findFirst) return null;
+    return runtimeToken.findFirst({
+      where: { taskId },
+      orderBy: [{ completedAt: 'desc' }, { updatedAt: 'desc' }],
+      select: { id: true, rootTokenId: true, branchKey: true, joinKey: true },
+    });
+  }
+
+  private averageHours(spans: Array<{ start: Date; end: Date }>): number {
+    if (!spans.length) return 0;
+    const totalMs = spans.reduce((sum, span) => sum + Math.max(0, span.end.getTime() - span.start.getTime()), 0);
+    return Math.round((totalMs / spans.length / 3_600_000) * 10) / 10;
+  }
+
+  private countBy<T>(rows: T[], keyOf: (row: T) => string): Array<{ key: string; count: number }> {
+    const buckets = new Map<string, number>();
+    for (const row of rows) {
+      const key = keyOf(row) || 'Unmapped';
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    return [...buckets.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  }
+
+  private countTasksByStage(
+    tasks: Array<{
+      status: TaskStatus;
+      dueDate: Date | null;
+      createdAt: Date;
+      completedAt: Date | null;
+      wfCase: { template?: { nameEn: string } | null; type: string };
+      templateStage?: { code: string; nameEn: string } | null;
+    }>,
+  ): Map<string, {
+    stage: string;
+    workflow: string;
+    total: number;
+    open: number;
+    completed: number;
+    overdue: number;
+    completedSpans: Array<{ start: Date; end: Date }>;
+  }> {
+    const now = Date.now();
+    const buckets = new Map<string, {
+      stage: string;
+      workflow: string;
+      total: number;
+      open: number;
+      completed: number;
+      overdue: number;
+      completedSpans: Array<{ start: Date; end: Date }>;
+    }>();
+    for (const task of tasks) {
+      const workflow = task.wfCase.template?.nameEn ?? task.wfCase.type;
+      const stage = task.templateStage?.nameEn ?? task.templateStage?.code ?? task.status;
+      const key = `${workflow}:${stage}`;
+      const bucket = buckets.get(key) ?? { stage, workflow, total: 0, open: 0, completed: 0, overdue: 0, completedSpans: [] };
+      bucket.total++;
+      if (task.status === TaskStatus.pending || task.status === TaskStatus.in_progress) {
+        bucket.open++;
+        if (task.dueDate && task.dueDate.getTime() < now) bucket.overdue++;
+      }
+      if (task.completedAt) {
+        bucket.completed++;
+        bucket.completedSpans.push({ start: task.createdAt, end: task.completedAt });
+      }
+      buckets.set(key, bucket);
+    }
+    return buckets;
   }
 
   private jsonRecord(value: unknown): Record<string, unknown> {
@@ -2906,6 +4956,7 @@ export class WorkflowService implements OnModuleInit {
         type: input.type ?? route?.template.caseType ?? 'general',
         status: input.status ?? CaseStatus.draft,
         templateId: route?.template.id ?? null,
+        templateVersion: route?.template.designerVersion ?? 1,
         assetId: input.assetId ?? null,
         assignmentId: input.assignmentId ?? null,
         createdBy: input.actor,
@@ -3009,6 +5060,105 @@ export class WorkflowService implements OnModuleInit {
     return updated;
   }
 
+  async controlCase(id: string, action: 'suspend' | 'resume' | 'cancel', dto: WorkflowCaseControlDto, user: AuthUser) {
+    const existing = await this.prisma.workflowCase.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('workflow case not found');
+    await this.assertCaseVisible(user.roles, existing, user);
+    const currentStatus = existing.status as CaseStatus;
+    const reason = dto.reason?.trim() ?? '';
+    if ((action === 'suspend' || action === 'cancel') && !reason) {
+      throw new BadRequestException(`Workflow ${action} requires a reason`);
+    }
+    if (action === 'suspend') {
+      this.assertCaseCanChange(currentStatus);
+      if (currentStatus === CASE_STATUS_SUSPENDED) throw new BadRequestException('Workflow case is already suspended');
+    }
+    if (action === 'resume' && currentStatus !== CASE_STATUS_SUSPENDED) {
+      throw new BadRequestException('Only suspended workflow cases can be resumed');
+    }
+    if (action === 'cancel' && FINAL_CASE_STATUSES.includes(currentStatus)) {
+      throw new BadRequestException('Final workflow cases cannot be cancelled');
+    }
+
+    const previous = action === 'resume'
+      ? await this.prisma.workflowEvent.findFirst({
+        where: { caseId: id, action: 'case.control.suspend' },
+        orderBy: { createdAt: 'desc' },
+        select: { fromStatus: true },
+      })
+      : null;
+    const resumeStatus = this.resumeStatusFromSuspension(previous?.fromStatus);
+    const nextStatus =
+      action === 'suspend'
+        ? CASE_STATUS_SUSPENDED
+        : action === 'cancel'
+          ? CASE_STATUS_CANCELLED
+          : resumeStatus;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.workflowCase.update({
+        where: { id },
+        data: { status: nextStatus },
+        include: caseInclude,
+      });
+      if (action === 'suspend') {
+        await tx.workflowRuntimeToken.updateMany({
+          where: { caseId: id, state: { in: ['active', 'waiting', 'queued'] } },
+          data: { state: 'suspended' },
+        });
+        await tx.workflowExecutionAttempt.updateMany({
+          where: { caseId: id, status: { in: ['queued', 'retrying', 'running', 'waiting_child'] } },
+          data: { status: 'paused' },
+        });
+      } else if (action === 'resume') {
+        await tx.workflowRuntimeToken.updateMany({
+          where: { caseId: id, state: 'suspended' },
+          data: { state: 'active' },
+        });
+        await tx.workflowExecutionAttempt.updateMany({
+          where: { caseId: id, status: 'paused' },
+          data: { status: 'queued', nextAttemptAt: new Date() },
+        });
+      } else {
+        const now = new Date();
+        await tx.workflowTask.updateMany({
+          where: { caseId: id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
+          data: { status: TaskStatus.cancelled, completedAt: now, decisionComment: reason },
+        });
+        await tx.workflowRuntimeToken.updateMany({
+          where: { caseId: id, completedAt: null },
+          data: { state: 'cancelled', completedAt: now },
+        });
+        await tx.workflowExecutionAttempt.updateMany({
+          where: { caseId: id, status: { notIn: ['succeeded', 'failed', 'cancelled'] } },
+          data: { status: 'cancelled', completedAt: now, outcome: 'cancelled', resultJson: { reason } as Prisma.InputJsonValue },
+        });
+      }
+      await tx.workflowEvent.create({
+        data: {
+          caseId: id,
+          actor: user.email,
+          action: `case.control.${action}`,
+          fromStatus: currentStatus,
+          toStatus: nextStatus,
+          comment: reason || (action === 'resume' ? 'Workflow execution resumed from suspended state.' : null),
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: `workflow_case.${action}`,
+          entityType: 'workflow_case',
+          entityId: id,
+          metadata: { fromStatus: currentStatus, toStatus: nextStatus, reason: reason || null },
+        },
+        tx,
+      );
+      return row;
+    });
+    return updated;
+  }
+
   async recordDomainCaseProgress(
     input: {
       caseId: string;
@@ -3087,7 +5237,7 @@ export class WorkflowService implements OnModuleInit {
       taskId: string;
       roleCodes: string[];
       actor: string;
-      decision: TaskDecision;
+      decision: WorkflowDecisionValue;
       comment?: string | null;
       eventAction: string;
     },
@@ -3111,7 +5261,7 @@ export class WorkflowService implements OnModuleInit {
         where: { id: input.taskId },
         data: {
           status: TaskStatus.completed,
-          decision: input.decision,
+          decision: input.decision === WORKFLOW_RETURN_FOR_CLARIFICATION ? null : input.decision as TaskDecision,
           decisionComment: input.comment ?? null,
           completedAt: new Date(),
         },
@@ -3157,7 +5307,12 @@ export class WorkflowService implements OnModuleInit {
           action: 'workflow_task.domain_decision',
           entityType: 'workflow_task',
           entityId: input.taskId,
-          metadata: { eventAction: input.eventAction, decision: input.decision },
+          metadata: {
+            eventAction: input.eventAction,
+            decision: input.decision,
+            stageCode: task.templateStage?.code ?? null,
+            routeTransitionId: routePlan?.transition?.id ?? null,
+          },
         },
         writer,
       );
@@ -3273,6 +5428,8 @@ export class WorkflowService implements OnModuleInit {
       const detail = [...validation.missing.map((field) => `Missing ${field}`), ...validation.errors].join('; ');
       throw new BadRequestException(`The workflow form is not complete yet. ${detail}`);
     }
+    const validatedFields = workflowFormRequiredFields(task.templateStage?.formSchemaJson);
+    const attachmentFields = workflowFormAttachmentFieldNames(task.templateStage?.formSchemaJson);
     const updated = await this.prisma.$transaction(async (tx) => {
       const saved = await tx.workflowTask.update({
         where: { id },
@@ -3298,7 +5455,13 @@ export class WorkflowService implements OnModuleInit {
           action: 'workflow_task.form.submit',
           entityType: 'workflow_task',
           entityId: id,
-          metadata: { stageCode: task.templateStage?.code ?? null },
+          metadata: {
+            stageCode: task.templateStage?.code ?? null,
+            validatedFields,
+            attachmentFields,
+            previousSubmittedAt: task.formSubmittedAt?.toISOString?.() ?? null,
+            newSubmittedAt: saved.formSubmittedAt?.toISOString?.() ?? null,
+          },
         },
         tx,
       );
@@ -3368,7 +5531,89 @@ export class WorkflowService implements OnModuleInit {
     return isAutomatedWorkflowStage(stage) || isRoutingOnlyWorkflowStage(stage);
   }
 
-  private finalStatusForDecision(decision: TaskDecision): CaseStatus {
+  private isParallelGatewayStage(stage: WorkflowStageWithRoute): boolean {
+    return String(stage.nodeType ?? '').toLowerCase() === 'parallel_gateway';
+  }
+
+  private isMergeGatewayStage(stage: WorkflowStageWithRoute): boolean {
+    const nodeType = String(stage.nodeType ?? '').toLowerCase();
+    return nodeType === 'merge_gateway' || nodeType === 'inclusive_gateway';
+  }
+
+  private parallelBranchesForGateway(
+    template: WorkflowTemplateWithRoute,
+    gateway: WorkflowStageWithRoute,
+    task: {
+      dueDate?: Date | null;
+      formDataJson?: unknown | null;
+      case: { id: string; status: CaseStatus; type?: string | null; assetId?: string | null };
+    },
+    decision: WorkflowDecisionValue,
+  ): NonNullable<RouteAdvancePlan['parallelBranches']> {
+    const outgoing = template.transitions
+      .filter((transition) => transition.fromStageId === gateway.id)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const joinKey = gateway.parallelGroup ?? `join:${gateway.id}`;
+    return outgoing.flatMap((transition, index) => {
+      const stage = this.firstActionableAfterTransition(template, transition, task, decision);
+      if (!stage) return [];
+      return [{
+        stage,
+        transition,
+        branchKey: `${joinKey}:branch:${index + 1}`,
+        branchIndex: index + 1,
+        joinKey,
+      }];
+    });
+  }
+
+  private firstActionableAfterTransition(
+    template: WorkflowTemplateWithRoute,
+    transition: WorkflowTransitionWithRoute,
+    task: {
+      dueDate?: Date | null;
+      formDataJson?: unknown | null;
+      case: { id: string; status: CaseStatus; type?: string | null; assetId?: string | null };
+    },
+    decision: WorkflowDecisionValue,
+  ): WorkflowStageWithRoute | null {
+    const stageById = new Map(template.stages.map((stage) => [stage.id, stage]));
+    let candidate = stageById.get(transition.toStageId) ?? null;
+    let guard = 0;
+    while (candidate && !isActionableWorkflowStage(candidate)) {
+      guard++;
+      if (guard > 25 || candidate.isFinal || this.isMergeGatewayStage(candidate)) return null;
+      const next = this.selectTransitionWithDmn(template.transitions, candidate, task, decision);
+      if (!next) return null;
+      candidate = stageById.get(next.toStageId) ?? null;
+    }
+    return candidate;
+  }
+
+  private async hasOpenIncomingMergeTasks(
+    client: Prisma.TransactionClient,
+    caseId: string,
+    template: WorkflowTemplateWithRoute,
+    mergeStage: WorkflowStageWithRoute,
+    currentTaskId?: string | null,
+  ): Promise<boolean> {
+    const incomingStageIds = template.transitions
+      .filter((transition) => transition.toStageId === mergeStage.id)
+      .map((transition) => transition.fromStageId);
+    if (!incomingStageIds.length) return false;
+    const openTasks = await client.workflowTask.count({
+      where: {
+        caseId,
+        templateStageId: { in: incomingStageIds },
+        ...(currentTaskId ? { id: { not: currentTaskId } } : {}),
+        status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+      },
+    });
+    return openTasks > 0;
+  }
+
+  private finalStatusForDecision(decision: WorkflowDecisionValue): CaseStatus {
+    if (decision === WORKFLOW_RETURN_FOR_CLARIFICATION) return CaseStatus.awaiting_information;
     return decision === TaskDecision.rejected ? CaseStatus.rejected : CaseStatus.implemented;
   }
 
@@ -3451,6 +5696,60 @@ export class WorkflowService implements OnModuleInit {
     return true;
   }
 
+  private async openClarificationTask(
+    client: Prisma.TransactionClient,
+    task: {
+      id: string;
+      caseId: string;
+      title: string;
+      case: { createdBy: string; status: CaseStatus; assetId?: string | null };
+    },
+    actor: string,
+    comment?: string | null,
+  ): Promise<void> {
+    const submitter = await client.user.findFirst({
+      where: { email: task.case.createdBy, isActive: true },
+      select: { id: true },
+    });
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 2);
+    await client.workflowTask.create({
+      data: {
+        caseId: task.caseId,
+        title: `Clarification requested - ${task.title}`,
+        type: 'information',
+        status: TaskStatus.pending,
+        assigneeUserId: submitter?.id ?? null,
+        dueDate,
+      },
+    });
+    if (task.case.status !== CaseStatus.awaiting_information) {
+      await client.workflowCase.update({
+        where: { id: task.caseId },
+        data: { status: CaseStatus.awaiting_information },
+      });
+      await client.workflowEvent.create({
+        data: {
+          caseId: task.caseId,
+          actor,
+          action: 'case.status',
+          fromStatus: task.case.status,
+          toStatus: CaseStatus.awaiting_information,
+          comment: 'Approval returned for clarification',
+        },
+      });
+    }
+    await client.workflowEvent.create({
+      data: {
+        caseId: task.caseId,
+        taskId: task.id,
+        actor,
+        action: 'decision.return_for_clarification',
+        comment: comment ?? null,
+      },
+    });
+  }
+
   private async assertStageDecisionPrerequisites(
     client: Prisma.TransactionClient,
     task: {
@@ -3464,9 +5763,12 @@ export class WorkflowService implements OnModuleInit {
         formSchemaJson?: unknown | null;
       } | null;
     },
-    decision: TaskDecision,
+    decision: WorkflowDecisionValue,
     comment?: string | null,
   ): Promise<void> {
+    if (decision === WORKFLOW_RETURN_FOR_CLARIFICATION && !comment?.trim()) {
+      throw new BadRequestException('Return for clarification requires a decision comment');
+    }
     if (decision !== TaskDecision.approved || !task.templateStage) return;
 
     const requiredEvidence = this.requiredRequirementNames(task.templateStage.evidenceRequirementsJson);
@@ -3526,19 +5828,41 @@ export class WorkflowService implements OnModuleInit {
   private selectTransitionWithDmn(
     transitions: WorkflowTransitionWithRoute[],
     fromStage: WorkflowStageWithRoute,
-    task: { case: { id: string; status: CaseStatus; assetId?: string | null } },
-    decision: TaskDecision,
+    task: {
+      dueDate?: Date | null;
+      formDataJson?: unknown | null;
+      case: {
+        id: string;
+        status: CaseStatus;
+        type?: string | null;
+        assetId?: string | null;
+        asset?: { assetType?: string | null } | null;
+      };
+    },
+    decision: WorkflowDecisionValue,
   ): WorkflowTransitionWithRoute | null {
     const outgoing = transitions.filter((transition) => transition.fromStageId === fromStage.id);
-    const context = {
+    const defaultPath = outgoing.find(isWorkflowDefaultPath) ?? null;
+    if ((decision as string) === 'timeout') {
+      return outgoing.find((transition) => normalizeWorkflowConnectorType(transition.connectorType) === 'timeout') ?? defaultPath;
+    }
+    if (fromStage.isDecision && outgoing.length > 1 && !defaultPath) {
+      throw new BadRequestException(`Decision gateway ${fromStage.code} must define a default connector path`);
+    }
+    const formValidation = validateWorkflowFormData(fromStage.formSchemaJson, task.formDataJson);
+    const context = buildWorkflowVariableContext({
       decision,
-      taskDecision: decision,
       caseId: task.case.id,
       caseStatus: task.case.status,
+      caseType: task.case.type ?? null,
       assetId: task.case.assetId ?? null,
+      assetType: task.case.asset?.assetType ?? null,
       stageCode: fromStage.code,
       stageKind: fromStage.kind,
-    };
+      formRequiredComplete: formValidation.valid,
+      taskSlaDueDate: task.dueDate ?? null,
+      formData: task.formDataJson ?? null,
+    });
     for (const transition of outgoing) {
       if (!transition.conditionJson) continue;
       const result = evaluateWorkflowDmnTable(transition.conditionJson, context);
@@ -3555,16 +5879,19 @@ export class WorkflowService implements OnModuleInit {
       );
       if (selected) return selected;
     }
-    return selectWorkflowTransitionForDecision(transitions, fromStage.id, decision);
+    return selectWorkflowTransitionForDecision(transitions, fromStage.id, decision) ?? defaultPath;
   }
 
   private async planRouteAdvance(
     client: Prisma.TransactionClient,
     task: {
+      id?: string | null;
       templateStageId: string | null;
-      case: { id: string; templateId: string | null; status: CaseStatus };
+      dueDate?: Date | null;
+      formDataJson?: unknown | null;
+      case: { id: string; templateId: string | null; templateVersion: number; status: CaseStatus; type?: string | null; assetId?: string | null };
     },
-    decision: TaskDecision,
+    decision: WorkflowDecisionValue,
   ): Promise<RouteAdvancePlan | null> {
     if (!task.templateStageId || !task.case.templateId) return null;
     const template = await client.workflowTemplate.findUnique({
@@ -3572,9 +5899,10 @@ export class WorkflowService implements OnModuleInit {
       include: templateInclude,
     });
     if (!template) return null;
-    const fromStage = template.stages.find((stage) => stage.id === task.templateStageId);
+    const runtimeTemplate = await this.runtimeTemplateForCase(client, template, task.case.templateVersion);
+    const fromStage = runtimeTemplate.stages.find((stage) => stage.id === task.templateStageId);
     if (!fromStage) return null;
-    const transition = this.selectTransitionWithDmn(template.transitions, fromStage, task, decision);
+    const transition = this.selectTransitionWithDmn(runtimeTemplate.transitions, fromStage, task, decision);
     if (!transition) {
       if (fromStage.isFinal) {
         return { fromStage, finalStatus: this.finalStatusForDecision(decision) };
@@ -3584,7 +5912,7 @@ export class WorkflowService implements OnModuleInit {
       }
       throw new BadRequestException('No next workflow route transition is configured for this stage');
     }
-    const nextStage = template.stages.find((stage) => stage.id === transition.toStageId);
+    const nextStage = runtimeTemplate.stages.find((stage) => stage.id === transition.toStageId);
     if (!nextStage) {
       throw new BadRequestException('The next workflow route stage is not configured');
     }
@@ -3603,13 +5931,48 @@ export class WorkflowService implements OnModuleInit {
           finalStatus: this.finalStatusForDecision(decision),
         };
       }
+      // Advanced nodes are durable system work, not implicit pass-through steps.
+      // The execution runner decides the success, failure, or timeout connector.
+      if (isAutomatedWorkflowStage(candidateStage)) {
+        return {
+          fromStage,
+          transition: candidateTransition,
+          passThroughStages,
+          nextStage: candidateStage,
+          toStatus: this.caseStatusForActiveStage(candidateStage),
+        };
+      }
       if (!this.isPassThroughStage(candidateStage)) {
         throw new BadRequestException('The next workflow route stage cannot create a task');
       }
+      if (this.isParallelGatewayStage(candidateStage)) {
+        passThroughStages.push(candidateStage);
+        const branches = this.parallelBranchesForGateway(runtimeTemplate, candidateStage, task, decision);
+        if (branches.length < 2) {
+          throw new BadRequestException(`Parallel gateway ${candidateStage.code} must define at least two branch connector paths`);
+        }
+        return {
+          fromStage,
+          transition,
+          passThroughStages,
+          parallelBranches: branches,
+          toStatus: this.caseStatusForActiveStage(branches[0].stage),
+        };
+      }
+      if (this.isMergeGatewayStage(candidateStage)) {
+        if (await this.hasOpenIncomingMergeTasks(client, task.case.id, runtimeTemplate, candidateStage, task.id ?? null)) {
+          return {
+            fromStage,
+            transition: candidateTransition,
+            passThroughStages,
+            mergeWaitStage: candidateStage,
+          };
+        }
+      }
       passThroughStages.push(candidateStage);
-      const nextTransition = this.selectTransitionWithDmn(template.transitions, candidateStage, task, decision);
+      const nextTransition = this.selectTransitionWithDmn(runtimeTemplate.transitions, candidateStage, task, decision);
       if (!nextTransition) throw new BadRequestException('Automated workflow stage has no next route transition');
-      const afterPassThrough = template.stages.find((stage) => stage.id === nextTransition.toStageId);
+      const afterPassThrough = runtimeTemplate.stages.find((stage) => stage.id === nextTransition.toStageId);
       if (!afterPassThrough) throw new BadRequestException('Automated workflow stage points to a missing next stage');
       candidateTransition = nextTransition;
       candidateStage = afterPassThrough;
@@ -3623,15 +5986,95 @@ export class WorkflowService implements OnModuleInit {
     };
   }
 
+  private async runtimeTemplateForCase(
+    client: Prisma.TransactionClient,
+    template: WorkflowTemplateWithRoute,
+    templateVersion: number,
+  ): Promise<WorkflowTemplateWithRoute> {
+    if (!templateVersion || templateVersion === template.designerVersion) return template;
+    const snapshot = await client.workflowTemplateVersion.findFirst({
+      where: { templateId: template.id, version: templateVersion },
+      select: { bpmnXml: true },
+    });
+    if (!snapshot) {
+      this.logger.warn(`Workflow case references missing ${template.code} version ${templateVersion}; using current route`);
+      return template;
+    }
+    const parsed = this.parseDesignerBpmn(snapshot.bpmnXml);
+    const databaseStageByCode = new Map(template.stages.map((stage) => [stage.code, stage]));
+    if (parsed.stages.some((stage) => !databaseStageByCode.has(stage.code))) {
+      this.logger.warn(`Workflow ${template.code} version ${templateVersion} contains a stage no longer present in the route registry`);
+      return template;
+    }
+    const stages = parsed.stages.map((stage) => {
+      const databaseStage = databaseStageByCode.get(stage.code)!;
+      return {
+        ...databaseStage,
+        ...stage,
+        id: databaseStage.id,
+        templateId: template.id,
+        nodeType: stage.nodeType ?? databaseStage.nodeType,
+        assignmentStrategy: stage.assignmentStrategy ?? databaseStage.assignmentStrategy,
+        isActive: true,
+        retiredAt: null,
+        retiredBy: null,
+      };
+    });
+    const stageByCode = new Map(stages.map((stage) => [stage.code, stage]));
+    const transitions = parsed.transitions.flatMap((edge, index) => {
+      const fromStage = stageByCode.get(edge.fromStageId);
+      const toStage = stageByCode.get(edge.toStageId);
+      if (!fromStage || !toStage) return [];
+      const current = template.transitions.find((candidate) =>
+        candidate.fromStageId === fromStage.id && candidate.toStageId === toStage.id &&
+        (candidate.decision ?? null) === (edge.decision ?? null));
+      return [{
+        ...(current ?? {}),
+        id: current?.id ?? `snapshot:${template.id}:${templateVersion}:${index + 1}`,
+        templateId: template.id,
+        fromStageId: fromStage.id,
+        toStageId: toStage.id,
+        labelEn: edge.labelEn,
+        labelAr: edge.labelAr,
+        connectorType: edge.connectorType ?? 'sequence',
+        decision: edge.decision ?? null,
+        conditionExpression: edge.conditionExpression ?? null,
+        conditionJson: edge.conditionJson ?? null,
+        isDefaultPath: edge.isDefaultPath ?? false,
+        timeoutAfterSeconds: edge.timeoutAfterSeconds ?? null,
+        sortOrder: edge.sortOrder,
+        isHappyPath: edge.isHappyPath,
+        isActive: true,
+        retiredAt: null,
+        retiredBy: null,
+        fromStage: { id: fromStage.id, code: fromStage.code },
+        toStage: { id: toStage.id, code: toStage.code },
+      }];
+    });
+    return { ...template, stages, transitions } as unknown as WorkflowTemplateWithRoute;
+  }
+
   private async applyRouteAdvance(
     client: Prisma.TransactionClient,
-    task: { caseId: string; case: { status: CaseStatus; assetId?: string | null } },
+    task: { id?: string | null; caseId: string; case: { status: CaseStatus; assetId?: string | null } },
     plan: RouteAdvancePlan | null,
     actor: string,
-    decision: TaskDecision,
+    decision: WorkflowDecisionValue,
   ): Promise<void> {
     if (!plan) return;
-    const targetStageName = plan.nextStage?.nameEn ?? plan.transition?.toStage?.code ?? 'Route complete';
+    const targetStageName = plan.nextStage?.nameEn ??
+      (plan.parallelBranches?.length ? `${plan.parallelBranches.length} parallel branches` : null) ??
+      plan.mergeWaitStage?.nameEn ??
+      plan.transition?.toStage?.code ??
+      'Route complete';
+    const parentToken = await this.latestRuntimeTokenForTask(client, task.id ?? null);
+    const baseLineage: WorkflowTokenLineageContext = {
+      parentTokenId: parentToken?.id ?? null,
+      rootTokenId: parentToken?.rootTokenId ?? parentToken?.id ?? null,
+      branchKey: parentToken?.branchKey ?? null,
+      joinKey: parentToken?.joinKey ?? null,
+      sourceTransitionId: plan.transition?.id ?? null,
+    };
     if (plan.transition) {
       await client.workflowEvent.create({
         data: {
@@ -3641,6 +6084,17 @@ export class WorkflowService implements OnModuleInit {
           comment: `${plan.fromStage.nameEn} -> ${targetStageName}`,
         },
       });
+    }
+    if (plan.mergeWaitStage) {
+      await client.workflowEvent.create({
+        data: {
+          caseId: task.caseId,
+          actor,
+          action: 'route.merge.waiting',
+          comment: `Waiting for all incoming branches before ${plan.mergeWaitStage.nameEn}`,
+        },
+      });
+      return;
     }
     for (const stage of plan.passThroughStages ?? []) {
       await client.workflowEvent.create({
@@ -3652,8 +6106,50 @@ export class WorkflowService implements OnModuleInit {
         },
       });
     }
+    if (plan.parallelBranches?.length) {
+      await client.workflowEvent.create({
+        data: {
+          caseId: task.caseId,
+          actor,
+          action: 'route.parallel_split.activated',
+          comment: `${plan.parallelBranches.length} branch tasks opened`,
+        },
+      });
+      for (const branch of plan.parallelBranches) {
+        await this.createStageTask(client, task.caseId, branch.stage, actor, {
+          assetId: task.case.assetId ?? null,
+          tokenLineage: {
+            ...baseLineage,
+            sourceTransitionId: branch.transition.id,
+            branchKey: branch.branchKey,
+            branchIndex: branch.branchIndex,
+            joinKey: branch.joinKey,
+          },
+        });
+      }
+      if (plan.toStatus && plan.toStatus !== task.case.status) {
+        await client.workflowCase.update({
+          where: { id: task.caseId },
+          data: { status: plan.toStatus },
+        });
+        await client.workflowEvent.create({
+          data: {
+            caseId: task.caseId,
+            actor,
+            action: 'case.status',
+            fromStatus: task.case.status,
+            toStatus: plan.toStatus,
+            comment: `Parallel route advanced after ${decision}`,
+          },
+        });
+      }
+      return;
+    }
     if (plan.nextStage) {
-      await this.createStageTask(client, task.caseId, plan.nextStage, actor, { assetId: task.case.assetId ?? null });
+      await this.createStageTask(client, task.caseId, plan.nextStage, actor, {
+        assetId: task.case.assetId ?? null,
+        tokenLineage: baseLineage,
+      });
       if (plan.toStatus && plan.toStatus !== task.case.status) {
         await client.workflowCase.update({
           where: { id: task.caseId },
@@ -3734,6 +6230,7 @@ export class WorkflowService implements OnModuleInit {
     if (isApprovalTask && task.case.createdBy === user.email) {
       throw new ForbiddenException('You cannot decide an approval you submitted');
     }
+    const returnedForClarification = dto.decision === WORKFLOW_RETURN_FOR_CLARIFICATION;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.assertStageDecisionPrerequisites(tx, task, dto.decision, dto.comment);
@@ -3744,7 +6241,7 @@ export class WorkflowService implements OnModuleInit {
         where: { id },
         data: {
           status: TaskStatus.completed,
-          decision: dto.decision,
+          decision: returnedForClarification ? null : dto.decision as TaskDecision,
           decisionComment: dto.comment ?? null,
           completedAt: new Date(),
           ...(isRoleQueueDecision ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode } : {}),
@@ -3775,6 +6272,20 @@ export class WorkflowService implements OnModuleInit {
 
       // Wire approval decisions back to the proposed assignment + case lifecycle atomically.
       if (isApprovalTask && task.case.assignmentId) {
+        if (returnedForClarification) {
+          await this.openClarificationTask(tx, task, user.email, dto.comment);
+          await this.audit.log(
+            {
+              actor: user.email,
+              action: 'workflow_task.return_for_clarification',
+              entityType: 'workflow_task',
+              entityId: id,
+              metadata: { assignmentId: task.case.assignmentId, commentRequired: true },
+            },
+            tx,
+          );
+          return decided;
+        }
         const approved = dto.decision === TaskDecision.approved;
         const assignment = await tx.stewardshipAssignment.findFirst({
           where: { id: task.case.assignmentId, deletedAt: null },
@@ -3855,6 +6366,11 @@ export class WorkflowService implements OnModuleInit {
           action: `workflow_task.${dto.decision}`,
           entityType: 'workflow_task',
           entityId: id,
+          metadata: {
+            decision: dto.decision,
+            stageCode: task.templateStage?.code ?? null,
+            routeTransitionId: routePlan?.transition?.id ?? null,
+          },
         },
         tx,
       );
@@ -3966,16 +6482,108 @@ export class WorkflowService implements OnModuleInit {
     if (!task) throw new BadRequestException('Workflow task does not belong to this case');
   }
 
+  private async resolveStageAssignee(
+    client: Prisma.TransactionClient,
+    caseId: string,
+    stage: WorkflowStageWithRoute,
+    roleCode?: string | null,
+    assetId?: string | null,
+  ): Promise<string | null> {
+    const strategy = String(stage.assignmentStrategy ?? 'role').trim().toLowerCase();
+    if (strategy === 'automation') return null;
+    if (strategy === 'role') return this.assigneeForRole(client, roleCode, assetId);
+    if (strategy === 'workload') return this.assigneeForRole(client, roleCode, assetId, true);
+
+    const config = this.jsonRecord(stage.assignmentConfigJson);
+    const wfCase = await client.workflowCase.findUnique({
+      where: { id: caseId },
+      select: {
+        createdBy: true,
+        assetId: true,
+        assignment: { select: { person: { select: { userId: true, email: true } } } },
+        template: { select: { createdBy: true, lastPublishedBy: true } },
+        runtimeTokens: {
+          orderBy: { activatedAt: 'desc' },
+          take: 1,
+          select: { dataJson: true },
+        },
+      },
+    });
+
+    const configuredUser = async (...candidates: unknown[]): Promise<string | null> => {
+      for (const candidate of candidates) {
+        const value = typeof candidate === 'string' ? candidate.trim() : '';
+        if (!value) continue;
+        const user = await client.user.findFirst({
+          where: {
+            isActive: true,
+            OR: [{ id: value }, { email: { equals: value, mode: 'insensitive' } }],
+          },
+          select: { id: true },
+        });
+        if (user) return user.id;
+      }
+      return null;
+    };
+
+    let resolved: string | null = null;
+    if (strategy === 'direct_user') {
+      resolved = await configuredUser(config['userId'], config['userEmail']);
+    } else if (strategy === 'requester') {
+      resolved = await configuredUser(wfCase?.createdBy);
+    } else if (strategy === 'workflow_owner') {
+      resolved = await configuredUser(
+        config['userId'],
+        config['userEmail'],
+        wfCase?.template?.createdBy,
+        wfCase?.template?.lastPublishedBy,
+      );
+    } else if (strategy === 'manager') {
+      resolved = await configuredUser(config['managerUserId'], config['managerEmail'], config['userId'], config['userEmail']);
+    } else if (strategy === 'backup') {
+      resolved = await configuredUser(config['backupUserId'], config['backupUserEmail'], config['userId'], config['userEmail']);
+    } else if (strategy === 'dynamic') {
+      const variablePath = String(config['variablePath'] ?? '').trim();
+      const context: Record<string, unknown> = {
+        case: {
+          createdBy: wfCase?.createdBy ?? null,
+          assetId: wfCase?.assetId ?? null,
+          assignment: wfCase?.assignment ?? null,
+        },
+        token: this.jsonRecord(wfCase?.runtimeTokens[0]?.dataJson),
+      };
+      resolved = await configuredUser(this.valueAtPath(context, variablePath), config['fallbackUserId'], config['fallbackUserEmail']);
+    }
+
+    return resolved ?? this.assigneeForRole(
+      client,
+      String(config['fallbackRoleCode'] ?? roleCode ?? '').trim() || null,
+      assetId,
+      strategy === 'workload',
+    );
+  }
+
+  private valueAtPath(source: Record<string, unknown>, path: string): unknown {
+    if (!path) return null;
+    let current: unknown = source;
+    for (const segment of path.split('.').filter(Boolean)) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) return null;
+      current = (current as Record<string, unknown>)[segment];
+    }
+    return current;
+  }
+
   private async assigneeForRole(
     client: Prisma.TransactionClient,
     roleCode?: string | null,
     assetId?: string | null,
+    preferLowestWorkload = false,
   ): Promise<string | null> {
     if (!roleCode) return null;
-    const directAssignee = await this.firstAssigneeForRole(client, roleCode, assetId);
+    const directAssignee = await this.firstAssigneeForRole(client, roleCode, assetId, preferLowestWorkload);
     if (directAssignee) return directAssignee;
     if (roleCode !== DMO_ADMIN_CODE) {
-      return this.firstAssigneeForRole(client, DMO_ADMIN_CODE, assetId);
+      return this.firstAssigneeForRole(client, DMO_ADMIN_CODE, assetId, preferLowestWorkload);
     }
     return null;
   }
@@ -3984,6 +6592,7 @@ export class WorkflowService implements OnModuleInit {
     client: Prisma.TransactionClient,
     roleCode: string,
     assetId?: string | null,
+    preferLowestWorkload = false,
   ): Promise<string | null> {
     const matches = await client.userRole.findMany({
       where: {
@@ -3996,6 +6605,11 @@ export class WorkflowService implements OnModuleInit {
         userId: true,
         user: {
           select: {
+            _count: {
+              select: {
+                workflowTasks: { where: { status: { in: [TaskStatus.pending, TaskStatus.in_progress] } } },
+              },
+            },
             userRoles: {
               select: {
                 role: { select: { code: true, deletedAt: true, isActive: true } },
@@ -4005,12 +6619,15 @@ export class WorkflowService implements OnModuleInit {
         },
       },
     });
-    if (!assetId && matches[0]) {
-      return (await this.delegateForAssignee(client, matches[0].userId, roleCode, null)) ?? matches[0].userId;
+    const ordered = preferLowestWorkload
+      ? [...matches].sort((left, right) => left.user._count.workflowTasks - right.user._count.workflowTasks)
+      : matches;
+    if (!assetId && ordered[0]) {
+      return (await this.delegateForAssignee(client, ordered[0].userId, roleCode, null)) ?? ordered[0].userId;
     }
     if (!assetId) return null;
 
-    for (const match of matches) {
+    for (const match of ordered) {
       const candidateRoleCodes = match.user.userRoles
         .map((userRole) => userRole.role)
         .filter((role) => role.isActive && !role.deletedAt)

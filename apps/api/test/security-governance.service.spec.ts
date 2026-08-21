@@ -20,6 +20,11 @@ function filterText(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 test('evaluateAccessDecision denies access when no role-data mapping exists', () => {
   const result = evaluateAccessDecision({
     hasMapping: false,
@@ -323,6 +328,145 @@ test('accessReviews do not expose unlinked items to organization-scoped reviewer
   assert.ok(!text.includes('{"assetId":null}'));
 });
 
+test('createAccessReviewCampaign includes active role grants as reviewer-ready items', async () => {
+  let createdItems: any[] = [];
+  let auditMetadata: any;
+  const service = new SecurityGovernanceService(
+    {
+      businessSequence: sequenceDelegate(),
+      accessGrant: {
+        findMany: async () => [
+          {
+            id: 'grant-role-1',
+            assetId: 'asset-1',
+            principalType: 'role',
+            principalId: 'data_steward',
+            asset: { id: 'asset-1', domainId: 'domain-1', classificationId: 'class-1' },
+          },
+        ],
+      },
+      userRole: {
+        findMany: async () => [
+          {
+            userId: 'user-1',
+            roleId: 'role-steward',
+            role: { code: 'data_steward' },
+          },
+        ],
+      },
+      accessReview: {
+        count: async () => 0,
+        findUnique: async () => null,
+        create: async (args: any) => {
+          createdItems = args.data.items.create;
+          return {
+            id: 'review-1',
+            code: args.data.code,
+            title: args.data.title,
+            status: args.data.status,
+            items: createdItems,
+          };
+        },
+      },
+    } as never,
+    {
+      log: async (entry: any) => {
+        auditMetadata = entry.metadata;
+      },
+    } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  const review = await service.createAccessReviewCampaign(
+    ['system_admin'],
+    { title: 'Role grant certification', includeUserGrants: false, includeRoleGrants: true },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(review.campaignSummary.reviewItems, 1);
+  assert.strictEqual(createdItems[0].grantId, 'grant-role-1');
+  assert.strictEqual(createdItems[0].userId, 'user-1');
+  assert.strictEqual(createdItems[0].roleId, 'role-steward');
+  assert.deepStrictEqual(auditMetadata.principalTypes, ['role']);
+});
+
+test('updateReviewItem queues linked grant revocation and completes the review', async () => {
+  let itemUpdate: any;
+  let grantUpdate: any;
+  let reviewUpdate: any;
+  let auditEntry: any;
+  const tx: any = {
+    accessReviewItem: {
+      update: async (args: any) => {
+        itemUpdate = args;
+        return { id: args.where.id, reviewId: 'review-1', decision: args.data.decision };
+      },
+      count: async () => 0,
+    },
+    accessGrant: {
+      update: async (args: any) => {
+        grantUpdate = args;
+        return { id: args.where.id, ...args.data };
+      },
+    },
+    accessReview: {
+      update: async (args: any) => {
+        reviewUpdate = args;
+        return { id: args.where.id, ...args.data };
+      },
+    },
+  };
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findFirst: async () => ({ id: 'asset-1' }) },
+      dataDomain: { findFirst: async () => ({ id: 'domain-1' }) },
+      classification: { findFirst: async () => ({ id: 'class-1', rank: 2 }) },
+      accessReviewItem: {
+        findUnique: async () => ({
+          id: 'item-1',
+          reviewId: 'review-1',
+          grantId: 'grant-1',
+          userId: 'user-1',
+          roleId: 'role-1',
+          assetId: 'asset-1',
+          domainId: 'domain-1',
+          classificationId: 'class-1',
+          review: { ownerUserId: null, status: 'active' },
+        }),
+      },
+      $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
+    } as never,
+    {
+      log: async (entry: any) => {
+        auditEntry = entry;
+      },
+    } as never,
+    {
+      resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
+    } as never,
+  );
+
+  await service.updateReviewItem(
+    'item-1',
+    ['system_admin'],
+    { decision: 'revoke', justification: 'Quarterly access review found no active business need' },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(itemUpdate.data.decision, 'revoke');
+  assert.strictEqual(grantUpdate.where.id, 'grant-1');
+  assert.strictEqual(grantUpdate.data.status, 'pending_revocation');
+  assert.strictEqual(grantUpdate.data.enforcementStatus, 'pending');
+  assert.strictEqual(grantUpdate.data.revokedBy, 'admin@dgop.local');
+  assert.strictEqual(grantUpdate.data.version.increment, 1);
+  assert.ok(grantUpdate.data.revocationReason.includes('Quarterly access review'));
+  assert.strictEqual(reviewUpdate.where.id, 'review-1');
+  assert.ok(reviewUpdate.data.completedAt instanceof Date);
+  assert.strictEqual(auditEntry.action, 'access_review_item.decide');
+});
+
 test('dlpIncidents do not expose unlinked incidents to organization-scoped reviewers', async () => {
   let dlpWhere: unknown;
   const service = new SecurityGovernanceService(
@@ -485,6 +629,7 @@ test('simulateDecision persists ABAC trace metadata for review-required decision
 test('createDlpIncident links new incidents to workflow cases', async () => {
   let workflowCaseId: string | null = null;
   const tx: any = {
+    businessSequence: sequenceDelegate(),
     dlpIncident: {
       create: async () => ({
         id: 'dlp-1',
@@ -510,6 +655,7 @@ test('createDlpIncident links new incidents to workflow cases', async () => {
   };
   const service = new SecurityGovernanceService(
     {
+      businessSequence: sequenceDelegate(),
       dataAsset: { findFirst: async () => ({ id: 'asset-1' }) },
       dlpIncident: { count: async () => 0, findUnique: async () => null },
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
@@ -535,6 +681,7 @@ test('createDlpIncident links new incidents to workflow cases', async () => {
 test('createClassificationRequest links new requests to workflow cases', async () => {
   let workflowCaseId: string | null = null;
   const tx: any = {
+    businessSequence: sequenceDelegate(),
     classificationChangeRequest: {
       create: async () => ({
         id: 'class-request-1',
@@ -593,6 +740,7 @@ test('backfillWorkflowLinks repairs legacy DLP and classification records', asyn
   const openedCases: any[] = [];
   const updates: any[] = [];
   const tx: any = {
+    businessSequence: sequenceDelegate(),
     dlpIncident: {
       findMany: async () => [
         {

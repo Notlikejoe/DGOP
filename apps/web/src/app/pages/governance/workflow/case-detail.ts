@@ -14,6 +14,8 @@ import {
   SLA_KIND,
   Task,
   UserRef,
+  WorkflowDecisionValue,
+  WorkflowTokenTrace,
 } from './workflow.types';
 
 @Component({
@@ -32,14 +34,19 @@ export class WorkflowCasePage implements OnInit {
 
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly wfCase = signal<CaseRow | null>(null);
+  protected readonly tokenTrace = signal<WorkflowTokenTrace | null>(null);
+  protected readonly tokenTraceState = signal<'idle' | 'loading' | 'ok' | 'error'>('idle');
   protected readonly users = signal<UserRef[]>([]);
   private caseId = '';
 
   // decision modal
   protected readonly decideTask = signal<Task | null>(null);
-  protected readonly decision = signal<'approved' | 'rejected'>('approved');
+  protected readonly decision = signal<WorkflowDecisionValue>('approved');
   protected readonly comment = signal('');
   protected readonly saving = signal(false);
+  protected readonly controlAction = signal<'suspend' | 'resume' | 'cancel'>('suspend');
+  protected readonly controlReason = signal('');
+  protected readonly controlModalOpen = signal(false);
 
   // add-task modal
   protected readonly taskModalOpen = signal(false);
@@ -63,14 +70,48 @@ export class WorkflowCasePage implements OnInit {
   protected load(): void {
     this.state.set('loading');
     this.http.get<CaseRow>(`/api/workflow/cases/${this.caseId}`).subscribe({
-      next: (c) => { this.wfCase.set(c); this.state.set('ok'); },
+      next: (c) => {
+        this.wfCase.set(c);
+        this.state.set('ok');
+        this.loadTokenTrace();
+      },
       error: () => this.state.set('error'),
+    });
+  }
+
+  protected loadTokenTrace(): void {
+    if (!this.caseId) return;
+    this.tokenTraceState.set('loading');
+    this.http.get<WorkflowTokenTrace>(`/api/workflow/cases/${this.caseId}/tokens`).subscribe({
+      next: (trace) => {
+        this.tokenTrace.set(trace);
+        this.tokenTraceState.set('ok');
+      },
+      error: () => {
+        this.tokenTrace.set(null);
+        this.tokenTraceState.set('error');
+      },
     });
   }
 
   protected readonly canSubmit = computed(() => {
     const c = this.wfCase();
     return !!c && c.status === 'draft' && c.tasks.length > 0 && this.canEdit;
+  });
+
+  protected readonly canSuspend = computed(() => {
+    const c = this.wfCase();
+    return !!c && this.canEdit && !this.isFinalCase(c.status) && c.status !== 'suspended';
+  });
+
+  protected readonly canResume = computed(() => {
+    const c = this.wfCase();
+    return !!c && this.canEdit && c.status === 'suspended';
+  });
+
+  protected readonly canCancel = computed(() => {
+    const c = this.wfCase();
+    return !!c && this.canEdit && !this.isFinalCase(c.status);
   });
 
   // ---------- helpers ----------
@@ -89,6 +130,18 @@ export class WorkflowCasePage implements OnInit {
   protected typeLabel(t: string): string { return this.t('wf.type.' + t); }
   protected fmtDate(d?: string | null): string { return d ? new Date(d).toISOString().slice(0, 10) : '-'; }
   protected fmtDateTime(d?: string | null): string { return d ? new Date(d).toLocaleString() : '-'; }
+  protected tokenShort(id?: string | null): string { return id ? id.slice(0, 8) : '-'; }
+  protected executionKind(status: string): StatusKind {
+    if (status === 'succeeded') return 'success';
+    if (status === 'failed') return 'danger';
+    if (status === 'paused' || status === 'retrying') return 'warning';
+    if (status === 'cancelled') return 'muted';
+    return 'info';
+  }
+
+  private isFinalCase(status: string): boolean {
+    return ['closed', 'implemented', 'rejected', 'cancelled', 'failed'].includes(status);
+  }
 
   /** A task can be decided by its assignee or an admin while still open. */
   protected canDecide(task: Task): boolean {
@@ -106,7 +159,7 @@ export class WorkflowCasePage implements OnInit {
   }
 
   // ---------- decision ----------
-  protected openDecision(task: Task, decision: 'approved' | 'rejected'): void {
+  protected openDecision(task: Task, decision: WorkflowDecisionValue): void {
     this.decideTask.set(task);
     this.decision.set(decision);
     this.comment.set('');
@@ -128,6 +181,75 @@ export class WorkflowCasePage implements OnInit {
         },
         error: (err) => { this.toast.errorFrom(err, this.t('wf.saveError')); this.saving.set(false); },
       });
+  }
+
+  protected openControl(action: 'suspend' | 'resume' | 'cancel'): void {
+    this.controlAction.set(action);
+    this.controlReason.set('');
+    this.controlModalOpen.set(true);
+  }
+
+  protected closeControl(): void {
+    this.controlModalOpen.set(false);
+    this.controlReason.set('');
+  }
+
+  protected controlTitle(): string {
+    return this.t(`wf.caseControl.${this.controlAction()}.title`);
+  }
+
+  protected controlSubmitLabel(): string {
+    return this.t(`wf.caseControl.${this.controlAction()}.submit`);
+  }
+
+  protected controlReasonRequired(): boolean {
+    return this.controlAction() !== 'resume';
+  }
+
+  protected submitControl(): void {
+    const c = this.wfCase();
+    if (!c || this.saving()) return;
+    if (this.controlReasonRequired() && !this.controlReason().trim()) {
+      this.toast.error(this.t('wf.caseControl.reasonRequired'));
+      return;
+    }
+    const action = this.controlAction();
+    this.saving.set(true);
+    this.http.post<CaseRow>(`/api/workflow/cases/${c.id}/${action}`, {
+      reason: this.controlReason().trim() || null,
+    }).subscribe({
+      next: () => {
+        this.toast.success(this.t(`wf.caseControl.${action}.success`));
+        this.saving.set(false);
+        this.closeControl();
+        this.load();
+      },
+      error: (err) => {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+        this.saving.set(false);
+      },
+    });
+  }
+
+  protected canRetryExecution(status: string): boolean {
+    const c = this.wfCase();
+    return this.canEdit && !!c && !this.isFinalCase(c.status) && c.status !== 'suspended' && ['failed', 'cancelled'].includes(status);
+  }
+
+  protected retryExecution(id: string): void {
+    if (this.saving()) return;
+    this.saving.set(true);
+    this.http.post(`/api/workflow/runtime/executions/${id}/retry`, {}).subscribe({
+      next: () => {
+        this.toast.success(this.t('wf.execution.retrySuccess'));
+        this.saving.set(false);
+        this.load();
+      },
+      error: (err) => {
+        this.toast.errorFrom(err, this.t('wf.saveError'));
+        this.saving.set(false);
+      },
+    });
   }
 
   // ---------- add task ----------

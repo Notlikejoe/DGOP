@@ -8,6 +8,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
@@ -579,8 +580,12 @@ export class BusinessValueService {
   private async nextWorkflowCode(tx: Prisma.TransactionClient, type: string): Promise<string> {
     const prefix = type === 'asset_lifecycle_decision' ? 'WF-LCM' : type === 'business_impact_assessment' ? 'WF-BIA' : 'WF-BDE';
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await tx.workflowCase.count({ where: { code: { startsWith: `${prefix}-${day}` } } });
-    return `${prefix}-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      tx,
+      `workflow_case:${prefix.toLowerCase()}:${day}`,
+      (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(await tx.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextCode(
@@ -594,20 +599,24 @@ export class BusinessValueService {
     prefix: string,
   ): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const where = { code: { startsWith: `${prefix}-${day}` } };
-    const count =
-      model === 'businessGlossaryTerm'
-        ? await this.prisma.businessGlossaryTerm.count({ where })
-        : model === 'businessLineageMap'
-          ? await this.prisma.businessLineageMap.count({ where })
-          : model === 'dataAssetValuation'
-            ? await this.prisma.dataAssetValuation.count({ where })
-            : model === 'assetLifecycleDecision'
-              ? await this.prisma.assetLifecycleDecision.count({ where })
-              : model === 'businessImpactAssessment'
-                ? await this.prisma.businessImpactAssessment.count({ where })
-                : await this.prisma.dataValueKpi.count({ where });
-    return `${prefix}-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      `business_value:${model}:${day}`,
+      (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(
+        model === 'businessGlossaryTerm'
+          ? await this.prisma.businessGlossaryTerm.findUnique({ where: { code } })
+          : model === 'businessLineageMap'
+            ? await this.prisma.businessLineageMap.findUnique({ where: { code } })
+            : model === 'dataAssetValuation'
+              ? await this.prisma.dataAssetValuation.findUnique({ where: { code } })
+              : model === 'assetLifecycleDecision'
+                ? await this.prisma.assetLifecycleDecision.findUnique({ where: { code } })
+                : model === 'businessImpactAssessment'
+                  ? await this.prisma.businessImpactAssessment.findUnique({ where: { code } })
+                  : await this.prisma.dataValueKpi.findUnique({ where: { code } })
+      ),
+    );
   }
 
   private async scopedFindWhere(roleCodes: string[], id: string) {

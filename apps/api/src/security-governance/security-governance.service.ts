@@ -11,11 +11,13 @@ import {
   SecuritySeverity,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
   CreateAccessReviewDto,
+  CreateAccessReviewCampaignDto,
   CreateClassificationChangeRequestDto,
   CreateDlpIncidentDto,
   CreateMaskingPolicyDto,
@@ -286,33 +288,27 @@ export class SecurityGovernanceService {
   }
 
   private async nextCode(prefix: string, model: 'maskingPolicy' | 'accessReview' | 'dlpIncident'): Promise<string> {
-    const count =
-      model === 'maskingPolicy'
-        ? await this.prisma.maskingPolicy.count()
-        : model === 'accessReview'
-          ? await this.prisma.accessReview.count()
-          : await this.prisma.dlpIncident.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `${prefix}-${String(count + i).padStart(4, '0')}`;
-      const exists =
+    return nextAvailableBusinessCode(
+      this.prisma,
+      `security_governance:${model}`,
+      (value) => `${prefix}-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(
         model === 'maskingPolicy'
           ? await this.prisma.maskingPolicy.findUnique({ where: { code } })
           : model === 'accessReview'
             ? await this.prisma.accessReview.findUnique({ where: { code } })
-            : await this.prisma.dlpIncident.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `${prefix}-${Date.now()}`;
+            : await this.prisma.dlpIncident.findUnique({ where: { code } })
+      ),
+    );
   }
 
   private async nextWorkflowCaseCode(client: PrismaWriter, prefix: string): Promise<string> {
-    const count = await client.workflowCase.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `WFC-${prefix}-${String(count + i).padStart(4, '0')}`;
-      const exists = await client.workflowCase.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `WFC-${prefix}-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      client,
+      `workflow_case:security:${prefix.toLowerCase()}`,
+      (value) => `WFC-${prefix}-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await client.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async createSecurityWorkflow(
@@ -665,10 +661,127 @@ export class SecurityGovernanceService {
     return review;
   }
 
+  async createAccessReviewCampaign(roleCodes: string[], dto: CreateAccessReviewCampaignDto, actor: string) {
+    const scope = await this.scope.resolve(roleCodes);
+    const assetIds = await this.visibleAssetIds(roleCodes);
+    const principalTypes = [
+      ...(dto.includeUserGrants === false ? [] : ['user']),
+      ...(dto.includeRoleGrants === false ? [] : ['role']),
+    ];
+    if (!principalTypes.length) throw new BadRequestException('Select at least one grant principal type for the review campaign');
+    const grantWhere: Prisma.AccessGrantWhereInput = {
+      status: 'active',
+      ownerDecision: 'approved',
+      principalType: { in: principalTypes },
+      ...(dto.assetId ? { assetId: dto.assetId } : {}),
+      ...(assetIds === 'all' ? {} : { assetId: { in: [...assetIds] } }),
+    };
+    const grants = await this.prisma.accessGrant.findMany({
+      where: grantWhere,
+      include: { asset: { select: { id: true, domainId: true, classificationId: true } } },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: 500,
+    });
+    if (!grants.length) throw new BadRequestException('No active approved grants are available for this review campaign');
+    const directUserIds = [...new Set(grants.filter((grant) => grant.principalType === 'user').map((grant) => grant.principalId))];
+    const roleGrantCodes = [...new Set(grants.filter((grant) => grant.principalType === 'role').map((grant) => grant.principalId))];
+    const [directUserRoles, roleGrantMemberships] = await Promise.all([
+      directUserIds.length
+        ? this.prisma.userRole.findMany({
+            where: { userId: { in: directUserIds }, user: { isActive: true }, role: { isActive: true, deletedAt: null } },
+            select: { userId: true, roleId: true },
+            orderBy: { roleId: 'asc' },
+          })
+        : Promise.resolve([]),
+      roleGrantCodes.length
+        ? this.prisma.userRole.findMany({
+            where: { role: { code: { in: roleGrantCodes }, isActive: true, deletedAt: null }, user: { isActive: true } },
+            select: { userId: true, roleId: true, role: { select: { code: true } } },
+            orderBy: [{ roleId: 'asc' }, { userId: 'asc' }],
+          })
+        : Promise.resolve([]),
+    ]);
+    const roleByUser = new Map<string, string>();
+    for (const row of directUserRoles) if (!roleByUser.has(row.userId)) roleByUser.set(row.userId, row.roleId);
+    const representativeByRoleCode = new Map<string, { userId: string; roleId: string }>();
+    for (const row of roleGrantMemberships) {
+      if (!representativeByRoleCode.has(row.role.code)) {
+        representativeByRoleCode.set(row.role.code, { userId: row.userId, roleId: row.roleId });
+      }
+    }
+    const skipped = { missingUserRole: 0, missingRoleMember: 0 };
+    const items = grants.flatMap((grant) => {
+      if (grant.principalType === 'user') {
+        const roleId = roleByUser.get(grant.principalId);
+        if (!roleId) {
+          skipped.missingUserRole++;
+          return [];
+        }
+        return [{
+          grantId: grant.id,
+          userId: grant.principalId,
+          roleId,
+          assetId: grant.assetId,
+          domainId: grant.asset.domainId,
+          classificationId: grant.asset.classificationId,
+        }];
+      }
+      if (grant.principalType === 'role') {
+        const representative = representativeByRoleCode.get(grant.principalId);
+        if (!representative) {
+          skipped.missingRoleMember++;
+          return [];
+        }
+        return [{
+          grantId: grant.id,
+          userId: representative.userId,
+          roleId: representative.roleId,
+          assetId: grant.assetId,
+          domainId: grant.asset.domainId,
+          classificationId: grant.asset.classificationId,
+        }];
+      }
+      return [];
+    });
+    if (!items.length) throw new BadRequestException('Eligible grants have no active user-role assignment to review');
+    const code = await this.nextCode('ARV', 'accessReview');
+    const review = await this.prisma.accessReview.create({
+      data: {
+        code,
+        title: dto.title.trim(),
+        description: dto.description?.trim() || 'Periodic access review campaign generated from active approved grants.',
+        status: AccessReviewStatus.active,
+        ownerUserId: dto.ownerUserId || null,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        createdBy: actor,
+        items: { create: items },
+      },
+      include: reviewInclude(),
+    });
+    await this.audit.log({
+      actor,
+      action: 'access_review.campaign.create',
+      entityType: 'access_review',
+      entityId: review.id,
+      metadata: {
+        code,
+        grantsConsidered: grants.length,
+        reviewItems: items.length,
+        principalTypes,
+        skipped,
+        scope: scope.orgUnits === 'all' ? 'all' : 'restricted',
+      },
+    });
+    return { ...review, campaignSummary: { grantsConsidered: grants.length, reviewItems: items.length, skipped } };
+  }
+
   async updateReviewItem(id: string, roleCodes: string[], dto: UpdateAccessReviewItemDto, actor: string) {
     const existing = await this.prisma.accessReviewItem.findUnique({
       where: { id },
-      include: { review: { select: { ownerUserId: true, status: true } } },
+      include: {
+        review: { select: { ownerUserId: true, status: true } },
+        grant: { select: { id: true, status: true, version: true, expiresAt: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Access review item not found');
     await this.assertSecurityTarget(roleCodes, existing, {
@@ -695,6 +808,45 @@ export class SecurityGovernanceService {
           reviewedAt: new Date(),
         },
       });
+      if (dto.decision === 'revoke' && existing.grantId) {
+        await tx.accessGrant.update({
+          where: { id: existing.grantId },
+          data: {
+            status: 'pending_revocation', enforcementStatus: 'pending', revokedBy: actor,
+            revocationReason: dto.justification?.trim() || `Revoked through access review ${existing.reviewId}`,
+            updatedBy: actor, version: { increment: 1 },
+          },
+        });
+      }
+      if (dto.decision === 'modify' && existing.grantId) {
+        await tx.accessGrant.update({
+          where: { id: existing.grantId },
+          data: {
+            status: 'requested', ownerDecision: 'pending', ownerDecisionBy: null, ownerDecisionAt: null,
+            enforcementStatus: 'not_enforced', updatedBy: actor, version: { increment: 1 },
+          },
+        });
+      }
+      if (dto.decision === 'shorten_expiry' && existing.grantId) {
+        if (!dto.newExpiresAt) throw new BadRequestException('A new expiry date is required');
+        const newExpiry = new Date(dto.newExpiresAt);
+        if (Number.isNaN(newExpiry.getTime()) || newExpiry <= new Date()) {
+          throw new BadRequestException('The new expiry date must be in the future');
+        }
+        if (existing.grant?.expiresAt && newExpiry >= existing.grant.expiresAt) {
+          throw new BadRequestException('A shortened expiry must be earlier than the current expiry');
+        }
+        await tx.accessGrant.update({
+          where: { id: existing.grantId },
+          data: { expiresAt: newExpiry, status: 'expiring', updatedBy: actor, version: { increment: 1 } },
+        });
+      }
+      if (dto.decision === 'suspend' && existing.grantId) {
+        await tx.accessGrant.update({
+          where: { id: existing.grantId },
+          data: { status: 'suspended', enforcementStatus: 'pending', updatedBy: actor, version: { increment: 1 } },
+        });
+      }
       const pending = await tx.accessReviewItem.count({
         where: { reviewId: existing.reviewId, decision: AccessReviewDecision.pending },
       });
@@ -706,7 +858,7 @@ export class SecurityGovernanceService {
       }
       return updated;
     });
-    await this.audit.log({ actor, action: 'access_review_item.decide', entityType: 'access_review_item', entityId: id, metadata: { decision: item.decision } });
+    await this.audit.log({ actor, action: 'access_review_item.decide', entityType: 'access_review_item', entityId: id, metadata: { decision: item.decision, grantId: existing.grantId, newExpiresAt: dto.newExpiresAt ?? null, justification: dto.justification ?? null } });
     return item;
   }
 

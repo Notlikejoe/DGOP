@@ -7,6 +7,9 @@ import assert from 'node:assert';
 import { WorkflowService } from '../src/workflow/workflow.service';
 import {
   DEFAULT_WORKFLOW_TEMPLATES,
+  WORKFLOW_RETURN_FOR_CLARIFICATION,
+  buildWorkflowVariableContext,
+  buildWorkflowMvpReadinessGate,
   buildWorkflowCaseTypeRegistry,
   buildWorkflowEscalationTemplates,
   buildWorkflowNotificationRules,
@@ -19,6 +22,7 @@ import {
   selectWorkflowTemplate,
   validateWorkflowFormData,
   workflowTemplateConfigurationStatus,
+  workflowNodePalette,
   workflowHealth,
 } from '../src/workflow/workflow.logic';
 import {
@@ -38,6 +42,13 @@ type Over = {
   assignmentBulkUpdates?: any[];
   template?: any;
   templates?: any[];
+  templateUpdates?: any[];
+  templateVersionCreates?: any[];
+  templateStageCreates?: any[];
+  templateStageUpdates?: any[];
+  templateStageBulkUpdates?: any[];
+  templateTransitionCreates?: any[];
+  templateTransitionBulkUpdates?: any[];
   createdTasks?: any[];
   caseUpdates?: any[];
   workflowCases?: any[];
@@ -48,8 +59,22 @@ type Over = {
   taskUpdates?: any[];
   tasks?: any[];
   taskFindManyArgs?: any;
+  runtimeTokens?: any[];
+  runtimeTokenCreates?: any[];
+  runtimeTokenUpdates?: any[];
+  runtimeTokenFindManyArgs?: any;
+  runtimeTokenFindFirstArgs?: any;
+  executionAttempts?: any[];
+  executionAttemptFindManyArgs?: any;
+  executionAttemptUpdates?: any[];
   events?: any[];
   auditEntries?: any[];
+  testRuns?: any[];
+  testRunCreates?: any[];
+  testRunUpdates?: any[];
+  testRunFindManyArgs?: any;
+  testRunFindFirstArgs?: any;
+  testRunAggregateMax?: number;
   submitter?: any;
   visibleAssets?: { id: string }[];
   scope?: any;
@@ -63,6 +88,9 @@ type Over = {
 function makeService(over: Over): WorkflowService {
   const prisma: any = {
     $transaction: async (fn: (client: any) => unknown) => fn(prisma),
+    businessSequence: {
+      upsert: async () => ({ value: BigInt((over.workflowCases?.length ?? 0) + 1) }),
+    },
     workflowTask: {
       findUnique: async () => over.task ?? null,
       count: async () => 0,
@@ -108,6 +136,97 @@ function makeService(over: Over): WorkflowService {
       findUnique: async () => over.template ?? null,
       findFirst: async (args: any) => over.templates?.find((template) => template.id === args.where?.id) ?? over.template ?? null,
       findMany: async () => over.templates ?? [],
+      update: async ({ data }: any) => {
+        (over.templateUpdates ??= []).push(data);
+        over.template = { ...(over.template ?? {}), ...data };
+        return over.template;
+      },
+      create: async ({ data }: any) => {
+        over.template = { id: 'tpl-new', ...data, stages: [], transitions: [] };
+        return over.template;
+      },
+    },
+    workflowTemplateVersion: {
+      findMany: async () => [],
+      findFirst: async () => null,
+      create: async ({ data }: any) => {
+        (over.templateVersionCreates ??= []).push(data);
+        return { id: `version-${over.templateVersionCreates.length}`, ...data };
+      },
+    },
+    workflowTemplateStage: {
+      findMany: async () => (over.template?.stages ?? []).map((stage: any) => ({ id: stage.id, code: stage.code })),
+      update: async ({ where, data }: any) => {
+        (over.templateStageUpdates ??= []).push({ where, data });
+        return { id: where.id, ...data };
+      },
+      create: async ({ data }: any) => {
+        (over.templateStageCreates ??= []).push(data);
+        return { id: `stage-${data.code}`, ...data };
+      },
+      updateMany: async (args: any) => {
+        (over.templateStageBulkUpdates ??= []).push(args);
+        return { count: 0 };
+      },
+    },
+    workflowTemplateTransition: {
+      updateMany: async (args: any) => {
+        (over.templateTransitionBulkUpdates ??= []).push(args);
+        return { count: 1 };
+      },
+      create: async ({ data }: any) => {
+        (over.templateTransitionCreates ??= []).push(data);
+        return { id: `transition-${over.templateTransitionCreates.length}`, ...data };
+      },
+    },
+    workflowVariableDefinition: {
+      findMany: async () => [],
+    },
+    workflowRuntimeToken: {
+      create: async (args: any) => {
+        const token = { id: `token-${(over.runtimeTokenCreates?.length ?? 0) + 1}`, ...args.data };
+        (over.runtimeTokenCreates ??= []).push(token);
+        return token;
+      },
+      updateMany: async (args: any) => {
+        (over.runtimeTokenUpdates ??= []).push(args);
+        return { count: 1 };
+      },
+      findFirst: async (args: any) => {
+        over.runtimeTokenFindFirstArgs = args;
+        return over.runtimeTokens?.[0] ?? null;
+      },
+      findMany: async (args: any) => {
+        over.runtimeTokenFindManyArgs = args;
+        return over.runtimeTokens ?? [];
+      },
+    },
+    workflowExecutionAttempt: {
+      create: async ({ data }: any) => {
+        const row = {
+          id: `execution-${(over.executionAttempts?.length ?? 0) + 1}`,
+          status: 'queued',
+          attemptCount: 0,
+          ...data,
+          createdAt: new Date('2026-08-15T09:00:00Z'),
+        };
+        (over.executionAttempts ??= []).push(row);
+        return row;
+      },
+      findMany: async (args: any) => {
+        over.executionAttemptFindManyArgs = args;
+        return over.executionAttempts ?? [];
+      },
+      findUnique: async ({ where }: any) => (over.executionAttempts ?? []).find((attempt) => attempt.id === where.id) ?? null,
+      updateMany: async (args: any) => {
+        (over.executionAttemptUpdates ??= []).push(args);
+        return { count: 1 };
+      },
+      update: async ({ where, data }: any) => {
+        (over.executionAttemptUpdates ??= []).push({ where, data });
+        const attempt = (over.executionAttempts ?? []).find((row) => row.id === where.id);
+        return { ...(attempt ?? { id: where.id }), ...data };
+      },
     },
     workflowEvent: {
       create: async (args: any) => {
@@ -118,7 +237,57 @@ function makeService(over: Over): WorkflowService {
         (over.events ??= []).push(...args.data);
         return { count: args.data.length };
       },
+      count: async (args?: any) => {
+        if (!args?.where) return over.events?.length ?? 0;
+        return (over.events ?? []).filter((event) =>
+          (!args.where.action || event.action === args.where.action) &&
+          (!args.where.case?.templateId?.in || args.where.case.templateId.in.includes(event.case?.templateId ?? event.templateId)),
+        ).length;
+      },
       findMany: async () => over.events ?? [],
+    },
+    workflowDesignerTestRun: {
+      aggregate: async () => ({
+        _max: {
+          runNumber: over.testRunAggregateMax ?? Math.max(0, ...(over.testRuns ?? []).map((run) => run.runNumber ?? 0)),
+        },
+      }),
+      create: async ({ data }: any) => {
+        const row = {
+          id: `test-run-${(over.testRunCreates?.length ?? 0) + 1}`,
+          ...data,
+          resetAt: null,
+          resetBy: null,
+          createdAt: new Date('2026-08-15T09:00:00Z'),
+          updatedAt: new Date('2026-08-15T09:00:00Z'),
+        };
+        (over.testRunCreates ??= []).push(data);
+        (over.testRuns ??= []).push(row);
+        return row;
+      },
+      findMany: async (args: any) => {
+        over.testRunFindManyArgs = args;
+        const rows = over.testRuns ?? [];
+        return rows
+          .filter((run) => !args.where?.status || run.status === args.where.status)
+          .sort((a, b) => (b.runNumber ?? 0) - (a.runNumber ?? 0))
+          .slice(args.skip ?? 0, (args.skip ?? 0) + (args.take ?? rows.length));
+      },
+      count: async (args?: any) => {
+        const rows = over.testRuns ?? [];
+        return rows.filter((run) => !args?.where?.status || run.status === args.where.status).length;
+      },
+      findFirst: async (args: any) => {
+        over.testRunFindFirstArgs = args;
+        return (over.testRuns ?? []).find((run) => run.id === args.where?.id && run.templateId === args.where?.templateId) ?? null;
+      },
+      update: async ({ where, data }: any) => {
+        (over.testRunUpdates ??= []).push({ where, data });
+        const existing = (over.testRuns ?? []).find((run) => run.id === where.id);
+        if (!existing) return { id: where.id, ...data };
+        Object.assign(existing, data, { updatedAt: new Date('2026-08-15T10:00:00Z') });
+        return existing;
+      },
     },
     auditLog: {
       create: async (args: any) => {
@@ -188,6 +357,216 @@ function makeService(over: Over): WorkflowService {
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
+
+function designerTemplateFixture(overrides: Partial<any> = {}) {
+  const now = new Date('2026-08-15T08:00:00Z');
+  const stages = [
+    {
+      id: 'stage-intake',
+      templateId: 'tpl-designer',
+      code: 'intake',
+      nameEn: 'Intake',
+      nameAr: 'Intake',
+      description: 'Capture request context.',
+      kind: 'intake',
+      nodeType: 'user_task',
+      taskType: 'information',
+      assignmentStrategy: 'role',
+      assigneeRoleCode: 'dmo_admin',
+      dueDays: 1,
+      formSchemaJson: { fields: ['request_title'], required: ['request_title'] },
+      slaConfigJson: { dueDays: 1 },
+      notificationRulesJson: [{ event: 'created', channel: 'in_app' }],
+      evidenceRequirementsJson: null,
+      automationConfigJson: null,
+      gatewayConfigJson: null,
+      parallelGroup: null,
+      sortOrder: 1,
+      isStart: true,
+      isDecision: false,
+      isFinal: false,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'stage-review',
+      templateId: 'tpl-designer',
+      code: 'review',
+      nameEn: 'Review',
+      nameAr: 'Review',
+      description: 'Review evidence and decide.',
+      kind: 'review',
+      nodeType: 'approval_task',
+      taskType: 'approval',
+      assignmentStrategy: 'role',
+      assigneeRoleCode: 'data_owner',
+      dueDays: 2,
+      formSchemaJson: null,
+      slaConfigJson: { dueDays: 2 },
+      notificationRulesJson: [{ event: 'assigned', channel: 'in_app' }],
+      evidenceRequirementsJson: [{ name: 'Review note', required: true }],
+      automationConfigJson: null,
+      gatewayConfigJson: null,
+      parallelGroup: null,
+      sortOrder: 2,
+      isStart: false,
+      isDecision: false,
+      isFinal: false,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'stage-closure',
+      templateId: 'tpl-designer',
+      code: 'closure',
+      nameEn: 'Closure',
+      nameAr: 'Closure',
+      description: 'Record final outcome.',
+      kind: 'closure',
+      nodeType: 'user_task',
+      taskType: 'approval',
+      assignmentStrategy: 'role',
+      assigneeRoleCode: 'dmo_admin',
+      dueDays: 1,
+      formSchemaJson: null,
+      slaConfigJson: { dueDays: 1 },
+      notificationRulesJson: [{ event: 'completed', channel: 'in_app' }],
+      evidenceRequirementsJson: [{ name: 'Decision note', required: true }],
+      automationConfigJson: null,
+      gatewayConfigJson: null,
+      parallelGroup: null,
+      sortOrder: 3,
+      isStart: false,
+      isDecision: false,
+      isFinal: true,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  const transitions = [
+    {
+      id: 'transition-intake-review',
+      templateId: 'tpl-designer',
+      fromStageId: 'stage-intake',
+      toStageId: 'stage-review',
+      fromStage: stages[0],
+      toStage: stages[1],
+      labelEn: 'Submit',
+      labelAr: 'Submit',
+      connectorType: 'sequence',
+      decision: null,
+      conditionExpression: null,
+      conditionJson: null,
+      isDefaultPath: false,
+      timeoutAfterSeconds: null,
+      isHappyPath: true,
+      sortOrder: 1,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'transition-review-closure',
+      templateId: 'tpl-designer',
+      fromStageId: 'stage-review',
+      toStageId: 'stage-closure',
+      fromStage: stages[1],
+      toStage: stages[2],
+      labelEn: 'Approve',
+      labelAr: 'Approve',
+      connectorType: 'success',
+      decision: 'approved',
+      conditionExpression: null,
+      conditionJson: null,
+      isDefaultPath: false,
+      timeoutAfterSeconds: null,
+      isHappyPath: true,
+      sortOrder: 2,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  ];
+  return {
+    id: 'tpl-designer',
+    code: 'WF-DESIGNER',
+    caseType: 'general',
+    nameEn: 'Designer fixture route',
+    nameAr: 'Designer fixture route',
+    description: 'Fixture route',
+    trigger: 'manual',
+    domainId: null,
+    defaultSlaDays: 4,
+    isSystem: true,
+    isActive: true,
+    bpmnXml: null,
+    designerJson: null,
+    designerVersion: 1,
+    lastPublishedAt: now,
+    lastPublishedBy: 'admin@dgop.local',
+    modelSignature: 'signed-fixture',
+    signatureAlgorithm: 'HMAC-SHA256',
+    securityJson: null,
+    deletedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    stages,
+    transitions,
+    ...overrides,
+  };
+}
+
+function designerFixtureBpmn(template = designerTemplateFixture()) {
+  return templateToBpmnXml({
+    id: template.id,
+    code: template.code,
+    caseType: template.caseType,
+    nameEn: template.nameEn,
+    nameAr: template.nameAr,
+    description: template.description,
+    defaultSlaDays: template.defaultSlaDays,
+    stages: template.stages.map((stage: any) => ({
+      id: stage.code,
+      code: stage.code,
+      nameEn: stage.nameEn,
+      nameAr: stage.nameAr,
+      description: stage.description,
+      kind: stage.kind,
+      nodeType: stage.nodeType,
+      taskType: stage.taskType,
+      assigneeRoleCode: stage.assigneeRoleCode,
+      dueDays: stage.dueDays,
+      formSchemaJson: stage.formSchemaJson,
+      slaConfigJson: stage.slaConfigJson,
+      notificationRulesJson: stage.notificationRulesJson,
+      evidenceRequirementsJson: stage.evidenceRequirementsJson,
+      automationConfigJson: stage.automationConfigJson,
+      gatewayConfigJson: stage.gatewayConfigJson,
+      parallelGroup: stage.parallelGroup,
+      sortOrder: stage.sortOrder,
+      isStart: stage.isStart,
+      isDecision: stage.isDecision,
+      isFinal: stage.isFinal,
+      isActive: stage.isActive,
+    })),
+    transitions: template.transitions.map((transition: any) => ({
+      fromStageId: transition.fromStage.code,
+      toStageId: transition.toStage.code,
+      labelEn: transition.labelEn,
+      labelAr: transition.labelAr,
+      connectorType: transition.connectorType,
+      decision: transition.decision,
+      conditionExpression: transition.conditionExpression,
+      conditionJson: transition.conditionJson,
+      isDefaultPath: transition.isDefaultPath,
+      isHappyPath: transition.isHappyPath,
+      sortOrder: transition.sortOrder,
+    })),
+  });
+}
 
 // ---------- SLA derivation ----------
 test('slaOf: completed task is done', () => {
@@ -333,6 +712,9 @@ test('recordDomainTaskDecision: completes task and advances configured route', a
   assert.strictEqual(over.taskUpdates?.[0].status, 'completed');
   assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-decision');
   assert.strictEqual(over.caseUpdates?.[0].status, 'under_review');
+  assert.strictEqual(over.runtimeTokenUpdates?.[0].where.taskId, 't1');
+  assert.strictEqual(over.runtimeTokenCreates?.[0].templateStageId, 'stage-decision');
+  assert.strictEqual(over.runtimeTokenCreates?.[0].sourceTransitionId, 'transition-1');
   assert.ok(over.events?.some((event) => event.action === 'domain.task.approved'));
 });
 
@@ -411,6 +793,65 @@ test('BPMN designer: validation blocks routes without a final stage', () => {
   );
   assert.strictEqual(validation.status, 'blocked');
   assert.ok(validation.errors.some((message) => message.includes('final stage')));
+});
+
+test('BPMN designer: validation enforces exactly one active start node', () => {
+  const validation = validateWorkflowRoute(
+    [
+      {
+        code: 'start_a',
+        nameEn: 'Start A',
+        nameAr: 'Start A',
+        kind: 'intake',
+        nodeType: 'start_event',
+        taskType: 'routing',
+        assigneeRoleCode: null,
+        dueDays: 0,
+        sortOrder: 1,
+        isStart: true,
+        isDecision: false,
+        isFinal: false,
+        isActive: true,
+      },
+      {
+        code: 'start_b',
+        nameEn: 'Start B',
+        nameAr: 'Start B',
+        kind: 'intake',
+        nodeType: 'start_event',
+        taskType: 'routing',
+        assigneeRoleCode: null,
+        dueDays: 0,
+        sortOrder: 2,
+        isStart: true,
+        isDecision: false,
+        isFinal: false,
+        isActive: true,
+      },
+      {
+        code: 'closed',
+        nameEn: 'Closed',
+        nameAr: 'Closed',
+        kind: 'closure',
+        nodeType: 'end_event',
+        taskType: 'routing',
+        assigneeRoleCode: null,
+        dueDays: 0,
+        sortOrder: 3,
+        isStart: false,
+        isDecision: false,
+        isFinal: true,
+        isActive: true,
+      },
+    ],
+    [
+      { fromStageId: 'start_a', toStageId: 'closed', labelEn: 'Finish', labelAr: 'Finish', isHappyPath: true, sortOrder: 1 },
+      { fromStageId: 'start_b', toStageId: 'closed', labelEn: 'Finish', labelAr: 'Finish', isHappyPath: true, sortOrder: 2 },
+    ],
+  );
+
+  assert.strictEqual(validation.status, 'blocked');
+  assert.ok(validation.errors.some((message) => message.includes('exactly one active start')));
 });
 
 test('BPMN designer: simulation previews task path and governance requirements', () => {
@@ -542,6 +983,28 @@ test('workflow configuration builders expose case registry, SLA, notifications, 
   assert.equal(notifications.length > templates.length, true);
   assert.equal(escalations.length > templates.length, true);
   assert.equal(workflowTemplateConfigurationStatus(templates[0]), 'ready');
+  const gate = buildWorkflowMvpReadinessGate(templates);
+  assert.equal(gate.summary.templatesChecked, templates.length);
+  assert.equal(gate.summary.requiredCoreNodes, 7);
+  assert.equal(gate.summary.coreNodesRegistered, 7);
+  assert.ok(gate.connectorTypes.some((connector) => connector.outcomes.includes(WORKFLOW_RETURN_FOR_CLARIFICATION)));
+});
+
+test('workflow v6 palette exposes core and advanced Volume 2 node types', () => {
+  const allNodes = workflowNodePalette();
+  const coreCodes = workflowNodePalette('core').map((node) => node.code);
+
+  assert.deepStrictEqual(coreCodes, [
+    'start_event',
+    'end_event',
+    'user_task',
+    'approval_task',
+    'decision_gateway',
+    'parallel_gateway',
+    'merge_gateway',
+  ]);
+  assert.ok(allNodes.some((node) => node.code === 'timer_event' && node.priority === 'advanced'));
+  assert.ok(allNodes.some((node) => node.code === 'error_event' && node.category === 'resilience'));
 });
 
 test('workflow routes: first actionable stage skips passive intake nodes', () => {
@@ -571,6 +1034,304 @@ test('workflow routes: rejected decisions follow the non-happy transition', () =
     'rejected',
   );
   assert.strictEqual(transition?.toStageId, 'review');
+});
+
+test('workflow routes: return-for-clarification follows the explicit clarification path', () => {
+  const transition = selectWorkflowTransitionForDecision(
+    [
+      { fromStageId: 'review', toStageId: 'close', decision: 'approved', isHappyPath: true, sortOrder: 1 },
+      { fromStageId: 'review', toStageId: 'close', decision: 'rejected', isHappyPath: false, sortOrder: 2 },
+      { fromStageId: 'review', toStageId: 'intake', decision: WORKFLOW_RETURN_FOR_CLARIFICATION, isHappyPath: false, sortOrder: 3 },
+    ],
+    'review',
+    WORKFLOW_RETURN_FOR_CLARIFICATION,
+  );
+  assert.strictEqual(transition?.toStageId, 'intake');
+});
+
+test('workflow routes: decision gateways require and use an explicit default path', () => {
+  const svc = makeService({});
+  const fromStage = {
+    id: 'stage-risk',
+    code: 'risk_gateway',
+    kind: 'gateway',
+    isDecision: true,
+    formSchemaJson: null,
+    gatewayConfigJson: null,
+  };
+  const task = {
+    dueDate: null,
+    formDataJson: { risk: 'medium' },
+    case: { id: 'case-1', status: 'submitted', type: 'general', assetId: null, asset: null },
+  };
+
+  assert.throws(
+    () =>
+      (svc as any).selectTransitionWithDmn(
+        [
+          { fromStageId: 'stage-risk', toStageId: 'manual', decision: 'manual_review', isHappyPath: false, sortOrder: 1 },
+          { fromStageId: 'stage-risk', toStageId: 'auto', decision: 'auto_approve', isHappyPath: false, sortOrder: 2 },
+        ],
+        fromStage,
+        task,
+        'approved',
+      ),
+    /must define a default connector path/,
+  );
+
+  const selected = (svc as any).selectTransitionWithDmn(
+    [
+      { fromStageId: 'stage-risk', toStageId: 'manual', decision: 'manual_review', isHappyPath: false, sortOrder: 1 },
+      {
+        fromStageId: 'stage-risk',
+        toStageId: 'fallback',
+        decision: 'default',
+        connectorType: 'default',
+        isDefaultPath: true,
+        isHappyPath: false,
+        sortOrder: 2,
+      },
+    ],
+    fromStage,
+    task,
+    'approved',
+  );
+  assert.strictEqual(selected?.toStageId, 'fallback');
+});
+
+test('workflow designer test run persists isolated route evidence without production cases', async () => {
+  const template = designerTemplateFixture();
+  const over: Over = {
+    template,
+    templates: [template],
+    testRuns: [],
+    auditEntries: [],
+  };
+  const svc = makeService(over);
+
+  const run = await svc.executeDesignerTestRun(
+    template.id,
+    { environment: 'test', variables: { requestPriority: 'pilot' } },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(run.templateId, template.id);
+  assert.equal(run.runNumber, 1);
+  assert.equal(run.isolation.productionCasesCreated, 0);
+  assert.equal(run.isolation.productionTasksCreated, 0);
+  assert.equal((run.executedPath as any).path.length, 3);
+  assert.equal(over.workflowCases?.length ?? 0, 0);
+  assert.ok(over.testRunCreates?.[0].bpmnXml.includes('<bpmn:definitions'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.test_run.execute'));
+});
+
+test('workflow designer test run reset preserves evidence and records audit', async () => {
+  const template = designerTemplateFixture();
+  const existing = {
+    id: 'test-run-1',
+    templateId: template.id,
+    runNumber: 3,
+    environment: 'test',
+    status: 'warning',
+    bpmnXml: '<bpmn:definitions />',
+    validationJson: { status: 'warning' },
+    inputJson: { isolation: { mode: 'designer_test_space', productionCasesCreated: 0, productionTasksCreated: 0 } },
+    simulationJson: { status: 'warning' },
+    executedPathJson: { path: [] },
+    resetAt: null,
+    resetBy: null,
+    createdBy: 'admin@dgop.local',
+    createdAt: new Date('2026-08-15T09:00:00Z'),
+    updatedAt: new Date('2026-08-15T09:00:00Z'),
+  };
+  const over: Over = {
+    template,
+    templates: [template],
+    testRuns: [existing],
+    auditEntries: [],
+  };
+  const svc = makeService(over);
+
+  const reset = await svc.resetDesignerTestRun(
+    template.id,
+    existing.id,
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(reset.status, 'reset');
+  assert.equal(reset.resetBy, 'admin@dgop.local');
+  assert.equal(over.testRunUpdates?.[0].data.status, 'reset');
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.test_run.reset'));
+});
+
+test('workflow operations report returns scoped AC-WF-17 evidence and operational metrics', async () => {
+  const template = designerTemplateFixture();
+  const over: Over = {
+    workflowCases: [
+      {
+        id: 'case-1',
+        code: 'WF-001',
+        title: 'Pilot route case',
+        status: 'submitted',
+        type: 'general',
+        createdBy: 'owner@dgop.local',
+        createdAt: new Date('2026-08-14T08:00:00Z'),
+        updatedAt: new Date('2026-08-14T09:00:00Z'),
+        templateId: template.id,
+        template: { id: template.id, code: template.code, nameEn: template.nameEn, nameAr: template.nameAr },
+        asset: {
+          orgUnitId: 'org-1',
+          orgUnit: { id: 'org-1', code: 'DG', nameEn: 'Data Governance Office', nameAr: 'Data Governance Office' },
+        },
+        tasks: [
+          {
+            id: 'task-1',
+            status: 'pending',
+            type: 'review',
+            dueDate: new Date('2026-08-14T08:00:00Z'),
+            createdAt: new Date('2026-08-13T08:00:00Z'),
+            completedAt: null,
+            templateStage: { code: 'review', nameEn: 'Review', nameAr: 'Review' },
+          },
+        ],
+      },
+    ],
+  };
+  const svc = makeService(over);
+
+  const report = await svc.workflowOperationsReport(
+    ['system_admin'],
+    { periodDays: 30, status: 'submitted' as never, ownerEmail: 'owner@dgop.local', orgUnitId: 'org-1' },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  const whereText = JSON.stringify(over.caseFindManyArgs.where);
+  assert.equal(report.summary.initiatedWorkflows, 1);
+  assert.equal(report.summary.overdueTasks, 1);
+  assert.equal(report.acceptanceEvidence.criterion, 'AC-WF-17');
+  assert.ok(whereText.includes('"createdBy":"owner@dgop.local"'));
+  assert.ok(whereText.includes('"orgUnitId":"org-1"'));
+});
+
+test('workflow canvas MVP gate promotes Sprint 48/49 execution and reporting evidence', () => {
+  const gate = buildWorkflowMvpReadinessGate([designerTemplateFixture()], {
+    testRunCount: 1,
+    automatedExecutionCount: 1,
+    operationalReportReady: true,
+  });
+
+  const statusByCode = new Map(gate.criteria.map((item) => [item.code, item.status]));
+  assert.equal(statusByCode.get('AC-WF-10'), 'ready');
+  assert.equal(statusByCode.get('AC-WF-14'), 'ready');
+  assert.equal(statusByCode.get('AC-WF-17'), 'ready');
+});
+
+test('workflow designer lifecycle: saving a draft resets reviewer approval', async () => {
+  const template = designerTemplateFixture({
+    securityJson: {
+      workflowLifecycle: {
+        state: 'under_review',
+        reviewStatus: 'approved',
+        approvedModelSignature: 'previous-signature',
+        reviewedBy: 'reviewer@dgop.local',
+      },
+    },
+  });
+  const over: Over = { template, templateUpdates: [], auditEntries: [] };
+  const svc = makeService(over);
+
+  await svc.saveTemplateBpmnDraft(
+    template.id,
+    { bpmnXml: designerFixtureBpmn(template), changeSummary: 'Draft after review' },
+    { id: 'designer', email: 'designer@dgop.local', roles: ['workflow_designer'] },
+  );
+
+  const lifecycle = over.templateUpdates?.[0].securityJson.workflowLifecycle;
+  assert.equal(lifecycle.state, 'draft');
+  assert.equal(lifecycle.reviewStatus, 'not_submitted');
+  assert.equal(lifecycle.approvedModelSignature, null);
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn_draft.save'));
+});
+
+test('workflow designer lifecycle: publish rejects unapproved BPMN snapshots', async () => {
+  const template = designerTemplateFixture();
+  const xml = designerFixtureBpmn(template);
+  (template as any).bpmnXml = xml;
+  const svc = makeService({ template });
+
+  await assert.rejects(
+    () => svc.publishTemplateBpmn(
+      template.id,
+      { bpmnXml: xml, changeSummary: 'Attempt publish' },
+      { id: 'publisher', email: 'publisher@dgop.local', roles: ['workflow_publisher'] },
+    ),
+    /reviewed and approved/,
+  );
+});
+
+test('workflow designer lifecycle: submit, approve and publish records reviewer gate', async () => {
+  const template = designerTemplateFixture();
+  const xml = designerFixtureBpmn(template);
+  const over: Over = {
+    template,
+    workflowCases: [],
+    templateUpdates: [],
+    templateVersionCreates: [],
+    auditEntries: [],
+  };
+  const svc = makeService(over);
+
+  await svc.submitTemplateReview(
+    template.id,
+    { bpmnXml: xml, comment: 'Ready for review' },
+    { id: 'designer', email: 'designer@dgop.local', roles: ['workflow_designer'] },
+  );
+  await svc.approveTemplateReview(
+    template.id,
+    { comment: 'Approved for pilot' },
+    { id: 'reviewer', email: 'reviewer@dgop.local', roles: ['workflow_reviewer'] },
+  );
+  await svc.publishTemplateBpmn(
+    template.id,
+    { bpmnXml: xml, changeSummary: 'Publish approved workflow' },
+    { id: 'publisher', email: 'publisher@dgop.local', roles: ['workflow_publisher'] },
+  );
+
+  const publishUpdate = over.templateUpdates?.find((update) => update.lastPublishedBy === 'publisher@dgop.local');
+  const publishLifecycle = publishUpdate.securityJson.workflowLifecycle;
+  assert.equal(publishLifecycle.reviewStatus, 'published');
+  assert.equal(publishLifecycle.reviewedBy, 'reviewer@dgop.local');
+  assert.equal(over.templateVersionCreates?.[0].createdBy, 'publisher@dgop.local');
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.submit'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn.publish'));
+});
+
+test('workflow designer lifecycle: publish rejects diagrams changed after approval', async () => {
+  const template = designerTemplateFixture();
+  const xml = designerFixtureBpmn(template);
+  const changedXml = xml.replace('Designer fixture route', 'Changed fixture route');
+  const svc = makeService({ template, workflowCases: [] });
+
+  await svc.submitTemplateReview(
+    template.id,
+    { bpmnXml: xml, comment: 'Ready for review' },
+    { id: 'designer', email: 'designer@dgop.local', roles: ['workflow_designer'] },
+  );
+  await svc.approveTemplateReview(
+    template.id,
+    { comment: 'Approved' },
+    { id: 'reviewer', email: 'reviewer@dgop.local', roles: ['workflow_reviewer'] },
+  );
+
+  await assert.rejects(
+    () => svc.publishTemplateBpmn(
+      template.id,
+      { bpmnXml: changedXml, changeSummary: 'Publish changed route' },
+      { id: 'publisher', email: 'publisher@dgop.local', roles: ['workflow_publisher'] },
+    ),
+    /changed after approval/,
+  );
 });
 
 test('workflow designer publish retires old transitions instead of hard deleting them', async () => {
@@ -939,6 +1700,66 @@ test('listCases: rejects invalid status filters before Prisma receives them', as
   );
 });
 
+test('getCaseTokenTrace: returns ordered runtime token lineage with parent stage hints', async () => {
+  const activatedAt = new Date('2026-08-14T10:00:00.000Z');
+  const over: Over = {
+    case: { id: 'case-1', assetId: null, createdBy: 'admin@dgop.local' },
+    runtimeTokens: [
+      {
+        id: 'token-root',
+        instanceKey: 'case-1:stage-review:task-review',
+        state: 'completed',
+        tokenType: 'stage',
+        parentTokenId: null,
+        rootTokenId: null,
+        branchKey: null,
+        branchIndex: null,
+        joinKey: null,
+        sourceTransitionId: null,
+        parallelGroup: null,
+        dataJson: { stageCode: 'review' },
+        activatedAt,
+        completedAt: new Date('2026-08-14T11:00:00.000Z'),
+        createdAt: activatedAt,
+        templateStage: { id: 'stage-review', code: 'review', nameEn: 'Review', nodeType: 'user_task', isDecision: false, isFinal: false },
+        task: { id: 'task-review', title: 'Review', status: 'completed', decision: 'approved', completedAt: new Date('2026-08-14T11:00:00.000Z') },
+      },
+      {
+        id: 'token-branch',
+        instanceKey: 'case-1:stage-remediate:task-remediate',
+        state: 'active',
+        tokenType: 'stage',
+        parentTokenId: 'token-root',
+        rootTokenId: 'token-root',
+        branchKey: 'branch-remediate',
+        branchIndex: 1,
+        joinKey: 'join-1',
+        sourceTransitionId: 'transition-parallel',
+        parallelGroup: 'join-1',
+        dataJson: { stageCode: 'remediate' },
+        activatedAt: new Date('2026-08-14T11:05:00.000Z'),
+        completedAt: null,
+        createdAt: new Date('2026-08-14T11:05:00.000Z'),
+        templateStage: { id: 'stage-remediate', code: 'remediate', nameEn: 'Remediate', nodeType: 'user_task', isDecision: false, isFinal: false },
+        task: { id: 'task-remediate', title: 'Remediate', status: 'pending', decision: null, completedAt: null },
+      },
+    ],
+  };
+  const svc = makeService(over);
+
+  const trace = await svc.getCaseTokenTrace(
+    ['system_admin'],
+    'case-1',
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] } as never,
+  );
+
+  assert.deepStrictEqual(over.runtimeTokenFindManyArgs.where, { caseId: 'case-1' });
+  assert.strictEqual(trace.tokens.length, 2);
+  assert.strictEqual(trace.tokens[1].parentStageCode, 'review');
+  assert.strictEqual(trace.tokens[1].rootTokenId, 'token-root');
+  assert.strictEqual(trace.lineage[1].branchKey, 'branch-remediate');
+});
+
 test('recordDomainTaskDecision: auto-assigns next stage only to a scoped role holder', async () => {
   const over: Over = {
     createdTasks: [],
@@ -1065,7 +1886,7 @@ test('decideTask: required stage evidence blocks approval until evidence exists'
   );
 });
 
-test('workflow routes: automated stages are recorded and skipped to the next human task', async () => {
+test('workflow routes: automated stages create a durable execution before the next human task', async () => {
   const over: Over = {
     attachmentCount: 0,
     createdTasks: [],
@@ -1165,8 +1986,10 @@ test('workflow routes: automated stages are recorded and skipped to the next hum
   await svc.decideTask('task-review', { decision: 'approved', comment: 'Proceed' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never);
 
   assert.strictEqual(over.createdTasks?.length, 1);
-  assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-decision');
-  assert.ok(over.events?.some((event) => event.action === 'route.automation.completed'));
+  assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-score');
+  assert.strictEqual(over.executionAttempts?.length, 1);
+  assert.strictEqual(over.executionAttempts?.[0].executionKind, 'business_rule_task');
+  assert.ok(over.events?.some((event) => event.action === 'route.automation.queued'));
 });
 
 test('slaOf: open task with no due date is none', () => {
@@ -1476,6 +2299,48 @@ test('decideTask: rejecting an approval task rejects the assignment', async () =
   assert.strictEqual(over.assignmentUpdate?.isActive, false);
 });
 
+test('decideTask: return for clarification opens an information task for the submitter', async () => {
+  const over: Over = {
+    createdTasks: [],
+    caseUpdates: [],
+    taskUpdates: [],
+    events: [],
+    auditEntries: [],
+    submitter: { id: 'u-submit' },
+    task: {
+      id: 't1',
+      title: 'Approve owner assignment',
+      assigneeUserId: 'u-appr',
+      status: 'pending',
+      caseId: 'c1',
+      case: {
+        id: 'c1',
+        type: 'owner_assignment_approval',
+        status: 'submitted',
+        createdBy: 'sub@dgop.local',
+        assignmentId: 'as1',
+        assetId: 'asset-1',
+      },
+    },
+    assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
+  };
+  const svc = makeService(over);
+
+  await svc.decideTask(
+    't1',
+    { decision: WORKFLOW_RETURN_FOR_CLARIFICATION, comment: 'Need owner evidence.' } as never,
+    { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never,
+  );
+
+  assert.strictEqual(over.taskUpdates?.[0].decision, null);
+  assert.strictEqual(over.createdTasks?.[0].type, 'information');
+  assert.strictEqual(over.createdTasks?.[0].assigneeUserId, 'u-submit');
+  assert.strictEqual(over.caseUpdates?.[0].status, 'awaiting_information');
+  assert.strictEqual(over.assignmentUpdate, undefined);
+  assert.ok(over.events?.some((event) => event.action === 'decision.return_for_clarification'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_task.return_for_clarification'));
+});
+
 test('enterprise workflow helpers: DMN table evaluates a target stage decision', () => {
   const result = evaluateWorkflowDmnTable(
     {
@@ -1499,19 +2364,59 @@ test('enterprise workflow helpers: reusable form schemas enforce required fields
       { name: 'businessReason', required: true },
       { name: 'riskScore', type: 'number', required: true },
       { name: 'decision', options: ['approve', 'reject'] },
+      { name: 'requiresDpia', label: 'DPIA required', type: 'boolean' },
+      { name: 'targetDate', label: 'Target date', type: 'date' },
+      { name: 'reviewers', label: 'Reviewers', type: 'list', allowed: ['privacy', 'security'] },
     ],
   };
 
-  const missing = validateWorkflowFormData(schema, { businessReason: 'Needed for audit' });
+  const missing = validateWorkflowFormData(schema, {
+    businessReason: 'Needed for audit',
+    requiresDpia: 'yes',
+    targetDate: 'not-a-date',
+    reviewers: ['privacy', 'legal'],
+  });
   assert.strictEqual(missing.valid, false);
   assert.ok(missing.missing.includes('riskScore'));
+  assert.ok(missing.errors.some((error) => error.includes('DPIA required must be true or false')));
+  assert.ok(missing.errors.some((error) => error.includes('Target date must be a valid date')));
+  assert.ok(missing.errors.some((error) => error.includes('Reviewers must use one of the configured allowed values')));
 
   const valid = validateWorkflowFormData(schema, {
     businessReason: 'Needed for audit',
     riskScore: 82,
     decision: 'approve',
+    requiresDpia: true,
+    targetDate: '2026-08-14',
+    reviewers: ['privacy', 'security'],
   });
   assert.strictEqual(valid.valid, true);
+});
+
+test('enterprise workflow helpers: variable context exposes typed case, stage, actor, and form values', () => {
+  const context = buildWorkflowVariableContext({
+    decision: 'approved',
+    caseId: 'case-1',
+    caseStatus: 'submitted',
+    caseType: 'data_quality_issue',
+    assetId: 'asset-1',
+    assetType: 'dataset',
+    stageCode: 'decision',
+    stageKind: 'approval',
+    actorUserId: 'owner@dgop.local',
+    actorRoles: ['data_owner'],
+    formRequiredComplete: true,
+    taskSlaDueDate: new Date('2026-08-14T10:00:00Z'),
+    formData: { riskScore: 82, reviewers: ['privacy', 'security'] },
+  });
+
+  assert.strictEqual(context['caseId'], 'case-1');
+  assert.strictEqual((context['case'] as Record<string, unknown>)['id'], 'case-1');
+  assert.strictEqual((context['asset'] as Record<string, unknown>)['type'], 'dataset');
+  assert.strictEqual((context['task'] as Record<string, unknown>)['decision'], 'approved');
+  assert.deepStrictEqual((context['actor'] as Record<string, unknown>)['roles'], ['data_owner']);
+  assert.strictEqual((context['formData'] as Record<string, unknown>)['riskScore'], 82);
+  assert.deepStrictEqual((context['formData'] as Record<string, unknown>)['reviewers'], ['privacy', 'security']);
 });
 
 test('enterprise workflow helpers: route version diff identifies stage and transition changes', () => {
@@ -1575,6 +2480,55 @@ test('enterprise workflow runtime: parallel approval stage opens one task per ap
   assert.deepStrictEqual(over.createdTasks?.map((task) => task.assigneeRoleCode), ['data_owner', 'privacy_officer']);
   assert.ok(over.createdTasks?.every((task) => task.approvalMode === 'parallel'));
   assert.ok(over.events?.some((event) => event.action === 'route.parallel_approval.activated'));
+});
+
+test('enterprise workflow runtime: completed child workflow is resumed exactly once across workers', async () => {
+  const attempt: any = {
+    id: 'execution-child-1',
+    caseId: 'case-parent',
+    taskId: 'task-parent',
+    status: 'waiting_child',
+    resultJson: { childCaseId: 'case-child' },
+    templateStage: { id: 'stage-sub', nameEn: 'Invoke governed child route' },
+    task: {
+      id: 'task-parent',
+      status: 'completed',
+      templateStage: { id: 'stage-sub', nameEn: 'Invoke governed child route' },
+      case: { id: 'case-parent', status: 'submitted' },
+    },
+  };
+  const first = makeService({ executionAttempts: [attempt] });
+  const prisma = (first as any).prisma;
+  let claimCount = 0;
+  prisma.workflowCase.findUnique = async () => ({ status: 'closed' });
+  prisma.workflowExecutionAttempt.updateMany = async ({ where, data }: any) => {
+    if (!where.status.in.includes(attempt.status)) return { count: 0 };
+    attempt.status = data.status;
+    claimCount += 1;
+    return { count: 1 };
+  };
+  prisma.workflowExecutionAttempt.update = async ({ data }: any) => {
+    Object.assign(attempt, data);
+    return attempt;
+  };
+  const second = new WorkflowService(
+    prisma,
+    (first as any).audit,
+    (first as any).scope,
+    (first as any).assignments,
+  );
+
+  const results = await Promise.all([
+    (first as any).resumeSubWorkflowAttempt(attempt.id),
+    (second as any).resumeSubWorkflowAttempt(attempt.id),
+  ]);
+
+  assert.strictEqual(claimCount, 1);
+  assert.strictEqual(
+    results.reduce((sum, result) => sum + result.succeeded + result.failed, 0),
+    1,
+  );
+  assert.strictEqual(attempt.status, 'succeeded');
 });
 
 (async () => {

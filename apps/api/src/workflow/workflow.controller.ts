@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -17,16 +18,23 @@ import {
   CreateWorkflowTemplateDto,
   DecisionDto,
   ListMyTasksDto,
+  ListWorkflowDesignerTestRunsDto,
   ListWorkflowCasesDto,
   SaveWorkflowBpmnDto,
   SubmitWorkflowTaskFormDto,
   SubmitAssignmentDto,
+  WorkflowCaseControlDto,
+  WorkflowTemplateReviewDto,
+  WorkflowTemplateLifecycleDto,
+  WorkflowDesignerTestRunDto,
   WorkflowTemplateMigrationExecuteDto,
   WorkflowTemplateRollbackDto,
   UpdateWorkflowDelegationDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  UpsertWorkflowVariableDto,
   UpsertWorkflowSlaTemplateDto,
+  WorkflowOperationsReportQueryDto,
   WorkflowDesignerMigrationPreviewDto,
   WorkflowDesignerSimulationDto,
   WorkflowRoutePreviewDto,
@@ -40,6 +48,7 @@ export class WorkflowController {
 
   // ----- route templates / graph -----
   @Get('templates')
+  @Header('Cache-Control', 'no-store, max-age=0')
   @RequirePermissions('workflow_cases.view')
   templates(@CurrentUser() user: AuthUser) {
     return this.service.listTemplates(user.roles);
@@ -52,6 +61,7 @@ export class WorkflowController {
   }
 
   @Get('templates/:id/designer')
+  @Header('Cache-Control', 'no-store, max-age=0')
   @RequirePermissions('workflow_cases.view')
   templateDesigner(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.service.getTemplateDesigner(id, user.roles);
@@ -63,10 +73,70 @@ export class WorkflowController {
     return this.service.saveTemplateBpmnDraft(id, dto, user);
   }
 
+  @Post('templates/:id/clone')
+  @RequirePermissions('workflow_cases.edit')
+  cloneTemplate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.cloneWorkflowTemplate(id, user);
+  }
+
+  @Patch('templates/:id/lifecycle')
+  @RequirePermissions('workflow_cases.edit')
+  templateLifecycle(
+    @Param('id') id: string,
+    @Body() dto: WorkflowTemplateLifecycleDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.controlWorkflowTemplateLifecycle(id, dto, user);
+  }
+
+  @Get('templates/:id/variables')
+  @RequirePermissions('workflow_cases.view')
+  templateVariables(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.listTemplateVariables(id, user);
+  }
+
+  @Post('templates/:id/variables')
+  @RequirePermissions('workflow_cases.edit')
+  upsertTemplateVariable(
+    @Param('id') id: string,
+    @Body() dto: UpsertWorkflowVariableDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.upsertTemplateVariable(id, dto, user);
+  }
+
+  @Patch('templates/:id/variables/:variableId/archive')
+  @RequirePermissions('workflow_cases.edit')
+  archiveTemplateVariable(
+    @Param('id') id: string,
+    @Param('variableId') variableId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.archiveTemplateVariable(id, variableId, user);
+  }
+
+  @Post('templates/:id/designer/layout')
+  @RequirePermissions('workflow_cases.edit')
+  layoutTemplateDesigner(@Param('id') id: string, @Body() dto: SaveWorkflowBpmnDto, @CurrentUser() user: AuthUser) {
+    return this.service.layoutTemplateBpmn(id, dto, user);
+  }
+
   @Post('templates/:id/designer/publish')
   @RequirePermissions('workflow_cases.edit')
   publishTemplateDesigner(@Param('id') id: string, @Body() dto: SaveWorkflowBpmnDto, @CurrentUser() user: AuthUser) {
     return this.service.publishTemplateBpmn(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/submit-review')
+  @RequirePermissions('workflow_cases.edit')
+  submitTemplateDesignerReview(@Param('id') id: string, @Body() dto: WorkflowTemplateReviewDto, @CurrentUser() user: AuthUser) {
+    return this.service.submitTemplateReview(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/approve-review')
+  @RequirePermissions('workflow_cases.edit')
+  approveTemplateDesignerReview(@Param('id') id: string, @Body() dto: WorkflowTemplateReviewDto, @CurrentUser() user: AuthUser) {
+    return this.service.approveTemplateReview(id, dto, user);
   }
 
   @Post('templates/:id/designer/simulate')
@@ -77,6 +147,36 @@ export class WorkflowController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.service.simulateTemplateDesigner(id, dto, user);
+  }
+
+  @Get('templates/:id/designer/test-runs')
+  @RequirePermissions('workflow_cases.view')
+  designerTestRuns(
+    @Param('id') id: string,
+    @Query() query: ListWorkflowDesignerTestRunsDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.listDesignerTestRuns(id, query, user);
+  }
+
+  @Post('templates/:id/designer/test-runs')
+  @RequirePermissions('workflow_cases.edit')
+  executeDesignerTestRun(
+    @Param('id') id: string,
+    @Body() dto: WorkflowDesignerTestRunDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.executeDesignerTestRun(id, dto, user);
+  }
+
+  @Post('templates/:id/designer/test-runs/:runId/reset')
+  @RequirePermissions('workflow_cases.edit')
+  resetDesignerTestRun(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.resetDesignerTestRun(id, runId, user);
   }
 
   @Post('templates/:id/designer/migration-preview')
@@ -125,10 +225,28 @@ export class WorkflowController {
     return this.service.dashboard(user.roles, user);
   }
 
+  @Get('reports/operations')
+  @RequirePermissions('workflow_cases.view')
+  operationsReport(@CurrentUser() user: AuthUser, @Query() query: WorkflowOperationsReportQueryDto) {
+    return this.service.workflowOperationsReport(user.roles, query, user);
+  }
+
   @Get('configuration')
   @RequirePermissions('workflow_cases.view')
   configuration(@CurrentUser() user: AuthUser) {
     return this.service.configuration(user.roles, user);
+  }
+
+  @Get('variables')
+  @RequirePermissions('workflow_cases.view')
+  variables() {
+    return this.service.workflowVariableRegistry();
+  }
+
+  @Get('audit-event-catalog')
+  @RequirePermissions('workflow_cases.view')
+  auditEventCatalog() {
+    return this.service.workflowAuditEventCatalog();
   }
 
   @Get('case-management')
@@ -147,6 +265,18 @@ export class WorkflowController {
   @RequirePermissions('workflow_cases.edit')
   maintenance(@CurrentUser() user: AuthUser) {
     return this.service.runMaintenance(user);
+  }
+
+  @Post('runtime/process')
+  @RequirePermissions('workflow_cases.edit')
+  processRuntime() {
+    return this.service.processRunnableExecutions();
+  }
+
+  @Post('runtime/executions/:id/retry')
+  @RequirePermissions('workflow_cases.edit')
+  retryRuntimeExecution(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.retryExecutionAttempt(id, user);
   }
 
   @Get('delegations')
@@ -216,6 +346,12 @@ export class WorkflowController {
     return this.service.listCaseAttachments(id, user);
   }
 
+  @Get('cases/:id/tokens')
+  @RequirePermissions('workflow_cases.view')
+  caseTokenTrace(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.service.getCaseTokenTrace(user.roles, id, user);
+  }
+
   @Post('cases/:id/attachments')
   @RequirePermissions('workflow_tasks.edit')
   addCaseAttachment(@Param('id') id: string, @Body() dto: AddWorkflowAttachmentDto, @CurrentUser() user: AuthUser) {
@@ -232,6 +368,24 @@ export class WorkflowController {
   @RequirePermissions('workflow_cases.edit')
   submitCase(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.service.submitCase(id, user.roles, user.email, user);
+  }
+
+  @Post('cases/:id/suspend')
+  @RequirePermissions('workflow_cases.edit')
+  suspendCase(@Param('id') id: string, @Body() dto: WorkflowCaseControlDto, @CurrentUser() user: AuthUser) {
+    return this.service.controlCase(id, 'suspend', dto, user);
+  }
+
+  @Post('cases/:id/resume')
+  @RequirePermissions('workflow_cases.edit')
+  resumeCase(@Param('id') id: string, @Body() dto: WorkflowCaseControlDto, @CurrentUser() user: AuthUser) {
+    return this.service.controlCase(id, 'resume', dto, user);
+  }
+
+  @Post('cases/:id/cancel')
+  @RequirePermissions('workflow_cases.edit')
+  cancelCase(@Param('id') id: string, @Body() dto: WorkflowCaseControlDto, @CurrentUser() user: AuthUser) {
+    return this.service.controlCase(id, 'cancel', dto, user);
   }
 
   @Post('cases/:id/tasks')

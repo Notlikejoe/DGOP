@@ -22,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { parseCsv } from '../common/csv';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
 import {
   CloseDataQualityIssueDto,
@@ -213,30 +214,30 @@ export class DataQualityService {
   }
 
   private async nextIssueCode(): Promise<string> {
-    const count = await this.prisma.dataQualityIssue.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `DQI-${String(count + i).padStart(4, '0')}`;
-      const exists = await this.prisma.dataQualityIssue.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `DQI-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      'data_quality_issue',
+      (value) => `DQI-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await this.prisma.dataQualityIssue.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextRuleCode(): Promise<string> {
-    const count = await this.prisma.dataQualityRule.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `DQR-${String(count + i).padStart(4, '0')}`;
-      const exists = await this.prisma.dataQualityRule.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `DQR-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      'data_quality_rule',
+      (value) => `DQR-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await this.prisma.dataQualityRule.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextCaseCode(client: PrismaWriter, issueCode: string): Promise<string> {
-    const preferred = `WFC-${issueCode}`;
-    const existing = await client.workflowCase.findUnique({ where: { code: preferred } });
-    if (!existing) return preferred;
-    return `WFC-${issueCode}-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      client,
+      `workflow_case:data_quality:${issueCode}`,
+      (value) => value === 1n ? `WFC-${issueCode}` : `WFC-${issueCode}-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await client.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async assertDomain(id: string | null | undefined): Promise<void> {

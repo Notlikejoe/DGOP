@@ -3,6 +3,7 @@ import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
   CreateAccessReviewDto,
+  CreateAccessReviewCampaignDto,
   CreateClassificationChangeRequestDto,
   CreateDlpIncidentDto,
   CreateMaskingPolicyDto,
@@ -56,6 +57,12 @@ export class SecurityGovernanceController {
   @RequirePermissions('security_governance.create')
   createAccessReview(@Body() dto: CreateAccessReviewDto, @CurrentUser() user: AuthUser) {
     return this.service.createAccessReview(user.roles, dto, user.email);
+  }
+
+  @Post('access-reviews/campaigns')
+  @RequirePermissions('security_governance.create')
+  createAccessReviewCampaign(@Body() dto: CreateAccessReviewCampaignDto, @CurrentUser() user: AuthUser) {
+    return this.service.createAccessReviewCampaign(user.roles, dto, user.email);
   }
 
   @Patch('access-review-items/:id')

@@ -167,6 +167,41 @@ interface ProductionAcceptance {
   environments: Array<{ name: string; status: string; entry: string; exit: string }>;
 }
 
+interface PilotSignOff {
+  id: string;
+  gateCode: string;
+  decision: string;
+  exceptionSummary?: string | null;
+  evidenceLinksJson?: string[] | null;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+interface PilotRehearsal {
+  id: string;
+  environment: string;
+  status: string;
+  deployedAt: string;
+  verifiedAt?: string | null;
+  rollbackTested: boolean;
+  rollbackCompletedAt?: string | null;
+  summary: string;
+  evidenceLinksJson?: string[] | null;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+interface PilotReadiness {
+  status: string;
+  acceptance: ProductionAcceptance & {
+    pilotGates?: Array<{ code: string; label: string; status: string; latestSignOff?: PilotSignOff | null }>;
+    latestRehearsal?: PilotRehearsal | null;
+  };
+  signOffs: PilotSignOff[];
+  rehearsals: PilotRehearsal[];
+  controls: { releaseCode: string; approvalRule: string };
+}
+
 interface ErrorExperienceReadiness {
   status: string;
   summary: {
@@ -207,6 +242,7 @@ export class GovernanceOperationsPage implements OnInit {
   protected readonly platformArchitecture = signal<PlatformArchitecture | null>(null);
   protected readonly controlCrosswalk = signal<ControlCrosswalk | null>(null);
   protected readonly productionAcceptance = signal<ProductionAcceptance | null>(null);
+  protected readonly pilotReadiness = signal<PilotReadiness | null>(null);
   protected readonly errorExperience = signal<ErrorExperienceReadiness | null>(null);
   protected readonly pageError = signal<UserFacingError | null>(null);
 
@@ -218,6 +254,11 @@ export class GovernanceOperationsPage implements OnInit {
     ownerRoleCode: 'dq_steward',
     nextRunAt: '',
     defaultSlaBusinessDays: 5,
+  };
+  protected pilotSignOffForm = { gateCode: 'workflow_canvas_uat', decision: 'approved', exceptionSummary: '', evidenceLinks: '' };
+  protected rehearsalForm = {
+    environment: 'PRE-PROD', status: 'passed', deployedAt: this.nowForInput(), verifiedAt: this.nowForInput(),
+    rollbackTested: true, rollbackCompletedAt: this.nowForInput(), summary: '', evidenceLinks: '',
   };
 
   protected readonly nodeMap = computed(() => {
@@ -236,6 +277,7 @@ export class GovernanceOperationsPage implements OnInit {
     this.platformArchitecture.set(null);
     this.controlCrosswalk.set(null);
     this.productionAcceptance.set(null);
+    this.pilotReadiness.set(null);
     this.errorExperience.set(null);
     this.http.get<Workspace>('/api/governance-operations/workspace').subscribe({
       next: (workspace) => {
@@ -262,6 +304,10 @@ export class GovernanceOperationsPage implements OnInit {
     this.http.get<ProductionAcceptance>('/api/governance-operations/production-acceptance').subscribe({
       next: (acceptance) => this.productionAcceptance.set(acceptance),
       error: () => this.productionAcceptance.set(null),
+    });
+    this.http.get<PilotReadiness>('/api/governance-operations/pilot-readiness').subscribe({
+      next: (readiness) => this.pilotReadiness.set(readiness),
+      error: () => this.pilotReadiness.set(null),
     });
     this.http.get<ErrorExperienceReadiness>('/api/governance-operations/error-experience').subscribe({
       next: (readiness) => this.errorExperience.set(readiness),
@@ -321,6 +367,43 @@ export class GovernanceOperationsPage implements OnInit {
 
   protected updateEscalation(row: any, status: string): void {
     this.patch(`/api/governance-operations/escalations/${row.id}`, { status });
+  }
+
+  protected recordPilotSignOff(): void {
+    if (!this.pilotSignOffForm.gateCode || this.busy()) return;
+    if (this.pilotSignOffForm.decision === 'approved_with_exception' && !this.pilotSignOffForm.exceptionSummary.trim()) return;
+    this.busy.set(true);
+    this.http.post('/api/governance-operations/pilot-sign-offs', {
+      gateCode: this.pilotSignOffForm.gateCode,
+      decision: this.pilotSignOffForm.decision,
+      exceptionSummary: this.pilotSignOffForm.exceptionSummary.trim() || null,
+      evidenceLinks: this.evidenceLinks(this.pilotSignOffForm.evidenceLinks),
+    }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.pilotSignOffForm = { gateCode: this.pilotSignOffForm.gateCode, decision: 'approved', exceptionSummary: '', evidenceLinks: '' };
+        this.loadWorkspace();
+      },
+      error: () => this.busy.set(false),
+    });
+  }
+
+  protected recordRehearsal(): void {
+    if (!this.rehearsalForm.summary.trim() || this.busy()) return;
+    this.busy.set(true);
+    this.http.post('/api/governance-operations/pilot-release-rehearsals', {
+      ...this.rehearsalForm,
+      verifiedAt: this.rehearsalForm.verifiedAt || null,
+      rollbackCompletedAt: this.rehearsalForm.rollbackCompletedAt || null,
+      evidenceLinks: this.evidenceLinks(this.rehearsalForm.evidenceLinks),
+    }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.rehearsalForm = { ...this.rehearsalForm, deployedAt: this.nowForInput(), verifiedAt: this.nowForInput(), rollbackCompletedAt: this.nowForInput(), summary: '', evidenceLinks: '' };
+        this.loadWorkspace();
+      },
+      error: () => this.busy.set(false),
+    });
   }
 
   protected nodeStyle(node: GraphNode): Record<string, string> {
@@ -392,5 +475,15 @@ export class GovernanceOperationsPage implements OnInit {
       },
       error: () => this.busy.set(false),
     });
+  }
+
+  private evidenceLinks(value: string): string[] {
+    return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean).slice(0, 20);
+  }
+
+  private nowForInput(): string {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
   }
 }

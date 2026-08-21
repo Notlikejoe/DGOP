@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
+import { isProductionLikeRuntime, isUnsafeSearchQueryKey } from '../common/runtime-safety';
 
 export interface ProtectedQuery {
   queryHash: string;
@@ -61,9 +62,10 @@ export function revealSearchQuery(envelope: unknown, fallback: string): string {
 }
 
 function deriveKey(): Buffer {
-  const material =
-    process.env.DGOP_SEARCH_QUERY_KEY ||
-    process.env.JWT_SECRET ||
-    'dgop-local-search-query-key-change-before-shared-demo';
+  const configured = process.env.DGOP_SEARCH_QUERY_KEY?.trim();
+  if (isProductionLikeRuntime() && isUnsafeSearchQueryKey(configured)) {
+    throw new Error('DGOP_SEARCH_QUERY_KEY must be configured safely in production-like runtime');
+  }
+  const material = configured || 'dgop-local-search-query-key-change-before-shared-demo';
   return createHash('sha256').update(material).digest();
 }

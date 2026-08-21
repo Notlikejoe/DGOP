@@ -14,6 +14,15 @@
       @if (canSubmit()) {
         <button type="button" class="ds-btn ds-btn--primary" (click)="submitCase()">{{ t('wf.submitCase') }}</button>
       }
+      @if (canSuspend()) {
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openControl('suspend')">{{ t('wf.caseControl.suspend.action') }}</button>
+      }
+      @if (canResume()) {
+        <button type="button" class="ds-btn ds-btn--primary" (click)="openControl('resume')">{{ t('wf.caseControl.resume.action') }}</button>
+      }
+      @if (canCancel()) {
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openControl('cancel')">{{ t('wf.caseControl.cancel.action') }}</button>
+      }
     </div>
   </header>
 
@@ -107,7 +116,97 @@
                     <td class="actions-col">
                       @if (canDecide(task)) {
                         <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openDecision(task, 'approved')">{{ t('wf.approve') }}</button>
+                        <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'return_for_clarification')">{{ t('wf.returnForClarification') }}</button>
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'rejected')">{{ t('wf.reject') }}</button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <div class="ds-card card--wide">
+        <div class="card-head">
+          <h2 class="card-title">{{ t('wf.tokens.title') }}</h2>
+          <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="loadTokenTrace()">{{ t('crud.retry') }}</button>
+        </div>
+        @if (tokenTraceState() === 'loading') {
+          <p class="muted">{{ t('wf.tokens.loading') }}</p>
+        } @else if (tokenTraceState() === 'error') {
+          <p class="error">{{ t('wf.tokens.error') }}</p>
+        } @else if (tokenTrace(); as trace) {
+          @if (!trace.tokens.length) {
+            <p class="muted">{{ t('wf.tokens.empty') }}</p>
+          } @else {
+            <div class="table-wrap">
+              <table class="ds-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('wf.graph.node.stage') }}</th>
+                    <th>{{ t('wf.col.task') }}</th>
+                    <th>{{ t('wf.tokens.state') }}</th>
+                    <th>{{ t('wf.tokens.branch') }}</th>
+                    <th>{{ t('wf.tokens.parent') }}</th>
+                    <th>{{ t('wf.tokens.join') }}</th>
+                    <th>{{ t('wf.tokens.activated') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (token of trace.tokens; track token.id) {
+                    <tr>
+                      <td><code>{{ token.stage?.code ?? token.tokenType }}</code></td>
+                      <td>{{ token.task?.title ?? token.instanceKey }}</td>
+                      <td>{{ token.state }}</td>
+                      <td>{{ token.branchKey ?? '-' }}</td>
+                      <td>{{ token.parentStageCode ?? tokenShort(token.parentTokenId) }}</td>
+                      <td>{{ token.joinKey ?? '-' }}</td>
+                      <td>{{ fmtDateTime(token.activatedAt) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        } @else {
+          <p class="muted">{{ t('wf.tokens.empty') }}</p>
+        }
+      </div>
+
+      <div class="ds-card card--wide">
+        <div class="card-head">
+          <h2 class="card-title">{{ t('wf.execution.title') }}</h2>
+        </div>
+        @if (!tokenTrace()?.executions?.length) {
+          <p class="muted">{{ t('wf.execution.empty') }}</p>
+        } @else {
+          <div class="table-wrap">
+            <table class="ds-table">
+              <thead>
+                <tr>
+                  <th>{{ t('wf.execution.kind') }}</th>
+                  <th>{{ t('wf.col.task') }}</th>
+                  <th>{{ t('wf.col.status') }}</th>
+                  <th>{{ t('wf.execution.attempts') }}</th>
+                  <th>{{ t('wf.execution.nextAttempt') }}</th>
+                  <th>{{ t('wf.execution.error') }}</th>
+                  <th class="actions-col">{{ t('crud.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (execution of tokenTrace()?.executions ?? []; track execution.id) {
+                  <tr>
+                    <td>{{ execution.executionKind }}</td>
+                    <td><code>{{ tokenShort(execution.taskId) }}</code></td>
+                    <td><app-status-chip [kind]="executionKind(execution.status)" [label]="t('wf.execution.status.' + execution.status)" /></td>
+                    <td>{{ execution.attemptCount }} / {{ execution.maxAttempts }}</td>
+                    <td>{{ fmtDateTime(execution.nextAttemptAt) }}</td>
+                    <td>{{ execution.errorMessage || execution.errorCode || '-' }}</td>
+                    <td class="actions-col">
+                      @if (canRetryExecution(execution.status)) {
+                        <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="saving()" (click)="retryExecution(execution.id)">{{ t('wf.execution.retry') }}</button>
                       }
                     </td>
                   </tr>
@@ -121,7 +220,7 @@
   }
 
   @if (decideTask(); as task) {
-    <app-modal [title]="decision() === 'approved' ? t('wf.approveTitle') : t('wf.rejectTitle')" (close)="closeDecision()">
+    <app-modal [title]="decision() === 'approved' ? t('wf.approveTitle') : decision() === 'rejected' ? t('wf.rejectTitle') : t('wf.returnTitle')" (close)="closeDecision()">
       <div class="form">
         <p><strong>{{ task.title }}</strong></p>
         <label class="field">
@@ -132,7 +231,26 @@
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeDecision()">{{ t('crud.cancel') }}</button>
         <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="submitDecision()">
-          {{ saving() ? t('crud.saving') : (decision() === 'approved' ? t('wf.approve') : t('wf.reject')) }}
+          {{ saving() ? t('crud.saving') : (decision() === 'approved' ? t('wf.approve') : decision() === 'rejected' ? t('wf.reject') : t('wf.returnForClarification')) }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (controlModalOpen() && wfCase(); as c) {
+    <app-modal [title]="controlTitle()" (close)="closeControl()">
+      <div class="form">
+        <p><strong><code>{{ c.code }}</code> {{ c.title }}</strong></p>
+        <p class="muted">{{ t('wf.caseControl.currentStatus') }}: {{ t('case.' + c.status) }}</p>
+        <label class="field">
+          <span class="field__label">{{ t('wf.caseControl.reason') }}@if (controlReasonRequired()) { <span class="req">*</span> }</span>
+          <textarea class="field__input" rows="3" [ngModel]="controlReason()" (ngModelChange)="controlReason.set($event)" name="controlReason"></textarea>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeControl()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving() || (controlReasonRequired() && !controlReason().trim())" (click)="submitControl()">
+          {{ saving() ? t('crud.saving') : controlSubmitLabel() }}
         </button>
       </div>
     </app-modal>

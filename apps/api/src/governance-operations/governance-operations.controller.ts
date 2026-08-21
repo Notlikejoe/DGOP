@@ -1,10 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
-import { CurrentUser, RequirePermissions } from '../auth/decorators';
+import { CurrentUser, RequirePermissions, Roles } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
   CreateComplianceCalendarTemplateDto,
   CreateGovernanceNotificationDto,
   CreateKsaHolidayDto,
+  CreatePilotReleaseRehearsalDto,
+  CreatePilotSignOffDto,
   DispatchNotificationsDto,
   UpdateComplianceCalendarTemplateDto,
   UpdateEscalationDto,
@@ -53,6 +55,26 @@ export class GovernanceOperationsController {
   @RequirePermissions('governance_operations.view')
   productionAcceptance(@CurrentUser() user: AuthUser) {
     return this.service.productionAcceptancePackage(user);
+  }
+
+  @Get('pilot-readiness')
+  @RequirePermissions('governance_operations.view')
+  pilotReadiness(@CurrentUser() user: AuthUser) {
+    return this.service.pilotReadiness(user);
+  }
+
+  @Post('pilot-sign-offs')
+  @Roles('system_admin', 'dmo_admin', 'security_admin', 'executive_sponsor')
+  @RequirePermissions('governance_operations.run')
+  recordPilotSignOff(@Body() dto: CreatePilotSignOffDto, @CurrentUser() user: AuthUser) {
+    return this.service.recordPilotSignOff(dto, user);
+  }
+
+  @Post('pilot-release-rehearsals')
+  @Roles('system_admin', 'dmo_admin', 'security_admin', 'executive_sponsor')
+  @RequirePermissions('governance_operations.run')
+  recordPilotReleaseRehearsal(@Body() dto: CreatePilotReleaseRehearsalDto, @CurrentUser() user: AuthUser) {
+    return this.service.recordPilotReleaseRehearsal(dto, user);
   }
 
   @Get('error-experience')

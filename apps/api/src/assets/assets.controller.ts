@@ -35,6 +35,9 @@ export class AssetsController {
     @Query('orgUnitId') orgUnitId?: string,
     @Query('ownerStatus') ownerStatus?: string,
     @Query('lifecycleStatus') lifecycleStatus?: string,
+    @Query('assetType') assetType?: string,
+    @Query('assetSubtype') assetSubtype?: string,
+    @Query('v6LifecycleState') v6LifecycleState?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
@@ -48,6 +51,9 @@ export class AssetsController {
       orgUnitId,
       ownerStatus,
       lifecycleStatus,
+      assetType,
+      assetSubtype,
+      v6LifecycleState,
     };
     return this.service.list(user.roles, filters, page, pageSize);
   }
@@ -68,6 +74,12 @@ export class AssetsController {
   @RequirePermissions('data_assets.import')
   import(@Body() dto: ImportAssetsDto, @CurrentUser() user: AuthUser) {
     return this.service.importCsv(user.roles, dto.csv, user.email);
+  }
+
+  @Post('import-preview')
+  @RequirePermissions('data_assets.import')
+  importPreview(@Body() dto: ImportAssetsDto, @CurrentUser() user: AuthUser) {
+    return this.service.importPreview(user.roles, dto.csv);
   }
 
   @Patch(':id')

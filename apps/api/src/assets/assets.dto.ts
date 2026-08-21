@@ -3,6 +3,7 @@ import {
   IsArray,
   IsIn,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -16,14 +17,19 @@ import {
   ASSET_DESCRIPTION_MAX,
   ASSET_NAME_MAX,
   ASSET_OWNER_MAX,
+  DATA_ASSET_TYPES,
   LIFECYCLE_STATUSES,
+  LIFECYCLE_PHASES,
   OWNER_STATUSES,
   RELATIONSHIP_TYPES,
+  V6_LIFECYCLE_STATES,
   normalizeAssetCode,
+  normalizeAssetSubtype,
+  normalizeAssetTypeInput,
   normalizeOptionalText,
 } from './assets.logic';
 
-export { LIFECYCLE_STATUSES, OWNER_STATUSES, RELATIONSHIP_TYPES } from './assets.logic';
+export { DATA_ASSET_TYPES, LIFECYCLE_STATUSES, LIFECYCLE_PHASES, OWNER_STATUSES, RELATIONSHIP_TYPES, V6_LIFECYCLE_STATES } from './assets.logic';
 
 // ---------- Data Assets ----------
 export class CreateAssetDto {
@@ -39,7 +45,14 @@ export class CreateAssetDto {
   @Transform(({ value }) => normalizeOptionalText(value))
   @IsOptional() @IsString() @MaxLength(ASSET_DESCRIPTION_MAX)
   description?: string | null;
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeAssetTypeInput(value) : value))
+  @IsOptional() @IsIn(DATA_ASSET_TYPES) assetType?: string;
+  @Transform(({ obj, value }) => (typeof value === 'string' ? normalizeAssetSubtype(obj?.assetType ?? 'dataset', value) : value))
+  @IsOptional() @IsString() @MaxLength(80) assetSubtype?: string | null;
+  @IsOptional() @IsIn(V6_LIFECYCLE_STATES) v6LifecycleState?: string;
+  @IsOptional() @IsIn(LIFECYCLE_PHASES) lifecyclePhase?: string;
   @IsOptional() @IsIn(LIFECYCLE_STATUSES) lifecycleStatus?: string;
+  @IsOptional() @IsObject() typeMetadataJson?: Record<string, unknown> | null;
   @Transform(({ value }) => normalizeOptionalText(value))
   @IsOptional() @IsString() @MaxLength(ASSET_OWNER_MAX)
   ownerName?: string | null;
@@ -61,7 +74,14 @@ export class UpdateAssetDto {
   @Transform(({ value }) => normalizeOptionalText(value))
   @IsOptional() @IsString() @MaxLength(ASSET_DESCRIPTION_MAX)
   description?: string | null;
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeAssetTypeInput(value) : value))
+  @IsOptional() @IsIn(DATA_ASSET_TYPES) assetType?: string;
+  @Transform(({ obj, value }) => (typeof value === 'string' ? normalizeAssetSubtype(obj?.assetType ?? 'dataset', value) : value))
+  @IsOptional() @IsString() @MaxLength(80) assetSubtype?: string | null;
+  @IsOptional() @IsIn(V6_LIFECYCLE_STATES) v6LifecycleState?: string;
+  @IsOptional() @IsIn(LIFECYCLE_PHASES) lifecyclePhase?: string;
   @IsOptional() @IsIn(LIFECYCLE_STATUSES) lifecycleStatus?: string;
+  @IsOptional() @IsObject() typeMetadataJson?: Record<string, unknown> | null;
   @Transform(({ value }) => normalizeOptionalText(value))
   @IsOptional() @IsString() @MaxLength(ASSET_OWNER_MAX)
   ownerName?: string | null;

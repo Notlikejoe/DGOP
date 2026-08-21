@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { NdiAuditPackStatus, NdiEvidenceStatus, Prisma, TaskDecision } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth.types';
 import { ScoringService } from '../scoring/scoring.service';
@@ -110,10 +111,12 @@ export class AuditPacksService {
 
   private async nextCode(): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await this.prisma.ndiAuditPack.count({
-      where: { code: { startsWith: `NDI-PACK-${day}` } },
-    });
-    return `NDI-PACK-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      `ndi_audit_pack:${day}`,
+      (value) => `NDI-PACK-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(await this.prisma.ndiAuditPack.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async actorPersonId(actor: Pick<AuthUser, 'id' | 'email'>): Promise<string | null> {

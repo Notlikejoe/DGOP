@@ -23,7 +23,17 @@ export const MASKING_TECHNIQUES = [
   'pseudonymization',
   'redaction',
 ] as const;
-export const ACCESS_REVIEW_DECISIONS = ['pending', 'certified', 'revoke', 'exception', 'escalated'] as const;
+export const ACCESS_REVIEW_DECISIONS = [
+  'pending',
+  'certified',
+  'modify',
+  'shorten_expiry',
+  'suspend',
+  'request_clarification',
+  'revoke',
+  'exception',
+  'escalated',
+] as const;
 export const DLP_STATUSES = ['new', 'triaged', 'under_review', 'contained', 'closed', 'false_positive'] as const;
 export const SECURITY_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
 
@@ -70,9 +80,20 @@ export class CreateAccessReviewDto {
   items!: AccessReviewItemDraftDto[];
 }
 
+export class CreateAccessReviewCampaignDto {
+  @IsString() @IsNotEmpty() title!: string;
+  @IsOptional() @IsString() description?: string | null;
+  @IsOptional() @IsString() ownerUserId?: string | null;
+  @IsOptional() @IsDateString() dueDate?: string | null;
+  @IsOptional() @IsString() assetId?: string | null;
+  @IsOptional() @IsBoolean() includeUserGrants?: boolean;
+  @IsOptional() @IsBoolean() includeRoleGrants?: boolean;
+}
+
 export class UpdateAccessReviewItemDto {
   @IsIn(ACCESS_REVIEW_DECISIONS) decision!: (typeof ACCESS_REVIEW_DECISIONS)[number];
   @IsOptional() @IsString() justification?: string | null;
+  @IsOptional() @IsDateString() newExpiresAt?: string | null;
 }
 
 export class CreateDlpIncidentDto {

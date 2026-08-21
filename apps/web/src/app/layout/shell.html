@@ -209,7 +209,7 @@
           type="button"
           class="ds-btn ds-btn--ghost"
           (click)="theme.toggle()"
-          [attr.aria-label]="t('action.theme')"
+          [attr.aria-label]="t('action.theme') + ': ' + (theme.theme() === 'dark' ? t('theme.light') : t('theme.dark'))"
         >
           {{ theme.theme() === 'dark' ? t('theme.light') : t('theme.dark') }}
         </button>
@@ -220,6 +220,8 @@
             class="profile__btn"
             (click)="menuOpen.set(!menuOpen())"
             [attr.aria-expanded]="menuOpen()"
+            [attr.aria-label]="t('action.profileMenu')"
+            [attr.title]="t('action.profileMenu')"
             aria-haspopup="menu"
           >
             <span class="profile__avatar" aria-hidden="true">{{ initials() }}</span>

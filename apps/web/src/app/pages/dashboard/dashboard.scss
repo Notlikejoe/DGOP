@@ -419,9 +419,65 @@
 }
 
 @media (max-width: 760px) {
+  .command-page {
+    gap: var(--space-3);
+  }
+
   .command-hero {
     grid-template-columns: 1fr;
-    padding: var(--space-5);
+    gap: var(--space-4);
+    padding: var(--space-4);
+  }
+
+  .command-hero__copy {
+    gap: var(--space-2);
+  }
+
+  .command-hero h1 {
+    font-size: 1.8rem;
+    line-height: 1.18;
+  }
+
+  .command-hero p {
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+  }
+
+  .command-hero__actions {
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+  }
+
+  .command-hero__actions .ds-btn {
+    min-height: 40px;
+    padding-inline: var(--space-3);
+  }
+
+  .command-hero__signal {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3);
+    align-items: center;
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
+  .command-hero__signal app-status-chip {
+    grid-row: 1 / 3;
+  }
+
+  .command-hero__signal .signal__value,
+  .command-hero__signal .signal__label {
+    grid-column: 2;
+  }
+
+  .command-hero__signal .signal__value {
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .command-hero__signal p {
+    grid-column: 1 / -1;
+    margin-top: var(--space-2);
   }
 
   .status-strip {

@@ -71,10 +71,23 @@ export const routes: Routes = [
           import('./pages/governance/workflow/workflow').then((m) => m.WorkflowPage),
       },
       {
+        path: 'governance/workflow/designer',
+        canActivate: [permissionGuard('workflow_cases.edit')],
+        data: { initialTab: 'designer' },
+        loadComponent: () =>
+          import('./pages/governance/workflow/workflow').then((m) => m.WorkflowPage),
+      },
+      {
         path: 'governance/workflow/cases/:id',
         canActivate: [permissionGuard('workflow_cases.view')],
         loadComponent: () =>
           import('./pages/governance/workflow/case-detail').then((m) => m.WorkflowCasePage),
+      },
+      {
+        path: 'governance/access',
+        canActivate: [permissionGuard('access_grants.view')],
+        loadComponent: () =>
+          import('./pages/governance/access-management/access-management').then((m) => m.AccessManagementPage),
       },
       {
         path: 'governance/ndi',

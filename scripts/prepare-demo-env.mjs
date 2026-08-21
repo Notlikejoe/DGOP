@@ -81,6 +81,14 @@ if (secretIsUnsafe(state.values.get('JWT_SECRET'))) {
   rotated.push('JWT_SECRET');
 }
 
+if (
+  secretIsUnsafe(state.values.get('DGOP_SEARCH_QUERY_KEY')) ||
+  state.values.get('DGOP_SEARCH_QUERY_KEY') === state.values.get('JWT_SECRET')
+) {
+  setValue(state, 'DGOP_SEARCH_QUERY_KEY', randomSecret());
+  rotated.push('DGOP_SEARCH_QUERY_KEY');
+}
+
 if (passwordIsUnsafe(state.values.get('SEED_ADMIN_PASSWORD'))) {
   setValue(state, 'SEED_ADMIN_PASSWORD', randomPassword());
   rotated.push('SEED_ADMIN_PASSWORD');
@@ -107,4 +115,4 @@ writeFileSync(envPath, `${state.lines.join('\n').replace(/\n+$/u, '')}\n`);
 
 console.log('Local demo environment prepared in ignored .env.');
 console.log(`Rotated keys: ${rotated.length ? rotated.join(', ') : 'none'}.`);
-console.log('Run `npm run db:seed` to apply rotated SEED_ADMIN_PASSWORD and SEED_PERSON_PASSWORD values to local demo accounts.');
+console.log('Run `npm run db:seed:local` to apply rotated SEED_ADMIN_PASSWORD and SEED_PERSON_PASSWORD values to local demo accounts.');

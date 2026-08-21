@@ -24,6 +24,11 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 test('PDP business days skip Friday and Saturday', () => {
   const thursday = new Date('2026-07-16T08:00:00Z');
   const due = addKsaBusinessDays(thursday, 1);
@@ -266,6 +271,7 @@ test('createDpia opens a routed privacy workflow case', async () => {
   const workflowInputs: any[] = [];
   const gatePhases: string[] = [];
   const tx: any = {
+    businessSequence: sequenceDelegate(),
     privacyDpia: {
       count: async () => 0,
       findUnique: async () => null,

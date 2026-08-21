@@ -1,11 +1,14 @@
 <section class="page">
   <header class="page__header">
     <div>
-      <h1>{{ t('wf.title') }}</h1>
-      <p class="page__subtitle">{{ t('wf.subtitle') }}</p>
+      <h1>{{ tab() === 'designer' ? t('wf.designer.pageTitle') : t('wf.title') }}</h1>
+      <p class="page__subtitle">{{ tab() === 'designer' ? t('wf.designer.pageSubtitle') : t('wf.subtitle') }}</p>
     </div>
     <div class="header-actions">
-      <button type="button" class="ds-btn ds-btn--ghost" (click)="loadAll()">{{ t('crud.retry') }}</button>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="loadAll()"><app-icon name="refresh" />{{ t('crud.refresh') }}</button>
+      @if (canEditDesigner && tab() !== 'designer') {
+        <a class="ds-btn ds-btn--primary" routerLink="/governance/workflow/designer">{{ t('wf.designer.open') }}</a>
+      }
       @if (canCreateCase) {
         <button type="button" class="ds-btn ds-btn--primary" (click)="openNewCase()">{{ t('wf.newCase') }}</button>
       }
@@ -33,7 +36,7 @@
     }
   </div>
 
-  <div class="ds-card">
+  <div class="ds-card" [class.ds-card--designer]="tab() === 'designer'">
     @if (state() === 'loading') {
       <p>{{ t('crud.loading') }}</p>
     } @else if (state() === 'error') {
@@ -117,6 +120,45 @@
             </section>
           }
 
+          @if (workflowOperationsReport(); as report) {
+            <section class="workflow-report" [attr.aria-label]="t('wf.dashboard.reportTitle')">
+              <div class="workflow-dashboard__head">
+                <div>
+                  <span class="section-kicker">{{ report.acceptanceEvidence.criterion }} &middot; {{ report.period.days }} {{ t('wf.graph.days') }}</span>
+                  <h2>{{ t('wf.dashboard.reportTitle') }}</h2>
+                  <p>{{ t('wf.dashboard.reportSubtitle') }}</p>
+                </div>
+                <app-status-chip [kind]="report.summary.overdueTasks > 0 ? 'warning' : 'success'" [label]="report.summary.slaCompliancePercentage + '%'" />
+              </div>
+              <div class="workflow-report__grid">
+                <article>
+                  <span>{{ t('wf.dashboard.initiated') }}</span>
+                  <strong>{{ report.summary.initiatedWorkflows }}</strong>
+                  <small>{{ report.summary.activeWorkflows }} {{ t('wf.dashboard.active') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.dashboard.completed') }}</span>
+                  <strong>{{ report.summary.completedWorkflows }}</strong>
+                  <small>{{ report.summary.failedWorkflows }} {{ t('wf.dashboard.failed') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.dashboard.avgTask') }}</span>
+                  <strong>{{ report.summary.averageTaskCompletionHours }}h</strong>
+                  <small>{{ report.summary.openTasks }} {{ t('wf.graph.openTasks') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.dashboard.stagePressure') }}</span>
+                  @for (stage of report.stagePerformance.slice(0, 3); track stage.stage + stage.workflow) {
+                    <div class="dashboard-list-row">
+                      <strong>{{ stage.stage }}</strong>
+                      <small>{{ stage.open }} {{ t('wf.graph.openTasks') }} &middot; {{ stage.overdue }} {{ t('wf.graph.overdue') }}</small>
+                    </div>
+                  }
+                </article>
+              </div>
+            </section>
+          }
+
           @if (configuration(); as cfg) {
             <section class="configuration-card" [attr.aria-label]="t('wf.config.title')">
               <div class="configuration-card__head">
@@ -143,6 +185,38 @@
                   <strong>{{ cfg.summary.unassignedTasks }}</strong>
                   <small>{{ t('wf.config.unassignedHelp') }}</small>
                 </article>
+                @if (cfg.workflowCanvasMvp) {
+                  <article>
+                    <span>{{ t('wf.config.workflowMvp') }}</span>
+                    <strong>{{ cfg.workflowCanvasMvp.summary.ready }} / {{ cfg.workflowCanvasMvp.summary.templatesChecked }}</strong>
+                    <small>{{ t('wf.config.workflowMvpHelp') }}</small>
+                  </article>
+                }
+                <article>
+                  <span>{{ t('wf.config.connectors') }}</span>
+                  <strong>{{ cfg.connectorTypes?.length ?? 0 }}</strong>
+                  <small>{{ t('wf.config.connectorsHelp') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.config.variables') }}</span>
+                  <strong>{{ cfg.variableRegistry?.length ?? 0 }}</strong>
+                  <small>{{ t('wf.config.variablesHelp') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.config.auditEvents') }}</span>
+                  <strong>{{ cfg.auditEventCatalog?.length ?? 0 }}</strong>
+                  <small>{{ t('wf.config.auditEventsHelp') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.config.testRuns') }}</span>
+                  <strong>{{ cfg.summary.designerTestRuns ?? 0 }}</strong>
+                  <small>{{ t('wf.config.testRunsHelp') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.config.automationEvents') }}</span>
+                  <strong>{{ cfg.summary.automatedExecutionEvents ?? 0 }}</strong>
+                  <small>{{ t('wf.config.automationEventsHelp') }}</small>
+                </article>
               </div>
               <div class="registry-strip">
                 @for (item of cfg.caseTypeRegistry.slice(0, 8); track item.caseType) {
@@ -151,6 +225,13 @@
                   </span>
                 }
               </div>
+              @if (cfg.variableRegistry?.length) {
+                <div class="registry-strip registry-strip--variables">
+                  @for (variable of cfg.variableRegistry!.slice(0, 8); track variable.code) {
+                    <span>{{ variable.code }} &middot; {{ variable.variableType }}</span>
+                  }
+                </div>
+              }
             </section>
           }
 
@@ -347,7 +428,7 @@
         <div class="empty"><p>{{ t('wf.graph.empty') }}</p></div>
       }
     } @else if (tab() === 'designer') {
-      <section class="designer-console--enterprise">
+      <section class="designer-console--enterprise" [class.designer-console--technical]="designerViewMode() === 'technical'">
         @if (designer(); as d) {
           <div class="designer-commandbar">
             <div>
@@ -355,18 +436,23 @@
               <h2>{{ t('wf.designer.enterpriseTitle') }}</h2>
               <p>{{ t('wf.designer.enterpriseHelp') }}</p>
             </div>
-            <div class="designer-commandbar__actions">
-              <div class="designer-mode-toggle" [attr.aria-label]="t('wf.designer.viewMode')">
-                <button type="button" [class.is-active]="designerViewMode() === 'business'" (click)="setDesignerViewMode('business')">
-                  {{ t('wf.designer.businessMap') }}
+              <div class="designer-commandbar__actions">
+                <div class="designer-mode-toggle" [attr.aria-label]="t('wf.designer.viewMode')">
+                  <button type="button" [class.is-active]="designerViewMode() === 'business'" (click)="setDesignerViewMode('business')">
+                    {{ t('wf.designer.businessMap') }}
                 </button>
                 <button type="button" [class.is-active]="designerViewMode() === 'technical'" (click)="setDesignerViewMode('technical')">
                   {{ t('wf.designer.advancedCanvas') }}
-                </button>
-              </div>
-              <div class="designer-score">
-                <span>{{ t('wf.designer.readiness') }}</span>
-                <strong>{{ designerReadiness() }}%</strong>
+                  </button>
+                </div>
+                @if (canEditDesigner) {
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerTestRunning()" (click)="executeDesignerTestRun()">
+                    {{ designerTestRunning() ? t('wf.designer.runningTest') : t('wf.designer.runTest') }}
+                  </button>
+                }
+                <div class="designer-score">
+                  <span>{{ t('wf.designer.readiness') }}</span>
+                  <strong>{{ designerReadiness() }}%</strong>
                 <app-status-chip [kind]="validationKind(d.validation.status)" [label]="t('wf.designer.status.' + d.validation.status)" />
               </div>
             </div>
@@ -392,7 +478,7 @@
           </div>
         }
 
-        <div class="designer-client-layout">
+        <div class="designer-client-layout" [class.designer-client-layout--technical]="designerViewMode() === 'technical'">
           <section class="designer-workspace">
             <div class="designer-workspace__head">
               <div>
@@ -418,6 +504,52 @@
             </div>
 
             @if (designerViewMode() === 'technical') {
+              <div class="designer-command-bar" [attr.aria-label]="t('wf.designer.toolbar')">
+                <div class="designer-command-bar__group designer-command-bar__group--primary">
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerSaving()" (click)="saveDesignerDraft()">
+                    <app-icon name="save" /> {{ t('wf.designer.toolbar.save') }}
+                  </button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerPreviewing()" (click)="refreshDesignerPreviews()">
+                    <app-icon name="check" /> {{ t('wf.designer.toolbar.validate') }}
+                  </button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerTestRunning()" (click)="executeDesignerTestRun()">
+                    <app-icon name="play" /> {{ t('wf.designer.toolbar.test') }}
+                  </button>
+                  <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'" (click)="publishDesigner()">
+                    {{ t('wf.designer.toolbar.publish') }}
+                  </button>
+                </div>
+                <div class="designer-command-bar__group">
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.undo')" [attr.aria-label]="t('wf.designer.toolbar.undo')" [disabled]="!designerCanUndo()" (click)="undoDesigner()"><app-icon name="undo" /></button>
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.redo')" [attr.aria-label]="t('wf.designer.toolbar.redo')" [disabled]="!designerCanRedo()" (click)="redoDesigner()"><app-icon name="redo" /></button>
+                  <span class="designer-command-bar__divider"></span>
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.zoomIn')" [attr.aria-label]="t('wf.designer.toolbar.zoomIn')" (click)="zoomDesigner(0.15)"><app-icon name="zoomIn" /></button>
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.zoomOut')" [attr.aria-label]="t('wf.designer.toolbar.zoomOut')" (click)="zoomDesigner(-0.15)"><app-icon name="zoomOut" /></button>
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.fit')" [attr.aria-label]="t('wf.designer.toolbar.fit')" (click)="fitDesigner()"><app-icon name="maximize" /></button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerAutoLayoutRunning()" (click)="autoLayoutDesigner()"><app-icon name="layout" /> {{ t('wf.designer.toolbar.autoLayout') }}</button>
+                  <span class="designer-command-bar__divider"></span>
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.copy')" [attr.aria-label]="t('wf.designer.toolbar.copy')" [disabled]="!selectedDesignerElement()" (click)="copyDesignerSelection()"><app-icon name="copy" /></button>
+                  <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.paste')" [attr.aria-label]="t('wf.designer.toolbar.paste')" [disabled]="!designerClipboardReady()" (click)="pasteDesignerSelection()"><app-icon name="clipboard" /></button>
+                  <button type="button" class="icon-button icon-button--danger" [title]="t('wf.designer.toolbar.delete')" [attr.aria-label]="t('wf.designer.toolbar.delete')" [disabled]="!selectedDesignerElement()" (click)="deleteDesignerSelection()"><app-icon name="trash" /></button>
+                </div>
+              </div>
+              <div class="designer-canvas-intelligence" [attr.aria-label]="t('wf.designer.routingIntelligence')">
+                <article>
+                  <span>{{ t('wf.designer.branching') }}</span>
+                  <strong>{{ designerFlowInsight().branchingStages }}</strong>
+                  <small>{{ designerFlowInsight().branchLabels }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.designer.decisions') }}</span>
+                  <strong>{{ designerFlowInsight().decisions }}</strong>
+                  <small>{{ t('wf.designer.decisionHelp') }}</small>
+                </article>
+                <article>
+                  <span>{{ t('wf.designer.parallelism') }}</span>
+                  <strong>{{ designerFlowInsight().parallelSplits }} / {{ designerFlowInsight().mergeJoins }}</strong>
+                  <small>{{ t('wf.designer.parallelHelp') }}</small>
+                </article>
+              </div>
               @if (designerState() === 'loading') {
                 <div class="empty"><p>{{ t('crud.loading') }}</p></div>
               } @else if (designerState() === 'error') {
@@ -426,7 +558,21 @@
                   <button type="button" class="ds-btn ds-btn--primary" (click)="ensureDesignerLoaded()">{{ t('crud.retry') }}</button>
                 </div>
               } @else {
-                <div #bpmnCanvas class="bpmn-canvas" [attr.aria-label]="t('wf.designer.canvasTitle')"></div>
+                <div class="designer-canvas-shell" [class.designer-canvas-shell--expanded]="designerCanvasExpanded()">
+                  <div class="designer-canvas-shell__rail">
+                    <div>
+                      <span>{{ t('wf.designer.volume2Ready') }}</span>
+                      <strong>{{ t('wf.designer.branchingAndParallelism') }}</strong>
+                    </div>
+                    <div class="designer-canvas-shell__controls">
+                      <button type="button" [attr.aria-label]="t('wf.designer.toolbar.zoomIn')" [title]="t('wf.designer.toolbar.zoomIn')" (click)="zoomDesigner(0.15)"><app-icon name="zoomIn" /></button>
+                      <button type="button" [attr.aria-label]="t('wf.designer.toolbar.zoomOut')" [title]="t('wf.designer.toolbar.zoomOut')" (click)="zoomDesigner(-0.15)"><app-icon name="zoomOut" /></button>
+                      <button type="button" [attr.aria-label]="t('wf.designer.toolbar.fit')" [title]="t('wf.designer.toolbar.fit')" (click)="fitDesigner()"><app-icon name="maximize" /></button>
+                      <button type="button" [attr.aria-label]="t(designerCanvasExpanded() ? 'wf.designer.toolbar.closeCanvas' : 'wf.designer.toolbar.expandCanvas')" [title]="t(designerCanvasExpanded() ? 'wf.designer.toolbar.closeCanvas' : 'wf.designer.toolbar.expandCanvas')" (click)="toggleDesignerCanvas()"><app-icon [name]="designerCanvasExpanded() ? 'x' : 'maximize'" /></button>
+                    </div>
+                  </div>
+                  <div #bpmnCanvas class="bpmn-canvas" [attr.aria-label]="t('wf.designer.canvasTitle')"></div>
+                </div>
               }
             } @else {
               <div class="client-route-map">
@@ -458,11 +604,37 @@
                   </div>
                 </div>
 
+                @if (designerBranchCards().length) {
+                  <div class="branch-architecture">
+                    @for (card of designerBranchCards(); track card.id) {
+                      <article [class.branch-architecture__card--parallel]="card.kind === 'parallel'" [class.branch-architecture__card--merge]="card.kind === 'merge'">
+                        <div>
+                          <app-status-chip [kind]="branchCardKind(card)" [label]="t(card.titleKey)" />
+                          <strong>{{ stageName(card.stage) }}</strong>
+                          <small>{{ t(card.helpKey) }}</small>
+                        </div>
+                        @if (card.transitions.length) {
+                          <ul>
+                            @for (transition of card.transitions; track transition.id) {
+                              <li>
+                                <span>{{ transitionLabel(transition) }}</span>
+                                <strong>{{ transitionTargetLabel(transition) }}</strong>
+                              </li>
+                            }
+                          </ul>
+                        }
+                      </article>
+                    }
+                  </div>
+                }
+
                 <div class="client-stage-lane">
                   @for (stage of designerRouteStages(); track stage.id; let index = $index) {
                     <article
                       class="client-stage-node"
                       [class.client-stage-node--decision]="stage.isDecision"
+                      [class.client-stage-node--parallel]="isParallelStage(stage)"
+                      [class.client-stage-node--merge]="isMergeStage(stage)"
                       [class.client-stage-node--final]="stage.isFinal"
                     >
                       <div class="client-stage-node__top">
@@ -497,7 +669,190 @@
           </section>
 
           <aside class="designer-side-stack">
+            @if (designerViewMode() === 'technical') {
+              <nav class="designer-inspector-tabs" [attr.aria-label]="t('wf.designer.inspector')">
+                <button type="button" [class.is-active]="designerInspectorTab() === 'build'" (click)="setDesignerInspectorTab('build')"><app-icon name="workflow" />{{ t('wf.designer.inspector.build') }}</button>
+                <button type="button" [class.is-active]="designerInspectorTab() === 'properties'" (click)="setDesignerInspectorTab('properties')"><app-icon name="settings" />{{ t('wf.designer.inspector.properties') }}</button>
+                <button type="button" [class.is-active]="designerInspectorTab() === 'variables'" (click)="setDesignerInspectorTab('variables')"><app-icon name="database" />{{ t('wf.designer.inspector.variables') }}</button>
+                <button type="button" [class.is-active]="designerInspectorTab() === 'validate'" (click)="setDesignerInspectorTab('validate')"><app-icon name="listCheck" />{{ t('wf.designer.inspector.validate') }}</button>
+              </nav>
+            }
+            <div class="designer-inspector-body">
+            @if (designerViewMode() === 'technical' && designerInspectorTab() === 'properties') {
+              <section class="designer-panel designer-panel--compact designer-properties-panel">
+                <div class="designer-panel__head">
+                  <span class="section-kicker">{{ t('wf.designer.properties.eyebrow') }}</span>
+                  <h2>{{ t('wf.designer.properties.title') }}</h2>
+                </div>
+                @if (selectedDesignerElement(); as selected) {
+                  <div class="selected-element-badge">
+                    <app-icon [name]="selected.kind === 'connector' ? 'workflow' : 'settings'" />
+                    <div><strong>{{ selected.name || selected.id }}</strong><span>{{ selected.bpmnType }}</span></div>
+                  </div>
+                  <label class="field">
+                    <span class="field__label">{{ t('wf.designer.properties.name') }}</span>
+                    <input class="field__input" [value]="selected.name" (change)="updateSelectedDesignerProperty('name', $any($event.target).value)" />
+                  </label>
+                  @if (selected.kind === 'connector') {
+                    <label class="field">
+                      <span class="field__label">{{ t('wf.designer.properties.connectorType') }}</span>
+                      <select class="field__input" [value]="selected.connectorType" (change)="updateSelectedDesignerProperty('connectorType', $any($event.target).value)">
+                        @for (connector of workflowConnectorTypes(); track connector.code) { <option [value]="connector.code">{{ connector.label }}</option> }
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field__label">{{ t('wf.designer.properties.condition') }}</span>
+                      <textarea class="field__input mono" rows="3" [value]="selected.conditionExpression" (change)="updateSelectedDesignerProperty('conditionExpression', $any($event.target).value)"></textarea>
+                    </label>
+                    <fieldset class="designer-rule-builder">
+                      <legend>{{ t('wf.designer.properties.ruleBuilder') }}</legend>
+                      <label class="field">
+                        <span class="field__label">{{ t('wf.designer.properties.ruleVariable') }}</span>
+                        <select class="field__input mono" [value]="selected.ruleVariable" (change)="updateSelectedDesignerRule('ruleVariable', $any($event.target).value)">
+                          <option value="">{{ t('wf.designer.variables.choose') }}</option>
+                          @if (selected.ruleVariable && !designerVariableOptions().length) { <option [value]="selected.ruleVariable">{{ selected.ruleVariable }}</option> }
+                          @for (variable of designerVariableOptions(); track variable.code) { <option [value]="variable.code">{{ variable.code }} - {{ variable.nameEn }}</option> }
+                        </select>
+                      </label>
+                      <div class="designer-rule-builder__row">
+                        <label class="field">
+                          <span class="field__label">{{ t('wf.designer.properties.ruleOperator') }}</span>
+                          <select class="field__input" [value]="selected.ruleOperator" (change)="updateSelectedDesignerRule('ruleOperator', $any($event.target).value)">
+                            <option value="eq">=</option><option value="neq">!=</option><option value="gt">&gt;</option><option value="gte">&gt;=</option><option value="lt">&lt;</option><option value="lte">&lt;=</option><option value="in">IN</option><option value="not_in">NOT IN</option><option value="contains">CONTAINS</option><option value="not_contains">DOES NOT CONTAIN</option><option value="is_empty">IS EMPTY</option><option value="is_not_empty">IS NOT EMPTY</option>
+                          </select>
+                        </label>
+                        <label class="field">
+                          <span class="field__label">{{ t('wf.designer.properties.ruleValue') }}</span>
+                          <input class="field__input mono" [value]="selected.ruleValue" (change)="updateSelectedDesignerRule('ruleValue', $any($event.target).value)" />
+                        </label>
+                      </div>
+                      <label class="field">
+                        <span class="field__label">{{ t('wf.designer.properties.ruleJoin') }}</span>
+                        <select class="field__input" [value]="selected.ruleJoin" (change)="updateSelectedDesignerRule('ruleJoin', $any($event.target).value)"><option value="AND">AND</option><option value="OR">OR</option></select>
+                      </label>
+                      <label class="field">
+                        <span class="field__label">{{ t('wf.designer.properties.ruleVariable2') }}</span>
+                        <select class="field__input mono" [value]="selected.ruleVariable2" (change)="updateSelectedDesignerRule('ruleVariable2', $any($event.target).value)">
+                          <option value="">{{ t('wf.designer.properties.ruleOptional') }}</option>
+                          @for (variable of designerVariableOptions(); track variable.code) { <option [value]="variable.code">{{ variable.code }} - {{ variable.nameEn }}</option> }
+                        </select>
+                      </label>
+                      @if (selected.ruleVariable2) {
+                        <div class="designer-rule-builder__row">
+                          <label class="field"><span class="field__label">{{ t('wf.designer.properties.ruleOperator') }}</span><select class="field__input" [value]="selected.ruleOperator2" (change)="updateSelectedDesignerRule('ruleOperator2', $any($event.target).value)"><option value="eq">=</option><option value="neq">!=</option><option value="gt">&gt;</option><option value="gte">&gt;=</option><option value="lt">&lt;</option><option value="lte">&lt;=</option><option value="in">IN</option><option value="not_in">NOT IN</option><option value="contains">CONTAINS</option><option value="not_contains">DOES NOT CONTAIN</option><option value="is_empty">IS EMPTY</option><option value="is_not_empty">IS NOT EMPTY</option></select></label>
+                          <label class="field"><span class="field__label">{{ t('wf.designer.properties.ruleValue') }}</span><input class="field__input mono" [value]="selected.ruleValue2" (change)="updateSelectedDesignerRule('ruleValue2', $any($event.target).value)" /></label>
+                        </div>
+                      }
+                      <label class="field">
+                        <span class="field__label">{{ t('wf.designer.properties.ruleOutcome') }}</span>
+                        <input class="field__input" [value]="selected.ruleOutcome" (change)="updateSelectedDesignerRule('ruleOutcome', $any($event.target).value)" />
+                      </label>
+                    </fieldset>
+                    <label class="designer-property-toggle">
+                      <input type="checkbox" [checked]="selected.isDefaultPath" (change)="updateSelectedDesignerProperty('isDefaultPath', $any($event.target).checked)" />
+                      <span>{{ t('wf.designer.properties.defaultPath') }}</span>
+                    </label>
+                  } @else {
+                    <div class="designer-property-readonly">
+                      <span>{{ t('wf.designer.properties.nodeType') }}</span><strong>{{ nodeTypeLabel(selected.nodeType) }}</strong>
+                    </div>
+                    <label class="field">
+                      <span class="field__label">{{ t('wf.designer.properties.taskType') }}</span>
+                      <select class="field__input" [value]="selected.taskType" (change)="updateSelectedDesignerProperty('taskType', $any($event.target).value)">
+                        <option value="information">{{ t('wf.designer.properties.task.information') }}</option>
+                        <option value="review">{{ t('wf.designer.properties.task.review') }}</option>
+                        <option value="approval">{{ t('wf.designer.properties.task.approval') }}</option>
+                        <option value="routing">{{ t('wf.designer.properties.task.routing') }}</option>
+                        <option value="automation">{{ t('wf.designer.properties.task.automation') }}</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field__label">{{ t('wf.designer.properties.assignment') }}</span>
+                      <select class="field__input" [value]="selected.assignmentStrategy" (change)="updateSelectedDesignerProperty('assignmentStrategy', $any($event.target).value)">
+                        <option value="role">{{ t('wf.designer.properties.assignment.role') }}</option>
+                        <option value="direct_user">{{ t('wf.designer.properties.assignment.user') }}</option>
+                        <option value="requester">{{ t('wf.designer.properties.assignment.requester') }}</option>
+                        <option value="workflow_owner">{{ t('wf.designer.properties.assignment.workflowOwner') }}</option>
+                        <option value="dynamic">{{ t('wf.designer.properties.assignment.dynamic') }}</option>
+                        <option value="workload">{{ t('wf.designer.properties.assignment.workload') }}</option>
+                        <option value="backup">{{ t('wf.designer.properties.assignment.backup') }}</option>
+                        <option value="manager">{{ t('wf.designer.properties.assignment.manager') }}</option>
+                        <option value="automation">{{ t('wf.designer.properties.assignment.automation') }}</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field__label">{{ t('wf.designer.properties.role') }}</span>
+                      <select class="field__input" [value]="selected.assigneeRoleCode" (change)="updateSelectedDesignerProperty('assigneeRoleCode', $any($event.target).value)">
+                        <option value="">{{ t('wf.graph.noDefaultRole') }}</option>
+                        @for (role of designerRoleOptions(); track role) { <option [value]="role">{{ roleLabel(role) }}</option> }
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="field__label">{{ t('wf.designer.properties.dueDays') }}</span>
+                      <input type="number" class="field__input" min="0" max="365" [value]="selected.dueDays" (change)="updateSelectedDesignerProperty('dueDays', $any($event.target).value)" />
+                    </label>
+                    @if (!['routing', 'automation'].includes(selected.taskType)) {
+                      <section class="designer-form-builder">
+                        <div class="designer-form-builder__head">
+                          <div><strong>{{ t('wf.designer.formBuilder') }}</strong><span>{{ t('wf.designer.formBuilderHelp') }}</span></div>
+                          <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="addDesignerFormField()"><app-icon name="plus" />{{ t('wf.designer.formAddField') }}</button>
+                        </div>
+                        @if (selected.formFields.length) {
+                          <div class="designer-form-fields">
+                            @for (field of selected.formFields; track field.id) {
+                              <article class="designer-form-field">
+                                <div class="designer-form-field__grid">
+                                  <label class="field"><span class="field__label">{{ t('wf.designer.formCode') }}</span><input class="field__input mono" [value]="field.name" (change)="updateDesignerFormField(field.id, 'name', $any($event.target).value)" /></label>
+                                  <label class="field"><span class="field__label">{{ t('wf.designer.formLabel') }}</span><input class="field__input" [value]="field.label" (change)="updateDesignerFormField(field.id, 'label', $any($event.target).value)" /></label>
+                                  <label class="field"><span class="field__label">{{ t('wf.designer.formType') }}</span><select class="field__input" [value]="field.type" (change)="updateDesignerFormField(field.id, 'type', $any($event.target).value)"><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option><option value="dropdown">Dropdown</option><option value="radio">Radio</option><option value="checkbox">Checkbox</option><option value="multi_select">Multi-select</option><option value="textarea">Text area</option><option value="file_attachment">File attachment</option><option value="read_only">Read-only</option></select></label>
+                                  <label class="field"><span class="field__label">{{ t('wf.designer.formOptions') }}</span><input class="field__input" [value]="field.options" (change)="updateDesignerFormField(field.id, 'options', $any($event.target).value)" /></label>
+                                </div>
+                                <div class="designer-form-field__actions"><label><input type="checkbox" [checked]="field.required" (change)="updateDesignerFormField(field.id, 'required', $any($event.target).checked)" />{{ t('wf.designer.formRequired') }}</label><button type="button" class="icon-btn" [title]="t('crud.delete')" (click)="removeDesignerFormField(field.id)"><app-icon name="trash" /></button></div>
+                              </article>
+                            }
+                          </div>
+                        } @else {
+                          <p class="designer-form-builder__empty">{{ t('wf.designer.formEmpty') }}</p>
+                        }
+                      </section>
+                    }
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.assignmentConfig') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.assignmentConfigJson" (change)="updateSelectedDesignerJson('assignmentConfigJson', $any($event.target).value)"></textarea>
+                    </details>
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.forms') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.formSchemaJson" (change)="updateSelectedDesignerJson('formSchemaJson', $any($event.target).value)"></textarea>
+                    </details>
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.evidence') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.evidenceRequirementsJson" (change)="updateSelectedDesignerJson('evidenceRequirementsJson', $any($event.target).value)"></textarea>
+                    </details>
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.sla') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.slaConfigJson" (change)="updateSelectedDesignerJson('slaConfigJson', $any($event.target).value)"></textarea>
+                    </details>
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.notifications') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.notificationRulesJson" (change)="updateSelectedDesignerJson('notificationRulesJson', $any($event.target).value)"></textarea>
+                    </details>
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.automation') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.automationConfigJson" (change)="updateSelectedDesignerJson('automationConfigJson', $any($event.target).value)"></textarea>
+                    </details>
+                    <details class="designer-json-config">
+                      <summary>{{ t('wf.designer.properties.gateway') }}</summary>
+                      <textarea class="field__input mono" rows="5" [value]="selected.json.gatewayConfigJson" (change)="updateSelectedDesignerJson('gatewayConfigJson', $any($event.target).value)"></textarea>
+                    </details>
+                  }
+                } @else {
+                  <div class="designer-property-empty"><app-icon name="settings" /><span>{{ t('wf.designer.properties.none') }}</span></div>
+                }
+              </section>
+            }
+            @if (designerViewMode() !== 'technical' || designerInspectorTab() !== 'properties') {
             <section class="designer-panel designer-panel--compact">
+            @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'build') {
             <div class="designer-panel__head">
               <span class="section-kicker">{{ t('wf.designer.eyebrow') }}</span>
               <h2>{{ t('wf.designer.routeLibrary') }}</h2>
@@ -507,12 +862,133 @@
             <label class="field">
               <span class="field__label">{{ t('wf.field.route') }}</span>
               <select class="field__input" [ngModel]="designerTemplateId()" (ngModelChange)="selectDesignerTemplate($event)" name="designerRoute">
-                @for (template of templates(); track template.id) {
-                  <option [value]="template.id">{{ template.code }} - {{ templateName(template) }}</option>
+                @for (group of designerRouteGroups(); track group.key) {
+                  <optgroup [label]="t(group.labelKey)">
+                    @for (template of group.templates; track template.id) {
+                      <option [value]="template.id">{{ templateName(template) }} - {{ template.code }}</option>
+                    }
+                  </optgroup>
                 }
               </select>
             </label>
 
+            <div class="designer-route-library">
+              @for (group of designerRouteGroups(); track group.key) {
+                <section class="designer-route-group">
+                  <h3>{{ t(group.labelKey) }}</h3>
+                  <div class="designer-route-options">
+                    @for (template of group.templates; track template.id) {
+                      <button
+                        type="button"
+                        class="designer-route-option"
+                        [class.designer-route-option--active]="designerTemplateId() === template.id"
+                        (click)="selectDesignerTemplate(template.id)"
+                      >
+                        <span>{{ t('wf.type.' + template.caseType) }}</span>
+                        <strong>{{ templateName(template) }}</strong>
+                        <small>
+                          {{ designerRouteMeta(template) }}
+                          &middot;
+                          {{ designerRouteCaseCount(template) }} {{ t('wf.graph.activeCases') }}
+                        </small>
+                        <app-status-chip
+                          [kind]="designerRouteStatus(template)"
+                          [label]="t('wf.graph.status.' + (routeSummaryByTemplateId().get(template.id)?.status ?? 'healthy'))"
+                        />
+                      </button>
+                    }
+                  </div>
+                </section>
+              }
+            </div>
+            }
+
+            @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'build') {
+            @if (workflowNodePalette().length) {
+              <div class="node-palette-panel">
+                <div class="node-palette-panel__head">
+                  <span>{{ t('wf.designer.nodePalette') }}</span>
+                  @if (workflowMvpGate(); as gate) {
+                    <app-status-chip [kind]="validationKind(gate.status)" [label]="t('wf.designer.status.' + gate.status)" />
+                  }
+                </div>
+                <div class="node-palette-group">
+                  <span>{{ t('wf.node.priority.core') }}</span>
+                  <div>
+                    @for (node of coreWorkflowNodes(); track node.code) {
+                      <button type="button" [title]="node.description" [disabled]="!canEditDesigner" (click)="addDesignerNode(node)">
+                        <strong>{{ node.label }}</strong>
+                        <small>{{ nodeCategoryLabel(node.category) }}</small>
+                      </button>
+                    }
+                  </div>
+                </div>
+                @if (advancedWorkflowNodes().length) {
+                  <div class="node-palette-group">
+                    <span>{{ t('wf.node.priority.advanced') }}</span>
+                    <div>
+                      @for (node of advancedWorkflowNodes(); track node.code) {
+                        <button type="button" [title]="node.description" [disabled]="!canEditDesigner" (click)="addDesignerNode(node)">
+                          <strong>{{ node.label }}</strong>
+                          <small>{{ nodeCategoryLabel(node.category) }}</small>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+                @if (workflowConnectorTypes().length) {
+                  <div class="connector-strip">
+                    @for (connector of workflowConnectorTypes(); track connector.code) {
+                      <span [title]="connector.description || (connector.outcomes || connector.allowedOutcomes || []).join(', ')">{{ connector.label }}</span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+            }
+
+            @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'variables') {
+            @if (designerViewMode() === 'technical') {
+              <div class="designer-panel__head">
+                <span class="section-kicker">{{ t('wf.designer.inspector.variables') }}</span>
+                <h2>{{ t('wf.designer.variables.title') }}</h2>
+                <p>{{ t('wf.designer.variables.help') }}</p>
+              </div>
+            }
+            <details class="designer-variable-panel" open>
+              <summary><span>{{ t('wf.designer.variables.title') }}</span><small>{{ designerVariables().length }}</small></summary>
+              <p>{{ t('wf.designer.variables.help') }}</p>
+              @if (designerVariables().length) {
+                <div class="designer-variable-list">
+                  @for (variable of designerVariables(); track variable.id || variable.code) {
+                    <article><button type="button" (click)="editDesignerVariable(variable)"><strong>{{ variable.code }}</strong><span>{{ variable.nameEn }} - {{ variable.variableType }}</span></button><button type="button" class="icon-btn" [title]="t('crud.delete')" [disabled]="designerVariableSaving()" (click)="archiveDesignerVariable(variable)"><app-icon name="trash" /></button></article>
+                  }
+                </div>
+              }
+              @if (canEditDesigner) {
+                <div class="designer-variable-form">
+                  <div class="designer-variable-form__grid">
+                    <label class="field"><span class="field__label">{{ t('wf.designer.variables.code') }}</span><input class="field__input mono" [value]="designerVariableDraft().code" (input)="updateDesignerVariableDraft('code', $any($event.target).value)" /></label>
+                    <label class="field"><span class="field__label">{{ t('wf.designer.variables.name') }}</span><input class="field__input" [value]="designerVariableDraft().nameEn" (input)="updateDesignerVariableDraft('nameEn', $any($event.target).value)" /></label>
+                    <label class="field"><span class="field__label">{{ t('wf.designer.variables.type') }}</span><select class="field__input" [value]="designerVariableDraft().variableType" (change)="updateDesignerVariableDraft('variableType', $any($event.target).value)"><option value="text">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="date">Date</option><option value="user">User</option><option value="role">Role</option><option value="list">List</option></select></label>
+                    <label class="field"><span class="field__label">{{ t('wf.designer.variables.scope') }}</span><select class="field__input" [value]="designerVariableDraft().scope" (change)="updateDesignerVariableDraft('scope', $any($event.target).value)"><option value="case">Case</option><option value="workflow">Workflow</option><option value="task">Task</option><option value="node">Node</option><option value="asset">Asset</option><option value="actor">Actor</option></select></label>
+                    <label class="field designer-variable-form__wide"><span class="field__label">{{ t('wf.designer.variables.values') }}</span><input class="field__input" [value]="designerVariableDraft().allowedValues" (input)="updateDesignerVariableDraft('allowedValues', $any($event.target).value)" /></label>
+                  </div>
+                  <label class="designer-property-toggle"><input type="checkbox" [checked]="designerVariableDraft().isRequired" (change)="updateDesignerVariableDraft('isRequired', $any($event.target).checked)" /><span>{{ t('wf.designer.variables.required') }}</span></label>
+                  <div class="designer-variable-form__actions"><button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="newDesignerVariable()">{{ t('crud.clear') }}</button><button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="designerVariableSaving() || !designerVariableDraft().code || !designerVariableDraft().nameEn" (click)="saveDesignerVariable()"><app-icon name="save" />{{ designerVariableSaving() ? t('crud.saving') : t('crud.save') }}</button></div>
+                </div>
+                }
+              </details>
+            }
+
+            @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'validate') {
+            @if (designerViewMode() === 'technical') {
+              <div class="designer-panel__head">
+                <span class="section-kicker">{{ t('wf.designer.inspector.validate') }}</span>
+                <h2>{{ t('wf.designer.checklist') }}</h2>
+                <p>{{ designerReadiness() }}% {{ t('wf.designer.readiness') }}</p>
+              </div>
+            }
             <div class="designer-checklist">
               <div class="designer-checklist__head">
                 <span>{{ t('wf.designer.checklist') }}</span>
@@ -530,12 +1006,17 @@
                 </article>
               }
             </div>
+            }
 
+            @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'build') {
             <button type="button" class="ds-btn ds-btn--ghost" (click)="openRouteModal()">
               {{ t('wf.designer.newRoute') }}
             </button>
+            }
             </section>
+            }
 
+          @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'validate') {
           <section class="designer-panel designer-panel--publish">
             <div class="designer-panel__head">
               <span class="section-kicker">{{ t('wf.designer.publishEyebrow') }}</span>
@@ -553,6 +1034,27 @@
                   <span>{{ t('wf.designer.publishedBy') }}</span>
                   <strong>{{ d.version.lastPublishedBy || '-' }}</strong>
                 </div>
+              </div>
+
+              <div class="lifecycle-summary">
+                <div class="lifecycle-summary__head">
+                  <span>{{ t('wf.designer.lifecycleState') }}</span>
+                  <app-status-chip [kind]="designerReviewStatusKind()" [label]="t('wf.designer.reviewStatus.' + designerReviewStatus())" />
+                </div>
+                <dl>
+                  <div>
+                    <dt>{{ t('wf.designer.state') }}</dt>
+                    <dd>{{ t('wf.designer.lifecycle.' + designerLifecycleState()) }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('wf.designer.reviewRequestedBy') }}</dt>
+                    <dd>{{ designerReviewRequestedBy() }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('wf.designer.reviewedBy') }}</dt>
+                    <dd>{{ designerReviewedBy() }}</dd>
+                  </div>
+                </dl>
               </div>
             }
 
@@ -579,10 +1081,42 @@
               <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving()" (click)="saveDesignerDraft()">
                 {{ designerSaving() ? t('crud.saving') : t('wf.designer.saveDraft') }}
               </button>
-              <button type="button" class="ds-btn ds-btn--primary" [disabled]="designerSaving()" (click)="publishDesigner()">
+              <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving() || !canSubmitWorkflowReview()" (click)="submitDesignerReview()">
+                {{ designerSaving() ? t('crud.saving') : t('wf.designer.submitReview') }}
+              </button>
+              <button
+                type="button"
+                class="ds-btn ds-btn--ghost"
+                [disabled]="designerSaving() || !canApproveWorkflowReview() || designerReviewStatus() !== 'pending'"
+                (click)="approveDesignerReview()"
+              >
+                {{ designerSaving() ? t('crud.saving') : t('wf.designer.approveReview') }}
+              </button>
+              <button
+                type="button"
+                class="ds-btn ds-btn--primary"
+                [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'"
+                (click)="publishDesigner()"
+              >
                 {{ designerSaving() ? t('crud.saving') : t('wf.designer.publish') }}
               </button>
             </div>
+
+            <div class="designer-lifecycle-actions">
+              <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving()" (click)="cloneDesignerTemplate()"><app-icon name="copy" />{{ t('wf.designer.lifecycle.clone') }}</button>
+              @if (designerLifecycleState() === 'active') {
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving() || !designerSummary().trim()" (click)="controlDesignerLifecycle('suspend')">{{ t('wf.designer.lifecycle.suspend') }}</button>
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving() || !designerSummary().trim()" (click)="controlDesignerLifecycle('retire')">{{ t('wf.designer.lifecycle.retire') }}</button>
+              } @else if (designerLifecycleState() === 'suspended' || designerLifecycleState() === 'published') {
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving()" (click)="controlDesignerLifecycle('activate')">{{ t('wf.designer.lifecycle.activate') }}</button>
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving() || !designerSummary().trim()" (click)="controlDesignerLifecycle('retire')">{{ t('wf.designer.lifecycle.retire') }}</button>
+              } @else if (designerLifecycleState() === 'retired') {
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving() || !designerSummary().trim()" (click)="controlDesignerLifecycle('archive')">{{ t('wf.designer.lifecycle.archive') }}</button>
+              } @else if (designerLifecycleState() === 'draft' && !designer()?.template?.isSystem) {
+                <button type="button" class="ds-btn ds-btn--ghost" [disabled]="designerSaving() || !designerSummary().trim()" (click)="controlDesignerLifecycle('delete_draft')"><app-icon name="trash" />{{ t('wf.designer.lifecycle.deleteDraft') }}</button>
+              }
+            </div>
+            <small class="designer-lifecycle-help">{{ t('wf.designer.lifecycle.reasonHelp') }}</small>
 
             @if (designerMigration(); as migration) {
               <div class="migration-card">
@@ -643,6 +1177,8 @@
               {{ t('wf.designer.migrateActiveCases') }}
             </button>
           </section>
+          }
+          </div>
           </aside>
         </div>
 
@@ -689,6 +1225,41 @@
               }
             </section>
           }
+
+          <section class="designer-evidence-card">
+            <div class="designer-evidence-card__head">
+              <div>
+                <span class="section-kicker">{{ t('wf.designer.testRunsEyebrow') }}</span>
+                <h3>{{ t('wf.designer.testRunsTitle') }}</h3>
+              </div>
+              <app-status-chip [kind]="designerTestRunsTotal() > 0 ? 'success' : 'warning'" [label]="designerTestRunsTotal().toString()" />
+            </div>
+            <p class="designer-card-note">{{ t('wf.designer.testRunsHelp') }}</p>
+            @if (designerTestRuns().length === 0) {
+              <div class="empty-mini">{{ t('wf.designer.noTestRuns') }}</div>
+            } @else {
+              <div class="test-run-list">
+                @for (run of designerTestRuns(); track run.id) {
+                  <article>
+                    <div>
+                      <strong>#{{ run.runNumber }} &middot; {{ run.environment }}</strong>
+                      <span>{{ fmtDate(run.createdAt) }} &middot; {{ run.createdBy }}</span>
+                      <small>{{ t('wf.designer.pathLength') }}: {{ testRunPathLength(run) }} &middot; {{ t('wf.designer.isolated') }}</small>
+                    </div>
+                    <app-status-chip [kind]="testRunKind(run.status)" [label]="t('wf.designer.status.' + run.status)" />
+                    <button
+                      type="button"
+                      class="ds-btn ds-btn--ghost btn-sm"
+                      [disabled]="run.status === 'reset'"
+                      (click)="resetDesignerTestRun(run)"
+                    >
+                      {{ t('wf.designer.resetTestRun') }}
+                    </button>
+                  </article>
+                }
+              </div>
+            }
+          </section>
 
           <section class="designer-evidence-card designer-evidence-card--wide">
             <div class="designer-evidence-card__head">
@@ -744,6 +1315,7 @@
                   <td class="actions-col">
                     <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openDecision(task, 'approved')">{{ t('wf.approve') }}</button>
                     <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'rejected')">{{ t('wf.reject') }}</button>
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'return_for_clarification')">{{ t('wf.returnForClarification') }}</button>
                   </td>
                 </tr>
               }
@@ -764,6 +1336,7 @@
                 <th>{{ t('wf.col.type') }}</th>
                 <th>{{ t('wf.col.status') }}</th>
                 <th>{{ t('wf.col.open') }}</th>
+                <th class="actions-col">{{ t('crud.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -774,6 +1347,17 @@
                   <td>{{ typeLabel(c.type) }}</td>
                   <td><app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" /></td>
                   <td>{{ c.openTasks }}</td>
+                  <td class="actions-col">
+                    @if (canSuspendCase(c)) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openCaseControl(c, 'suspend')">{{ t('wf.caseControl.suspend.action') }}</button>
+                    }
+                    @if (canResumeCase(c)) {
+                      <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openCaseControl(c, 'resume')">{{ t('wf.caseControl.resume.action') }}</button>
+                    }
+                    @if (canCancelCase(c)) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openCaseControl(c, 'cancel')">{{ t('wf.caseControl.cancel.action') }}</button>
+                    }
+                  </td>
                 </tr>
               }
             </tbody>
@@ -784,19 +1368,38 @@
   </div>
 
   @if (decideTask(); as task) {
-    <app-modal [title]="decision() === 'approved' ? t('wf.approveTitle') : t('wf.rejectTitle')" (close)="closeDecision()">
+    <app-modal [title]="decisionTitle()" (close)="closeDecision()">
       <div class="form">
         <p><strong>{{ task.title }}</strong></p>
         @if (task.case) { <p class="muted"><code>{{ task.case.code }}</code> — {{ task.case.title }}</p> }
         <label class="field">
-          <span class="field__label">{{ t('wf.field.comment') }}</span>
+          <span class="field__label">{{ t('wf.field.comment') }}@if (decisionCommentRequired()) { <span class="req">*</span> }</span>
           <textarea class="field__input" rows="3" [ngModel]="comment()" (ngModelChange)="comment.set($event)" name="comment"></textarea>
         </label>
       </div>
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeDecision()">{{ t('crud.cancel') }}</button>
-        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="submitDecision()">
-          {{ saving() ? t('crud.saving') : (decision() === 'approved' ? t('wf.approve') : t('wf.reject')) }}
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving() || (decisionCommentRequired() && !comment().trim())" (click)="submitDecision()">
+          {{ saving() ? t('crud.saving') : decisionSubmitLabel() }}
+        </button>
+      </div>
+    </app-modal>
+  }
+
+  @if (controlCase(); as c) {
+    <app-modal [title]="caseControlTitle()" (close)="closeCaseControl()">
+      <div class="form">
+        <p><strong><code>{{ c.code }}</code> {{ c.title }}</strong></p>
+        <p class="muted">{{ t('wf.caseControl.currentStatus') }}: {{ t('case.' + c.status) }}</p>
+        <label class="field">
+          <span class="field__label">{{ t('wf.caseControl.reason') }}@if (caseControlReasonRequired()) { <span class="req">*</span> }</span>
+          <textarea class="field__input" rows="3" [ngModel]="controlReason()" (ngModelChange)="controlReason.set($event)" name="controlReason"></textarea>
+        </label>
+      </div>
+      <div footer>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="closeCaseControl()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving() || (caseControlReasonRequired() && !controlReason().trim())" (click)="submitCaseControl()">
+          {{ saving() ? t('crud.saving') : caseControlSubmitLabel() }}
         </button>
       </div>
     </app-modal>

@@ -11,16 +11,66 @@ const BPMN_TASK_TAGS = [
   'scriptTask',
   'subProcess',
   'callActivity',
+  'intermediateCatchEvent',
+  'intermediateThrowEvent',
 ];
 
 const BPMN_GATEWAY_TAGS = ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway'];
-const VALID_TASK_TYPES = new Set(['approval', 'review', 'information']);
-const VALID_ASSIGNMENT_STRATEGIES = new Set(['role', 'direct_user', 'workload', 'backup', 'manager', 'automation']);
-const AUTOMATED_NODE_TYPES = new Set(['service_task', 'business_rule_task', 'script_task', 'send_task', 'receive_task']);
-const ROUTING_NODE_TYPES = new Set(['exclusive_gateway', 'parallel_gateway', 'inclusive_gateway', 'event_based_gateway']);
+const VALID_TASK_TYPES = new Set(['approval', 'review', 'information', 'routing', 'automation']);
+const VALID_ASSIGNMENT_STRATEGIES = new Set([
+  'role',
+  'direct_user',
+  'requester',
+  'manager',
+  'workflow_owner',
+  'dynamic',
+  'workload',
+  'backup',
+  'automation',
+]);
+const VALID_CONNECTOR_TYPES = new Set([
+  'sequence',
+  'conditional',
+  'default',
+  'approval',
+  'return',
+  'parallel_split',
+  'merge_join',
+  'success',
+  'failure',
+  'timeout',
+]);
+
+export const WORKFLOW_BPMN_LAYOUT_VERSION = 'v6-graph-lanes-4';
+const AUTOMATED_NODE_TYPES = new Set([
+  'automated_task',
+  'service_task',
+  'business_rule_task',
+  'script_task',
+  'send_task',
+  'receive_task',
+  'notification_task',
+  'sub_workflow',
+]);
+const ROUTING_NODE_TYPES = new Set([
+  'start_event',
+  'end_event',
+  'decision_gateway',
+  'exclusive_gateway',
+  'parallel_gateway',
+  'merge_gateway',
+  'inclusive_gateway',
+  'event_based_gateway',
+  'timer_event',
+  'error_event',
+]);
 const VALID_NODE_TYPES = new Set([
+  'start_event',
+  'end_event',
   'user_task',
   'manual_task',
+  'approval_task',
+  'automated_task',
   'service_task',
   'business_rule_task',
   'script_task',
@@ -28,10 +78,16 @@ const VALID_NODE_TYPES = new Set([
   'receive_task',
   'sub_process',
   'call_activity',
+  'decision_gateway',
   'exclusive_gateway',
   'parallel_gateway',
+  'merge_gateway',
   'inclusive_gateway',
   'event_based_gateway',
+  'timer_event',
+  'notification_task',
+  'sub_workflow',
+  'error_event',
 ]);
 
 export type WorkflowDesignerChecklistItem = {
@@ -51,6 +107,7 @@ export type WorkflowBpmnStage = {
   nodeType?: string;
   taskType: string;
   assignmentStrategy?: string;
+  assignmentConfigJson?: unknown | null;
   assigneeRoleCode?: string | null;
   dueDays: number;
   formSchemaJson?: unknown | null;
@@ -65,6 +122,7 @@ export type WorkflowBpmnStage = {
   isDecision: boolean;
   isFinal: boolean;
   isActive: boolean;
+  invalidConfigurationFields?: string[];
 };
 
 export type WorkflowBpmnTransition = {
@@ -73,11 +131,15 @@ export type WorkflowBpmnTransition = {
   toStageId: string;
   labelEn: string;
   labelAr: string;
+  connectorType?: string | null;
   decision?: string | null;
   conditionExpression?: string | null;
   conditionJson?: unknown | null;
+  isDefaultPath?: boolean;
+  timeoutAfterSeconds?: number | null;
   isHappyPath: boolean;
   sortOrder: number;
+  invalidConditionJson?: boolean;
 };
 
 export type WorkflowBpmnTemplate = {
@@ -150,6 +212,8 @@ type BpmnFlow = {
   attrs: Record<string, unknown>;
 };
 
+type BpmnBounds = { width: number; height: number };
+
 export function templateToBpmnXml(template: WorkflowBpmnTemplate): string {
   const stages = [...template.stages].filter((stage) => stage.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
   const transitions = [...template.transitions].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -180,7 +244,17 @@ export function templateToBpmnXml(template: WorkflowBpmnTemplate): string {
     if (!from || !to) continue;
     const label = transition.labelEn || transition.decision || 'Next step';
     const id = safeBpmnId(`Flow_${index + 1}_${from}_${to}`);
-    flowXml.push(sequenceFlow(id, from, to, label, transition.conditionExpression, transition.conditionJson));
+    flowXml.push(sequenceFlow(
+      id,
+      from,
+      to,
+      label,
+      transition.connectorType,
+      transition.conditionExpression,
+      transition.conditionJson,
+      transition.isDefaultPath,
+      transition.timeoutAfterSeconds,
+    ));
     edgeDi.push({ id, from, to, label });
   }
 
@@ -195,7 +269,7 @@ export function templateToBpmnXml(template: WorkflowBpmnTemplate): string {
   const taskXml = stages.map((stage) => {
     const id = stageIdByRef.get(stage.id ?? stage.code) ?? safeBpmnId(`Stage_${stage.code}`);
     const tag = bpmnTagForStage(stage);
-    return [
+    const opening = [
       `    <bpmn:${tag} id="${id}" name="${escapeXml(stage.nameEn)}"`,
       ` dgop:code="${escapeXml(stage.code)}"`,
       ` dgop:kind="${escapeXml(stage.kind)}"`,
@@ -207,6 +281,7 @@ export function templateToBpmnXml(template: WorkflowBpmnTemplate): string {
       ` dgop:isDecision="${stage.isDecision ? 'true' : 'false'}"`,
       ` dgop:isFinal="${stage.isFinal ? 'true' : 'false'}"`,
       stage.assigneeRoleCode ? ` dgop:assigneeRoleCode="${escapeXml(stage.assigneeRoleCode)}"` : '',
+      stage.assignmentConfigJson ? ` dgop:assignmentConfig="${escapeXml(JSON.stringify(stage.assignmentConfigJson))}"` : '',
       stage.parallelGroup ? ` dgop:parallelGroup="${escapeXml(stage.parallelGroup)}"` : '',
       stage.formSchemaJson ? ` dgop:formSchema="${escapeXml(JSON.stringify(stage.formSchemaJson))}"` : '',
       stage.slaConfigJson ? ` dgop:slaConfig="${escapeXml(JSON.stringify(stage.slaConfigJson))}"` : '',
@@ -214,27 +289,39 @@ export function templateToBpmnXml(template: WorkflowBpmnTemplate): string {
       stage.evidenceRequirementsJson ? ` dgop:evidenceRequirements="${escapeXml(JSON.stringify(stage.evidenceRequirementsJson))}"` : '',
       stage.automationConfigJson ? ` dgop:automationConfig="${escapeXml(JSON.stringify(stage.automationConfigJson))}"` : '',
       stage.gatewayConfigJson ? ` dgop:gatewayConfig="${escapeXml(JSON.stringify(stage.gatewayConfigJson))}"` : '',
-      ` />`,
     ].join('');
+    const nodeType = normalizeNodeType(stage.nodeType);
+    if (nodeType === 'timer_event') {
+      return `${opening}>\n      <bpmn:timerEventDefinition />\n    </bpmn:${tag}>`;
+    }
+    if (nodeType === 'error_event') {
+      return `${opening}>\n      <bpmn:errorEventDefinition />\n    </bpmn:${tag}>`;
+    }
+    return `${opening} />`;
   });
 
-  const positions = layoutPositions([startId, ...stages.map((stage) => stageIdByRef.get(stage.id ?? stage.code)!), endId]);
+  const layout = layoutTemplatePositions(stages, transitions, stageIdByRef, startId, endId);
+  const positions = layout.positions;
+  const bounds = layout.bounds;
   const shapeDi = [
-    shape(startId, positions.get(startId) ?? { x: 80, y: 180 }, 36, 36),
+    shape(startId, positions.get(startId) ?? { x: 80, y: 180 }, bounds.get(startId)?.width ?? 44, bounds.get(startId)?.height ?? 44),
     ...stages.map((stage) => {
       const id = stageIdByRef.get(stage.id ?? stage.code)!;
-      return shape(id, positions.get(id) ?? { x: 220, y: 150 }, 154, 82);
+      const box = bounds.get(id) ?? boundsForStage(stage);
+      return shape(id, positions.get(id) ?? { x: 220, y: 150 }, box.width, box.height);
     }),
-    shape(endId, positions.get(endId) ?? { x: 520, y: 180 }, 36, 36),
+    shape(endId, positions.get(endId) ?? { x: 520, y: 180 }, bounds.get(endId)?.width ?? 44, bounds.get(endId)?.height ?? 44),
   ];
 
   const edgeDiXml = edgeDi.map((edge) => {
     const from = positions.get(edge.from) ?? { x: 80, y: 180 };
     const to = positions.get(edge.to) ?? { x: 220, y: 180 };
+    const fromBox = bounds.get(edge.from) ?? { width: 154, height: 82 };
+    const toBox = bounds.get(edge.to) ?? { width: 154, height: 82 };
+    const waypoints = edgeWaypoints(from, to, fromBox, toBox);
     return [
       `      <bpmndi:BPMNEdge id="${edge.id}_di" bpmnElement="${edge.id}">`,
-      `        <di:waypoint x="${from.x + 80}" y="${from.y + 40}" />`,
-      `        <di:waypoint x="${to.x}" y="${to.y + 40}" />`,
+      ...waypoints.map((point) => `        <di:waypoint x="${point.x}" y="${point.y}" />`),
       '      </bpmndi:BPMNEdge>',
     ].join('\n');
   });
@@ -279,12 +366,48 @@ export function parseBpmnXml(xml: string): WorkflowBpmnParseResult {
 
   const nodes = collectNodes(process as Record<string, unknown>);
   const flows = collectFlows(process as Record<string, unknown>);
-  const taskNodes = nodes.filter((node) => BPMN_TASK_TAGS.includes(localName(node.tag)));
-  const stageIdByNode = new Map<string, string>();
+  const stageNodes = nodes.filter((node) => {
+    const name = localName(node.tag);
+    return BPMN_TASK_TAGS.includes(name) || BPMN_GATEWAY_TAGS.includes(name);
+  });
+  const incomingCount = new Map<string, number>();
+  const outgoingCount = new Map<string, number>();
+  for (const flow of flows) {
+    incomingCount.set(flow.targetRef, (incomingCount.get(flow.targetRef) ?? 0) + 1);
+    outgoingCount.set(flow.sourceRef, (outgoingCount.get(flow.sourceRef) ?? 0) + 1);
+  }
   const stageByNode = new Map<string, WorkflowBpmnStage>();
 
-  taskNodes.forEach((node, index) => {
+  stageNodes.forEach((node, index) => {
     const code = normalizeStageCode(String(attr(node, 'code') ?? node.id ?? `stage_${index + 1}`), index);
+    const elementName = localName(node.tag);
+    const inferredNodeType = inferNodeType(
+      node.tag,
+      incomingCount.get(node.id) ?? 0,
+      outgoingCount.get(node.id) ?? 0,
+      node.name,
+      node.attrs,
+    );
+    const nodeType = normalizeNodeType(String(attr(node, 'nodeType') ?? inferredNodeType));
+    const routingNode = ROUTING_NODE_TYPES.has(nodeType);
+    const jsonConfiguration = {
+      assignmentConfigJson: parseJsonAttr(attr(node, 'assignmentConfig')),
+      formSchemaJson: parseJsonAttr(attr(node, 'formSchema')),
+      slaConfigJson: parseJsonAttr(attr(node, 'slaConfig')),
+      notificationRulesJson: parseJsonAttr(attr(node, 'notificationRules')),
+      evidenceRequirementsJson: parseJsonAttr(attr(node, 'evidenceRequirements')),
+      automationConfigJson: parseJsonAttr(attr(node, 'automationConfig')),
+      gatewayConfigJson: parseJsonAttr(attr(node, 'gatewayConfig')),
+    };
+    const invalidConfigurationFields = [
+      ['assignmentConfig', attr(node, 'assignmentConfig')],
+      ['formSchema', attr(node, 'formSchema')],
+      ['slaConfig', attr(node, 'slaConfig')],
+      ['notificationRules', attr(node, 'notificationRules')],
+      ['evidenceRequirements', attr(node, 'evidenceRequirements')],
+      ['automationConfig', attr(node, 'automationConfig')],
+      ['gatewayConfig', attr(node, 'gatewayConfig')],
+    ].filter(([, value]) => hasInvalidJsonAttr(value)).map(([field]) => String(field));
     const stage: WorkflowBpmnStage = {
       id: node.id,
       code,
@@ -292,25 +415,30 @@ export function parseBpmnXml(xml: string): WorkflowBpmnParseResult {
       nameAr: node.name || humanize(code),
       description: null,
       kind: normalizeKind(String(attr(node, 'kind') ?? inferKind(node.name, node.tag))),
-      nodeType: normalizeNodeType(String(attr(node, 'nodeType') ?? inferNodeType(node.tag))),
+      nodeType,
       taskType: normalizeTaskType(String(attr(node, 'taskType') ?? inferTaskType(node.name, node.tag))),
-      assignmentStrategy: normalizeAssignmentStrategy(String(attr(node, 'assignmentStrategy') ?? 'role')),
+      assignmentStrategy: normalizeAssignmentStrategy(String(attr(node, 'assignmentStrategy') ?? (routingNode ? 'automation' : 'role'))),
+      assignmentConfigJson: jsonConfiguration.assignmentConfigJson,
       assigneeRoleCode: cleanString(attr(node, 'assigneeRoleCode')),
-      dueDays: boundedDueDays(Number(attr(node, 'dueDays') ?? 2)),
-      formSchemaJson: parseJsonAttr(attr(node, 'formSchema')),
-      slaConfigJson: parseJsonAttr(attr(node, 'slaConfig')),
-      notificationRulesJson: parseJsonAttr(attr(node, 'notificationRules')),
-      evidenceRequirementsJson: parseJsonAttr(attr(node, 'evidenceRequirements')),
-      automationConfigJson: parseJsonAttr(attr(node, 'automationConfig')),
-      gatewayConfigJson: parseJsonAttr(attr(node, 'gatewayConfig')),
+      dueDays: boundedDueDays(Number(attr(node, 'dueDays') ?? (routingNode ? 0 : 2))),
+      formSchemaJson: jsonConfiguration.formSchemaJson,
+      slaConfigJson: jsonConfiguration.slaConfigJson,
+      notificationRulesJson: jsonConfiguration.notificationRulesJson,
+      evidenceRequirementsJson: jsonConfiguration.evidenceRequirementsJson,
+      automationConfigJson: jsonConfiguration.automationConfigJson,
+      gatewayConfigJson: jsonConfiguration.gatewayConfigJson,
       parallelGroup: cleanString(attr(node, 'parallelGroup')),
       sortOrder: index + 1,
       isStart: asBool(attr(node, 'isStart')),
-      isDecision: asBool(attr(node, 'isDecision')),
+      isDecision: asBool(attr(node, 'isDecision')) ||
+        (['exclusiveGateway', 'inclusiveGateway'].includes(elementName) && (outgoingCount.get(node.id) ?? 0) > 1),
       isFinal: asBool(attr(node, 'isFinal')),
       isActive: true,
+      invalidConfigurationFields,
     };
-    stageIdByNode.set(node.id, stage.code);
+    if (stage.taskType === 'approval' && stage.nodeType === 'user_task') {
+      stage.nodeType = 'approval_task';
+    }
     stageByNode.set(node.id, stage);
   });
 
@@ -333,22 +461,34 @@ export function parseBpmnXml(xml: string): WorkflowBpmnParseResult {
   let transitionIndex = 0;
   for (const [nodeId, stage] of stageByNode.entries()) {
     const nextStages = nextStageTargets(nodeId, outgoing, stageByNode, new Set());
-    if (nextStages.length > 1) stage.isDecision = true;
+    if (nextStages.length > 1 && !['parallel_gateway', 'merge_gateway'].includes(stageNodeType(stage))) {
+      stage.isDecision = true;
+    }
     for (const next of nextStages) {
       if (next.nodeId === nodeId) continue;
       transitionIndex++;
       const decision = inferDecision(next.label, nextStages.length > 1);
+      const explicitConnector = next.flow ? cleanString(attrFromAttrs(next.flow.attrs, 'connectorType')) : null;
+      const connectorType = normalizeConnectorType(
+        explicitConnector ?? inferredGatewayConnector(stage, next.stage),
+        decision,
+      );
+      const rawConditionJson = next.flow ? attrFromAttrs(next.flow.attrs, 'conditionJson') : null;
       transitions.push({
         id: `${stage.code}->${next.stage.code}:${transitionIndex}`,
         fromStageId: stage.code,
         toStageId: next.stage.code,
         labelEn: next.label || decision || 'Next step',
         labelAr: next.label || decision || 'Next step',
+        connectorType,
         decision,
         conditionExpression: cleanString(next.flow ? attrFromAttrs(next.flow.attrs, 'conditionExpression') : null),
-        conditionJson: next.flow ? parseJsonAttr(attrFromAttrs(next.flow.attrs, 'conditionJson')) : null,
+        conditionJson: parseJsonAttr(rawConditionJson),
+        isDefaultPath: asBool(next.flow ? attrFromAttrs(next.flow.attrs, 'isDefaultPath') : null) || connectorType === 'default',
+        timeoutAfterSeconds: boundedPositiveInt(next.flow ? attrFromAttrs(next.flow.attrs, 'timeoutAfterSeconds') : null),
         isHappyPath: decision !== 'rejected',
         sortOrder: transitionIndex,
+        invalidConditionJson: hasInvalidJsonAttr(rawConditionJson),
       });
     }
   }
@@ -396,6 +536,9 @@ export function validateWorkflowRoute(
     if (!VALID_ASSIGNMENT_STRATEGIES.has(stage.assignmentStrategy || 'role')) {
       errors.push(`Stage ${stage.code} uses an unsupported assignment strategy.`);
     }
+    if (stage.invalidConfigurationFields?.length) {
+      errors.push(`Stage ${stage.code} has invalid JSON in: ${stage.invalidConfigurationFields.join(', ')}.`);
+    }
     if (stage.dueDays < 0 || stage.dueDays > 365) errors.push(`Stage ${stage.code} has an invalid SLA day value.`);
     if (!stage.assigneeRoleCode && !AUTOMATED_NODE_TYPES.has(nodeType) && !ROUTING_NODE_TYPES.has(nodeType) && !stage.isFinal && !isPassiveRoutingStage(stage)) {
       errors.push(`Stage ${stage.code} needs a responsible role before it can create work.`);
@@ -409,12 +552,24 @@ export function validateWorkflowRoute(
     if ((stage.kind === 'intake' || stage.taskType === 'information') && !hasStructuredRequirement(stage.formSchemaJson)) {
       warnings.push(`Information stage ${stage.code} should define the form fields users must complete.`);
     }
-    if (AUTOMATED_NODE_TYPES.has(stageNodeType(stage)) && !hasStructuredRequirement(stage.automationConfigJson)) {
-      warnings.push(`Automated stage ${stage.code} should define the integration, rule, or service action.`);
+    if (AUTOMATED_NODE_TYPES.has(stageNodeType(stage)) && !['notification_task', 'sub_workflow'].includes(nodeType) && !hasStructuredRequirement(stage.automationConfigJson)) {
+      errors.push(`Automated stage ${stage.code} must define the integration, rule, or service action.`);
+    }
+    if (nodeType === 'notification_task' && !hasStructuredRequirement(stage.notificationRulesJson)) {
+      errors.push(`Notification stage ${stage.code} must define at least one notification rule.`);
+    }
+    if (nodeType === 'timer_event' && !hasStructuredRequirement(stage.slaConfigJson)) {
+      errors.push(`Timer stage ${stage.code} must define a duration, due date, timeout, or SLA rule.`);
+    }
+    if (nodeType === 'sub_workflow' && !hasSubWorkflowReference(stage.automationConfigJson)) {
+      errors.push(`Sub-workflow stage ${stage.code} must reference a published workflow template.`);
     }
   }
 
-  if (activeStages.length && !activeStages.some((stage) => stage.isStart)) errors.push('Route needs at least one start stage.');
+  if (activeStages.length) {
+    const startCount = activeStages.filter((stage) => stage.isStart).length;
+    if (startCount !== 1) errors.push(`Route needs exactly one active start stage; found ${startCount}.`);
+  }
   if (activeStages.length && !activeStages.some((stage) => stage.isFinal)) errors.push('Route needs at least one final stage.');
 
   for (const transition of transitions) {
@@ -423,9 +578,20 @@ export function validateWorkflowRoute(
   }
 
   const outgoingByStage = new Map<string, WorkflowBpmnTransition[]>();
+  const incomingByStage = new Map<string, WorkflowBpmnTransition[]>();
   const transitionKeys = new Set<string>();
   for (const transition of transitions) {
     if (transition.fromStageId === transition.toStageId) errors.push(`Transition from ${transition.fromStageId} points back to the same stage.`);
+    if (!VALID_CONNECTOR_TYPES.has(normalizeConnectorType(transition.connectorType, transition.decision))) {
+      errors.push(`Transition from ${transition.fromStageId} to ${transition.toStageId} uses an unsupported connector type.`);
+    }
+    if (transition.invalidConditionJson) {
+      errors.push(`Transition from ${transition.fromStageId} to ${transition.toStageId} contains invalid condition JSON.`);
+    }
+    const normalizedConnector = normalizeConnectorType(transition.connectorType, transition.decision);
+    if (normalizedConnector === 'conditional' && !hasExecutableCondition(transition)) {
+      errors.push(`Conditional transition from ${transition.fromStageId} to ${transition.toStageId} needs an executable condition.`);
+    }
     const transitionKey = `${transition.fromStageId}->${transition.toStageId}:${transition.decision ?? transition.conditionExpression ?? transition.labelEn}`;
     if (transitionKeys.has(transitionKey)) warnings.push(`Duplicate transition detected: ${transitionKey}.`);
     transitionKeys.add(transitionKey);
@@ -433,22 +599,49 @@ export function validateWorkflowRoute(
     const arr = outgoingByStage.get(transition.fromStageId) ?? [];
     arr.push(transition);
     outgoingByStage.set(transition.fromStageId, arr);
+    const incoming = incomingByStage.get(transition.toStageId) ?? [];
+    incoming.push(transition);
+    incomingByStage.set(transition.toStageId, incoming);
   }
   const finalCodes = new Set(activeStages.filter((stage) => stage.isFinal).map((stage) => stage.code));
   for (const stage of activeStages) {
     const outgoing = outgoingByStage.get(stage.code) ?? [];
+    const nodeType = normalizeNodeType(stage.nodeType);
+    const isParallelSplit = nodeType === 'parallel_gateway';
     if (stage.isFinal && outgoing.length > 0) warnings.push(`Final stage ${stage.code} should not send users to another stage.`);
     if (!stage.isFinal && activeStages.length > 1 && outgoing.length === 0) {
       errors.push(`Stage ${stage.code} is not final and has no next step.`);
     }
-    if (outgoing.length > 1 && !stage.isDecision) {
+    if (outgoing.length > 1 && !stage.isDecision && !isParallelSplit) {
       warnings.push(`Stage ${stage.code} has multiple exits and was marked as a decision point.`);
       stage.isDecision = true;
     }
-    if (stage.isDecision && outgoing.length < 2) {
+    if (isParallelSplit && outgoing.length < 2) {
+      errors.push(`Parallel gateway ${stage.code} must define at least two branch connector paths.`);
+    }
+    if (isParallelSplit && outgoing.some((transition) => normalizeConnectorType(transition.connectorType) !== 'parallel_split')) {
+      errors.push(`Parallel gateway ${stage.code} must use parallel split connectors for every branch.`);
+    }
+    if (isParallelSplit && !reachableMergeGateway(stage.code, outgoingByStage, activeStages)) {
+      errors.push(`Parallel gateway ${stage.code} must converge through a reachable merge gateway.`);
+    }
+    if (nodeType === 'merge_gateway') {
+      const incoming = incomingByStage.get(stage.code) ?? [];
+      if (incoming.length < 2) errors.push(`Merge gateway ${stage.code} must have at least two incoming branch paths.`);
+      if (incoming.some((transition) => normalizeConnectorType(transition.connectorType) !== 'merge_join')) {
+        errors.push(`Merge gateway ${stage.code} must use merge join connectors for every incoming branch.`);
+      }
+    }
+    if (stage.isDecision && !isParallelSplit && outgoing.length < 2) {
       warnings.push(`Decision stage ${stage.code} should have at least two branches.`);
     }
-    if (stage.isDecision && outgoing.length > 1 && !outgoing.some((transition) => !transition.isHappyPath || transition.decision === 'rejected')) {
+    if (stage.isDecision && !isParallelSplit && outgoing.length > 1 && !outgoing.some(isDefaultTransition)) {
+      errors.push(`Decision stage ${stage.code} must define exactly one default connector path.`);
+    }
+    if (stage.isDecision && !isParallelSplit && outgoing.filter(isDefaultTransition).length > 1) {
+      errors.push(`Decision stage ${stage.code} has multiple default connector paths.`);
+    }
+    if (stage.isDecision && !isParallelSplit && outgoing.length > 1 && !outgoing.some((transition) => !transition.isHappyPath || transition.decision === 'rejected')) {
       warnings.push(`Decision stage ${stage.code} should include a rejection or rework path.`);
     }
     if (outgoing.length > 1) {
@@ -464,7 +657,7 @@ export function validateWorkflowRoute(
 
   const reachable = reachableStageCodes(activeStages, transitions);
   for (const stage of activeStages) {
-    if (!reachable.has(stage.code)) warnings.push(`Stage ${stage.code} is not reachable from the start stage.`);
+    if (!reachable.has(stage.code)) errors.push(`Stage ${stage.code} is not reachable from the start stage.`);
     if (!stage.isFinal && finalCodes.size && !canReachAnyFinal(stage.code, finalCodes, outgoingByStage, new Set())) {
       errors.push(`Stage ${stage.code} cannot reach a final stage.`);
     }
@@ -580,6 +773,7 @@ function buildEnterpriseChecklist(
   warnings: string[],
 ): WorkflowDesignerChecklistItem[] {
   const hasStart = stages.some((stage) => stage.isStart);
+  const startCount = stages.filter((stage) => stage.isStart).length;
   const hasFinal = stages.some((stage) => stage.isFinal);
   const humanStages = stages.filter((stage) => !AUTOMATED_NODE_TYPES.has(stageNodeType(stage)) && !isPassiveRoutingStage(stage));
   const assigned = humanStages.filter((stage) => stage.assigneeRoleCode || stage.isFinal).length;
@@ -594,7 +788,7 @@ function buildEnterpriseChecklist(
   const automatedReady = automatedStages.filter((stage) => hasStructuredRequirement(stage.automationConfigJson)).length;
 
   return [
-    checklistItem('route_shape', 'Route has a clear start and end', hasStart && hasFinal, hasStart || hasFinal, `${stages.length} stages, ${transitions.length} transitions`),
+    checklistItem('route_shape', 'Route has exactly one start and a clear end', startCount === 1 && hasFinal, hasStart || hasFinal, `${startCount} start stage(s), ${stages.length} stages, ${transitions.length} transitions`),
     checklistItem('owners', 'Every human stage has a responsible role', humanStages.length === assigned, assigned > 0, `${assigned}/${humanStages.length} human stages assigned`),
     checklistItem('decisions', 'Decision branches are explicit', decisionStages.length === decisionEdges, decisionEdges > 0 || decisionStages.length === 0, `${decisionEdges}/${decisionStages.length} decision stages have branches`),
     checklistItem('forms', 'Intake and information stages define forms', informationStages.length === 0 || forms === informationStages.length, forms > 0, `${forms}/${informationStages.length} information stages have form schemas`),
@@ -642,12 +836,18 @@ function sequenceFlow(
   from: string,
   to: string,
   label: string,
+  connectorType?: string | null,
   conditionExpression?: string | null,
   conditionJson?: unknown | null,
+  isDefaultPath?: boolean,
+  timeoutAfterSeconds?: number | null,
 ): string {
   const conditionAttrs = [
+    connectorType ? ` dgop:connectorType="${escapeXml(normalizeConnectorType(connectorType))}"` : '',
     conditionExpression ? ` dgop:conditionExpression="${escapeXml(conditionExpression)}"` : '',
     conditionJson ? ` dgop:conditionJson="${escapeXml(JSON.stringify(conditionJson))}"` : '',
+    isDefaultPath ? ' dgop:isDefaultPath="true"' : '',
+    timeoutAfterSeconds ? ` dgop:timeoutAfterSeconds="${Math.max(1, Math.round(timeoutAfterSeconds))}"` : '',
   ].join('');
   return `    <bpmn:sequenceFlow id="${id}" name="${escapeXml(label)}" sourceRef="${from}" targetRef="${to}"${conditionAttrs} />`;
 }
@@ -660,12 +860,163 @@ function shape(id: string, pos: { x: number; y: number }, width: number, height:
   ].join('\n');
 }
 
-function layoutPositions(ids: string[]): Map<string, { x: number; y: number }> {
-  const map = new Map<string, { x: number; y: number }>();
-  ids.forEach((id, index) => {
-    map.set(id, { x: 70 + index * 210, y: 150 + (index % 2 === 0 ? 0 : 18) });
+function layoutTemplatePositions(
+  stages: WorkflowBpmnStage[],
+  transitions: WorkflowBpmnTransition[],
+  stageIdByRef: Map<string, string>,
+  startId: string,
+  endId: string,
+): { positions: Map<string, { x: number; y: number }>; bounds: Map<string, BpmnBounds> } {
+  const baseY = 330;
+  const startX = 110;
+  const stageX = 280;
+  const gapX = 280;
+  const positions = new Map<string, { x: number; y: number }>();
+  const bounds = new Map<string, BpmnBounds>();
+  bounds.set(startId, { width: 44, height: 44 });
+  bounds.set(endId, { width: 44, height: 44 });
+  positions.set(startId, { x: startX, y: baseY + 14 });
+
+  const activeStages = [...stages].sort((a, b) => a.sortOrder - b.sortOrder);
+  const stageById = new Map<string, WorkflowBpmnStage>();
+  activeStages.forEach((stage, index) => {
+    const id = stageIdByRef.get(stage.id ?? stage.code) ?? safeBpmnId(`Stage_${stage.code || index + 1}`);
+    stageById.set(id, stage);
+    bounds.set(id, boundsForStage(stage));
   });
-  return map;
+
+  const ranks = graphStageRanks(activeStages, transitions, stageIdByRef);
+  const stagesByRank = new Map<number, Array<{ id: string; stage: WorkflowBpmnStage }>>();
+  for (const [id, stage] of stageById.entries()) {
+    const rank = ranks.get(id) ?? 0;
+    const lane = stagesByRank.get(rank) ?? [];
+    lane.push({ id, stage });
+    stagesByRank.set(rank, lane);
+  }
+  for (const [rank, lane] of stagesByRank.entries()) {
+    lane.sort((a, b) => a.stage.sortOrder - b.stage.sortOrder);
+    const offsets = lane.length > 1 ? branchOffsets(lane.length) : [0];
+    lane.forEach(({ id, stage }, index) => {
+      const box = bounds.get(id) ?? boundsForStage(stage);
+      const yOffset = stage.isFinal || isMergeNode(stage) ? 0 : offsets[index];
+      positions.set(id, {
+        x: stageX + rank * gapX,
+        y: centeredNodeY(baseY + yOffset, box),
+      });
+    });
+  }
+
+  const lastX = Math.max(...[...positions.values()].map((position) => position.x), stageX);
+  positions.set(endId, { x: lastX + gapX, y: baseY + 14 });
+
+  return { positions, bounds };
+}
+
+function graphStageRanks(
+  stages: WorkflowBpmnStage[],
+  transitions: WorkflowBpmnTransition[],
+  stageIdByRef: Map<string, string>,
+): Map<string, number> {
+  const stageIds = new Set(stages.map((stage) => stageIdByRef.get(stage.id ?? stage.code)).filter((id): id is string => Boolean(id)));
+  const outgoing = new Map<string, string[]>();
+  for (const transition of transitions) {
+    const from = stageIdByRef.get(transition.fromStageId);
+    const to = stageIdByRef.get(transition.toStageId);
+    if (!from || !to || !stageIds.has(from) || !stageIds.has(to)) continue;
+    const targets = outgoing.get(from) ?? [];
+    targets.push(to);
+    outgoing.set(from, targets);
+  }
+
+  const backEdges = new Set<string>();
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const markBackEdges = (nodeId: string): void => {
+    if (visited.has(nodeId)) return;
+    visiting.add(nodeId);
+    for (const targetId of outgoing.get(nodeId) ?? []) {
+      if (visiting.has(targetId)) {
+        backEdges.add(`${nodeId}->${targetId}`);
+        continue;
+      }
+      markBackEdges(targetId);
+    }
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+  };
+  const startIds = stages
+    .filter((stage) => stage.isStart)
+    .map((stage) => stageIdByRef.get(stage.id ?? stage.code))
+    .filter((id): id is string => Boolean(id));
+  for (const startId of startIds) markBackEdges(startId);
+  for (const id of stageIds) markBackEdges(id);
+
+  const ranks = new Map<string, number>();
+  const roots = startIds.length ? startIds : [...stageIds].slice(0, 1);
+  roots.forEach((id) => ranks.set(id, 0));
+  for (let pass = 0; pass < stages.length; pass++) {
+    let changed = false;
+    for (const [from, targets] of outgoing.entries()) {
+      const sourceRank = ranks.get(from);
+      if (sourceRank === undefined) continue;
+      for (const target of targets) {
+        if (backEdges.has(`${from}->${target}`)) continue;
+        const nextRank = sourceRank + 1;
+        if ((ranks.get(target) ?? -1) >= nextRank) continue;
+        ranks.set(target, nextRank);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  let fallbackRank = Math.max(...ranks.values(), -1) + 1;
+  for (const stage of stages) {
+    const id = stageIdByRef.get(stage.id ?? stage.code);
+    if (id && !ranks.has(id)) ranks.set(id, fallbackRank++);
+  }
+  return ranks;
+}
+
+function branchOffsets(count: number): number[] {
+  const pattern = [-145, 145, -265, 265, 0, -390, 390];
+  return Array.from({ length: count }, (_, index) => pattern[index] ?? (index % 2 === 0 ? -420 : 420));
+}
+
+function boundsForStage(stage: WorkflowBpmnStage): BpmnBounds {
+  if (isGatewayNode(stage)) return { width: 64, height: 64 };
+  if (normalizeNodeType(stage.nodeType) === 'timer_event') return { width: 54, height: 54 };
+  return { width: 172, height: 78 };
+}
+
+function centeredNodeY(centerY: number, box: BpmnBounds): number {
+  return Math.round(centerY - box.height / 2);
+}
+
+function edgeWaypoints(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  fromBox: BpmnBounds,
+  toBox: BpmnBounds,
+): Array<{ x: number; y: number }> {
+  const start = { x: Math.round(from.x + fromBox.width), y: Math.round(from.y + fromBox.height / 2) };
+  const end = { x: Math.round(to.x), y: Math.round(to.y + toBox.height / 2) };
+  if (end.x <= start.x) {
+    const turnX = Math.round(start.x + 58);
+    const returnX = Math.round(end.x - 58);
+    return [start, { x: turnX, y: start.y }, { x: turnX, y: end.y + 92 }, { x: returnX, y: end.y + 92 }, { x: returnX, y: end.y }, end];
+  }
+  if (Math.abs(start.y - end.y) < 16) return [start, end];
+  const midX = Math.round(start.x + (end.x - start.x) / 2);
+  return [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+}
+
+function isGatewayNode(stage: WorkflowBpmnStage): boolean {
+  return ['decision_gateway', 'parallel_gateway', 'merge_gateway', 'inclusive_gateway', 'event_based_gateway'].includes(normalizeNodeType(stage.nodeType));
+}
+
+function isMergeNode(stage: WorkflowBpmnStage): boolean {
+  return ['merge_gateway', 'inclusive_gateway'].includes(normalizeNodeType(stage.nodeType));
 }
 
 function collectNodes(process: Record<string, unknown>): BpmnNode[] {
@@ -866,6 +1217,36 @@ function boundedDueDays(value: number): number {
   return Math.min(Math.max(Math.round(value), 0), 365);
 }
 
+function boundedPositiveInt(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.min(Math.round(parsed), 31_536_000);
+}
+
+function normalizeConnectorType(value?: unknown, decision?: string | null): string {
+  const fromValue = String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  const fromDecision = String(decision ?? '').trim().toLowerCase();
+  const clean = fromValue || (
+    fromDecision === 'approved' ? 'success' :
+    fromDecision === 'rejected' ? 'failure' :
+    fromDecision === 'return_for_clarification' ? 'return' :
+    'sequence'
+  );
+  if (clean === 'return_for_clarification' || clean === 'returned' || clean === 'clarification') return 'return';
+  if (clean === 'default_path' || clean === 'otherwise') return 'default';
+  if (clean === 'conditional_path' || clean === 'condition') return 'conditional';
+  if (clean === 'parallel' || clean === 'parallel_gateway') return 'parallel_split';
+  if (clean === 'merge' || clean === 'merge_gateway') return 'merge_join';
+  return VALID_CONNECTOR_TYPES.has(clean) ? clean : 'sequence';
+}
+
+function isDefaultTransition(transition: WorkflowBpmnTransition): boolean {
+  return Boolean(transition.isDefaultPath) ||
+    normalizeConnectorType(transition.connectorType, transition.decision) === 'default' ||
+    String(transition.decision ?? '').toLowerCase() === 'default' ||
+    (transition.decision === 'rejected' && transition.isHappyPath === false);
+}
+
 function normalizeStageCode(value: string, index: number): string {
   const clean = value
     .replace(/^Stage_/i, '')
@@ -876,7 +1257,7 @@ function normalizeStageCode(value: string, index: number): string {
 }
 
 function normalizeKind(value: string): string {
-  const clean = value.toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+  const clean = String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
   return clean || 'review';
 }
 
@@ -885,16 +1266,27 @@ function normalizeTaskType(value: string): string {
   return VALID_TASK_TYPES.has(clean) ? clean : 'review';
 }
 
-function normalizeNodeType(value: string): string {
-  const clean = value.toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+function normalizeNodeType(value?: string | null): string {
+  const clean = String(value ?? '').toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
   if (!clean) return 'user_task';
+  if (clean === 'start' || clean === 'start_node') return 'start_event';
+  if (clean === 'end' || clean === 'end_node') return 'end_event';
   if (clean === 'usertask') return 'user_task';
   if (clean === 'manualtask') return 'manual_task';
+  if (clean === 'approval' || clean === 'approvaltask') return 'approval_task';
+  if (clean === 'automated' || clean === 'automatedtask') return 'automated_task';
   if (clean === 'servicetask') return 'service_task';
   if (clean === 'businessruletask') return 'business_rule_task';
   if (clean === 'scripttask') return 'script_task';
   if (clean === 'sendtask') return 'send_task';
   if (clean === 'receivetask') return 'receive_task';
+  if (clean === 'decision' || clean === 'decision_gateway' || clean === 'exclusivegateway') return 'decision_gateway';
+  if (clean === 'parallel' || clean === 'parallelgateway') return 'parallel_gateway';
+  if (clean === 'merge' || clean === 'merge_gateway' || clean === 'inclusivegateway') return 'merge_gateway';
+  if (clean === 'timer' || clean === 'timer_node') return 'timer_event';
+  if (clean === 'notification' || clean === 'notification_node') return 'notification_task';
+  if (clean === 'sub_workflow_node' || clean === 'subprocess' || clean === 'callactivity') return 'sub_workflow';
+  if (clean === 'error' || clean === 'error_node') return 'error_event';
   return clean;
 }
 
@@ -907,7 +1299,13 @@ function normalizeAssignmentStrategy(value: string): string {
   return VALID_ASSIGNMENT_STRATEGIES.has(clean) ? clean : 'role';
 }
 
-function inferNodeType(tag: string): string {
+function inferNodeType(
+  tag: string,
+  incoming = 0,
+  outgoing = 0,
+  nodeName = '',
+  attrs: Record<string, unknown> = {},
+): string {
   const name = localName(tag);
   if (name === 'manualTask') return 'manual_task';
   if (name === 'serviceTask') return 'service_task';
@@ -915,25 +1313,40 @@ function inferNodeType(tag: string): string {
   if (name === 'scriptTask') return 'script_task';
   if (name === 'sendTask') return 'send_task';
   if (name === 'receiveTask') return 'receive_task';
-  if (name === 'subProcess') return 'sub_process';
-  if (name === 'callActivity') return 'call_activity';
-  if (name === 'exclusiveGateway') return 'exclusive_gateway';
-  if (name === 'parallelGateway') return 'parallel_gateway';
-  if (name === 'inclusiveGateway') return 'inclusive_gateway';
-  if (name === 'eventBasedGateway') return 'event_based_gateway';
+  if (name === 'subProcess') return 'sub_workflow';
+  if (name === 'callActivity') return 'sub_workflow';
+  if (name === 'exclusiveGateway') return 'decision_gateway';
+  if (name === 'parallelGateway') return incoming > 1 && outgoing <= 1 ? 'merge_gateway' : 'parallel_gateway';
+  if (name === 'inclusiveGateway') return incoming > 1 && outgoing <= 1 ? 'merge_gateway' : 'decision_gateway';
+  if (name === 'eventBasedGateway') return 'timer_event';
+  if (name === 'intermediateCatchEvent' || name === 'intermediateThrowEvent') {
+    const childNames = Object.keys(attrs).map(localName);
+    if (childNames.includes('errorEventDefinition') || nodeName.toLowerCase().includes('error')) return 'error_event';
+    return 'timer_event';
+  }
   return 'user_task';
 }
 
 function bpmnTagForStage(stage: WorkflowBpmnStage): string {
   const type = normalizeNodeType(stage.nodeType || 'user_task');
+  if (type === 'start_event') return 'task';
+  if (type === 'end_event') return 'task';
+  if (type === 'approval_task') return 'userTask';
+  if (type === 'automated_task') return 'serviceTask';
   if (type === 'manual_task') return 'manualTask';
   if (type === 'service_task') return 'serviceTask';
   if (type === 'business_rule_task') return 'businessRuleTask';
   if (type === 'script_task') return 'scriptTask';
   if (type === 'send_task') return 'sendTask';
   if (type === 'receive_task') return 'receiveTask';
-  if (type === 'sub_process') return 'subProcess';
-  if (type === 'call_activity') return 'callActivity';
+  if (type === 'sub_workflow') return 'callActivity';
+  if (type === 'decision_gateway') return 'exclusiveGateway';
+  if (type === 'parallel_gateway') return 'parallelGateway';
+  if (type === 'merge_gateway') return 'parallelGateway';
+  if (type === 'inclusive_gateway') return 'inclusiveGateway';
+  if (type === 'timer_event') return 'intermediateCatchEvent';
+  if (type === 'notification_task') return 'sendTask';
+  if (type === 'error_event') return 'intermediateCatchEvent';
   return 'userTask';
 }
 
@@ -947,8 +1360,52 @@ function parseJsonAttr(value: unknown): unknown | null {
   }
 }
 
+function hasInvalidJsonAttr(value: unknown): boolean {
+  const text = cleanString(value);
+  if (!text) return false;
+  try {
+    JSON.parse(text);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+function hasExecutableCondition(transition: WorkflowBpmnTransition): boolean {
+  if (transition.conditionExpression?.trim() || transition.decision?.trim()) return true;
+  if (!transition.conditionJson || typeof transition.conditionJson !== 'object') return false;
+  const root = transition.conditionJson as Record<string, unknown>;
+  const table = (root['dmnTable'] ?? root['decisionTable'] ?? root) as Record<string, unknown>;
+  return Array.isArray(table?.['rules']) && table['rules'].length > 0;
+}
+
+function hasSubWorkflowReference(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const config = value as Record<string, unknown>;
+  return Boolean(String(config['templateId'] ?? config['workflowTemplateId'] ?? config['caseType'] ?? '').trim());
+}
+
+function reachableMergeGateway(
+  startCode: string,
+  outgoingByStage: Map<string, WorkflowBpmnTransition[]>,
+  stages: WorkflowBpmnStage[],
+): boolean {
+  const nodeTypeByCode = new Map(stages.map((stage) => [stage.code, stageNodeType(stage)]));
+  const queue = (outgoingByStage.get(startCode) ?? []).map((edge) => edge.toStageId);
+  const visited = new Set<string>([startCode]);
+  while (queue.length) {
+    const code = queue.shift()!;
+    if (visited.has(code)) continue;
+    visited.add(code);
+    if (nodeTypeByCode.get(code) === 'merge_gateway') return true;
+    for (const edge of outgoingByStage.get(code) ?? []) queue.push(edge.toStageId);
+  }
+  return false;
+}
+
 function inferKind(name: string, tag: string): string {
   const text = `${name} ${tag}`.toLowerCase();
+  if (BPMN_GATEWAY_TAGS.includes(localName(tag))) return 'routing';
   if (text.includes('intake') || text.includes('start')) return 'intake';
   if (text.includes('triage')) return 'triage';
   if (text.includes('root') || text.includes('analysis') || text.includes('impact')) return 'analysis';
@@ -961,9 +1418,18 @@ function inferKind(name: string, tag: string): string {
 
 function inferTaskType(name: string, tag: string): string {
   const text = `${name} ${tag}`.toLowerCase();
+  if (BPMN_GATEWAY_TAGS.includes(localName(tag))) return 'routing';
   if (text.includes('approve') || text.includes('decision') || tag.includes('businessRuleTask')) return 'approval';
   if (text.includes('intake') || text.includes('information') || text.includes('capture')) return 'information';
   return 'review';
+}
+
+function inferredGatewayConnector(from: WorkflowBpmnStage, to: WorkflowBpmnStage): string | null {
+  const fromType = stageNodeType(from);
+  const toType = stageNodeType(to);
+  if (fromType === 'parallel_gateway') return 'parallel_split';
+  if (toType === 'merge_gateway') return 'merge_join';
+  return null;
 }
 
 function inferDecision(label: string, hasMultipleBranches: boolean): string | null {

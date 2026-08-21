@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
@@ -13,12 +14,21 @@ import {
   UpdateAssetDto,
 } from './assets.dto';
 import {
+  DATA_ASSET_TYPES,
   LIFECYCLE_STATUSES,
+  LIFECYCLE_PHASES,
+  V6_LIFECYCLE_STATES,
+  assetTypePanel,
+  isKnownAssetTypeInput,
   normalizeAssetCode,
+  normalizeAssetSubtype,
+  normalizeAssetType,
+  normalizeAssetTypeInput,
   normalizeOptionalText,
   uniqueIds,
   validateAssetCrossFields,
   validateAssetText,
+  validateAssetTypeFields,
 } from './assets.logic';
 import { parseCsv } from '../common/csv';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
@@ -34,6 +44,9 @@ export interface AssetFilters {
   orgUnitId?: string;
   ownerStatus?: string;
   lifecycleStatus?: string;
+  assetType?: string;
+  assetSubtype?: string;
+  v6LifecycleState?: string;
 }
 
 const refSelect = { select: { id: true, code: true, nameEn: true, nameAr: true } };
@@ -112,8 +125,19 @@ export class AssetsService {
     const lifecycleStatus = parseQueryEnum(filters.lifecycleStatus, LIFECYCLE_STATUSES, 'asset lifecycle status', (value) =>
       value.toLowerCase(),
     );
+    const assetType = parseQueryEnum(filters.assetType, DATA_ASSET_TYPES, 'asset type', (value) =>
+      isKnownAssetTypeInput(value) ? normalizeAssetType(value) : normalizeAssetTypeInput(value),
+    );
+    const v6LifecycleState = parseQueryEnum(filters.v6LifecycleState, V6_LIFECYCLE_STATES, 'v6 lifecycle state', (value) =>
+      value.toLowerCase(),
+    );
     if (ownerStatus) and.push({ ownerStatus });
     if (lifecycleStatus) and.push({ lifecycleStatus });
+    if (assetType) and.push({ assetType });
+    if (filters.assetSubtype) {
+      and.push({ assetSubtype: normalizeAssetSubtype(assetType ?? filters.assetType ?? 'dataset', filters.assetSubtype) });
+    }
+    if (v6LifecycleState) and.push({ v6LifecycleState });
     if (filters.subjectId) and.push({ subjects: { some: { dataSubjectId: filters.subjectId } } });
     if (filters.search) {
       const term = filters.search.trim();
@@ -126,6 +150,13 @@ export class AssetsService {
       });
     }
     return and;
+  }
+
+  private withAssetTypePanel<T extends { assetType?: string | null }>(asset: T): T & { assetTypePanel: ReturnType<typeof assetTypePanel> } {
+    return {
+      ...asset,
+      assetTypePanel: assetTypePanel(asset.assetType),
+    };
   }
 
   private async assertWritableScope(
@@ -180,13 +211,14 @@ export class AssetsService {
     const params = parsePageParams(page, pageSize);
     if (!params) {
       const bounded = boundedFirstPageParams(pageSize);
-      return this.prisma.dataAsset.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+      const rows = await this.prisma.dataAsset.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+      return rows.map((row) => this.withAssetTypePanel(row));
     }
     const [rows, total] = await Promise.all([
       this.prisma.dataAsset.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.dataAsset.count({ where }),
     ]);
-    return toPaged(rows, total, params);
+    return toPaged(rows.map((row) => this.withAssetTypePanel(row)), total, params);
   }
 
   async get(roleCodes: string[], id: string) {
@@ -196,11 +228,16 @@ export class AssetsService {
       include: detailInclude,
     });
     if (!asset) throw new NotFoundException('data_asset not found');
-    return asset;
+    return this.withAssetTypePanel(asset);
   }
 
   private ownerStatusFor(ownerName?: string | null): string {
     return ownerName && ownerName.trim() ? 'assigned' : 'unassigned';
+  }
+
+  private toPrismaJson(value: Record<string, unknown> | null | undefined): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {
+    if (value === undefined) return undefined;
+    return value === null ? Prisma.JsonNull : value as Prisma.InputJsonValue;
   }
 
   private assertAssetText(
@@ -220,6 +257,10 @@ export class AssetsService {
       nameAr: dto.nameAr.trim(),
       description: normalizeOptionalText(dto.description) ?? undefined,
       ownerName: normalizeOptionalText(dto.ownerName) ?? null,
+      assetType: normalizeAssetType(dto.assetType),
+      assetSubtype: normalizeAssetSubtype(normalizeAssetType(dto.assetType), dto.assetSubtype),
+      v6LifecycleState: dto.v6LifecycleState ?? 'registered',
+      lifecyclePhase: dto.lifecyclePhase ?? 'discover',
       lifecycleStatus: dto.lifecycleStatus ?? 'draft',
       subjectIds: uniqueIds(dto.subjectIds),
     };
@@ -233,6 +274,10 @@ export class AssetsService {
       nameAr: typeof dto.nameAr === 'string' ? dto.nameAr.trim() : dto.nameAr,
       description: normalizeOptionalText(dto.description),
       ownerName: normalizeOptionalText(dto.ownerName),
+      assetType: dto.assetType === undefined ? undefined : normalizeAssetType(dto.assetType),
+      assetSubtype: dto.assetSubtype === undefined ? undefined : normalizeAssetSubtype(dto.assetType ?? 'dataset', dto.assetSubtype),
+      v6LifecycleState: dto.v6LifecycleState,
+      lifecyclePhase: dto.lifecyclePhase,
       subjectIds: dto.subjectIds === undefined ? undefined : uniqueIds(dto.subjectIds),
     };
   }
@@ -244,6 +289,12 @@ export class AssetsService {
     capabilityId?: string | null;
     classificationId?: string | null;
     subjectIds?: string[];
+    assetType?: string | null;
+    assetSubtype?: string | null;
+    lifecyclePhase?: string | null;
+    v6LifecycleState?: string | null;
+    previousV6LifecycleState?: string | null;
+    typeMetadataJson?: unknown | null;
   }): Promise<void> {
     const [domain, orgUnit, system, capability, classification, subjects] = await Promise.all([
       target.domainId
@@ -305,6 +356,7 @@ export class AssetsService {
       orgUnitId: target.orgUnitId,
       system,
     });
+    errors.push(...validateAssetTypeFields(target));
     if (errors.length) throw new BadRequestException(errors.join('; '));
   }
 
@@ -313,17 +365,24 @@ export class AssetsService {
     await this.assertWritableScope(roleCodes, normalized);
     await this.assertAssetIntegrity(normalized);
     const { subjectIds, ...rest } = normalized;
-    const asset = await this.prisma.dataAsset.create({
-      data: {
-        ...rest,
-        ownerName: normalized.ownerName ?? null,
-        ownerStatus: this.ownerStatusFor(normalized.ownerName),
-        lifecycleStatus: normalized.lifecycleStatus ?? 'draft',
-        subjects: subjectIds?.length
-          ? { create: subjectIds.map((dataSubjectId) => ({ dataSubjectId })) }
-          : undefined,
-      },
-      include: detailInclude,
+    const createData: Prisma.DataAssetUncheckedCreateInput = {
+      ...rest,
+      typeMetadataJson: this.toPrismaJson(rest.typeMetadataJson),
+      ownerName: normalized.ownerName ?? null,
+      ownerStatus: this.ownerStatusFor(normalized.ownerName),
+      lifecycleStatus: normalized.lifecycleStatus ?? 'draft',
+    };
+    const asset = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.dataAsset.create({ data: createData, select: { id: true } });
+      if (subjectIds?.length) {
+        await tx.assetSubject.createMany({
+          data: subjectIds.map((dataSubjectId) => ({ assetId: created.id, dataSubjectId })),
+          skipDuplicates: true,
+        });
+      }
+      const loaded = await tx.dataAsset.findUnique({ where: { id: created.id }, include: detailInclude });
+      if (!loaded) throw new BadRequestException('Could not create data asset');
+      return loaded;
     });
     await this.audit.log({
       actor,
@@ -332,7 +391,7 @@ export class AssetsService {
       entityId: asset.id,
       metadata: { code: asset.code },
     });
-    return asset;
+    return this.withAssetTypePanel(asset);
   }
 
   async update(id: string, roleCodes: string[], dto: UpdateAssetDto & { code?: unknown }, actor: string) {
@@ -342,6 +401,12 @@ export class AssetsService {
       normalized.subjectIds !== undefined
         ? normalized.subjectIds
         : existing.subjects.map((subject) => subject.dataSubject.id);
+    const nextAssetSubtype =
+      normalized.assetSubtype !== undefined
+        ? normalized.assetSubtype
+        : normalized.assetType !== undefined && normalized.assetType !== existing.assetType
+          ? null
+          : existing.assetSubtype;
     const nextIntegrityTarget = {
       domainId: normalized.domainId !== undefined ? normalized.domainId : existing.domainId,
       orgUnitId: normalized.orgUnitId !== undefined ? normalized.orgUnitId : existing.orgUnitId,
@@ -350,6 +415,12 @@ export class AssetsService {
       classificationId:
         normalized.classificationId !== undefined ? normalized.classificationId : existing.classificationId,
       subjectIds,
+      assetType: normalized.assetType !== undefined ? normalized.assetType : existing.assetType,
+      assetSubtype: nextAssetSubtype,
+      lifecyclePhase: normalized.lifecyclePhase !== undefined ? normalized.lifecyclePhase : existing.lifecyclePhase,
+      v6LifecycleState: normalized.v6LifecycleState !== undefined ? normalized.v6LifecycleState : existing.v6LifecycleState,
+      previousV6LifecycleState: existing.v6LifecycleState,
+      typeMetadataJson: normalized.typeMetadataJson !== undefined ? normalized.typeMetadataJson : existing.typeMetadataJson,
     };
     await this.assertWritableScope(roleCodes, {
       domainId: nextIntegrityTarget.domainId,
@@ -362,6 +433,12 @@ export class AssetsService {
     const { subjectIds: nextSubjectIds, ...rest } = normalized;
 
     const data: Record<string, unknown> = { ...rest };
+    if (normalized.typeMetadataJson !== undefined) {
+      data['typeMetadataJson'] = this.toPrismaJson(normalized.typeMetadataJson);
+    }
+    if (normalized.assetType !== undefined && normalized.assetSubtype === undefined && normalized.assetType !== existing.assetType) {
+      data['assetSubtype'] = null;
+    }
     if (normalized.ownerName !== undefined) {
       data['ownerName'] = normalized.ownerName ?? null;
       data['ownerStatus'] = this.ownerStatusFor(normalized.ownerName);
@@ -386,7 +463,7 @@ export class AssetsService {
       entityType: 'data_asset',
       entityId: id,
     });
-    return asset;
+    return this.withAssetTypePanel(asset);
   }
 
   async remove(id: string, roleCodes: string[], actor: string) {
@@ -460,7 +537,80 @@ export class AssetsService {
   }
 
   // ---------- CSV Import ----------
+  async importPreview(roleCodes: string[], csv: string) {
+    const plan = await this.buildImportPlan(roleCodes, csv);
+    return {
+      processed: plan.processed,
+      validRows: plan.rows.length,
+      errors: plan.errors,
+      rows: plan.rows.map((row) => ({
+        row: row.row,
+        code: row.code,
+        action: row.action,
+        assetType: row.data.assetType,
+        assetSubtype: row.data.assetSubtype,
+        v6LifecycleState: row.data.v6LifecycleState,
+        lifecyclePhase: row.data.lifecyclePhase,
+        subjectCount: row.subjectIds.length,
+      })),
+    };
+  }
+
   async importCsv(roleCodes: string[], csv: string, actor: string) {
+    const plan = await this.buildImportPlan(roleCodes, csv);
+    let created = 0;
+    let updated = 0;
+    const errors = [...plan.errors];
+
+    for (const row of plan.rows) {
+      try {
+        if (row.existingId) {
+          const existingId = row.existingId;
+          await this.prisma.$transaction(async (tx) => {
+            await tx.dataAsset.update({
+              where: { id: existingId },
+              data: this.importUpdateData(row.data),
+            });
+            await tx.assetSubject.deleteMany({ where: { assetId: existingId } });
+            if (row.subjectIds.length) {
+              await tx.assetSubject.createMany({
+                data: row.subjectIds.map((dataSubjectId) => ({ assetId: existingId, dataSubjectId })),
+                skipDuplicates: true,
+              });
+            }
+          });
+          updated++;
+        } else {
+          await this.prisma.$transaction(async (tx) => {
+            const createdAsset = await tx.dataAsset.create({
+              data: this.importCreateData(row.code, row.data),
+              select: { id: true },
+            });
+            if (row.subjectIds.length) {
+              await tx.assetSubject.createMany({
+                data: row.subjectIds.map((dataSubjectId) => ({ assetId: createdAsset.id, dataSubjectId })),
+                skipDuplicates: true,
+              });
+            }
+          });
+          created++;
+        }
+      } catch (e) {
+        errors.push({ row: row.row, message: (e as Error).message });
+      }
+    }
+
+    await this.audit.log({
+      actor,
+      action: 'data_asset.import',
+      entityType: 'data_asset',
+      entityId: 'bulk',
+      metadata: { created, updated, errors: errors.length, previewErrors: plan.errors.length },
+    });
+    return { processed: plan.processed, created, updated, errors };
+  }
+
+  private async buildImportPlan(roleCodes: string[], csv: string) {
     const rows = parseCsv(csv);
     if (rows.length === 0) throw new BadRequestException('CSV has no data rows');
 
@@ -484,9 +634,32 @@ export class AssetsService {
     const systemById = new Map(systems.map((system) => [system.id, system]));
     const classificationById = new Map(classifications.map((classification) => [classification.id, classification]));
 
-    let created = 0;
-    let updated = 0;
     const errors: { row: number; message: string }[] = [];
+    const plannedRows: Array<{
+      row: number;
+      code: string;
+      action: 'create' | 'update';
+      existingId: string | null;
+      subjectIds: string[];
+      data: {
+        nameEn: string;
+        nameAr: string;
+        description: string | null;
+        assetType: string;
+        assetSubtype: string | null;
+        v6LifecycleState: string;
+        lifecyclePhase: string;
+        lifecycleStatus: string;
+        typeMetadataJson: Record<string, unknown> | null;
+        ownerName: string | null;
+        ownerStatus: string;
+        domainId: string | null;
+        orgUnitId: string | null;
+        systemId: string | null;
+        capabilityId: string | null;
+        classificationId: string | null;
+      };
+    }> = [];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -495,10 +668,16 @@ export class AssetsService {
       const nameEn = (row['nameen'] ?? '').trim();
       const nameAr = (row['namear'] ?? '').trim();
       const lifecycleStatus = (row['lifecyclestatus'] ?? 'draft').trim() || 'draft';
+      const assetType = normalizeAssetType(row['assettype'] ?? 'dataset');
+      const assetSubtype = normalizeAssetSubtype(assetType, row['assetsubtype'] ?? '');
+      const v6LifecycleState = (row['v6lifecyclestate'] ?? 'registered').trim() || 'registered';
+      const lifecyclePhase = (row['lifecyclephase'] ?? 'discover').trim() || 'discover';
       const ownerName = normalizeOptionalText(row['ownername'] ?? '') ?? null;
       const description = normalizeOptionalText(row['description'] ?? '') ?? null;
+      const typeMetadataJson = this.parseTypeMetadata(row['typemetadatajson'] ?? row['typemetadata'] ?? '', line, errors);
+      if (typeMetadataJson === undefined) continue;
       const textErrors = validateAssetText(
-        { code, nameEn, nameAr, description, lifecycleStatus, ownerName },
+        { code, nameEn, nameAr, description, lifecycleStatus, ownerName, assetType, assetSubtype, v6LifecycleState, lifecyclePhase },
         { requireCode: true, requireNames: true, allowCode: true },
       );
       if (textErrors.length) {
@@ -556,6 +735,18 @@ export class AssetsService {
         orgUnitId,
         system: systemId ? systemById.get(systemId) : null,
       });
+      const existing = await this.prisma.dataAsset.findUnique({
+        where: { code },
+        select: { id: true, v6LifecycleState: true },
+      });
+      crossErrors.push(...validateAssetTypeFields({
+        assetType,
+        assetSubtype,
+        lifecyclePhase,
+        v6LifecycleState,
+        previousV6LifecycleState: existing?.v6LifecycleState ?? null,
+        typeMetadataJson,
+      }));
       if (crossErrors.length) {
         errors.push({ row: line, message: crossErrors.join('; ') });
         continue;
@@ -565,7 +756,12 @@ export class AssetsService {
         nameEn,
         nameAr,
         description,
+        assetType,
+        assetSubtype,
+        v6LifecycleState,
+        lifecyclePhase,
         lifecycleStatus,
+        typeMetadataJson,
         ownerName,
         ownerStatus: this.ownerStatusFor(ownerName),
         domainId: domainId ?? null,
@@ -575,44 +771,60 @@ export class AssetsService {
         classificationId: classificationId ?? null,
       };
 
-      try {
-        const existing = await this.prisma.dataAsset.findUnique({ where: { code } });
-        if (existing) {
-          await this.prisma.$transaction(async (tx) => {
-            await tx.dataAsset.update({ where: { code }, data: { ...data, deletedAt: null, isActive: true } });
-            await tx.assetSubject.deleteMany({ where: { assetId: existing.id } });
-            if (uniqueSubjectIds.length) {
-              await tx.assetSubject.createMany({
-                data: uniqueSubjectIds.map((dataSubjectId) => ({ assetId: existing.id, dataSubjectId })),
-                skipDuplicates: true,
-              });
-            }
-          });
-          updated++;
-        } else {
-          await this.prisma.dataAsset.create({
-            data: {
-              code,
-              ...data,
-              subjects: uniqueSubjectIds.length
-                ? { create: uniqueSubjectIds.map((dataSubjectId) => ({ dataSubjectId })) }
-                : undefined,
-            },
-          });
-          created++;
-        }
-      } catch (e) {
-        errors.push({ row: line, message: (e as Error).message });
-      }
+      plannedRows.push({
+        row: line,
+        code,
+        action: existing ? 'update' : 'create',
+        existingId: existing?.id ?? null,
+        subjectIds: uniqueSubjectIds,
+        data,
+      });
     }
 
-    await this.audit.log({
-      actor,
-      action: 'data_asset.import',
-      entityType: 'data_asset',
-      entityId: 'bulk',
-      metadata: { created, updated, errors: errors.length },
-    });
-    return { processed: rows.length, created, updated, errors };
+    return { processed: rows.length, rows: plannedRows, errors };
+  }
+
+  private importUpdateData(
+    data: Record<string, unknown> & { typeMetadataJson: Record<string, unknown> | null },
+  ): Prisma.DataAssetUncheckedUpdateInput {
+    const { typeMetadataJson, ...rest } = data;
+    return {
+      ...rest,
+      typeMetadataJson: this.toPrismaJson(typeMetadataJson),
+      deletedAt: null,
+      isActive: true,
+    } as Prisma.DataAssetUncheckedUpdateInput;
+  }
+
+  private importCreateData(
+    code: string,
+    data: Record<string, unknown> & { typeMetadataJson: Record<string, unknown> | null },
+  ): Prisma.DataAssetUncheckedCreateInput {
+    const { typeMetadataJson, ...rest } = data;
+    return {
+      code,
+      ...rest,
+      typeMetadataJson: this.toPrismaJson(typeMetadataJson),
+    } as Prisma.DataAssetUncheckedCreateInput;
+  }
+
+  private parseTypeMetadata(
+    value: string | undefined,
+    row: number,
+    errors: { row: number; message: string }[],
+  ): Record<string, unknown> | null | undefined {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        errors.push({ row, message: 'typeMetadataJson must be a JSON object' });
+        return undefined;
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      errors.push({ row, message: 'typeMetadataJson must be valid JSON' });
+      return undefined;
+    }
   }
 }

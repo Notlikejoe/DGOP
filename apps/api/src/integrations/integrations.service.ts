@@ -19,6 +19,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
 import { parseCsv } from '../common/csv';
@@ -1497,33 +1498,30 @@ export class IntegrationsService implements OnModuleInit {
   }
 
   private async nextBatchCode(): Promise<string> {
-    const count = await this.prisma.integrationImportBatch.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `INT-BAT-${String(count + i).padStart(4, '0')}`;
-      const exists = await this.prisma.integrationImportBatch.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `INT-BAT-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      'integration_batch',
+      (value) => `INT-BAT-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await this.prisma.integrationImportBatch.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextEventCode(): Promise<string> {
-    const count = await this.prisma.integrationEvent.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `INT-EVT-${String(count + i).padStart(5, '0')}`;
-      const exists = await this.prisma.integrationEvent.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `INT-EVT-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      'integration_event',
+      (value) => `INT-EVT-${formatBusinessSequence(value, 5)}`,
+      async (code) => !(await this.prisma.integrationEvent.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextReconciliationCode(client: PrismaWriter): Promise<string> {
-    const count = await client.integrationReconciliationReport.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `INT-REC-${String(count + i).padStart(5, '0')}`;
-      const exists = await client.integrationReconciliationReport.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `INT-REC-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      client,
+      'integration_reconciliation',
+      (value) => `INT-REC-${formatBusinessSequence(value, 5)}`,
+      async (code) => !(await client.integrationReconciliationReport.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async createReconciliationReport(

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import {
   ComplianceCalendarStatus,
   ComplianceCalendarType,
@@ -8,6 +8,8 @@ import {
   GovernanceNotificationStatus,
   GovernanceNotificationChannel,
   GovernanceNotificationDeliveryStatus,
+  PilotReleaseRehearsalStatus,
+  PilotSignOffDecision,
 } from '@prisma/client';
 
 export class CreateComplianceCalendarTemplateDto {
@@ -91,4 +93,22 @@ export class UpdateNotificationDeliveryAttemptDto {
   @IsOptional() @IsString() @MaxLength(120) provider?: string | null;
   @IsOptional() @IsString() @MaxLength(240) target?: string | null;
   @IsOptional() @IsString() @MaxLength(1000) errorMessage?: string | null;
+}
+
+export class CreatePilotSignOffDto {
+  @IsString() @MaxLength(80) gateCode!: string;
+  @IsIn(Object.values(PilotSignOffDecision)) decision!: PilotSignOffDecision;
+  @IsOptional() @IsString() @MaxLength(1600) exceptionSummary?: string | null;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(500, { each: true }) evidenceLinks?: string[];
+}
+
+export class CreatePilotReleaseRehearsalDto {
+  @IsString() @MaxLength(32) environment!: string;
+  @IsIn(Object.values(PilotReleaseRehearsalStatus)) status!: PilotReleaseRehearsalStatus;
+  @IsDateString() deployedAt!: string;
+  @IsOptional() @IsDateString() verifiedAt?: string | null;
+  @IsBoolean() rollbackTested!: boolean;
+  @IsOptional() @IsDateString() rollbackCompletedAt?: string | null;
+  @IsString() @MaxLength(1600) summary!: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(500, { each: true }) evidenceLinks?: string[];
 }

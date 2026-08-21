@@ -82,6 +82,7 @@ process.env.HEALTH_INCLUDE_DETAILS ??= 'false';
 
 requireEnv('DATABASE_URL');
 requireEnv('JWT_SECRET', isSafeSecret);
+requireEnv('DGOP_SEARCH_QUERY_KEY', (value) => isSafeSecret(value) && value !== process.env.JWT_SECRET);
 requireEnv('CORS_ORIGINS', originsAreSafe);
 requireEnv('SEED_ADMIN_PASSWORD', isSafePassword);
 requireEnv('SEED_PERSON_PASSWORD', isSafePassword);

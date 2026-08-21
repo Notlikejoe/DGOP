@@ -24,6 +24,11 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 test('match scoring defaults guide the five-step resolution flow', () => {
   assert.equal(clampScore(121), 100);
   assert.equal(clampScore(-10), 0);
@@ -241,6 +246,7 @@ test('runMdmMatching creates governed candidates with engine explanations', asyn
   });
   const service = new ExtendedDomainsService(
     {
+      businessSequence: sequenceDelegate(),
       dataAsset: {
         findMany: async () => {
           assetQuery++;
@@ -254,7 +260,7 @@ test('runMdmMatching creates governed candidates with engine explanations', asyn
       },
       mdmMatchCandidate: {
         findMany: async () => [],
-        count: async () => 0,
+        findUnique: async () => null,
         upsert: async (args: any) => {
           persisted = args.create;
           return { id: 'match-1', ...args.create };

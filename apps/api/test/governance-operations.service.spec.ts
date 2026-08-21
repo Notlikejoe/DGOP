@@ -41,6 +41,11 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 function includesScopedOwnUnlinked(where: unknown, actor: string): boolean {
   const text = JSON.stringify(where);
   return text.includes('"assetId":null') && text.includes('"createdBy"') && text.includes(actor);
@@ -49,6 +54,41 @@ function includesScopedOwnUnlinked(where: unknown, actor: string): boolean {
 function includesBroadUnlinkedAsset(where: unknown): boolean {
   const text = JSON.stringify(where);
   return text.includes('{"assetId":null}') && !text.includes('"createdBy"');
+}
+
+function addWorkflowCanvasReadinessDelegates(
+  prisma: any,
+  evidence: {
+    templates?: number;
+    signedSnapshots?: number;
+    testRuns?: number;
+    automationEvents?: number;
+    accessGrants?: number;
+    requestedAccessGrants?: number;
+    pendingAccessEnforcement?: number;
+    failedAccessEnforcement?: number;
+  } = {},
+): any {
+  prisma.workflowTemplate ??= {};
+  prisma.workflowTemplate.count ??= async () => evidence.templates ?? 1;
+  prisma.workflowTemplateVersion ??= {};
+  prisma.workflowTemplateVersion.count ??= async () => evidence.signedSnapshots ?? 1;
+  prisma.workflowDesignerTestRun ??= {};
+  prisma.workflowDesignerTestRun.count ??= async () => evidence.testRuns ?? 1;
+  prisma.workflowEvent ??= {};
+  prisma.workflowEvent.count ??= async () => evidence.automationEvents ?? 1;
+  prisma.accessGrant ??= {};
+  prisma.accessGrant.count ??= async (args: any) => {
+    if (args?.where?.status === 'requested') return evidence.requestedAccessGrants ?? 0;
+    if (args?.where?.enforcementStatus === 'pending') return evidence.pendingAccessEnforcement ?? 0;
+    if (args?.where?.enforcementStatus === 'failed') return evidence.failedAccessEnforcement ?? 0;
+    return evidence.accessGrants ?? 1;
+  };
+  prisma.pilotSignOff ??= {};
+  prisma.pilotSignOff.findMany ??= async () => [];
+  prisma.pilotReleaseRehearsal ??= {};
+  prisma.pilotReleaseRehearsal.findMany ??= async () => [];
+  return prisma;
 }
 
 test('KSA business days skip Friday, Saturday, and configured holidays', () => {
@@ -311,7 +351,7 @@ test('operating pressure uses capacity-aware thresholds instead of raw task coun
 });
 
 test('production readiness aggregates scoped engine signals into a ready response', async () => {
-  const prisma: any = {
+  const prisma: any = addWorkflowCanvasReadinessDelegates({
     ksaHoliday: { findMany: async () => [] },
     dataAsset: {
       count: async () => 5,
@@ -333,7 +373,7 @@ test('production readiness aggregates scoped engine signals into a ready respons
     integrationImportBatch: { count: async () => 0 },
     integrationConnector: { count: async () => 0 },
     governanceEscalation: { count: async () => 0 },
-  };
+  });
   const audit = {
     verifyChain: async () => ({
       totalRowsRead: 12,
@@ -363,12 +403,14 @@ test('production readiness aggregates scoped engine signals into a ready respons
   assert.equal(readiness.status, 'ready');
   assert.equal(readiness.summary.governedAssets, 5);
   assert.equal(readiness.summary.integrationProblems, 0);
-  assert.equal(readiness.checks.length, 6);
+  assert.equal(readiness.checks.length, 8);
   assert.equal(readiness.checks.find((check) => check.code === 'audit_chain')?.status, 'ready');
+  assert.equal(readiness.checks.find((check) => check.code === 'workflow_canvas_mvp')?.status, 'ready');
+  assert.equal(readiness.checks.find((check) => check.code === 'access_governance')?.status, 'ready');
 });
 
 test('production readiness treats verified accepted legacy audit baseline as ready', async () => {
-  const prisma: any = {
+  const prisma: any = addWorkflowCanvasReadinessDelegates({
     ksaHoliday: { findMany: async () => [] },
     dataAsset: {
       count: async () => 5,
@@ -385,7 +427,7 @@ test('production readiness treats verified accepted legacy audit baseline as rea
     integrationImportBatch: { count: async () => 0 },
     integrationConnector: { count: async () => 0 },
     governanceEscalation: { count: async () => 0 },
-  };
+  });
   const audit = {
     verifyChain: async () => ({
       totalRowsRead: 30,
@@ -417,9 +459,60 @@ test('production readiness treats verified accepted legacy audit baseline as rea
   assert.equal(auditCheck?.metric.legacyBaselineAccepted, true);
 });
 
+test('production readiness watches small seeded data-quality samples instead of blocking the pilot', async () => {
+  const prisma: any = addWorkflowCanvasReadinessDelegates({
+    ksaHoliday: { findMany: async () => [] },
+    dataAsset: {
+      count: async () => 5,
+      findMany: async () => [],
+    },
+    workflowCase: { count: async () => 0 },
+    workflowTask: {
+      count: async () => 0,
+      findMany: async () => [],
+    },
+    dataQualityIssue: { count: async () => 2 },
+    auditLog: { count: async () => 12 },
+    integrationEvent: { count: async (args?: any) => (args?.where?.status ? 0 : 20) },
+    integrationImportBatch: { count: async () => 0 },
+    integrationConnector: { count: async () => 0 },
+    governanceEscalation: { count: async () => 0 },
+  });
+  const audit = {
+    verifyChain: async () => ({
+      totalRowsRead: 12,
+      valid: true,
+      checked: 12,
+      legacyRows: 0,
+      brokenAt: null,
+      expectedHash: null,
+      actualHash: null,
+      expectedPreviousHash: null,
+      actualPreviousHash: null,
+    }),
+    legacyBaselineAccepted: async () => false,
+  };
+  const service = new GovernanceOperationsService(
+    prisma,
+    audit as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const readiness = await service.productionReadiness({
+    id: 'admin',
+    email: 'admin@dgop.local',
+    roles: ['system_admin'],
+  });
+
+  const dqCheck = readiness.checks.find((check) => check.code === 'data_quality_pressure');
+  assert.equal(readiness.status, 'watch');
+  assert.equal(dqCheck?.status, 'watch');
+  assert.equal(dqCheck?.metric.readinessBaseline, 10);
+});
+
 test('production readiness does not count every unlinked data quality issue for scoped users', async () => {
   const dqWhere: unknown[] = [];
-  const prisma: any = {
+  const prisma: any = addWorkflowCanvasReadinessDelegates({
     ksaHoliday: { findMany: async () => [] },
     dataAsset: {
       count: async () => 0,
@@ -441,7 +534,7 @@ test('production readiness does not count every unlinked data quality issue for 
     integrationImportBatch: { count: async () => 0 },
     integrationConnector: { count: async () => 0 },
     governanceEscalation: { count: async () => 0 },
-  };
+  });
   const audit = {
     verifyChain: async () => ({
       totalRowsRead: 0,
@@ -572,7 +665,7 @@ test('platform architecture exposes v5 platform services, dependency map, and li
 });
 
 test('enterprise close-out exposes control crosswalk, production acceptance, and error readiness', async () => {
-  const prisma: any = {
+  const prisma: any = addWorkflowCanvasReadinessDelegates({
     ksaHoliday: { findMany: async () => [] },
     permission: { count: async () => 40 },
     roleDataScope: { count: async () => 5 },
@@ -607,7 +700,7 @@ test('enterprise close-out exposes control crosswalk, production acceptance, and
     integrationImportBatch: { count: async () => 1 },
     integrationConnector: { count: async () => 0 },
     governanceEscalation: { count: async () => 0 },
-  };
+  });
   const audit = {
     verifyChain: async () => ({
       totalRowsRead: 30,
@@ -690,6 +783,7 @@ test('SLA recalculation uses stable dedupe keys for workflow task signals', asyn
     },
   };
   const prisma: any = {
+    businessSequence: sequenceDelegate(),
     ksaHoliday: { findMany: async () => [] },
     workflowTask: { findMany: async () => [overdueTask] },
     governanceNotification: {
@@ -709,8 +803,8 @@ test('SLA recalculation uses stable dedupe keys for workflow task signals', asyn
       updateMany: async () => ({ count: 0 }),
     },
     governanceEscalation: {
-      count: async () => 0,
       findUnique: async ({ where }: any) => {
+        if (where.code) return null;
         assert.equal(where.dedupeKey, 'workflow_task:task-1:escalation');
         return existingEscalation;
       },

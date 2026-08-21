@@ -10,6 +10,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
@@ -146,34 +147,31 @@ export class FoiService {
 
   private async nextRequestNumber(client: PrismaWriter): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await client.foiRequest.count({ where: { requestNumber: { startsWith: `FOI-${year}-` } } });
-    for (let offset = 1; offset < 1000; offset += 1) {
-      const requestNumber = `FOI-${year}-${String(count + offset).padStart(4, '0')}`;
-      const exists = await client.foiRequest.findUnique({ where: { requestNumber } });
-      if (!exists) return requestNumber;
-    }
-    throw new BadRequestException('Could not generate FOI request number');
+    return nextAvailableBusinessCode(
+      client,
+      `foi_request:${year}`,
+      (value) => `FOI-${year}-${formatBusinessSequence(value, 4)}`,
+      async (requestNumber) => !(await client.foiRequest.findUnique({ where: { requestNumber }, select: { id: true } })),
+    );
   }
 
   private async nextAppealNumber(client: PrismaWriter): Promise<string> {
     const year = new Date().getFullYear();
-    const count = await client.foiAppeal.count({ where: { appealNumber: { startsWith: `FOIA-${year}-` } } });
-    for (let offset = 1; offset < 1000; offset += 1) {
-      const appealNumber = `FOIA-${year}-${String(count + offset).padStart(4, '0')}`;
-      const exists = await client.foiAppeal.findUnique({ where: { appealNumber } });
-      if (!exists) return appealNumber;
-    }
-    throw new BadRequestException('Could not generate FOI appeal number');
+    return nextAvailableBusinessCode(
+      client,
+      `foi_appeal:${year}`,
+      (value) => `FOIA-${year}-${formatBusinessSequence(value, 4)}`,
+      async (appealNumber) => !(await client.foiAppeal.findUnique({ where: { appealNumber }, select: { id: true } })),
+    );
   }
 
   private async nextWorkflowCaseCode(client: PrismaWriter): Promise<string> {
-    const count = await client.workflowCase.count();
-    for (let offset = 1; offset < 1000; offset += 1) {
-      const code = `WFC-FOI-${String(count + offset).padStart(4, '0')}`;
-      const exists = await client.workflowCase.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    throw new BadRequestException('Could not generate workflow case code');
+    return nextAvailableBusinessCode(
+      client,
+      'workflow_case:foi',
+      (value) => `WFC-FOI-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await client.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async createWorkflowForRequest(client: Prisma.TransactionClient, request: { id: string; requestNumber: string; subject: string; assetId?: string | null; assignedOfficerPersonId?: string | null }, roleCodes: string[], actor: string): Promise<string> {

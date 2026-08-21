@@ -20,6 +20,7 @@ import {
   TaskStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
@@ -252,23 +253,21 @@ export class OpenDataService {
   }
 
   private async nextCode(): Promise<string> {
-    const count = await this.prisma.openDataCandidate.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `ODC-${String(count + i).padStart(4, '0')}`;
-      const exists = await this.prisma.openDataCandidate.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `ODC-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      'open_data_candidate',
+      (value) => `ODC-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await this.prisma.openDataCandidate.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async nextWorkflowCaseCode(client: Prisma.TransactionClient): Promise<string> {
-    const count = await client.workflowCase.count();
-    for (let i = 1; i <= 50; i++) {
-      const code = `WFC-${String(count + i).padStart(4, '0')}`;
-      const exists = await client.workflowCase.findUnique({ where: { code } });
-      if (!exists) return code;
-    }
-    return `WFC-${Date.now()}`;
+    return nextAvailableBusinessCode(
+      client,
+      'workflow_case',
+      (value) => `WFC-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await client.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 
   private async buildEligibility(

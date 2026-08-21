@@ -688,6 +688,22 @@ a {
   border-radius: var(--radius-lg);
 }
 
+@media (max-width: 640px) {
+  .content .page .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    overflow: visible;
+  }
+
+  .content .page .tab {
+    width: 100%;
+    min-width: 0;
+    padding-inline: var(--space-2);
+    white-space: normal;
+  }
+}
+
 .content .page .designer-console {
   display: grid;
   grid-template-columns: minmax(250px, 0.24fr) minmax(0, 1fr) minmax(260px, 0.27fr);
@@ -916,7 +932,111 @@ a {
   backdrop-filter: blur(14px);
 }
 
+app-workflow .designer-canvas-shell__rail > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+app-workflow .designer-canvas-shell__rail {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 0.85rem;
+  inset-inline-end: 0.85rem;
+  display: grid;
+  gap: 0.15rem;
+  max-width: min(310px, 42%);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--command-accent) 45%, var(--command-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--command-surface) 96%, transparent);
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--command-on) 9%, transparent);
+}
+
+app-workflow .designer-canvas-shell__controls {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.45rem;
+}
+
+app-workflow .designer-canvas-shell__controls button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--command-on);
+  background: var(--command-surface-2);
+  border: 1px solid var(--command-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+app-workflow .designer-canvas-shell__controls button:hover,
+app-workflow .designer-canvas-shell__controls button:focus-visible {
+  border-color: var(--command-accent);
+  outline: 2px solid color-mix(in srgb, var(--command-accent) 38%, transparent);
+}
+
+app-workflow .designer-canvas-shell--expanded {
+  position: fixed !important;
+  inset: var(--space-2) !important;
+  z-index: 450;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  border: 1px solid var(--command-border) !important;
+  border-radius: 8px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
+}
+
+app-workflow .designer-canvas-shell--expanded .bpmn-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+app-workflow .designer-canvas-shell--expanded .designer-canvas-shell__rail {
+  position: fixed;
+  inset-block-start: 1rem;
+  inset-inline-end: 1rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+}
+
 @media (max-width: 760px) {
+  app-workflow .designer-client-layout--technical .designer-canvas-shell__rail {
+    inset-block-start: var(--space-2);
+    inset-inline-end: var(--space-2);
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  app-workflow .designer-client-layout--technical .designer-canvas-shell__rail > div:first-child {
+    display: none;
+  }
+
+  app-workflow .designer-client-layout--technical .designer-canvas-shell__controls {
+    margin: 0;
+    padding: 0.25rem;
+    background: color-mix(in srgb, var(--command-surface) 94%, transparent);
+    border: 1px solid var(--command-border);
+    border-radius: 7px;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--command-on) 8%, transparent);
+  }
+
+  app-workflow .bpmn-canvas .djs-palette.two-column.open {
+    zoom: 0.76;
+    transform-origin: top left;
+  }
+
+  [dir='rtl'] app-workflow .bpmn-canvas .djs-palette.two-column.open {
+    transform-origin: top right;
+  }
+
   .content .page > .page__header {
     grid-template-columns: 1fr;
     padding: var(--space-4);

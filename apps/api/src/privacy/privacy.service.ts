@@ -14,6 +14,7 @@ import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
 import { parseQueryEnum } from '../common/query-filters';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { WorkflowService } from '../workflow/workflow.service';
 import {
   CreateBreachDto,
@@ -214,13 +215,12 @@ export class PrivacyService {
   private async nextCode(client: PrismaWriter, model: string, field: string, prefix: string): Promise<string> {
     const year = new Date().getFullYear();
     const delegate = (client as unknown as Record<string, any>)[model];
-    const count = await delegate.count({ where: { [field]: { startsWith: `${prefix}-${year}-` } } });
-    for (let offset = 1; offset < 1000; offset += 1) {
-      const code = `${prefix}-${year}-${String(count + offset).padStart(4, '0')}`;
-      const exists = await delegate.findUnique({ where: { [field]: code } });
-      if (!exists) return code;
-    }
-    throw new BadRequestException(`Could not generate ${prefix} code`);
+    return nextAvailableBusinessCode(
+      client,
+      `privacy:${prefix.toLowerCase()}:${year}`,
+      (value) => `${prefix}-${year}-${formatBusinessSequence(value, 4)}`,
+      async (code) => !(await delegate.findUnique({ where: { [field]: code }, select: { id: true } })),
+    );
   }
 
   private async createWorkflow(client: Prisma.TransactionClient, input: { type: string; title: string; description?: string | null; assetId?: string | null; assigneePersonId?: string | null; dueAt?: Date | null }, roleCodes: string[], actor: string): Promise<string> {

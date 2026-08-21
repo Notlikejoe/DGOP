@@ -21,6 +21,11 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 test('sharing risk adds controls for missing basis, cross-border transfer, and masking', () => {
   const result = calculateSharingRisk({
     classificationRank: 4,
@@ -228,6 +233,7 @@ test('request creators cannot record their own approving review', async () => {
 test('createRequest opens a routed data sharing workflow case', async () => {
   const workflowInputs: any[] = [];
   const tx: any = {
+    businessSequence: sequenceDelegate(),
     dataSharingRequest: {
       count: async () => 0,
       findUnique: async () => null,

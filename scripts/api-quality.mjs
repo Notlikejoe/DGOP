@@ -163,6 +163,7 @@ if (unsafe.length) {
 
 const seedPath = join(root, 'apps', 'api', 'prisma', 'seed.ts');
 const seedText = readFileSync(seedPath, 'utf8');
+const localSeedText = readFileSync(join(root, 'scripts', 'seed-local.mjs'), 'utf8');
 const mojibakeArabicPattern = /[ØÙ][^\s'"}),.;:!?<>]*/u;
 const mojibakeSeed = seedText.match(mojibakeArabicPattern);
 if (mojibakeSeed) {
@@ -177,6 +178,21 @@ if (leakedFallbacks.length) {
 }
 if (!seedText.includes('SEED_ADMIN_PASSWORD must be set') || !seedText.includes('SEED_PERSON_PASSWORD must be set')) {
   fail('Seed data must require SEED_ADMIN_PASSWORD and SEED_PERSON_PASSWORD instead of falling back to defaults.');
+}
+if (
+  !seedText.includes("process.env.DGOP_ALLOW_DESTRUCTIVE_SEED === 'true'") ||
+  !seedText.includes("process.env.DGOP_ALLOW_PRODUCTION_SEED === 'true'") ||
+  !seedText.includes('if (!allowDestructiveSeed)') ||
+  !seedText.includes("process.env.NODE_ENV === 'production' && !allowProductionSeed")
+) {
+  fail('Database seed must fail closed without explicit destructive and production acknowledgements.');
+}
+if (
+  !localSeedText.includes("new Set(['localhost', '127.0.0.1', '::1', '[::1]'])") ||
+  !localSeedText.includes("DGOP_ALLOW_DESTRUCTIVE_SEED: 'true'") ||
+  !localSeedText.includes("DGOP_ALLOW_PRODUCTION_SEED: 'false'")
+) {
+  fail('Local seed wrapper must enforce loopback database scope and keep production seeding disabled.');
 }
 
 const dqConfigText = readFileSync(join(root, 'apps', 'api', 'src', 'data-quality', 'data-quality.config.ts'), 'utf8');
@@ -453,6 +469,17 @@ if (
 const workflowServiceText = readFileSync(join(root, 'apps', 'api', 'src', 'workflow', 'workflow.service.ts'), 'utf8');
 const workflowControllerText = readFileSync(join(root, 'apps', 'api', 'src', 'workflow', 'workflow.controller.ts'), 'utf8');
 const workflowSpecText = readFileSync(join(root, 'apps', 'api', 'test', 'workflow.service.spec.ts'), 'utf8');
+const accessGrantsServiceText = readFileSync(join(root, 'apps', 'api', 'src', 'access', 'access-grants.service.ts'), 'utf8');
+const accessMatrixSeedText = readFileSync(join(root, 'apps', 'api', 'prisma', 'seed.ts'), 'utf8');
+const backendHardeningMigrationText = readFileSync(
+  join(root, 'apps', 'api', 'prisma', 'migrations', '20260820213000_backend_concurrency_and_demo_isolation', 'migration.sql'),
+  'utf8',
+);
+const businessSequenceText = readFileSync(join(root, 'apps', 'api', 'src', 'common', 'business-sequence.ts'), 'utf8');
+const accessConcurrencyMigrationText = readFileSync(
+  join(root, 'apps', 'api', 'prisma', 'migrations', '20260821003000_access_grant_concurrency_invariants', 'migration.sql'),
+  'utf8',
+);
 const workflowReadBootstrapPattern =
   /async\s+(?:graph|configuration|caseManagement)\s*\([^)]*\)\s*\{[\s\S]{0,500}?ensureDefaultTemplates\s*\(/u;
 if (
@@ -478,6 +505,46 @@ if (
   !workflowSpecText.includes('updateTask: hides tasks on unanchored cases outside actor visibility')
 ) {
   fail('Workflow case/task writes must keep actor-aware visibility for unanchored cases and regression tests for scope bypasses.');
+}
+if (
+  !workflowServiceText.includes("expectedStatuses: string[] = ['running']") ||
+  !workflowServiceText.includes("['waiting_child']") ||
+  !workflowServiceText.includes("data: { status: 'completing' }") ||
+  !workflowSpecText.includes('completed child workflow is resumed exactly once across workers')
+) {
+  fail('Sub-workflow completion must retain its transactional status claim and multi-worker regression coverage.');
+}
+const countBasedCodeGenerators = walkTypescript(srcDir)
+  .map((file) => ({ file, text: readFileSync(file, 'utf8') }))
+  .filter(({ text }) => /private\s+async\s+next[A-Za-z]*(?:Code|Number)[\s\S]{0,700}?\.count\s*\(/u.test(text));
+if (
+  countBasedCodeGenerators.length ||
+  !businessSequenceText.includes('businessSequence.upsert') ||
+  !businessSequenceText.includes('nextAvailableBusinessCode') ||
+  !workflowServiceText.includes("'workflow_case'") ||
+  !accessGrantsServiceText.includes("'access_grant'")
+) {
+  fail(
+    `Human-readable identifiers must use the shared atomic business sequence helper:${countBasedCodeGenerators
+      .map(({ file }) => `\n- ${relative(root, file)}`)
+      .join('')}`,
+  );
+}
+if (
+  !accessConcurrencyMigrationText.includes('access_grants_active_principal_key') ||
+  !accessConcurrencyMigrationText.includes('HAVING COUNT(*) > 1') ||
+  !accessGrantsServiceText.includes('claimGrantVersion(') ||
+  !accessGrantsServiceText.includes('version: dto.expectedVersion')
+) {
+  fail('Access grants must retain database uniqueness and optimistic concurrency controls.');
+}
+if (
+  !accessMatrixSeedText.includes("process.env.DGOP_SEED_ACCESS_MATRIX_SAMPLES === 'true'") ||
+  !accessMatrixSeedText.includes('if (seedAccessMatrixSamples)') ||
+  !backendHardeningMigrationText.includes("status\" = 'revoked'") ||
+  !backendHardeningMigrationText.includes('Pilot authorization deactivated during production-data isolation.')
+) {
+  fail('Access-matrix pilot authorizations must stay inactive after migrations and require explicit local seed opt-in.');
 }
 const governanceOperationsServiceText = readFileSync(join(root, 'apps', 'api', 'src', 'governance-operations', 'governance-operations.service.ts'), 'utf8');
 const governanceReadBootstrapPattern =
@@ -727,6 +794,19 @@ if (
 }
 if (!healthControllerText.includes('database:') || !healthControllerText.includes('status: dbStatus')) {
   fail('Health check must always expose database.status so release smoke tests prove database connectivity without leaking details.');
+}
+if (!healthControllerText.includes('httpResponse?.status(503)')) {
+  fail('Health check must return HTTP 503 when its database readiness probe fails.');
+}
+const searchCryptoText = readFileSync(join(root, 'apps', 'api', 'src', 'search', 'search.crypto.ts'), 'utf8');
+const prepareDemoEnvText = readFileSync(join(root, 'scripts', 'prepare-demo-env.mjs'), 'utf8');
+if (
+  !runtimeSafetyText.includes('DGOP_SEARCH_QUERY_KEY must be distinct from JWT_SECRET') ||
+  searchCryptoText.includes('process.env.JWT_SECRET') ||
+  !startDemoText.includes("requireEnv('DGOP_SEARCH_QUERY_KEY'") ||
+  !prepareDemoEnvText.includes("setValue(state, 'DGOP_SEARCH_QUERY_KEY', randomSecret())")
+) {
+  fail('Protected search queries must use a dedicated generated key that is validated separately from JWT signing.');
 }
 if (!startDemoText.includes("requireEnv('SEED_PERSON_PASSWORD', isSafePassword)")) {
   fail('start:demo must require a rotated SEED_PERSON_PASSWORD before serving production-style demos.');

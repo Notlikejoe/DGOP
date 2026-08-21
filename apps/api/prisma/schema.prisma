@@ -509,6 +509,13 @@ model DataAsset {
   nameEn                    String
   nameAr                    String
   description               String?
+  /// v6.0 first-class asset type: dataset, file, document_record, api_data_feed, bi_report_dashboard, ai_data_product.
+  assetType                 String                         @default("dataset") @map("asset_type")
+  assetSubtype              String?                        @map("asset_subtype")
+  /// v6.0 type-aware lifecycle state used by access management and Asset 360.
+  v6LifecycleState          String                         @default("registered") @map("v6_lifecycle_state")
+  lifecyclePhase            String                         @default("discover") @map("lifecycle_phase")
+  typeMetadataJson          Json?                          @map("type_metadata_json")
   /// Lifecycle status code (see StatusValue domain "lifecycle"): draft, active, deprecated, retired.
   lifecycleStatus           String                         @default("draft")
   /// Ownership state for filtering: unassigned | assigned (full registry arrives in Sprint 5).
@@ -533,6 +540,7 @@ model DataAsset {
   dqScores                  DataQualityScore[]
   dqProfiles                DataQualityProfile[]
   accessReviewItems         AccessReviewItem[]
+  accessGrants              AccessGrant[]
   abacDecisions             AbacDecisionLog[]
   dlpIncidents              DlpIncident[]
   classificationRequests    ClassificationChangeRequest[]
@@ -577,12 +585,55 @@ model DataAsset {
   @@index([systemId])
   @@index([capabilityId])
   @@index([classificationId])
+  @@index([assetType])
+  @@index([assetSubtype])
+  @@index([v6LifecycleState])
+  @@index([lifecyclePhase])
   @@index([lifecycleStatus])
   @@index([ownerStatus])
   @@index([externalCatalogId])
   @@index([catalogSource])
   @@index([catalogSyncStatus])
   @@map("data_assets")
+}
+
+/// v6.0 reference catalogue for the six governed data asset types.
+model DataAssetType {
+  id                       String             @id @default(uuid())
+  code                     String             @unique
+  nameEn                   String
+  nameAr                   String
+  description              String?
+  lifecycleStatesJson      Json?
+  evidenceExpectationsJson Json?
+  isActive                 Boolean            @default(true)
+  deletedAt                DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  subtypes                 DataAssetSubtype[]
+
+  @@index([isActive])
+  @@map("data_asset_types")
+}
+
+/// v6.0 governed subtypes under a first-class data asset type.
+model DataAssetSubtype {
+  id          String        @id @default(uuid())
+  typeId      String
+  code        String
+  nameEn      String
+  nameAr      String
+  description String?
+  isActive    Boolean       @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  type        DataAssetType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+
+  @@unique([typeId, code])
+  @@index([typeId])
+  @@index([code])
+  @@map("data_asset_subtypes")
 }
 
 /// Many-to-many mapping of data assets to the data subjects they describe.
@@ -699,6 +750,9 @@ enum CaseStatus {
   approved
   rejected
   implemented
+  suspended
+  cancelled
+  failed
   closed
 }
 
@@ -792,6 +846,7 @@ model WorkflowCase {
   type                          String                         @default("general")
   status                        CaseStatus                     @default(draft)
   templateId                    String?
+  templateVersion               Int                            @default(1)
   assetId                       String?
   assignmentId                  String?
   createdBy                     String
@@ -822,12 +877,15 @@ model WorkflowCase {
   governanceEscalations         GovernanceEscalation[]
   complianceCalendarOccurrences ComplianceCalendarOccurrence[]
   runtimeTokens                 WorkflowRuntimeToken[]
+  executionAttempts             WorkflowExecutionAttempt[]
+  accessGrants                  AccessGrant[]
   createdAt                     DateTime                       @default(now())
   updatedAt                     DateTime                       @updatedAt
 
   @@index([status])
   @@index([type])
   @@index([templateId])
+  @@index([templateId, templateVersion])
   @@index([assetId])
   @@map("workflow_cases")
 }
@@ -859,6 +917,7 @@ model WorkflowTask {
   comments                WorkflowTaskComment[]
   attachments             WorkflowTaskAttachment[]
   runtimeTokens           WorkflowRuntimeToken[]
+  executionAttempt        WorkflowExecutionAttempt?
   governanceNotifications GovernanceNotification[]
   governanceEscalations   GovernanceEscalation[]
   createdAt               DateTime                 @default(now())
@@ -896,29 +955,72 @@ model WorkflowEvent {
 /// Durable workflow execution token. Tokens give each routed case a Zeebe-style
 /// execution ledger without replacing the existing case/task user experience.
 model WorkflowRuntimeToken {
-  id              String                 @id @default(uuid())
-  instanceKey     String                 @unique
-  caseId          String
-  templateStageId String?
-  taskId          String?
-  state           String                 @default("active")
-  tokenType       String                 @default("stage")
-  parallelGroup   String?
-  dataJson        Json?
-  activatedAt     DateTime               @default(now())
-  completedAt     DateTime?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  case            WorkflowCase           @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  templateStage   WorkflowTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
-  task            WorkflowTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  id                 String                 @id @default(uuid())
+  instanceKey        String                 @unique
+  caseId             String
+  templateStageId    String?
+  taskId             String?
+  parentTokenId      String?
+  rootTokenId        String?
+  branchKey          String?
+  branchIndex        Int?
+  joinKey            String?
+  sourceTransitionId String?
+  state              String                 @default("active")
+  tokenType          String                 @default("stage")
+  parallelGroup      String?
+  dataJson           Json?
+  activatedAt        DateTime               @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  case               WorkflowCase           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  templateStage      WorkflowTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
+  task               WorkflowTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
   @@index([templateStageId])
   @@index([taskId])
+  @@index([parentTokenId])
+  @@index([rootTokenId])
+  @@index([branchKey])
+  @@index([joinKey])
+  @@index([sourceTransitionId])
   @@index([state])
   @@index([parallelGroup])
   @@map("workflow_runtime_tokens")
+}
+
+/// Durable, idempotent execution record for non-human workflow nodes.
+model WorkflowExecutionAttempt {
+  id              String                @id @default(uuid())
+  idempotencyKey  String                @unique
+  caseId          String
+  taskId          String                @unique
+  templateStageId String
+  executionKind   String
+  status          String                @default("queued")
+  attemptCount    Int                   @default(0)
+  maxAttempts     Int                   @default(3)
+  nextAttemptAt   DateTime              @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  outcome         String?
+  errorCode       String?
+  errorMessage    String?
+  inputJson       Json?
+  resultJson      Json?
+  createdBy       String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  case            WorkflowCase          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  task            WorkflowTask          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  templateStage   WorkflowTemplateStage @relation(fields: [templateStageId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+  @@index([caseId])
+  @@index([templateStageId])
+  @@map("workflow_execution_attempts")
 }
 
 model WorkflowDelegation {
@@ -1009,34 +1111,36 @@ model WorkflowSlaTemplate {
 /// Reusable workflow route definition. Templates make case types visible and
 /// configurable without replacing the existing case/task engine.
 model WorkflowTemplate {
-  id              String                       @id @default(uuid())
-  code            String                       @unique
-  caseType        String
-  nameEn          String
-  nameAr          String
-  description     String?
-  trigger         String                       @default("manual")
-  domainId        String?
-  defaultSlaDays  Int                          @default(5)
-  bpmnXml         String?
-  designerJson    Json?
-  designerVersion Int                          @default(1)
-  lastPublishedAt DateTime?
-  lastPublishedBy String?
-  modelSignature  String?
-  signatureAlgorithm String?
-  securityJson    Json?
-  isSystem        Boolean                      @default(false)
-  isActive        Boolean                      @default(true)
-  deletedAt       DateTime?
-  createdBy       String?
-  createdAt       DateTime                     @default(now())
-  updatedAt       DateTime                     @updatedAt
-  domain          DataDomain?                  @relation(fields: [domainId], references: [id], onDelete: SetNull)
-  stages          WorkflowTemplateStage[]
-  transitions     WorkflowTemplateTransition[]
-  cases           WorkflowCase[]
-  versions        WorkflowTemplateVersion[]
+  id                  String                       @id @default(uuid())
+  code                String                       @unique
+  caseType            String
+  nameEn              String
+  nameAr              String
+  description         String?
+  trigger             String                       @default("manual")
+  domainId            String?
+  defaultSlaDays      Int                          @default(5)
+  bpmnXml             String?
+  designerJson        Json?
+  designerVersion     Int                          @default(1)
+  lastPublishedAt     DateTime?
+  lastPublishedBy     String?
+  modelSignature      String?
+  signatureAlgorithm  String?
+  securityJson        Json?
+  isSystem            Boolean                      @default(false)
+  isActive            Boolean                      @default(true)
+  deletedAt           DateTime?
+  createdBy           String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  domain              DataDomain?                  @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  stages              WorkflowTemplateStage[]
+  transitions         WorkflowTemplateTransition[]
+  cases               WorkflowCase[]
+  versions            WorkflowTemplateVersion[]
+  testRuns            WorkflowDesignerTestRun[]
+  variableDefinitions WorkflowVariableDefinition[]
 
   @@index([caseType])
   @@index([domainId])
@@ -1047,25 +1151,53 @@ model WorkflowTemplate {
 /// Versioned BPMN snapshots for workflow templates. Publishing creates an
 /// immutable snapshot so administrators can trace how a route changed.
 model WorkflowTemplateVersion {
-  id             String           @id @default(uuid())
-  templateId     String
-  version        Int
-  source         String           @default("designer")
-  changeSummary  String?
-  bpmnXml        String
-  designerJson   Json?
-  validationJson Json?
-  modelSignature String?
-  signatureAlgorithm String?
+  id                    String           @id @default(uuid())
+  templateId            String
+  version               Int
+  source                String           @default("designer")
+  changeSummary         String?
+  bpmnXml               String
+  designerJson          Json?
+  validationJson        Json?
+  modelSignature        String?
+  signatureAlgorithm    String?
   encryptedSnapshotJson Json?
-  securityJson   Json?
-  createdBy      String
-  createdAt      DateTime         @default(now())
-  template       WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  securityJson          Json?
+  createdBy             String
+  createdAt             DateTime         @default(now())
+  template              WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, version])
   @@index([templateId])
   @@map("workflow_template_versions")
+}
+
+/// Isolated designer test execution evidence. Test runs validate and execute
+/// route logic without creating production workflow cases, tasks, or tokens.
+model WorkflowDesignerTestRun {
+  id               String           @id @default(uuid())
+  templateId       String
+  runNumber        Int
+  environment      String           @default("test")
+  status           String           @default("ready")
+  bpmnXml          String
+  validationJson   Json
+  inputJson        Json?
+  simulationJson   Json
+  executedPathJson Json
+  resetAt          DateTime?
+  resetBy          String?
+  createdBy        String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  template         WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, runNumber])
+  @@index([templateId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("workflow_designer_test_runs")
 }
 
 /// A visible node in a workflow route. Stages can create default tasks when a
@@ -1081,6 +1213,7 @@ model WorkflowTemplateStage {
   nodeType                 String                       @default("user_task")
   taskType                 String                       @default("review")
   assignmentStrategy       String                       @default("role")
+  assignmentConfigJson     Json?
   assigneeRoleCode         String?
   dueDays                  Int                          @default(2)
   formSchemaJson           Json?
@@ -1100,6 +1233,7 @@ model WorkflowTemplateStage {
   incoming                 WorkflowTemplateTransition[] @relation("WorkflowTransitionTo")
   tasks                    WorkflowTask[]
   runtimeTokens            WorkflowRuntimeToken[]
+  executionAttempts        WorkflowExecutionAttempt[]
 
   @@unique([templateId, code])
   @@index([templateId])
@@ -1115,9 +1249,12 @@ model WorkflowTemplateTransition {
   toStageId           String
   labelEn             String
   labelAr             String
+  connectorType       String                @default("sequence") @map("connector_type")
   decision            String?
   conditionExpression String?
   conditionJson       Json?
+  isDefaultPath       Boolean               @default(false) @map("is_default_path")
+  timeoutAfterSeconds Int?                  @map("timeout_after_seconds")
   sortOrder           Int                   @default(0)
   isHappyPath         Boolean               @default(true)
   isActive            Boolean               @default(true)
@@ -1132,6 +1269,37 @@ model WorkflowTemplateTransition {
   @@index([toStageId])
   @@index([isActive])
   @@map("workflow_template_transitions")
+}
+
+/// Typed runtime variables exposed to workflow forms, decisions, and connector conditions.
+model WorkflowVariableDefinition {
+  id                String            @id @default(uuid())
+  registryKey       String            @unique
+  templateId        String?
+  code              String
+  nameEn            String
+  nameAr            String?
+  description       String?
+  variableType      String
+  scope             String            @default("case")
+  source            String            @default("system")
+  defaultValueJson  Json?
+  allowedValuesJson Json?
+  isRequired        Boolean           @default(false)
+  isActive          Boolean           @default(true)
+  deletedAt         DateTime?
+  createdBy         String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  template          WorkflowTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, code])
+  @@index([templateId])
+  @@index([code])
+  @@index([variableType])
+  @@index([scope])
+  @@index([isActive])
+  @@map("workflow_variable_definitions")
 }
 
 /// Append-only audit log foundation.
@@ -2725,6 +2893,10 @@ enum AccessReviewStatus {
 enum AccessReviewDecision {
   pending
   certified
+  modify
+  shorten_expiry
+  suspend
+  request_clarification
   revoke
   exception
   escalated
@@ -2855,6 +3027,7 @@ model AccessReviewItem {
   assetId          String?
   domainId         String?
   classificationId String?
+  grantId          String?
   decision         AccessReviewDecision @default(pending)
   reviewer         String?
   justification    String?
@@ -2867,13 +3040,236 @@ model AccessReviewItem {
   asset            DataAsset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
   domain           DataDomain?          @relation(fields: [domainId], references: [id], onDelete: SetNull)
   classification   Classification?      @relation(fields: [classificationId], references: [id], onDelete: SetNull)
+  grant            AccessGrant?        @relation(fields: [grantId], references: [id], onDelete: SetNull)
 
   @@index([reviewId])
   @@index([userId])
   @@index([roleId])
   @@index([decision])
   @@index([domainId])
+  @@index([grantId])
+  @@unique([reviewId, grantId])
   @@map("access_review_items")
+}
+
+model AccessPermissionCatalog {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  assetType   String    @map("asset_type")
+  action      String
+  nameEn      String
+  nameAr      String?
+  description String?
+  riskLevel   String    @default("standard") @map("risk_level")
+  version     Int       @default(1)
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  grantPermissions AccessGrantPermission[]
+
+  @@unique([assetType, action, version])
+  @@index([assetType])
+  @@index([action])
+  @@index([isActive])
+  @@map("access_permission_catalog")
+}
+
+model AccessPermissionProfile {
+  id                  String        @id @default(uuid())
+  code                String        @unique
+  assetType           String        @map("asset_type")
+  nameEn              String
+  nameAr              String?
+  description         String?
+  version             Int           @default(1)
+  permissionCodesJson Json          @map("permission_codes_json")
+  isActive            Boolean       @default(true)
+  deletedAt           DateTime?
+  createdBy           String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  grants              AccessGrant[]
+
+  @@unique([assetType, code, version])
+  @@index([assetType])
+  @@index([isActive])
+  @@map("access_permission_profiles")
+}
+
+model AccessGrant {
+  id                String                   @id @default(uuid())
+  code              String                   @unique
+  assetId           String
+  principalType     String                   @default("user") @map("principal_type")
+  principalId       String                   @map("principal_id")
+  permissionCode    String                   @map("permission_code")
+  profileId         String?
+  status            String                   @default("requested")
+  startsAt          DateTime                 @default(now()) @map("starts_at")
+  expiresAt         DateTime?                @map("expires_at")
+  justification     String
+  version           Int                      @default(1)
+  ownerDecision     String                   @default("pending") @map("owner_decision")
+  ownerDecisionBy   String?                  @map("owner_decision_by")
+  ownerDecisionAt   DateTime?                @map("owner_decision_at")
+  enforcementStatus String                   @default("not_enforced") @map("enforcement_status")
+  workflowCaseId    String?
+  createdBy         String
+  updatedBy         String?
+  revokedAt         DateTime?
+  revokedBy         String?
+  revocationReason  String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  asset             DataAsset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  profile           AccessPermissionProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  workflowCase      WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  reviewItems       AccessReviewItem[]
+  enforcementAttempts AccessEnforcementAttempt[]
+  permissions       AccessGrantPermission[]
+  versions          AccessGrantVersion[]
+
+  @@index([assetId])
+  @@index([principalType, principalId])
+  @@index([permissionCode])
+  @@index([profileId])
+  @@index([status])
+  @@index([ownerDecision])
+  @@index([enforcementStatus])
+  @@index([workflowCaseId])
+  @@index([expiresAt])
+  @@map("access_grants")
+}
+
+/// Immutable business snapshots retained for every access-grant version.
+model AccessGrantVersion {
+  id           String      @id @default(uuid())
+  grantId      String      @map("grant_id")
+  version      Int
+  snapshotJson Json        @map("snapshot_json")
+  changeReason String?     @map("change_reason")
+  changedBy    String      @map("changed_by")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  grant        AccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@unique([grantId, version])
+  @@index([grantId, createdAt])
+  @@map("access_grant_versions")
+}
+
+/// Normalized permission membership for profile-expanded and custom access grants.
+model AccessGrantPermission {
+  id             String                  @id @default(uuid())
+  grantId        String                  @map("grant_id")
+  permissionCode String                  @map("permission_code")
+  source         String                  @default("custom")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  grant          AccessGrant             @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  permission     AccessPermissionCatalog @relation(fields: [permissionCode], references: [code], onDelete: Restrict)
+
+  @@unique([grantId, permissionCode])
+  @@index([permissionCode])
+  @@map("access_grant_permissions")
+}
+
+/// Active role/group identities synchronized from the enterprise directory.
+model AccessPrincipalDirectory {
+  id           String    @id @default(uuid())
+  principalType String   @map("principal_type")
+  externalId   String    @map("external_id")
+  nameEn       String    @map("name_en")
+  nameAr       String?   @map("name_ar")
+  source       String    @default("local_registry")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastSyncedAt DateTime? @map("last_synced_at")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@unique([principalType, externalId])
+  @@index([principalType, isActive])
+  @@map("access_principal_directory")
+}
+
+/// Append-only connector handoff ledger for external access enforcement.
+model AccessEnforcementAttempt {
+  id              String      @id @default(uuid())
+  grantId         String
+  idempotencyKey  String      @unique
+  operation       String
+  connectorCode   String
+  status          String      @default("queued")
+  attemptCount    Int         @default(0)
+  maxAttempts     Int         @default(3)
+  nextAttemptAt   DateTime    @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+  requestJson     Json?
+  responseJson    Json?
+  errorCode       String?
+  errorMessage    String?
+  createdBy       String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  grant           AccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@index([status, nextAttemptAt])
+  @@index([operation])
+  @@map("access_enforcement_attempts")
+}
+
+/// Append-only approver decision for a named production-pilot acceptance gate.
+/// An exception is explicit evidence, never an implicit successful sign-off.
+enum PilotSignOffDecision {
+  approved
+  approved_with_exception
+  declined
+}
+
+/// Result of a deployment and rollback rehearsal for a production-pilot release.
+enum PilotReleaseRehearsalStatus {
+  planned
+  passed
+  failed
+}
+
+model PilotSignOff {
+  id                 String               @id @default(uuid())
+  releaseCode        String               @default("v6-production-pilot")
+  gateCode           String
+  decision           PilotSignOffDecision
+  exceptionSummary   String?
+  evidenceLinksJson  Json?
+  recordedBy         String
+  recordedAt         DateTime             @default(now())
+  createdAt          DateTime             @default(now())
+
+  @@index([releaseCode, gateCode, recordedAt])
+  @@index([decision])
+  @@map("pilot_sign_offs")
+}
+
+model PilotReleaseRehearsal {
+  id                  String                       @id @default(uuid())
+  releaseCode         String                       @default("v6-production-pilot")
+  environment         String
+  status              PilotReleaseRehearsalStatus  @default(planned)
+  deployedAt          DateTime
+  verifiedAt          DateTime?
+  rollbackTested      Boolean                      @default(false)
+  rollbackCompletedAt DateTime?
+  summary             String
+  evidenceLinksJson   Json?
+  recordedBy          String
+  recordedAt          DateTime                     @default(now())
+  createdAt           DateTime                     @default(now())
+
+  @@index([releaseCode, recordedAt])
+  @@index([status])
+  @@map("pilot_release_rehearsals")
 }
 
 model AbacDecisionLog {
@@ -4058,25 +4454,25 @@ model SearchableObjectRegistry {
 }
 
 model SearchIndexRecord {
-  id             String   @id @default(uuid())
-  entityType     String
-  entityId       String
-  title          String
-  subtitle       String?
-  keywords       String
+  id                 String   @id @default(uuid())
+  entityType         String
+  entityId           String
+  title              String
+  subtitle           String?
+  keywords           String
   normalizedKeywords String?
-  route          String
-  permission     String?
-  source         String   @default("database")
-  externalSystem String?
+  route              String
+  permission         String?
+  source             String   @default("database")
+  externalSystem     String?
   indexedPayloadJson Json?
-  contentHash    String?
-  visibilityJson Json?
-  version        Int      @default(1)
-  isDeleted      Boolean  @default(false)
-  lastCdcEventId String?
-  lastIndexedAt  DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  contentHash        String?
+  visibilityJson     Json?
+  version            Int      @default(1)
+  isDeleted          Boolean  @default(false)
+  lastCdcEventId     String?
+  lastIndexedAt      DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([entityType, entityId])
   @@index([entityType])
@@ -4088,17 +4484,17 @@ model SearchIndexRecord {
 }
 
 model SavedSearch {
-  id          String   @id @default(uuid())
-  userId      String
-  name        String
-  query       String
-  queryHash   String?
+  id                  String   @id @default(uuid())
+  userId              String
+  name                String
+  query               String
+  queryHash           String?
   queryCiphertextJson Json?
-  queryProtected Boolean @default(false)
-  filtersJson Json?
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  queryProtected      Boolean  @default(false)
+  filtersJson         Json?
+  isDefault           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@unique([userId, name])
   @@index([userId])
@@ -4106,17 +4502,17 @@ model SavedSearch {
 }
 
 model SearchAnalyticsEvent {
-  id                 String   @id @default(uuid())
-  userId             String?
-  query              String
-  queryHash          String?
+  id                  String   @id @default(uuid())
+  userId              String?
+  query               String
+  queryHash           String?
   queryCiphertextJson Json?
-  queryProtected     Boolean  @default(false)
-  resultCount        Int      @default(0)
-  selectedEntityType String?
-  selectedEntityId   String?
-  source             String   @default("global_search")
-  createdAt          DateTime @default(now())
+  queryProtected      Boolean  @default(false)
+  resultCount         Int      @default(0)
+  selectedEntityType  String?
+  selectedEntityId    String?
+  source              String   @default("global_search")
+  createdAt           DateTime @default(now())
 
   @@index([userId])
   @@index([createdAt])
@@ -4124,20 +4520,20 @@ model SearchAnalyticsEvent {
 }
 
 model SearchIndexChangeEvent {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   entityType     String
   entityId       String
   operation      String
-  status         String   @default("queued")
-  attempts       Int      @default(0)
+  status         String    @default("queued")
+  attempts       Int       @default(0)
   payloadJson    Json?
   visibilityJson Json?
   resultMessage  String?
   errorMessage   String?
-  queuedAt       DateTime @default(now())
+  queuedAt       DateTime  @default(now())
   processedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([entityType, entityId])
   @@index([status, queuedAt])
@@ -4314,4 +4710,15 @@ model ContinuousImprovementItem {
   @@index([priority])
   @@index([maturityAssessmentId])
   @@map("continuous_improvement_items")
+}
+
+/// Atomic counters for human-readable business identifiers. Database upserts
+/// prevent duplicate codes when multiple API instances create records at once.
+model BusinessSequence {
+  key       String   @id
+  value     BigInt   @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("business_sequences")
 }

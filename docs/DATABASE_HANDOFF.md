@@ -15,18 +15,28 @@ Port: 55436
 Database: dgop_dev
 User: postgres
 Schema: public
-Connection shape: postgresql://postgres@127.0.0.1:55436/dgop_dev?schema=public
+Connection shape: postgresql://postgres:<local-password>@127.0.0.1:55436/dgop_dev?schema=public
 ```
 
 The currently running local PostgreSQL process uses this machine-local data
 directory:
 
 ```text
-C:/Users/Youss/AppData/Local/Temp/dgop-postgres-data-bpmn
+C:/Users/Youss/OneDrive/Documents/DGOP/storage/postgres-data
 ```
 
 That path is useful for local troubleshooting only. For another developer, the
 source of truth should be the Prisma schema, migrations, and seed script below.
+The local cluster uses SCRAM-SHA-256 authentication and listens only on
+`127.0.0.1:55436`.
+
+Use the repository lifecycle commands instead of invoking `pg_ctl` directly:
+
+```bash
+npm run db:local:start
+npm run db:local:status
+npm run db:local:stop
+```
 
 ## Source Of Truth
 
@@ -45,7 +55,7 @@ root:
 npm run install:all
 npm run db:generate
 npm run db:migrate
-npm run db:seed
+npm run db:seed:local
 npm run db:status
 ```
 
@@ -53,7 +63,7 @@ For production-like or shared environments, prefer:
 
 ```bash
 npm run db:deploy
-npm run db:seed
+npm run db:seed:local
 ```
 
 ## Verified Local Snapshot

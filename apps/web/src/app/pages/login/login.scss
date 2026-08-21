@@ -100,6 +100,16 @@
   background: var(--command-surface-2);
 }
 
+.auth__signals .auth__signal--healthy {
+  border-color: color-mix(in srgb, var(--success) 48%, var(--command-border));
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.auth__signals .auth__signal--unavailable {
+  border-color: color-mix(in srgb, var(--danger) 48%, var(--command-border));
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
 .auth__signals span {
   color: var(--command-muted);
   font-size: var(--font-size-xs);

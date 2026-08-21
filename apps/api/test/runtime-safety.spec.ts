@@ -31,6 +31,7 @@ test('strict runtime rejects unsafe secrets, wildcard origins, and missing webho
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
     JWT_SECRET: 'replace-with-at-least-32-random-characters',
+    DGOP_SEARCH_QUERY_KEY: 'replace-with-a-different-32-character-random-secret',
     CORS_ORIGINS: '*',
     SEED_ADMIN_PASSWORD: 'Admin@12345',
     SEED_PERSON_PASSWORD: 'replace-with-local-demo-password',
@@ -38,6 +39,7 @@ test('strict runtime rejects unsafe secrets, wildcard origins, and missing webho
   });
 
   assert.ok(issues.some((issue) => issue.includes('JWT_SECRET')));
+  assert.ok(issues.some((issue) => issue.includes('DGOP_SEARCH_QUERY_KEY')));
   assert.ok(issues.some((issue) => issue.includes('wildcard')));
   assert.ok(issues.some((issue) => issue.includes('SEED_ADMIN_PASSWORD')));
   assert.ok(issues.some((issue) => issue.includes('SEED_PERSON_PASSWORD')));
@@ -50,6 +52,7 @@ test('strict runtime rejects non-HTTPS external origins while allowing local loo
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
     JWT_SECRET: 'safe-jwt-secret-with-more-than-32-chars',
+    DGOP_SEARCH_QUERY_KEY: 'safe-search-key-distinct-from-jwt-and-long-enough',
     SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
     SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
     DGOP_WEBHOOK_TOKEN: 'safe-webhook-token-with-more-than-32-chars',
@@ -72,6 +75,7 @@ test('strict runtime applies the same origin safeguards to PUBLIC_ORIGIN', () =>
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
     JWT_SECRET: 'safe-jwt-secret-with-more-than-32-chars',
+    DGOP_SEARCH_QUERY_KEY: 'safe-search-key-distinct-from-jwt-and-long-enough',
     CORS_ORIGINS: 'https://demo.example.com',
     SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
     SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
@@ -98,6 +102,7 @@ test('strict runtime accepts rotated demo settings', () => {
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
     JWT_SECRET: 'safe-jwt-secret-with-more-than-32-chars',
+    DGOP_SEARCH_QUERY_KEY: 'safe-search-key-distinct-from-jwt-and-long-enough',
     CORS_ORIGINS: 'https://demo.example.com',
     SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
     SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
@@ -105,6 +110,22 @@ test('strict runtime accepts rotated demo settings', () => {
   });
 
   assert.deepStrictEqual(issues, []);
+});
+
+test('strict runtime rejects reuse of the JWT secret for search encryption', () => {
+  const sharedSecret = 'shared-secret-that-is-long-enough-but-not-isolated';
+  const issues = collectRuntimeSafetyIssues({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://user:pass@localhost:5432/dgop',
+    JWT_SECRET: sharedSecret,
+    DGOP_SEARCH_QUERY_KEY: sharedSecret,
+    CORS_ORIGINS: 'https://demo.example.com',
+    SEED_ADMIN_PASSWORD: 'rotated-admin-password-2026',
+    SEED_PERSON_PASSWORD: 'rotated-person-password-2026',
+    DGOP_WEBHOOK_TOKEN: 'safe-webhook-token-with-more-than-32-chars',
+  });
+
+  assert.ok(issues.some((issue) => issue.includes('distinct from JWT_SECRET')));
 });
 
 test('configuredCorsOrigins deduplicates CORS and public origin values', () => {

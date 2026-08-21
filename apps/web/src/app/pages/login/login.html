@@ -22,18 +22,18 @@
         {{ t('login.commandCopy') }}
       </p>
 
-      <div class="auth__signals" [attr.aria-label]="t('login.signalsLabel')">
-        <div>
-          <span>{{ t('login.signalHealthy') }}</span>
-          <strong>{{ t('login.signalApi') }}</strong>
+      <div class="auth__signals" [attr.aria-label]="t('login.signalsLabel')" role="status" aria-live="polite">
+        <div [class.auth__signal--healthy]="health()?.status === 'ok'" [class.auth__signal--unavailable]="healthState() === 'unavailable'">
+          <span>{{ t('login.signalApi') }}</span>
+          <strong>{{ serviceStatus() }}</strong>
+        </div>
+        <div [class.auth__signal--healthy]="health()?.database?.status === 'up'" [class.auth__signal--unavailable]="healthState() === 'unavailable'">
+          <span>{{ t('login.signalDatabase') }}</span>
+          <strong>{{ databaseStatus() }}</strong>
         </div>
         <div>
-          <span>{{ t('login.signalVisible') }}</span>
-          <strong>{{ t('login.signalOwners') }}</strong>
-        </div>
-        <div>
-          <span>{{ t('login.signalReady') }}</span>
-          <strong>{{ t('login.signalEvidence') }}</strong>
+          <span>{{ t('login.signalEnvironment') }}</span>
+          <strong>{{ environmentStatus() }}</strong>
         </div>
       </div>
     </section>
@@ -86,7 +86,9 @@
         </button>
       </form>
 
-      <p class="auth__hint">{{ t('login.devHint') }}</p>
+      @if (developmentBuild) {
+        <p class="auth__hint">{{ t('login.devHint') }}</p>
+      }
     </section>
   </main>
 </div>

@@ -40,6 +40,11 @@ export function isUnsafeJwtSecret(secret?: string | null): boolean {
   return !value || value.length < 32 || UNSAFE_JWT_SECRETS.has(value);
 }
 
+export function isUnsafeSearchQueryKey(secret?: string | null): boolean {
+  const value = secret?.trim();
+  return !value || value.length < 32 || value.startsWith('replace-with') || UNSAFE_JWT_SECRETS.has(value);
+}
+
 export function isUnsafeDemoPassword(password?: string | null): boolean {
   const value = password?.trim();
   return !value || value.length < 12 || UNSAFE_DEMO_PASSWORDS.has(value);
@@ -78,6 +83,11 @@ export function collectRuntimeSafetyIssues(env: RuntimeEnv = process.env): strin
   }
   if (isUnsafeJwtSecret(env.JWT_SECRET)) {
     issues.push('JWT_SECRET must be at least 32 characters and not use a known placeholder');
+  }
+  if (isUnsafeSearchQueryKey(env.DGOP_SEARCH_QUERY_KEY)) {
+    issues.push('DGOP_SEARCH_QUERY_KEY must be configured with at least 32 random characters');
+  } else if (env.DGOP_SEARCH_QUERY_KEY?.trim() === env.JWT_SECRET?.trim()) {
+    issues.push('DGOP_SEARCH_QUERY_KEY must be distinct from JWT_SECRET');
   }
   if (origins.length === 0) {
     issues.push('CORS_ORIGINS or PUBLIC_ORIGIN must be configured');

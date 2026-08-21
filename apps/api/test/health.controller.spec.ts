@@ -29,9 +29,12 @@ test('production health exposes database status without database name', async ()
 });
 
 test('health reports degraded when database connectivity fails', async () => {
-  const res = await makeController({ dbThrows: true, env: { NODE_ENV: 'production' } }).check();
+  let httpStatus = 200;
+  const response = { status: (status: number) => { httpStatus = status; return response; } };
+  const res = await makeController({ dbThrows: true, env: { NODE_ENV: 'production' } }).check(response as never);
   assert.equal(res.status, 'degraded');
   assert.equal((res.database as Record<string, unknown>).status, 'down');
+  assert.equal(httpStatus, 503);
 });
 
 test('detail mode includes environment, uptime, and database name', async () => {

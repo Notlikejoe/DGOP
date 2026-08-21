@@ -1,0 +1,504 @@
+<section class="access-page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">{{ t('access.eyebrow') }}</span>
+      <h1>{{ t('access.title') }}</h1>
+      <p>{{ t('access.subtitle') }}</p>
+    </div>
+    <div class="head-actions">
+      <nav class="access-view-switch" [attr.aria-label]="t('access.views')">
+        <button type="button" class="ds-btn ds-btn--ghost" [class.active-mode]="viewMode() === 'register'" (click)="setMode('register')">{{ t('access.view.register') }}</button>
+        <button type="button" class="ds-btn ds-btn--ghost" [class.active-mode]="viewMode() === 'matrix'" (click)="setMode('matrix')">{{ t('access.view.matrix') }}</button>
+        <button type="button" class="ds-btn ds-btn--ghost" [class.active-mode]="viewMode() === 'effective'" (click)="setMode('effective')">{{ t('access.view.effective') }}</button>
+        <button type="button" class="ds-btn ds-btn--ghost" [class.active-mode]="viewMode() === 'reports'" (click)="setMode('reports')">{{ t('access.view.reports') }}</button>
+      </nav>
+      <div class="access-commandbar">
+        <button type="button" class="icon-button" [attr.title]="t('access.action.refreshGrants')" [attr.aria-label]="t('access.action.refreshGrants')" (click)="load()"><app-icon name="refresh" /></button>
+        @if (canCreate) {
+          <button type="button" class="ds-btn ds-btn--primary" (click)="openCreate()"><app-icon name="plus" /> {{ t('access.action.newGrant') }}</button>
+        }
+        <details #accessActions class="access-action-menu">
+          <summary class="ds-btn ds-btn--ghost"><app-icon name="menu" /> {{ t('access.action.more') }}</summary>
+          <div class="access-action-menu__panel">
+            <button type="button" (click)="exportCsv(); accessActions.open = false"><app-icon name="fileCheck" /> {{ t('access.action.exportCsv') }}</button>
+            <button type="button" (click)="openCsv(); accessActions.open = false"><app-icon name="fileCheck" /> {{ t('access.action.bulkChange') }}</button>
+            @if (canEdit) {
+              <button type="button" [disabled]="busy()" (click)="reconcileLifecycle(); accessActions.open = false"><app-icon name="refresh" /> {{ t('access.action.reconcile') }}</button>
+            }
+          </div>
+        </details>
+      </div>
+    </div>
+  </header>
+
+  <section class="metric-strip" [attr.aria-label]="t('access.metrics.label')">
+    <article><span>{{ t('access.metrics.total') }}</span><strong>{{ metrics().total }}</strong></article>
+    <article><span>{{ t('access.metrics.active') }}</span><strong>{{ metrics().active }}</strong></article>
+    <article><span>{{ t('access.metrics.review') }}</span><strong>{{ metrics().ownerReview }}</strong></article>
+    <article class="metric-strip__attention"><span>{{ t('access.metrics.enforcement') }}</span><strong>{{ metrics().attention }}</strong></article>
+  </section>
+  @if (lifecycleResult(); as lifecycle) {
+    <section class="lifecycle-note">
+      <strong>{{ t('access.lifecycle.reconciled') }}</strong>
+      <span>{{ lifecycle.activated }} {{ t('access.value.activated') }}, {{ lifecycle.scheduled }} {{ t('access.value.scheduled') }}, {{ lifecycle.expired }} {{ t('access.value.expired') }}.</span>
+    </section>
+  }
+
+  <section class="workspace">
+    @if (viewMode() === 'matrix') {
+      <div class="grant-list ds-card matrix-panel">
+        <div class="toolbar matrix-toolbar">
+          <div>
+            <span class="eyebrow">{{ t('access.matrix.eyebrow') }}</span>
+            <h2>{{ t('access.matrix.title') }}</h2>
+            <p>{{ t('access.matrix.subtitle') }}</p>
+          </div>
+          <div class="matrix-actions">
+            <button type="button" class="ds-btn ds-btn--ghost" [class.active-mode]="catalogueOpen()" (click)="catalogueOpen.set(!catalogueOpen())">{{ t('access.matrix.catalogue') }}</button>
+            <div class="density-control" [attr.aria-label]="t('access.matrix.density')">
+              <button type="button" [class.active]="matrixDensity() === 'compact'" (click)="matrixDensity.set('compact')">{{ t('access.matrix.compact') }}</button>
+              <button type="button" [class.active]="matrixDensity() === 'detailed'" (click)="matrixDensity.set('detailed')">{{ t('access.matrix.detailed') }}</button>
+            </div>
+            @if (canCreate) {
+              <button type="button" class="ds-btn ds-btn--ghost" (click)="selectAllEmptyMatrixCells()">{{ t('access.matrix.selectEmpty') }}</button>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="!selectedMatrixCells().length" (click)="openBulkGrant()">{{ t('access.matrix.bulkGrant') }} ({{ selectedMatrixCells().length }})</button>
+            }
+            <button type="button" class="icon-button" [attr.title]="t('access.matrix.refresh')" [attr.aria-label]="t('access.matrix.refresh')" (click)="loadMatrix()"><app-icon name="refresh" /></button>
+          </div>
+        </div>
+
+        <section class="matrix-filterbar" [attr.aria-label]="t('access.matrix.filters')">
+          <label class="matrix-filterbar__search"><span>{{ t('access.field.asset') }}</span><input [(ngModel)]="matrixFilters.assetSearch" (keyup.enter)="applyMatrixFilters()" [placeholder]="t('access.placeholder.assetSearch')" /></label>
+          <label><span>{{ t('access.field.assetType') }}</span><select [(ngModel)]="matrixFilters.assetType"><option value="">{{ t('access.option.allAssetTypes') }}</option>@for (type of assetTypes; track type) { <option [value]="type">{{ label(type) }}</option> }</select></label>
+          <label><span>{{ t('access.field.principal') }}</span><select [(ngModel)]="matrixFilters.principalType"><option value="">{{ t('access.option.rolesGroups') }}</option><option value="role">{{ t('access.value.roles') }}</option><option value="group">{{ t('access.value.identity_groups') }}</option></select></label>
+          <label><span>{{ t('access.field.roleGroup') }}</span><input [(ngModel)]="matrixFilters.principalSearch" (keyup.enter)="applyMatrixFilters()" [placeholder]="t('access.placeholder.searchColumns')" /></label>
+          <label><span>{{ t('access.field.profile') }}</span><select [(ngModel)]="matrixFilters.profileId"><option value="">{{ t('access.option.allProfiles') }}</option>@for (profile of matrixFilterProfiles(); track profile.id) { <option [value]="profile.id">{{ profileOptionLabel(profile) }} | {{ label(profile.assetType) }}</option> }</select></label>
+          <label><span>{{ t('access.field.privilege') }}</span><select [(ngModel)]="matrixFilters.permissionCode"><option value="">{{ t('access.option.allPrivileges') }}</option>@for (permission of matrixFilterPermissions(); track permission.id) { <option [value]="permission.code">{{ permissionName(permission) }} · {{ label(permission.assetType) }}</option> }</select></label>
+          <label><span>{{ t('access.field.status') }}</span><select [(ngModel)]="matrixFilters.status"><option value="">{{ t('access.option.allStatuses') }}</option>@for (status of matrixStatusOptions; track status) { <option [value]="status">{{ label(status) }}</option> }</select></label>
+          <label><span>{{ t('access.field.enforcement') }}</span><select [(ngModel)]="matrixFilters.enforcementStatus"><option value="">{{ t('access.option.allEnforcement') }}</option>@for (status of matrixEnforcementOptions; track status) { <option [value]="status">{{ label(status) }}</option> }</select></label>
+          <div class="matrix-filterbar__actions"><button type="button" class="ds-btn ds-btn--ghost" (click)="clearMatrixFilters()">{{ t('crud.clear') }}</button><button type="button" class="ds-btn ds-btn--primary" (click)="applyMatrixFilters()">{{ t('access.action.applyFilters') }}</button></div>
+        </section>
+
+        <div class="privilege-legend" [attr.aria-label]="t('access.legend.label')">
+          <span><i class="privilege-dot privilege-dot--read"></i>{{ t('access.legend.read') }}</span>
+          <span><i class="privilege-dot privilege-dot--write"></i>{{ t('access.legend.write') }}</span>
+          <span><i class="privilege-dot privilege-dot--execute"></i>{{ t('access.legend.execute') }}</span>
+          <span><i class="privilege-dot privilege-dot--share"></i>{{ t('access.legend.share') }}</span>
+          <span><i class="privilege-dot privilege-dot--admin"></i>{{ t('access.legend.admin') }}</span>
+          <small>{{ t('access.legend.riskHelp') }}</small>
+        </div>
+
+        @if (catalogueOpen()) {
+          <section class="catalogue-panel" [attr.aria-label]="t('access.catalogue.label')">
+            <div class="catalogue-panel__head"><div><span class="eyebrow">{{ t('access.catalogue.eyebrow') }}</span><h3>{{ t('access.catalogue.title') }}</h3></div><strong>{{ permissions().length }} {{ t('access.catalogue.activePrivileges') }} · {{ profiles().length }} {{ t('access.value.profiles') }}</strong></div>
+            <div class="catalogue-grid">
+              @for (type of assetTypes; track type) {
+                <article>
+                  <div><strong>{{ label(type) }}</strong><small>{{ profilesForAssetType(type).length }} {{ t('access.catalogue.standardProfiles') }}</small></div>
+                  <div class="catalogue-permissions">
+                    @for (permission of permissionsForAssetType(type); track permission.id) {
+                      <span [class.catalogue-permission--high]="permission.riskLevel === 'high'" [title]="permission.description || permissionName(permission)">{{ permissionAction(permission.code) }}</span>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+        }
+
+        @if (matrixState() === 'loading') {
+          <div class="empty-state"><strong>{{ t('access.matrix.loading') }}</strong><span>{{ t('access.matrix.loadingHelp') }}</span></div>
+        } @else if (matrixState() === 'error') {
+          <div class="empty-state"><strong>{{ t('access.matrix.error') }}</strong><button type="button" class="ds-btn ds-btn--ghost" (click)="loadMatrix()">{{ t('crud.retry') }}</button></div>
+        } @else if (matrix(); as m) {
+          <div class="matrix-summary">
+            <span><strong>{{ m.summary.assetCount }}</strong> {{ t('access.matrix.of') }} {{ m.summary.totalAssets }} {{ t('access.value.assets') }}</span>
+            <span><strong>{{ m.summary.principalCount }}</strong> {{ t('access.matrix.rolesGroups') }}</span>
+            <span><strong>{{ m.summary.grantedCells }}</strong> {{ t('access.matrix.authorizedCells') }}</span>
+            <span><strong>{{ m.summary.readCells }}</strong> {{ t('access.legend.read') }}</span>
+            <span><strong>{{ m.summary.writeCells }}</strong> {{ t('access.legend.write') }}</span>
+            <span class="matrix-summary__risk"><strong>{{ m.summary.highRiskCells }}</strong> {{ t('access.matrix.highRisk') }}</span>
+            <span class="matrix-summary__attention"><strong>{{ m.summary.attentionCells }}</strong> {{ t('access.matrix.needAttention') }}</span>
+          </div>
+          <p class="matrix-scroll-hint"><strong>{{ t('access.matrix.compare') }}</strong> {{ t('access.matrix.scrollHelp') }}</p>
+          <section class="matrix-mobile" [attr.aria-label]="t('access.matrix.mobileTitle')">
+            <div class="matrix-mobile__head">
+              <div>
+                <strong>{{ t('access.matrix.mobileTitle') }}</strong>
+                <span>{{ t('access.matrix.mobileHelp') }}</span>
+              </div>
+              <label>
+                <span>{{ t('access.field.principal') }}</span>
+                <select [ngModel]="mobileMatrixPrincipalKey()" (ngModelChange)="mobileMatrixPrincipalKey.set($event)">
+                  @for (principal of m.principals; track principal.type + ':' + principal.id) {
+                    <option [value]="principal.type + ':' + principal.id">{{ principalName(principal) }} - {{ label(principal.type) }}</option>
+                  }
+                </select>
+              </label>
+            </div>
+            @if (mobileMatrixPrincipal(m); as principal) {
+              <div class="matrix-mobile__list">
+                @for (asset of m.assets; track asset.id) {
+                  @let cell = matrixCell(asset.id, principal.type, principal.id);
+                  <article
+                    class="matrix-mobile-card"
+                    [class.matrix-mobile-card--granted]="cell?.grantCount"
+                    [class.matrix-mobile-card--attention]="cell?.attention"
+                    [class.matrix-mobile-card--risk]="cell?.riskLevel === 'high'"
+                    [class.matrix-mobile-card--selected]="matrixCellSelected(asset.id, principal.type, principal.id)"
+                  >
+                    <button
+                      type="button"
+                      class="matrix-mobile-card__body"
+                      [attr.aria-label]="assetName(asset) + ', ' + principalName(principal) + ', ' + (cell ? matrixCellValue(cell) : t('access.matrix.noAccess'))"
+                      (click)="cell ? openMatrixCell(asset, principal, cell) : null"
+                    >
+                      <span class="matrix-mobile-card__asset">
+                        <strong>{{ assetName(asset) }}</strong>
+                        <small>{{ asset.code }}</small>
+                        <i>{{ label(asset.assetType) }}@if (asset.classification) { &middot; {{ localizedName(asset.classification) }} }</i>
+                      </span>
+                      <span class="matrix-mobile-card__access">
+                        <strong>{{ cell ? matrixCellValue(cell) : t('access.matrix.noAccess') }}</strong>
+                        <small>{{ cell ? label(cell.accessState) : t('access.detail.defaultDeny') }}</small>
+                      </span>
+                      @if (cell; as accessCell) {
+                        @if (accessCell.permissions.length) {
+                          <span class="matrix-mobile-card__rights">
+                            @for (permission of accessCell.permissions.slice(0, 4); track permission) {
+                              <i [class.matrix-mobile-card__right--high]="accessCell.highRiskPermissions.includes(permission)">{{ permissionAction(permission) }}</i>
+                            }
+                            @if (accessCell.permissions.length > 4) { <i>+{{ accessCell.permissions.length - 4 }}</i> }
+                          </span>
+                        } @else {
+                          <span class="matrix-mobile-card__empty">{{ t('access.matrix.noPermissions') }}</span>
+                        }
+                      }
+                      <span class="matrix-mobile-card__inspect">{{ t('access.matrix.inspect') }}</span>
+                    </button>
+                    @if (canCreate && !cell?.grantCount) {
+                      <label class="matrix-mobile-card__select">
+                        <input type="checkbox" [checked]="matrixCellSelected(asset.id, principal.type, principal.id)" (change)="toggleMatrixCell(asset.id, principal.type, principal.id, $any($event.target).checked)" />
+                        <span>{{ t('access.matrix.selectForGrant') }}</span>
+                      </label>
+                    }
+                  </article>
+                }
+              </div>
+            }
+          </section>
+          <div class="matrix-wrap" [class.matrix-wrap--compact]="matrixDensity() === 'compact'">
+            <table class="matrix-table" [attr.aria-label]="t('access.matrix.tableLabel')">
+              <thead>
+                <tr>
+                  <th class="matrix-asset-heading"><strong>{{ t('access.matrix.assetHeading') }}</strong><small>{{ t('access.matrix.assetHeadingHelp') }}</small></th>
+                  @for (principal of m.principals; track principal.type + ':' + principal.id) {
+                    <th><strong>{{ principalName(principal) }}</strong><small>{{ label(principal.type) }} · {{ principal.id }}</small></th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (asset of m.assets; track asset.id) {
+                  <tr>
+                    <th class="matrix-asset-cell"><strong>{{ assetName(asset) }}</strong><small>{{ asset.code }}</small><div><span>{{ label(asset.assetType) }}</span>@if (asset.classification) { <span>{{ localizedName(asset.classification) }}</span> }@if (asset.domain) { <span>{{ localizedName(asset.domain) }}</span> }</div></th>
+                    @for (principal of m.principals; track principal.type + ':' + principal.id) {
+                      @let cell = matrixCell(asset.id, principal.type, principal.id);
+                      <td [class.has-grant]="cell?.grantCount" [class.needs-attention]="cell?.attention" [class.high-risk-cell]="cell?.riskLevel === 'high'" [class.matrix-cell--selected]="matrixCellSelected(asset.id, principal.type, principal.id)" [class.matrix-cell--focused]="matrixCellFocused(asset.id, principal.type, principal.id)">
+                        @if (cell) {
+                          <button type="button" class="matrix-cell-button" [attr.aria-label]="assetName(asset) + ', ' + principalName(principal) + ', ' + matrixCellValue(cell)" (click)="openMatrixCell(asset, principal, cell)">
+                            <strong>{{ matrixCellValue(cell) }}</strong>
+                            <small>{{ label(cell.accessState) }}</small>
+                            @if (matrixDensity() === 'detailed' && cell.permissions.length) {
+                              <span class="cell-permissions">@for (permission of cell.permissions.slice(0, 3); track permission) { <i [class.cell-permission--high]="cell.highRiskPermissions.includes(permission)">{{ permissionAction(permission) }}</i> }@if (cell.permissions.length > 3) { <i>+{{ cell.permissions.length - 3 }}</i> }</span>
+                              <span class="cell-privileges">@for (privilege of cell.privilegeClasses; track privilege) { <i [class]="'privilege-tag privilege-tag--' + privilege">{{ privilegeClassLabel(privilege) }}</i> }</span>
+                            }
+                          </button>
+                        }
+                        @if (canCreate && !cell?.grantCount) { <label class="matrix-cell-select" (click)="$event.stopPropagation()"><input type="checkbox" [checked]="matrixCellSelected(asset.id, principal.type, principal.id)" (change)="toggleMatrixCell(asset.id, principal.type, principal.id, $any($event.target).checked)" /><span>{{ t('crud.select') }}</span></label> }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="matrix-footer"><span>{{ t('access.matrix.constraint') }}</span><div><button type="button" class="icon-button" [attr.title]="t('access.matrix.previousPage')" [attr.aria-label]="t('access.matrix.previousPage')" [disabled]="m.summary.assetPage <= 1" (click)="changeMatrixPage(-1)"><app-icon name="undo" /></button><strong>{{ t('access.matrix.page') }} {{ m.summary.assetPage }} {{ t('access.matrix.of') }} {{ m.summary.assetPageCount }}</strong><button type="button" class="icon-button" [attr.title]="t('access.matrix.nextPage')" [attr.aria-label]="t('access.matrix.nextPage')" [disabled]="m.summary.assetPage >= m.summary.assetPageCount" (click)="changeMatrixPage(1)"><app-icon name="redo" /></button></div></div>
+        } @else {
+          <div class="empty-state">{{ t('access.matrix.empty') }}</div>
+        }
+      </div>
+    } @else {
+      @if (viewMode() === 'reports') {
+        <div class="grant-list ds-card report-panel">
+          <div class="toolbar"><div><span class="eyebrow">{{ t('access.reports.eyebrow') }}</span><h2>{{ t('access.reports.title') }}</h2></div><button type="button" class="icon-button" [attr.title]="t('access.reports.refresh')" [attr.aria-label]="t('access.reports.refresh')" (click)="loadReport()"><app-icon name="refresh" /></button></div>
+          @if (report(); as r) {
+            <div class="report-metrics">
+              <article><span>{{ t('access.reports.total') }}</span><strong>{{ r.summary.totalGrants }}</strong></article>
+              <article><span>{{ t('access.value.active') }}</span><strong>{{ r.summary.activeGrants }}</strong></article>
+              <article><span>{{ t('access.reports.pendingEnforcement') }}</span><strong>{{ r.summary.pendingEnforcement }}</strong></article>
+              <article [class.report-metric--danger]="r.summary.enforcementFailures"><span>{{ t('access.reports.failures') }}</span><strong>{{ r.summary.enforcementFailures }}</strong></article>
+              <article [class.report-metric--warning]="r.summary.expiringWithin30Days"><span>{{ t('access.reports.expiring') }}</span><strong>{{ r.summary.expiringWithin30Days }}</strong></article>
+              <article><span>{{ t('access.reports.highRisk') }}</span><strong>{{ r.summary.highRiskGrants }}</strong></article>
+              <article><span>{{ t('access.reports.reviewed') }}</span><strong>{{ r.summary.reviewedGrants }}</strong></article>
+              <article><span>{{ t('access.reports.connectorAttempts') }}</span><strong>{{ r.summary.connectorAttempts }}</strong></article>
+            </div>
+            <div class="report-breakdowns">
+              <section><h3>{{ t('access.reports.byAssetType') }}</h3>@for (item of r.byAssetType; track item.code) { <div><span>{{ label(item.code) }}</span><strong>{{ item.count }}</strong></div> }</section>
+              <section><h3>{{ t('access.reports.byLifecycle') }}</h3>@for (item of r.byStatus; track item.code) { <div><span>{{ label(item.code) }}</span><strong>{{ item.count }}</strong></div> }</section>
+              <section><h3>{{ t('access.reports.byEnforcement') }}</h3>@for (item of r.byEnforcementStatus; track item.code) { <div><span>{{ label(item.code) }}</span><strong>{{ item.count }}</strong></div> }</section>
+              <section><h3>{{ t('access.reports.byPrincipal') }}</h3>@for (item of r.byPrincipalType; track item.code) { <div><span>{{ label(item.code) }}</span><strong>{{ item.count }}</strong></div> }</section>
+            </div>
+            <p class="report-generated">{{ t('access.reports.generated') }} {{ date(r.generatedAt) }}{{ r.truncated ? ' - ' + t('access.reports.limited') : '' }}</p>
+          } @else { <div class="empty-state">{{ t('access.reports.loading') }}</div> }
+        </div>
+      } @else if (viewMode() === 'effective') {
+        <div class="grant-list ds-card effective-panel">
+          <div class="toolbar">
+            <div>
+              <span class="eyebrow">{{ t('access.effective.eyebrow') }}</span>
+              <h2>{{ t('access.effective.title') }}</h2>
+            </div>
+            <button type="button" class="icon-button" [attr.title]="t('access.effective.refresh')" [attr.aria-label]="t('access.effective.refresh')" (click)="loadEffectiveAccess()"><app-icon name="refresh" /></button>
+          </div>
+          @if (effectiveAccess(); as effective) {
+            <div class="matrix-summary">
+              <span>{{ effective.summary.totalEffectiveRows }} {{ t('access.effective.rows') }}</span>
+              <span>{{ effective.summary.current }} {{ t('access.value.current') }}</span>
+              <span>{{ effective.summary.enforcementGaps }} {{ t('access.effective.gaps') }}</span>
+              <span>{{ effective.summary.externalUnverified }} {{ t('access.effective.external') }}</span>
+            </div>
+            <div class="table-wrap">
+              <table class="ds-table effective-table">
+                <thead><tr><th>{{ t('access.field.subject') }}</th><th>{{ t('access.field.asset') }}</th><th>{{ t('access.field.permission') }}</th><th>{{ t('access.field.source') }}</th><th>{{ t('access.field.lifecycle') }}</th><th>{{ t('access.field.enforcement') }}</th><th>{{ t('access.field.window') }}</th></tr></thead>
+                <tbody>
+                  @for (row of effective.data; track row.grantId + ':' + row.subjectType + ':' + row.subjectId) {
+                    <tr [class.needs-attention-row]="row.enforcementGap || row.expansionStatus === 'external_unverified'">
+                      <td><strong>{{ row.subjectLabel }}</strong><small>{{ label(row.subjectType) }} &middot; {{ row.subjectId }}</small></td>
+                      <td><strong>{{ row.asset.code }}</strong><small>{{ assetName(row.asset) }}</small></td>
+                      <td>{{ row.permissionCode }}</td>
+                      <td><strong>{{ label(row.source) }}</strong><small>{{ label(row.expansionStatus) }}</small></td>
+                      <td><app-status-chip [kind]="kind(row.lifecycleState)" [label]="label(row.lifecycleState)" /></td>
+                      <td><app-status-chip [kind]="kind(row.enforcementStatus)" [label]="label(row.enforcementStatus)" /></td>
+                      <td><small>{{ date(row.startsAt) }} {{ t('access.to') }} {{ date(row.expiresAt) }}</small></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="empty-state">{{ t('access.effective.loading') }}</div>
+          }
+        </div>
+      } @else {
+      <div class="grant-list ds-card">
+      <div class="toolbar">
+        <div>
+          <span class="eyebrow">{{ t('access.register.eyebrow') }}</span>
+          <h2>{{ t('access.register.title') }}</h2>
+        </div>
+        <select [ngModel]="statusFilter()" (ngModelChange)="setStatus($event)" [attr.aria-label]="t('access.register.filterStatus')">
+          <option value="">{{ t('access.option.allStatuses') }}</option>
+          @for (status of statusOptions; track status) { <option [value]="status">{{ label(status) }}</option> }
+        </select>
+      </div>
+
+      @if (state() === 'loading') {
+        <div class="empty-state">{{ t('access.register.loading') }}</div>
+      } @else if (state() === 'error') {
+        <div class="empty-state"><strong>{{ t('access.register.error') }}</strong><button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button></div>
+      } @else if (grants().length === 0) {
+        <div class="empty-state">{{ t('access.register.empty') }}</div>
+      } @else {
+        <div class="table-wrap">
+          <table class="ds-table">
+            <thead><tr><th>{{ t('access.field.grant') }}</th><th>{{ t('access.field.asset') }}</th><th>{{ t('access.field.principal') }}</th><th>{{ t('access.field.permission') }}</th><th>{{ t('access.field.owner') }}</th><th>{{ t('access.field.enforcement') }}</th></tr></thead>
+            <tbody>
+              @for (grant of grants(); track grant.id) {
+                <tr [class.selected]="selected()?.id === grant.id" (click)="select(grant)">
+                  <td><strong>{{ grant.code }}</strong><small>v{{ grant.version }} &middot; {{ label(grant.status) }}</small></td>
+                  <td><strong>{{ grant.asset.code }}</strong><small>{{ assetName(grant.asset) }}</small></td>
+                  <td><strong>{{ label(grant.principalType) }}</strong><small>{{ grant.principalId }}</small></td>
+                  <td>{{ grantPermissionLabel(grant) }}</td>
+                  <td><app-status-chip [kind]="kind(grant.ownerDecision)" [label]="label(grant.ownerDecision)" /></td>
+                  <td><app-status-chip [kind]="kind(grant.enforcementStatus)" [label]="label(grant.enforcementStatus)" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+      }
+    }
+
+    <aside class="grant-detail ds-card" [class.grant-detail--empty]="!selected() && !selectedMatrixCell()">
+      @if (selected(); as grant) {
+        <div class="detail-head">
+          <div><span class="eyebrow">{{ t('access.detail.eyebrow') }}</span><h2>{{ grant.code }}</h2><p>{{ assetName(grant.asset) }} &middot; {{ grantPermissionLabel(grant) }}</p></div>
+          <app-status-chip [kind]="kind(grant.status)" [label]="label(grant.status)" />
+        </div>
+        <dl class="facts">
+          <div><dt>{{ t('access.field.principal') }}</dt><dd>{{ label(grant.principalType) }}: {{ grant.principalId }}</dd></div>
+          <div><dt>{{ t('access.field.profile') }}</dt><dd>{{ grant.profile?.code || t('access.detail.directPermission') }}</dd></div>
+          <div><dt>{{ t('access.field.privileges') }}</dt><dd><span class="detail-permissions">@for (permission of grant.permissions || []; track permission.permissionCode) { <i [class.detail-permission--high]="permission.permission?.riskLevel === 'high'">{{ permissionAction(permission.permissionCode) }}</i> }</span></dd></div>
+          <div><dt>{{ t('access.detail.window') }}</dt><dd>{{ date(grant.startsAt) }} {{ t('access.to') }} {{ date(grant.expiresAt) }}</dd></div>
+          <div><dt>{{ t('access.field.justification') }}</dt><dd>{{ grant.justification }}</dd></div>
+          <div><dt>{{ t('access.detail.ownerDecision') }}</dt><dd>{{ label(grant.ownerDecision) }}{{ grant.ownerDecisionBy ? ' ' + t('access.by') + ' ' + grant.ownerDecisionBy : '' }}</dd></div>
+        </dl>
+
+        @if (canEdit && grant.ownerDecision === 'pending') {
+          <div class="actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="decide('approved')">{{ t('access.action.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="decide('rejected')">{{ t('access.action.reject') }}</button></div>
+        }
+        @if (canEdit && grant.ownerDecision === 'approved' && grant.status === 'active') {
+          <div class="actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="dispatch('grant')">{{ t('access.action.dispatch') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="dispatch('verify')">{{ t('access.action.verify') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="openManualCompletion()">{{ t('access.action.manualEvidence') }}</button></div>
+        }
+        @if (canEdit && !['expired', 'rejected', 'revoked'].includes(grant.status)) {
+          <div class="actions grant-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="openEdit(grant)">{{ t('access.action.modify') }}</button><button type="button" class="ds-btn ds-btn--danger" [disabled]="busy()" (click)="openRevoke(grant)">{{ t('access.action.revoke') }}</button></div>
+        }
+
+        <section class="attempts"><div class="attempts__head"><span class="eyebrow">{{ t('access.detail.enforcementLedger') }}</span><app-status-chip [kind]="kind(grant.enforcementStatus)" [label]="label(grant.enforcementStatus)" /></div>
+          @if (!grant.enforcementAttempts?.length) { <p>{{ t('access.detail.noHandoff') }}</p> }
+          @for (attempt of grant.enforcementAttempts || []; track attempt.id) {
+            <article><div><strong>{{ label(attempt.operation) }}</strong><span>{{ attempt.connectorCode }} &middot; {{ date(attempt.completedAt || attempt.createdAt) }}</span>@if (attempt.responseJson?.evidenceReference) { <small>{{ t('access.field.evidence') }}: {{ attempt.responseJson?.evidenceReference }}</small> } @if (['queued', 'running', 'retrying'].includes(attempt.status) && canEdit) { <div class="attempt-actions"><button type="button" class="ds-btn ds-btn--ghost btn-compact" (click)="openConnectorResult(attempt, 'succeeded')">{{ t('access.action.recordSuccess') }}</button><button type="button" class="ds-btn ds-btn--ghost btn-compact" (click)="openConnectorResult(attempt, 'failed')">{{ t('access.action.recordFailure') }}</button></div> }</div><app-status-chip [kind]="kind(attempt.status)" [label]="label(attempt.status)" /></article>
+          }
+        </section>
+        <section class="attempts"><div class="attempts__head"><span class="eyebrow">{{ t('access.detail.versionHistory') }}</span><strong>{{ grant.versions?.length || 0 }} {{ t('access.detail.retained') }}</strong></div>
+          @for (version of grant.versions || []; track version.id) { <article><div><strong>{{ t('access.detail.version') }} {{ version.version }}</strong><span>{{ version.changeReason || t('access.detail.snapshot') }}</span><small>{{ version.changedBy }} &middot; {{ date(version.createdAt) }}</small></div></article> }
+        </section>
+        <a class="review-link" routerLink="/governance/security">{{ t('access.detail.openReviews') }}</a>
+      } @else if (selectedMatrixCell(); as context) {
+        <div class="detail-head"><div><span class="eyebrow">{{ t('access.detail.matrixCell') }}</span><h2>{{ t('access.matrix.noAccess') }}</h2><p>{{ assetName(context.asset) }} · {{ principalName(context.principal) }}</p></div><app-status-chip kind="muted" [label]="t('access.detail.defaultDeny')" /></div>
+        <dl class="facts">
+          <div><dt>{{ t('access.field.asset') }}</dt><dd>{{ context.asset.code }} · {{ label(context.asset.assetType) }}</dd></div>
+          <div><dt>{{ t('access.field.principal') }}</dt><dd>{{ label(context.principal.type) }} · {{ context.principal.id }}</dd></div>
+          <div><dt>{{ t('access.field.classification') }}</dt><dd>{{ context.asset.classification ? localizedName(context.asset.classification) : t('access.value.not_classified') }}</dd></div>
+          <div><dt>{{ t('access.field.domain') }}</dt><dd>{{ context.asset.domain ? localizedName(context.asset.domain) : t('access.value.not_assigned') }}</dd></div>
+          <div><dt>{{ t('access.field.decision') }}</dt><dd>{{ t('access.detail.noAuthorization') }}</dd></div>
+        </dl>
+        @if (canCreate) { <button type="button" class="ds-btn ds-btn--primary" (click)="createFromMatrixCell(context)"><app-icon name="plus" /> {{ t('access.action.createGoverned') }}</button> }
+      } @else { <div class="empty-state"><strong>{{ t('access.detail.selectCell') }}</strong><span>{{ t('access.detail.selectCellHelp') }}</span></div> }
+    </aside>
+  </section>
+</section>
+
+@if (createOpen()) {
+  <app-modal [title]="editing() ? t('access.modal.modifyTitle') : t('access.modal.createTitle')" size="lg" (close)="createOpen.set(false); editing.set(null)">
+    <div class="grant-editor">
+      <section class="grant-editor__section">
+        <header><div><span class="eyebrow">1. {{ t('access.modal.targetStep') }}</span><h3>{{ t('access.modal.targetTitle') }}</h3></div><p>{{ t('access.modal.targetHelp') }}</p></header>
+        <div class="form-grid">
+          <label><span>{{ t('access.field.governedAsset') }}</span><select [(ngModel)]="grantForm.assetId" (ngModelChange)="grantForm.permissionCodes = []; grantForm.profileId = ''"><option value="">{{ t('access.option.selectAsset') }}</option>@for (asset of assets(); track asset.id) { <option [value]="asset.id">{{ asset.code }} - {{ assetName(asset) }}</option> }</select></label>
+          <label><span>{{ t('access.field.principalType') }}</span><select [ngModel]="grantForm.principalType" (ngModelChange)="setPrincipalType($event)"><option value="role">{{ t('access.value.role') }}</option><option value="group">{{ t('access.value.group') }}</option></select></label>
+          <label class="form-grid__wide"><span>{{ t('access.field.roleGroup') }}</span><select [(ngModel)]="grantForm.principalId"><option value="">{{ t('access.option.selectPrincipal') }}</option>@for (principal of availablePrincipals(); track principal.type + ':' + principal.id) { <option [value]="principal.id">{{ principalName(principal) }} - {{ principal.id }}</option> }</select></label>
+        </div>
+      </section>
+
+      <section class="grant-editor__section grant-editor__section--rights">
+        <header><div><span class="eyebrow">2. {{ t('access.modal.rightsStep') }}</span><h3>{{ t('access.modal.rightsTitle') }}</h3></div><p>{{ t('access.modal.rightsHelp') }}</p></header>
+        <label class="access-profile-field"><span>{{ t('access.field.permissionProfile') }}</span><select [ngModel]="grantForm.profileId" (ngModelChange)="setProfile($event)" [disabled]="!selectedAsset()"><option value="">{{ t('access.option.customPermissions') }}</option>@for (profile of availableProfiles(); track profile.id) { <option [value]="profile.id">{{ profileOptionLabel(profile) }}</option> }</select></label>
+        @if (!selectedAsset()) {
+          <div class="rights-empty"><strong>{{ t('access.modal.selectAssetFirst') }}</strong><span>{{ t('access.modal.selectAssetHelp') }}</span></div>
+        } @else if (selectedProfile(); as profile) {
+          <div class="profile-preview">
+            <div class="profile-preview__head"><div><strong>{{ profileName(profile) }}</strong><span>{{ profile.code }} v{{ profile.version }}</span></div><b>{{ selectedPermissionCodes().length }} {{ t('access.value.rights') }}</b></div>
+            <div class="profile-rights">@for (code of selectedPermissionCodes(); track code) { <span [class.profile-right--high]="permissionIsHighRisk(code)">{{ permissionAction(code) }}</span> }</div>
+            @if (selectedHighRiskCount()) { <p class="risk-note">{{ t('access.modal.includes') }} {{ selectedHighRiskCount() }} {{ t('access.modal.highRiskRights') }}. {{ t('access.modal.riskJustification') }}</p> }
+          </div>
+        } @else {
+          <fieldset class="permission-picker">
+            <legend>{{ t('access.modal.granularRights') }}</legend>
+            <div class="permission-picker__summary"><span><strong>{{ selectedPermissionCodes().length }}</strong> {{ t('access.value.selected') }}</span>@if (selectedHighRiskCount()) { <span class="permission-picker__risk"><strong>{{ selectedHighRiskCount() }}</strong> {{ t('access.matrix.highRisk') }}</span> }</div>
+            @for (group of privilegeGroups; track group.key) {
+              @if (permissionsInGroup(availablePermissions(), group.key); as groupPermissions) {
+                @if (groupPermissions.length) {
+                  <details class="permission-group">
+                    <summary><div><strong>{{ t(group.labelKey) }}</strong><small>{{ t(group.descriptionKey) }}</small></div><span>{{ groupPermissions.length }} {{ t('access.value.available') }}</span></summary>
+                    <div class="permission-group__options">
+                      @for (permission of groupPermissions; track permission.id) {
+                        <label [class.permission-option--selected]="permissionSelected(permission.code)" [class.permission-picker__high]="permission.riskLevel === 'high'">
+                          <input type="checkbox" [checked]="permissionSelected(permission.code)" (change)="togglePermission(permission.code, $any($event.target).checked)" />
+                          <span><strong>{{ permissionName(permission) }}</strong><small>{{ i18n.lang() === 'ar' ? permission.code : (permission.description || permission.code) }}</small><i>{{ permissionAction(permission.code) }}{{ permission.riskLevel === 'high' ? ' | ' + t('access.matrix.highRisk') : '' }}</i></span>
+                        </label>
+                      }
+                    </div>
+                  </details>
+                }
+              }
+            }
+          </fieldset>
+        }
+      </section>
+
+      <section class="grant-editor__section">
+        <header><div><span class="eyebrow">3. {{ t('access.modal.recordStep') }}</span><h3>{{ t('access.modal.recordTitle') }}</h3></div><p>{{ t('access.modal.recordHelp') }}</p></header>
+        <div class="form-grid">
+          <label><span>{{ t('access.field.effectiveFrom') }}</span><input type="datetime-local" [(ngModel)]="grantForm.startsAt" /></label>
+          <label><span>{{ t('access.field.expiresAt') }}</span><input type="datetime-local" [(ngModel)]="grantForm.expiresAt" /></label>
+          <label class="form-grid__wide"><span>{{ t('access.field.businessJustification') }}</span><textarea rows="4" [(ngModel)]="grantForm.justification" [placeholder]="t('access.placeholder.justification')"></textarea></label>
+          @if (editing()) { <label class="form-grid__wide"><span>{{ t('access.field.changeReason') }}</span><textarea rows="3" [(ngModel)]="grantForm.changeReason" [placeholder]="t('access.placeholder.changeReason')"></textarea></label> }
+        </div>
+      </section>
+    </div>
+    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="createOpen.set(false); editing.set(null)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="createGrant()">{{ editing() ? t('access.action.saveRevision') : t('access.action.createGrant') }}</button></div>
+  </app-modal>
+}
+
+@if (revokeOpen()) {
+  <app-modal [title]="t('access.revoke.title')" (close)="revokeOpen.set(false)">
+    <p class="modal-copy">{{ t('access.revoke.help') }}</p>
+    <label class="modal-field"><span>{{ t('access.revoke.reason') }}</span><textarea rows="4" [ngModel]="revokeReason()" (ngModelChange)="revokeReason.set($event)" [placeholder]="t('access.revoke.placeholder')"></textarea></label>
+    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="revokeOpen.set(false)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--danger" [disabled]="busy() || !revokeReason().trim()" (click)="revokeGrant()">{{ t('access.revoke.action') }}</button></div>
+  </app-modal>
+}
+
+@if (bulkOpen()) {
+  <app-modal [title]="t('access.bulk.title')" size="lg" (close)="bulkOpen.set(false)">
+    <p class="modal-copy">{{ selectedMatrixCells().length }} {{ t('access.bulk.help') }}</p>
+    <div class="grant-editor grant-editor--bulk">
+      <section class="grant-editor__section grant-editor__section--rights">
+      <header><div><span class="eyebrow">{{ t('access.modal.rightsStep') }}</span><h3>{{ t('access.bulk.rightsTitle') }}</h3></div><p>{{ t('access.bulk.rightsHelp') }}</p></header>
+      <label class="access-profile-field"><span>{{ t('access.field.permissionProfile') }}</span><select [ngModel]="bulkForm.profileId" (ngModelChange)="setBulkProfile($event)"><option value="">{{ t('access.option.customPermissions') }}</option>@for (profile of bulkAvailableProfiles(); track profile.id) { <option [value]="profile.id">{{ profileOptionLabel(profile) }}</option> }</select></label>
+      @if (bulkSelectedProfile(); as profile) {
+        <div class="profile-preview"><div class="profile-preview__head"><div><strong>{{ profileName(profile) }}</strong><span>{{ profile.code }} v{{ profile.version }}</span></div><b>{{ bulkSelectedPermissionCodes().length }} {{ t('access.value.rights') }}</b></div><div class="profile-rights">@for (code of bulkSelectedPermissionCodes(); track code) { <span [class.profile-right--high]="permissionIsHighRisk(code)">{{ permissionAction(code) }}</span> }</div>@if (bulkSelectedHighRiskCount()) { <p class="risk-note">{{ t('access.modal.includes') }} {{ bulkSelectedHighRiskCount() }} {{ t('access.modal.highRiskRights') }}.</p> }</div>
+      } @else {
+        <fieldset class="permission-picker">
+          <legend>{{ t('access.modal.granularRights') }}</legend>
+          <div class="permission-picker__summary"><span><strong>{{ bulkSelectedPermissionCodes().length }}</strong> {{ t('access.value.selected') }}</span>@if (bulkSelectedHighRiskCount()) { <span class="permission-picker__risk"><strong>{{ bulkSelectedHighRiskCount() }}</strong> {{ t('access.matrix.highRisk') }}</span> }</div>
+          @for (group of privilegeGroups; track group.key) { @if (permissionsInGroup(bulkAvailablePermissions(), group.key); as groupPermissions) { @if (groupPermissions.length) { <details class="permission-group"><summary><div><strong>{{ t(group.labelKey) }}</strong><small>{{ t(group.descriptionKey) }}</small></div><span>{{ groupPermissions.length }} {{ t('access.value.available') }}</span></summary><div class="permission-group__options">@for (permission of groupPermissions; track permission.id) { <label [class.permission-option--selected]="bulkPermissionSelected(permission.code)" [class.permission-picker__high]="permission.riskLevel === 'high'"><input type="checkbox" [checked]="bulkPermissionSelected(permission.code)" (change)="toggleBulkPermission(permission.code, $any($event.target).checked)" /><span><strong>{{ permissionName(permission) }}</strong><small>{{ i18n.lang() === 'ar' ? permission.code : (permission.description || permission.code) }}</small><i>{{ permissionAction(permission.code) }}{{ permission.riskLevel === 'high' ? ' | ' + t('access.matrix.highRisk') : '' }}</i></span></label> }</div></details> } } }
+        </fieldset>
+      }
+      </section>
+      <section class="grant-editor__section"><header><div><span class="eyebrow">{{ t('access.modal.recordStep') }}</span><h3>{{ t('access.bulk.recordTitle') }}</h3></div></header><div class="form-grid"><label><span>{{ t('access.field.effectiveFrom') }}</span><input type="datetime-local" [(ngModel)]="bulkForm.startsAt" /></label><label><span>{{ t('access.field.expiresAt') }}</span><input type="datetime-local" [(ngModel)]="bulkForm.expiresAt" /></label><label class="form-grid__wide"><span>{{ t('access.field.businessJustification') }}</span><textarea rows="3" [(ngModel)]="bulkForm.justification"></textarea></label><label class="form-grid__wide"><span>{{ t('access.field.changeReason') }}</span><textarea rows="3" [(ngModel)]="bulkForm.changeReason" [placeholder]="t('access.placeholder.changeSetReason')"></textarea></label></div></section>
+    </div>
+    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="bulkOpen.set(false)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="submitBulkGrant()">{{ t('access.bulk.commit') }} {{ selectedMatrixCells().length }}</button></div>
+  </app-modal>
+}
+
+@if (connectorOpen()) {
+  <app-modal [title]="t('access.connector.title')" (close)="connectorOpen.set(false)">
+    <p class="modal-copy">{{ t('access.connector.help') }}</p>
+    <label class="modal-field"><span>{{ t('access.field.outcome') }}</span><select [ngModel]="connectorStatus()" (ngModelChange)="connectorStatus.set($event)"><option value="succeeded">{{ t('access.value.succeeded') }}</option><option value="failed">{{ t('access.value.failed') }}</option></select></label>
+    <label class="modal-field"><span>{{ t('access.connector.reference') }}</span><input [ngModel]="connectorReference()" (ngModelChange)="connectorReference.set($event)" [placeholder]="t('access.connector.referencePlaceholder')" /></label>
+    <label class="modal-field"><span>{{ t('access.connector.message') }}</span><textarea rows="3" [ngModel]="connectorMessage()" (ngModelChange)="connectorMessage.set($event)"></textarea></label>
+    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="connectorOpen.set(false)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy() || !connectorReference().trim()" (click)="completeConnectorAttempt()">{{ t('access.connector.record') }}</button></div>
+  </app-modal>
+}
+
+@if (csvOpen()) {
+  <app-modal [title]="t('access.csv.title')" size="lg" (close)="csvOpen.set(false)">
+    <p class="modal-copy">{{ t('access.csv.help') }}</p>
+    <textarea class="csv-input" rows="12" [ngModel]="csvText()" (ngModelChange)="csvText.set($event)" [placeholder]="t('access.csv.placeholder')"></textarea>
+    @if (csvResult(); as result) { <div class="validation-summary"><strong>{{ result.validRows }} {{ t('access.csv.valid') }}</strong><span>{{ result.invalidRows }} {{ t('access.csv.invalidOf') }} {{ result.totalRows }} {{ t('access.csv.rows') }}</span>@for (row of invalidCsvRows(); track row.row) { <p>{{ t('access.csv.row') }} {{ row.row }}: {{ row.errors.join('; ') }}</p> }</div> }
+    <label class="modal-field"><span>{{ t('access.field.changeReason') }}</span><input [ngModel]="csvCommitReason()" (ngModelChange)="csvCommitReason.set($event)" [placeholder]="t('access.placeholder.changeSetReason')" /></label>
+    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="loadCsvTemplate()">{{ t('access.csv.loadTemplate') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy() || !csvText().trim()" (click)="validateCsv()">{{ t('access.csv.validate') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy() || !csvResult() || !!csvResult()?.invalidRows" (click)="commitCsv()">{{ t('access.csv.commit') }}</button></div>
+  </app-modal>
+}
+
+@if (manualOpen()) {
+  <app-modal [title]="t('access.manual.title')" (close)="manualOpen.set(false)">
+    <p class="modal-copy">{{ t('access.manual.help') }}</p>
+    <label class="modal-field"><span>{{ t('access.field.outcome') }}</span><select [ngModel]="manualStatus()" (ngModelChange)="manualStatus.set($event)"><option value="enforced">{{ t('access.value.enforced') }}</option><option value="failed">{{ t('access.value.failed') }}</option><option value="not_enforced">{{ t('access.value.not_enforced') }}</option></select></label>
+    <label class="modal-field"><span>{{ t('access.manual.evidenceReference') }}</span><input [ngModel]="manualEvidence()" (ngModelChange)="manualEvidence.set($event)" [placeholder]="t('access.manual.placeholder')" /></label>
+    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="manualOpen.set(false)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="completeManualProvisioning()">{{ t('access.manual.record') }}</button></div>
+  </app-modal>
+}

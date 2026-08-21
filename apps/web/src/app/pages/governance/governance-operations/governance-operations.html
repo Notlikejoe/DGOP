@@ -233,6 +233,53 @@
       }
     </section>
 
+    @if (pilotReadiness(); as pilot) {
+      <section class="pilot-readiness" aria-label="Production pilot release controls">
+        <div class="pilot-readiness__head">
+          <div>
+            <span class="eyebrow">Production pilot controls</span>
+            <h2>Sign-off, exception, and rehearsal evidence</h2>
+            <p>{{ pilot.controls.approvalRule }}</p>
+          </div>
+          <app-status-chip [kind]="statusKind(pilot.status)" [label]="t('operations.status.' + pilot.status)" />
+        </div>
+        <div class="pilot-gates">
+          @for (gate of pilot.acceptance.pilotGates || []; track gate.code) {
+            <article>
+              <div>
+                <strong>{{ gate.label }}</strong>
+                <span>{{ gate.latestSignOff ? formatDate(gate.latestSignOff.recordedAt) + ' by ' + gate.latestSignOff.recordedBy : 'Awaiting recorded decision' }}</span>
+                @if (gate.latestSignOff?.exceptionSummary) { <small>{{ gate.latestSignOff?.exceptionSummary }}</small> }
+              </div>
+              <app-status-chip [kind]="statusKind(gate.status)" [label]="t('operations.status.' + gate.status)" />
+            </article>
+          }
+        </div>
+        <div class="pilot-actions">
+          <form class="pilot-form" (ngSubmit)="recordPilotSignOff()">
+            <h3>Record sign-off</h3>
+            <label>Gate<select [(ngModel)]="pilotSignOffForm.gateCode" name="signoffGate"><option value="workflow_canvas_uat">Workflow Canvas UAT</option><option value="access_management_uat">Access Management UAT</option><option value="security_controls">Security and control evidence</option><option value="performance_exceptions">Performance evidence</option><option value="production_go_no_go">Production pilot go/no-go</option></select></label>
+            <label>Decision<select [(ngModel)]="pilotSignOffForm.decision" name="signoffDecision"><option value="approved">Approved</option><option value="approved_with_exception">Approved with exception</option><option value="declined">Declined</option></select></label>
+            <label>Exception mitigation<textarea rows="3" [(ngModel)]="pilotSignOffForm.exceptionSummary" name="signoffException" placeholder="Required for approved with exception"></textarea></label>
+            <label>Evidence references<textarea rows="2" [(ngModel)]="pilotSignOffForm.evidenceLinks" name="signoffEvidence" placeholder="One reference per line or comma-separated"></textarea></label>
+            <button type="submit" class="ds-btn ds-btn--primary" [disabled]="busy()">Record sign-off</button>
+          </form>
+          <form class="pilot-form" (ngSubmit)="recordRehearsal()">
+            <h3>Deployment rehearsal</h3>
+            <label>Environment<select [(ngModel)]="rehearsalForm.environment" name="rehearsalEnvironment"><option value="TEST">TEST</option><option value="UAT">UAT</option><option value="PRE-PROD">PRE-PROD</option><option value="PROD">PROD</option></select></label>
+            <label>Outcome<select [(ngModel)]="rehearsalForm.status" name="rehearsalStatus"><option value="passed">Passed</option><option value="failed">Failed</option><option value="planned">Planned</option></select></label>
+            <label>Deployed at<input type="datetime-local" [(ngModel)]="rehearsalForm.deployedAt" name="rehearsalDeployedAt" /></label>
+            <label>Verified at<input type="datetime-local" [(ngModel)]="rehearsalForm.verifiedAt" name="rehearsalVerifiedAt" /></label>
+            <label class="pilot-check"><input type="checkbox" [(ngModel)]="rehearsalForm.rollbackTested" name="rehearsalRollback" /> Rollback drill completed</label>
+            <label>Rollback completed at<input type="datetime-local" [(ngModel)]="rehearsalForm.rollbackCompletedAt" name="rehearsalRollbackAt" /></label>
+            <label>Result summary<textarea rows="3" [(ngModel)]="rehearsalForm.summary" name="rehearsalSummary" placeholder="Deployment, smoke checks, rollback, and owner outcome"></textarea></label>
+            <label>Evidence references<textarea rows="2" [(ngModel)]="rehearsalForm.evidenceLinks" name="rehearsalEvidence" placeholder="One reference per line or comma-separated"></textarea></label>
+            <button type="submit" class="ds-btn ds-btn--primary" [disabled]="busy()">Record rehearsal</button>
+          </form>
+        </div>
+      </section>
+    }
+
     <section class="ops-grid">
       <article class="ds-card graph-card">
         <div class="panel-head">

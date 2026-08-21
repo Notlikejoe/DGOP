@@ -46,6 +46,18 @@
           <option value="">{{ t('assets.filter.system') }}</option>
           @for (sy of systems(); track sy.id) { <option [value]="sy.id">{{ name(sy) }}</option> }
         </select>
+        <select class="toolbar__status" [ngModel]="filters().assetType" (ngModelChange)="setFilter('assetType', $event)" [attr.aria-label]="t('assets.field.assetType')">
+          <option value="">{{ t('assets.filter.assetType') }}</option>
+          @for (type of assetTypes; track type) { <option [value]="type">{{ assetTypeLabel(type) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().assetSubtype" (ngModelChange)="setFilter('assetSubtype', $event)" [attr.aria-label]="t('assets.field.assetSubtype')">
+          <option value="">{{ t('assets.filter.assetSubtype') }}</option>
+          @for (subtype of subtypesFor(filters().assetType || 'dataset'); track subtype) { <option [value]="subtype">{{ assetSubtypeLabel(subtype) }}</option> }
+        </select>
+        <select class="toolbar__status" [ngModel]="filters().v6LifecycleState" (ngModelChange)="setFilter('v6LifecycleState', $event)" [attr.aria-label]="t('assets.field.v6Lifecycle')">
+          <option value="">{{ t('assets.filter.v6Lifecycle') }}</option>
+          @for (state of v6LifecycleStates; track state) { <option [value]="state">{{ v6LifecycleLabel(state) }}</option> }
+        </select>
         <select class="toolbar__status" [ngModel]="filters().lifecycleStatus" (ngModelChange)="setFilter('lifecycleStatus', $event)" [attr.aria-label]="t('assets.field.lifecycle')">
           <option value="">{{ t('assets.filter.lifecycle') }}</option>
           @for (l of lifecycles; track l) { <option [value]="l">{{ t('assets.lifecycle.' + l) }}</option> }
@@ -74,6 +86,7 @@
               <tr>
                 <th>{{ t('assets.col.code') }}</th>
                 <th>{{ t('assets.col.name') }}</th>
+                <th>{{ t('assets.col.type') }}</th>
                 <th>{{ t('assets.col.domain') }}</th>
                 <th>{{ t('assets.col.classification') }}</th>
                 <th>{{ t('assets.col.owner') }}</th>
@@ -91,6 +104,7 @@
                   <td>
                     <button type="button" class="link-btn" (click)="openDetail(a.id)">{{ name(a) }}</button>
                   </td>
+                  <td>{{ assetTypeLabel(a.assetType) }}</td>
                   <td>{{ name(a.domain) }}</td>
                   <td>
                     @if (a.classification) {
@@ -152,6 +166,10 @@
         <h2 class="card-title">{{ t('assets.overview') }}</h2>
         <dl class="facts">
           <div class="fact"><dt>{{ t('assets.field.lifecycle') }}</dt><dd><app-status-chip [kind]="lifecycleKind(a.lifecycleStatus)" [label]="t('assets.lifecycle.' + a.lifecycleStatus)" /></dd></div>
+          <div class="fact"><dt>{{ t('assets.field.v6Lifecycle') }}</dt><dd>{{ v6LifecycleLabel(a.v6LifecycleState) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.lifecyclePhase') }}</dt><dd>{{ lifecyclePhaseLabel(a.lifecyclePhase) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.assetType') }}</dt><dd>{{ assetTypeLabel(a.assetType) }}</dd></div>
+          <div class="fact"><dt>{{ t('assets.field.assetSubtype') }}</dt><dd>{{ assetSubtypeLabel(a.assetSubtype) }}</dd></div>
           <div class="fact"><dt>{{ t('assets.col.owner') }}</dt><dd><app-status-chip [kind]="ownerKind(a.ownerStatus)" [label]="a.ownerName || t('assets.owner.' + a.ownerStatus)" /></dd></div>
           <div class="fact"><dt>{{ t('assets.field.domain') }}</dt><dd>{{ name(a.domain) }}</dd></div>
           <div class="fact"><dt>{{ t('assets.field.classification') }}</dt>
@@ -169,6 +187,20 @@
             <div class="fact fact--wide"><dt>{{ t('assets.field.description') }}</dt><dd>{{ a.description }}</dd></div>
           }
         </dl>
+        @if (a.assetTypePanel) {
+          <section class="asset-type-panel">
+            <div>
+              <span class="asset-type-panel__eyebrow">{{ assetTypeLabel(a.assetTypePanel.code) }}</span>
+              <h3>{{ a.assetTypePanel.title }}</h3>
+              <p>{{ a.assetTypePanel.emptyState }}</p>
+            </div>
+            <div class="evidence-strip">
+              @for (evidence of a.assetTypePanel.expectedEvidence; track evidence) {
+                <span>{{ evidenceLabel(evidence) }}</span>
+              }
+            </div>
+          </section>
+        }
       </div>
 
       <div class="ds-card">
@@ -420,6 +452,31 @@
             </select>
           </label>
           <label class="field">
+            <span class="field__label">{{ t('assets.field.assetType') }}</span>
+            <select class="field__input" [ngModel]="draft().assetType" (ngModelChange)="set('assetType', $event)" name="assetType">
+              @for (type of assetTypes; track type) { <option [value]="type">{{ assetTypeLabel(type) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.assetSubtype') }}</span>
+            <select class="field__input" [ngModel]="draft().assetSubtype" (ngModelChange)="set('assetSubtype', $event)" name="assetSubtype">
+              <option value="">{{ t('assets.none') }}</option>
+              @for (subtype of subtypesFor(draft().assetType); track subtype) { <option [value]="subtype">{{ assetSubtypeLabel(subtype) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.v6Lifecycle') }}</span>
+            <select class="field__input" [ngModel]="draft().v6LifecycleState" (ngModelChange)="set('v6LifecycleState', $event)" name="v6LifecycleState">
+              @for (state of v6LifecycleStates; track state) { <option [value]="state">{{ v6LifecycleLabel(state) }}</option> }
+            </select>
+          </label>
+          <label class="field">
+            <span class="field__label">{{ t('assets.field.lifecyclePhase') }}</span>
+            <select class="field__input" [ngModel]="draft().lifecyclePhase" (ngModelChange)="set('lifecyclePhase', $event)" name="lifecyclePhase">
+              @for (phase of lifecyclePhases; track phase) { <option [value]="phase">{{ lifecyclePhaseLabel(phase) }}</option> }
+            </select>
+          </label>
+          <label class="field">
             <span class="field__label">{{ t('assets.field.nameEn') }}<span class="req">*</span></span>
             <input type="text" class="field__input" [ngModel]="draft().nameEn" (ngModelChange)="set('nameEn', $event)" name="nameEn" [attr.maxlength]="assetNameMax" />
           </label>
@@ -518,13 +575,54 @@
         <textarea class="field__input mono" rows="8" [ngModel]="importCsv()" (ngModelChange)="importCsv.set($event)" name="csv"></textarea>
         <button type="button" class="ds-btn ds-btn--ghost btn-sm self-start" (click)="insertSample()">{{ t('assets.import.sample') }}</button>
 
+        @if (importPreviewResult(); as preview) {
+          <div class="import-result">
+            <p>{{ importPreviewSummary() }}</p>
+            @if (preview.rows.length) {
+              <h4>{{ t('assets.import.previewRowsTitle') }}</h4>
+              <div class="table-wrap">
+                <table class="ds-table import-preview-table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('crud.code') }}</th>
+                      <th>{{ t('assets.import.action') }}</th>
+                      <th>{{ t('assets.field.assetType') }}</th>
+                      <th>{{ t('assets.field.v6Lifecycle') }}</th>
+                      <th>{{ t('assets.import.subjects') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of preview.rows; track row.row) {
+                      <tr>
+                        <td><code>{{ row.code }}</code></td>
+                        <td>{{ t('assets.import.action.' + row.action) }}</td>
+                        <td>{{ row.assetType }} @if (row.assetSubtype) { <span class="muted">/ {{ row.assetSubtype }}</span> }</td>
+                        <td>{{ v6LifecycleLabel(row.v6LifecycleState) }} <span class="muted">/ {{ row.lifecyclePhase }}</span></td>
+                        <td>{{ row.subjectCount }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+            @if (preview.errors.length) {
+              <h4>{{ t('assets.import.errorsTitle') }}</h4>
+              <ul class="rel-list">
+                @for (e of preview.errors; track $index) {
+                  <li class="danger">Row {{ e.row }}: {{ e.message }}</li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
         @if (importResult(); as r) {
           <div class="import-result">
             <p>{{ importSummary() }}</p>
             @if (r.errors.length) {
               <h4>{{ t('assets.import.errorsTitle') }}</h4>
               <ul class="rel-list">
-                @for (e of r.errors; track e.row) {
+                @for (e of r.errors; track $index) {
                   <li class="danger">Row {{ e.row }}: {{ e.message }}</li>
                 }
               </ul>
@@ -535,7 +633,10 @@
 
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeImport()">{{ t('crud.cancel') }}</button>
-        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!importCsv().trim() || importing()" (click)="runImport()">
+        <button type="button" class="ds-btn ds-btn--ghost" [disabled]="!importCsv().trim() || previewingImport() || importing()" (click)="runImportPreview()">
+          {{ previewingImport() ? t('assets.import.previewing') : t('assets.import.preview') }}
+        </button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canRunImport()" (click)="runImport()">
           {{ importing() ? t('assets.import.running') : t('assets.import.run') }}
         </button>
       </div>

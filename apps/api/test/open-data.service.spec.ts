@@ -26,6 +26,11 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 const allScope = { orgUnits: 'all', domains: 'all', maxClassRank: null };
 const scopedFinance = { orgUnits: 'all', domains: ['finance'], maxClassRank: 2 };
 
@@ -82,6 +87,7 @@ function makeService(overrides: Record<string, any> = {}) {
   };
 
   const prisma = {
+    businessSequence: sequenceDelegate(),
     dataAsset: {
       findMany: async () => data.visibleAssets.map((a: any) => ({ id: a.id })),
       findFirst: async (args: any) => {

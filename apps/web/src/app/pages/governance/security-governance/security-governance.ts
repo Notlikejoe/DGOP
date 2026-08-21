@@ -1,15 +1,20 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
+import { AuthService } from '../../../core/auth.service';
 import { I18nService } from '../../../core/i18n.service';
 import { StatusChip, StatusKind } from '../../../shared/status-chip';
 import { AppIcon } from '../../../shared/app-icon';
+import { Modal } from '../../../shared/modal';
+import { ToastService } from '../../../shared/toast.service';
 
 interface Ref { id: string; code: string; nameEn: string; nameAr: string; }
 interface ClassificationRef extends Ref { rank: number; color: string; }
 interface RoleRef extends Ref { maxClassificationRank?: number | null; }
 interface UserRef { id: string; email: string; displayName?: string | null; }
+interface AssetRef extends Ref { domain?: Ref | null; classification?: ClassificationRef | null; }
 
 interface MaskingPolicy {
   id: string;
@@ -48,6 +53,8 @@ interface AccessReviewItem {
   domain?: Ref | null;
   classification?: ClassificationRef | null;
 }
+
+type AccessReviewDecision = 'certified' | 'modify' | 'shorten_expiry' | 'suspend' | 'request_clarification' | 'revoke' | 'exception' | 'escalated';
 
 interface AccessReview {
   id: string;
@@ -97,6 +104,22 @@ interface DecisionLog {
   maskingPolicy?: MaskingPolicy | null;
 }
 
+interface SimulatedDecision extends DecisionLog {
+  classification?: ClassificationRef | null;
+  abac: {
+    risk: string;
+    purpose: string;
+    networkZone: string;
+    obligations: string[];
+    violations: string[];
+    ruleTrace: string[];
+  };
+}
+
+interface AssetPage {
+  data: AssetRef[];
+}
+
 interface SecuritySummary {
   mappings: number;
   maskingPolicies: number;
@@ -110,6 +133,7 @@ interface SecuritySummary {
 interface SecurityQueueItem {
   id: string;
   type: 'access_review' | 'dlp' | 'classification';
+  refId: string;
   title: string;
   subtitle: string;
   status: string;
@@ -124,12 +148,14 @@ interface SecurityQueueItem {
 @Component({
   selector: 'app-security-governance',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusChip, AppIcon],
+  imports: [FormsModule, RouterLink, StatusChip, AppIcon, Modal],
   templateUrl: './security-governance.html',
   styleUrl: './security-governance.scss',
 })
 export class SecurityGovernancePage implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+  private readonly toast = inject(ToastService);
   protected readonly i18n = inject(I18nService);
 
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
@@ -142,6 +168,48 @@ export class SecurityGovernancePage implements OnInit {
   protected readonly decisions = signal<DecisionLog[]>([]);
   protected readonly selectedQueueId = signal<string | null>(null);
   protected readonly expandedPanel = signal<string | null>(null);
+  protected readonly campaignOpen = signal(false);
+  protected readonly reviewDecisionOpen = signal(false);
+  protected readonly simulatorOpen = signal(false);
+  protected readonly simulatorLoading = signal(false);
+  protected readonly busy = signal(false);
+  protected readonly canCreate = this.auth.hasPermission('security_governance.create');
+  protected readonly canDecide = this.auth.hasPermission('security_governance.edit');
+  protected readonly canSimulate =
+    this.auth.hasPermission('security_governance.create') &&
+    this.auth.hasPermission('roles.view') &&
+    this.auth.hasPermission('data_assets.view');
+  protected readonly simulatorRoles = signal<RoleRef[]>([]);
+  protected readonly simulatorAssets = signal<AssetRef[]>([]);
+  protected readonly simulatorResult = signal<SimulatedDecision | null>(null);
+  protected campaignForm = {
+    title: '',
+    description: '',
+    dueDate: '',
+    includeUserGrants: true,
+    includeRoleGrants: true,
+  };
+  protected reviewDecisionForm: { itemId: string; decision: AccessReviewDecision; justification: string; newExpiresAt: string } = {
+    itemId: '',
+    decision: 'certified',
+    justification: '',
+    newExpiresAt: '',
+  };
+  protected simulatorForm = {
+    roleId: '',
+    assetId: '',
+    requestedAction: 'read',
+    purpose: 'governance',
+    networkZone: 'internal',
+    personalDataRequested: false,
+    legalBasisConfirmed: false,
+    emergencyAccess: false,
+    approvalTicketId: '',
+    businessJustification: '',
+  };
+  protected readonly accessActions = ['read', 'export', 'share', 'write', 'delete'] as const;
+  protected readonly accessPurposes = ['governance', 'privacy', 'compliance', 'audit', 'operations', 'break_glass'] as const;
+  protected readonly networkZones = ['internal', 'trusted', 'public'] as const;
 
   protected readonly activeReview = computed(() => this.accessReviews()[0] ?? null);
   protected readonly pendingItems = computed(() =>
@@ -157,6 +225,7 @@ export class SecurityGovernancePage implements OnInit {
   protected readonly securityQueue = computed<SecurityQueueItem[]>(() => [
     ...this.pendingItems().map((item) => ({
       id: `access_review:${item.id}`,
+      refId: item.id,
       type: 'access_review' as const,
       title: this.name(item.user),
       subtitle: `${this.name(item.role)} - ${this.targetName(item)}`,
@@ -169,6 +238,7 @@ export class SecurityGovernancePage implements OnInit {
       .filter((incident) => !['closed', 'false_positive'].includes(incident.status))
       .map((incident) => ({
         id: `dlp:${incident.id}`,
+        refId: incident.id,
         type: 'dlp' as const,
         title: incident.title,
         subtitle: `${this.name(incident.asset)} - ${this.date(incident.detectedAt)}`,
@@ -183,6 +253,7 @@ export class SecurityGovernancePage implements OnInit {
       .filter((request) => request.status === 'pending')
       .map((request) => ({
         id: `classification:${request.id}`,
+        refId: request.id,
         type: 'classification' as const,
         title: this.name(request.asset),
         subtitle: `${this.name(request.fromClassification)} to ${this.name(request.toClassification)}`,
@@ -198,6 +269,11 @@ export class SecurityGovernancePage implements OnInit {
     const rows = this.securityQueue();
     const id = this.selectedQueueId();
     return rows.find((row) => row.id === id) ?? rows[0] ?? null;
+  });
+  protected readonly selectedReviewItem = computed(() => {
+    const row = this.selectedQueueItem();
+    if (!row || row.type !== 'access_review') return null;
+    return this.pendingItems().find((item) => item.id === row.refId) ?? null;
   });
 
   ngOnInit(): void {
@@ -252,6 +328,176 @@ export class SecurityGovernancePage implements OnInit {
 
   protected closeExpandedPanel(): void {
     this.expandedPanel.set(null);
+  }
+
+  protected openCampaign(): void {
+    const date = new Date();
+    date.setDate(date.getDate() + 14);
+    this.campaignForm = {
+      title: `Periodic access certification - ${new Date().toISOString().slice(0, 10)}`,
+      description: '',
+      dueDate: date.toISOString().slice(0, 10),
+      includeUserGrants: true,
+      includeRoleGrants: true,
+    };
+    this.campaignOpen.set(true);
+  }
+
+  protected createCampaign(): void {
+    if (!this.canCreate || this.busy()) return;
+    if (!this.campaignForm.title.trim()) {
+      this.toast.error(this.t('sec.campaign.titleRequired'));
+      return;
+    }
+    if (!this.campaignForm.includeUserGrants && !this.campaignForm.includeRoleGrants) {
+      this.toast.error(this.t('sec.campaign.typeRequired'));
+      return;
+    }
+    this.busy.set(true);
+    this.http.post<AccessReview>('/api/security-governance/access-reviews/campaigns', {
+      title: this.campaignForm.title.trim(),
+      description: this.campaignForm.description.trim() || null,
+      dueDate: this.campaignForm.dueDate || null,
+      includeUserGrants: this.campaignForm.includeUserGrants,
+      includeRoleGrants: this.campaignForm.includeRoleGrants,
+    }).subscribe({
+      next: (review) => {
+        this.busy.set(false);
+        this.campaignOpen.set(false);
+        this.toast.success(`${this.t('sec.campaign.created')} ${review.code}`);
+        this.load();
+      },
+      error: (error) => {
+        this.busy.set(false);
+        this.toast.errorFrom(error, this.t('sec.campaign.error'));
+      },
+    });
+  }
+
+  protected openSimulator(): void {
+    if (!this.canSimulate || this.busy()) return;
+    this.simulatorResult.set(null);
+    this.simulatorOpen.set(true);
+    if (this.simulatorRoles().length && this.simulatorAssets().length) {
+      this.ensureSimulatorDefaults();
+      return;
+    }
+    this.simulatorLoading.set(true);
+    forkJoin({
+      roles: this.http.get<RoleRef[]>('/api/roles'),
+      assets: this.http.get<AssetRef[] | AssetPage>('/api/assets?page=1&pageSize=100'),
+    }).subscribe({
+      next: (result) => {
+        this.simulatorRoles.set(result.roles.filter((role) => role.code !== 'system_admin'));
+        this.simulatorAssets.set(Array.isArray(result.assets) ? result.assets : result.assets.data);
+        this.simulatorLoading.set(false);
+        this.ensureSimulatorDefaults();
+      },
+      error: (error) => {
+        this.simulatorLoading.set(false);
+        this.toast.errorFrom(error, this.t('sec.sim.error'));
+      },
+    });
+  }
+
+  protected closeSimulator(): void {
+    if (this.busy()) return;
+    this.simulatorOpen.set(false);
+  }
+
+  protected ensureSimulatorDefaults(): void {
+    const roles = this.simulatorRoles();
+    const assets = this.simulatorAssets();
+    this.simulatorForm = {
+      ...this.simulatorForm,
+      roleId: this.simulatorForm.roleId || roles[0]?.id || '',
+      assetId: this.simulatorForm.assetId || assets[0]?.id || '',
+    };
+  }
+
+  protected submitSimulator(): void {
+    if (!this.canSimulate || this.busy()) return;
+    if (!this.simulatorForm.roleId || !this.simulatorForm.assetId) {
+      this.toast.error(this.t('sec.sim.required'));
+      return;
+    }
+    this.busy.set(true);
+    this.http.post<SimulatedDecision>('/api/security-governance/decision-log/simulate', {
+      roleId: this.simulatorForm.roleId,
+      assetId: this.simulatorForm.assetId,
+      requestedAction: this.simulatorForm.requestedAction,
+      purpose: this.simulatorForm.purpose,
+      networkZone: this.simulatorForm.networkZone,
+      personalDataRequested: this.simulatorForm.personalDataRequested,
+      legalBasisConfirmed: this.simulatorForm.legalBasisConfirmed,
+      emergencyAccess: this.simulatorForm.emergencyAccess,
+      approvalTicketId: this.simulatorForm.approvalTicketId.trim() || null,
+      businessJustification: this.simulatorForm.businessJustification.trim() || null,
+    }).subscribe({
+      next: (result) => {
+        this.busy.set(false);
+        this.simulatorResult.set(result);
+        this.toast.success(this.t('sec.sim.done'));
+        this.load();
+      },
+      error: (error) => {
+        this.busy.set(false);
+        this.toast.errorFrom(error, this.t('sec.sim.error'));
+      },
+    });
+  }
+
+  protected openReviewDecision(decision: AccessReviewDecision): void {
+    const item = this.selectedReviewItem();
+    if (!this.canDecide || !item || this.busy()) return;
+    this.reviewDecisionForm = {
+      itemId: item.id,
+      decision,
+      justification: '',
+      newExpiresAt: '',
+    };
+    this.reviewDecisionOpen.set(true);
+  }
+
+  protected closeReviewDecision(): void {
+    if (this.busy()) return;
+    this.reviewDecisionOpen.set(false);
+  }
+
+  protected reviewDecisionTitle(): string {
+    return `${this.t('sec.review.decisionTitle')} - ${this.t('sec.decision.' + this.reviewDecisionForm.decision)}`;
+  }
+
+  protected submitReviewDecision(): void {
+    if (!this.canDecide || this.busy()) return;
+    const justification = this.reviewDecisionForm.justification.trim();
+    if (this.reviewDecisionForm.decision !== 'certified' && !justification) {
+      this.toast.error(this.t('sec.review.justificationRequired'));
+      return;
+    }
+    if (this.reviewDecisionForm.decision === 'shorten_expiry' && !this.reviewDecisionForm.newExpiresAt) {
+      this.toast.error(this.t('sec.review.expiryRequired'));
+      return;
+    }
+    this.busy.set(true);
+    this.http.patch<AccessReviewItem>(`/api/security-governance/access-review-items/${this.reviewDecisionForm.itemId}`, {
+      decision: this.reviewDecisionForm.decision,
+      justification: justification || null,
+      newExpiresAt: this.reviewDecisionForm.newExpiresAt
+        ? new Date(this.reviewDecisionForm.newExpiresAt).toISOString()
+        : null,
+    }).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.reviewDecisionOpen.set(false);
+        this.toast.success(this.t('sec.review.decisionSaved'));
+        this.load();
+      },
+      error: (error) => {
+        this.busy.set(false);
+        this.toast.errorFrom(error, this.t('sec.review.decisionError'));
+      },
+    });
   }
 
   protected name(o?: { nameEn?: string; nameAr?: string; fullNameEn?: string; fullNameAr?: string; displayName?: string | null; email?: string } | null): string {

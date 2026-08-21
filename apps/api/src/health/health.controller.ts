@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../auth/decorators';
 
@@ -12,7 +13,7 @@ export class HealthController {
   ) {}
 
   @Get()
-  async check() {
+  async check(@Res({ passthrough: true }) httpResponse?: Response) {
     const environment = this.config.get<string>('NODE_ENV') ?? 'development';
     const includeDetails =
       environment !== 'production' ||
@@ -22,6 +23,7 @@ export class HealthController {
       await this.prisma.$queryRaw`SELECT 1`;
     } catch {
       dbStatus = 'down';
+      httpResponse?.status(503);
     }
 
     const response: Record<string, unknown> = {

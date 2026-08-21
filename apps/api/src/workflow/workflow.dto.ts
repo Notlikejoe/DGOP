@@ -10,6 +10,7 @@ import {
   IsString,
   Max,
   MaxLength,
+  Matches,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -21,7 +22,7 @@ import {
   WorkflowDelegationStatus,
   WorkflowSlaBreachPolicy,
 } from '@prisma/client';
-import { WORKFLOW_CASE_TYPES, WORKFLOW_TASK_TYPES } from './workflow.logic';
+import { WORKFLOW_CASE_TYPES, WORKFLOW_RETURN_FOR_CLARIFICATION, WORKFLOW_TASK_TYPES, type WorkflowDecisionValue } from './workflow.logic';
 
 export class CreateCaseDto {
   @IsString() @IsNotEmpty() title!: string;
@@ -56,9 +57,49 @@ export class SaveWorkflowBpmnDto {
   @IsOptional() @IsBoolean() acknowledgeMigrationRisk?: boolean;
 }
 
+export class UpsertWorkflowVariableDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) @Matches(/^[A-Za-z][A-Za-z0-9_.-]*$/) code!: string;
+  @IsString() @IsNotEmpty() @MaxLength(220) nameEn!: string;
+  @IsOptional() @IsString() @MaxLength(220) nameAr?: string | null;
+  @IsOptional() @IsString() @MaxLength(1200) description?: string | null;
+  @IsIn(['text', 'number', 'boolean', 'date', 'user', 'role', 'list']) variableType!: string;
+  @IsOptional() @IsIn(['case', 'workflow', 'task', 'node', 'asset', 'actor']) scope?: string;
+  @IsOptional() @IsIn(['designer', 'initiation_form', 'task_form', 'automation', 'calculated', 'system', 'runtime']) source?: string;
+  @IsOptional() defaultValue?: unknown;
+  @IsOptional() allowedValues?: unknown[];
+  @IsOptional() @IsBoolean() isRequired?: boolean;
+}
+
+export class WorkflowTemplateReviewDto {
+  @IsOptional() @IsString() bpmnXml?: string | null;
+  @IsOptional() @IsString() @MaxLength(1200) comment?: string | null;
+}
+
+export class WorkflowTemplateLifecycleDto {
+  @IsIn(['activate', 'suspend', 'retire', 'archive', 'delete_draft']) action!: string;
+  @IsOptional() @IsString() @MaxLength(1200) reason?: string | null;
+}
+
+export class WorkflowCaseControlDto {
+  @IsOptional() @IsString() @MaxLength(1200) reason?: string | null;
+}
+
 export class WorkflowDesignerSimulationDto {
   @IsOptional() @IsString() bpmnXml?: string | null;
   @IsOptional() @IsObject() decisions?: Record<string, string | null>;
+}
+
+export class WorkflowDesignerTestRunDto {
+  @IsOptional() @IsString() bpmnXml?: string | null;
+  @IsOptional() @IsObject() decisions?: Record<string, string | null>;
+  @IsOptional() @IsObject() variables?: Record<string, unknown>;
+  @IsOptional() @IsIn(['dev', 'test', 'uat', 'demo']) environment?: string;
+}
+
+export class ListWorkflowDesignerTestRunsDto {
+  @IsOptional() @IsIn(['ready', 'warning', 'blocked', 'reset']) status?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) pageSize?: number;
 }
 
 export class WorkflowDesignerMigrationPreviewDto {
@@ -81,6 +122,15 @@ export class ListWorkflowCasesDto {
   @IsOptional() @IsIn(WORKFLOW_CASE_TYPES) type?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
+}
+
+export class WorkflowOperationsReportQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(366) periodDays?: number;
+  @IsOptional() @IsString() templateId?: string | null;
+  @IsOptional() @IsIn(WORKFLOW_CASE_TYPES) caseType?: string;
+  @IsOptional() @IsEnum(CaseStatus) status?: CaseStatus;
+  @IsOptional() @IsString() @MaxLength(220) ownerEmail?: string;
+  @IsOptional() @IsString() orgUnitId?: string | null;
 }
 
 export class UpdateCaseDto {
@@ -109,7 +159,7 @@ export class UpdateTaskDto {
 }
 
 export class DecisionDto {
-  @IsEnum(TaskDecision) decision!: TaskDecision;
+  @IsIn([...Object.values(TaskDecision), WORKFLOW_RETURN_FOR_CLARIFICATION]) decision!: WorkflowDecisionValue;
   @IsOptional() @IsString() comment?: string | null;
 }
 

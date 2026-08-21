@@ -11,6 +11,12 @@
     </div>
     <div class="header-actions">
       <a class="ds-btn ds-btn--ghost" routerLink="/admin/roles">{{ t('sec.openRoles') }}</a>
+      @if (canCreate) {
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openCampaign()">{{ t('sec.campaign.open') }}</button>
+      }
+      @if (canSimulate) {
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="openSimulator()">{{ t('sec.sim.open') }}</button>
+      }
       <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
     </div>
   </header>
@@ -177,6 +183,35 @@
             </div>
           </dl>
 
+          @if (item.type === 'access_review') {
+            <div class="review-actions" [attr.aria-label]="t('sec.review.actionsLabel')">
+              <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('certified')">
+                {{ t('sec.review.action.certify') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm review-action--danger" [disabled]="!canDecide || busy()" (click)="openReviewDecision('revoke')">
+                {{ t('sec.review.action.revoke') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('modify')">
+                {{ t('sec.review.action.modify') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('shorten_expiry')">
+                {{ t('sec.review.action.shorten') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm review-action--danger" [disabled]="!canDecide || busy()" (click)="openReviewDecision('suspend')">
+                {{ t('sec.review.action.suspend') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('request_clarification')">
+                {{ t('sec.review.action.clarify') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('exception')">
+                {{ t('sec.review.action.exception') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('escalated')">
+                {{ t('sec.review.action.escalate') }}
+              </button>
+            </div>
+          }
+
           <div class="detail-actions">
             <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/admin/roles">{{ t('sec.openRoles') }}</a>
             <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="load()">{{ t('crud.retry') }}</button>
@@ -263,3 +298,181 @@
     </div>
   }
 </section>
+
+@if (campaignOpen()) {
+  <app-modal [title]="t('sec.campaign.title')" size="lg" (close)="campaignOpen.set(false)">
+    <p class="campaign-copy">{{ t('sec.campaign.copy') }}</p>
+    <div class="campaign-form">
+      <label class="campaign-field">
+        <span>{{ t('sec.campaign.field.title') }}</span>
+        <input [ngModel]="campaignForm.title" (ngModelChange)="campaignForm.title = $event" />
+      </label>
+      <label class="campaign-field">
+        <span>{{ t('sec.campaign.field.due') }}</span>
+        <input type="date" [ngModel]="campaignForm.dueDate" (ngModelChange)="campaignForm.dueDate = $event" />
+      </label>
+      <label class="campaign-field campaign-field--wide">
+        <span>{{ t('sec.campaign.field.description') }}</span>
+        <textarea rows="3" [ngModel]="campaignForm.description" (ngModelChange)="campaignForm.description = $event"></textarea>
+      </label>
+      <label class="campaign-check">
+        <input type="checkbox" [ngModel]="campaignForm.includeUserGrants" (ngModelChange)="campaignForm.includeUserGrants = $event" />
+        <span>{{ t('sec.campaign.includeUsers') }}</span>
+      </label>
+      <label class="campaign-check">
+        <input type="checkbox" [ngModel]="campaignForm.includeRoleGrants" (ngModelChange)="campaignForm.includeRoleGrants = $event" />
+        <span>{{ t('sec.campaign.includeRoles') }}</span>
+      </label>
+    </div>
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="campaignOpen.set(false)">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="createCampaign()">{{ t('sec.campaign.create') }}</button>
+    </div>
+  </app-modal>
+}
+
+@if (simulatorOpen()) {
+  <app-modal [title]="t('sec.sim.title')" size="lg" (close)="closeSimulator()">
+    <p class="campaign-copy">{{ t('sec.sim.copy') }}</p>
+    @if (simulatorLoading()) {
+      <div class="empty empty--small"><p>{{ t('assets.loading') }}</p></div>
+    } @else {
+      <div class="simulator-grid">
+        <label class="campaign-field">
+          <span>{{ t('sec.sim.role') }}</span>
+          <select [ngModel]="simulatorForm.roleId" (ngModelChange)="simulatorForm.roleId = $event">
+            @for (role of simulatorRoles(); track role.id) {
+              <option [ngValue]="role.id">{{ name(role) }} - {{ role.code }}</option>
+            }
+          </select>
+        </label>
+        <label class="campaign-field">
+          <span>{{ t('sec.sim.asset') }}</span>
+          <select [ngModel]="simulatorForm.assetId" (ngModelChange)="simulatorForm.assetId = $event">
+            @for (asset of simulatorAssets(); track asset.id) {
+              <option [ngValue]="asset.id">{{ name(asset) }} - {{ asset.code }}</option>
+            }
+          </select>
+        </label>
+        <label class="campaign-field">
+          <span>{{ t('sec.sim.action') }}</span>
+          <select [ngModel]="simulatorForm.requestedAction" (ngModelChange)="simulatorForm.requestedAction = $event">
+            @for (action of accessActions; track action) {
+              <option [ngValue]="action">{{ t('sec.sim.action.' + action) }}</option>
+            }
+          </select>
+        </label>
+        <label class="campaign-field">
+          <span>{{ t('sec.sim.purpose') }}</span>
+          <select [ngModel]="simulatorForm.purpose" (ngModelChange)="simulatorForm.purpose = $event">
+            @for (purpose of accessPurposes; track purpose) {
+              <option [ngValue]="purpose">{{ t('sec.sim.purpose.' + purpose) }}</option>
+            }
+          </select>
+        </label>
+        <label class="campaign-field">
+          <span>{{ t('sec.sim.network') }}</span>
+          <select [ngModel]="simulatorForm.networkZone" (ngModelChange)="simulatorForm.networkZone = $event">
+            @for (zone of networkZones; track zone) {
+              <option [ngValue]="zone">{{ t('sec.sim.network.' + zone) }}</option>
+            }
+          </select>
+        </label>
+        <label class="campaign-field">
+          <span>{{ t('sec.sim.ticket') }}</span>
+          <input [ngModel]="simulatorForm.approvalTicketId" (ngModelChange)="simulatorForm.approvalTicketId = $event" />
+        </label>
+        <label class="campaign-field campaign-field--wide">
+          <span>{{ t('sec.sim.businessJustification') }}</span>
+          <textarea rows="3" [ngModel]="simulatorForm.businessJustification" (ngModelChange)="simulatorForm.businessJustification = $event"></textarea>
+        </label>
+        <label class="campaign-check">
+          <input type="checkbox" [ngModel]="simulatorForm.personalDataRequested" (ngModelChange)="simulatorForm.personalDataRequested = $event" />
+          <span>{{ t('sec.sim.personalData') }}</span>
+        </label>
+        <label class="campaign-check">
+          <input type="checkbox" [ngModel]="simulatorForm.legalBasisConfirmed" (ngModelChange)="simulatorForm.legalBasisConfirmed = $event" />
+          <span>{{ t('sec.sim.legalBasis') }}</span>
+        </label>
+        <label class="campaign-check">
+          <input type="checkbox" [ngModel]="simulatorForm.emergencyAccess" (ngModelChange)="simulatorForm.emergencyAccess = $event" />
+          <span>{{ t('sec.sim.emergency') }}</span>
+        </label>
+      </div>
+      @if (simulatorResult(); as result) {
+        <div class="simulator-result">
+          <div class="simulator-result__head">
+            <app-status-chip [kind]="decisionKind(result.decision)" [label]="t('sec.decision.' + result.decision)" />
+            <app-status-chip [kind]="riskKind(result.abac.risk)" [label]="t('sec.severity.' + result.abac.risk)" />
+          </div>
+          <p>{{ result.reason }}</p>
+          <div class="simulator-trace">
+            <div>
+              <strong>{{ t('sec.sim.obligations') }}</strong>
+              @for (item of result.abac.obligations; track item) { <span>{{ item }}</span> }
+              @empty { <span>{{ t('sec.sim.none') }}</span> }
+            </div>
+            <div>
+              <strong>{{ t('sec.sim.violations') }}</strong>
+              @for (item of result.abac.violations; track item) { <span>{{ item }}</span> }
+              @empty { <span>{{ t('sec.sim.none') }}</span> }
+            </div>
+            <div>
+              <strong>{{ t('sec.sim.ruleTrace') }}</strong>
+              @for (item of result.abac.ruleTrace; track item) { <span>{{ item }}</span> }
+              @empty { <span>{{ t('sec.sim.none') }}</span> }
+            </div>
+          </div>
+        </div>
+      }
+    }
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="closeSimulator()">{{ t('crud.cancel') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="busy() || simulatorLoading()" (click)="submitSimulator()">
+        {{ t('sec.sim.run') }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+@if (reviewDecisionOpen()) {
+  <app-modal [title]="reviewDecisionTitle()" size="md" (close)="closeReviewDecision()">
+    @if (selectedReviewItem(); as item) {
+      <div class="review-decision-summary">
+        <span class="badge-code">{{ item.reviewCode }}</span>
+        <strong>{{ name(item.user) }}</strong>
+        <p>{{ name(item.role) }} - {{ targetName(item) }}</p>
+      </div>
+    }
+    <label class="review-decision-field">
+      <span>{{ t('sec.review.justification') }}</span>
+      <textarea
+        rows="4"
+        [attr.placeholder]="t('sec.review.justificationPlaceholder')"
+        [ngModel]="reviewDecisionForm.justification"
+        (ngModelChange)="reviewDecisionForm.justification = $event"
+      ></textarea>
+    </label>
+    @if (reviewDecisionForm.decision === 'shorten_expiry') {
+      <label class="review-decision-field">
+        <span>{{ t('sec.review.newExpiry') }}</span>
+        <input type="datetime-local" [(ngModel)]="reviewDecisionForm.newExpiresAt" />
+      </label>
+    }
+    @if (reviewDecisionForm.decision !== 'certified') {
+      <p class="review-decision-warning">{{ t('sec.review.justificationHelp') }}</p>
+    }
+    <div footer>
+      <button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="closeReviewDecision()">{{ t('crud.cancel') }}</button>
+      <button
+        type="button"
+        class="ds-btn ds-btn--primary"
+        [class.review-action--danger]="reviewDecisionForm.decision === 'revoke'"
+        [disabled]="busy()"
+        (click)="submitReviewDecision()"
+      >
+        {{ t('sec.review.submitDecision') }}
+      </button>
+    </div>
+  </app-modal>
+}

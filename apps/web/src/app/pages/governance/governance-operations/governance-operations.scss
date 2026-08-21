@@ -609,6 +609,42 @@
   color: var(--danger);
 }
 
+.pilot-readiness {
+  display: grid;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+  border-block: 1px solid var(--border);
+}
+
+.pilot-readiness__head,
+.pilot-gates article {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.pilot-readiness__head h2,
+.pilot-readiness__head p,
+.pilot-form h3 { margin: 0; }
+
+.pilot-readiness__head p,
+.pilot-gates span,
+.pilot-gates small { display: block; margin-top: var(--space-1); color: var(--on-surface-muted); }
+
+.pilot-gates { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); }
+.pilot-gates article { min-width: 0; padding: var(--space-3); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.pilot-gates strong, .pilot-gates span, .pilot-gates small { overflow-wrap: anywhere; }
+
+.pilot-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.pilot-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); align-items: end; }
+.pilot-form h3, .pilot-form > button { grid-column: 1 / -1; }
+.pilot-form label { display: grid; gap: var(--space-1); color: var(--on-surface-muted); font-size: var(--font-size-sm); font-weight: 700; }
+.pilot-form select, .pilot-form input, .pilot-form textarea { width: 100%; min-height: 38px; padding: var(--space-2); color: var(--on-surface); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); font: inherit; }
+.pilot-form textarea { resize: vertical; }
+.pilot-check { grid-template-columns: auto 1fr; align-items: center; min-height: 38px; }
+.pilot-check input { width: 16px; min-height: 16px; }
+
 @media (max-width: 1220px) {
   .metric-strip,
   .ops-grid,
@@ -622,6 +658,10 @@
   .control-grid,
   .readiness-row {
     grid-template-columns: 1fr;
+  }
+
+  .pilot-gates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -649,6 +689,20 @@
   .acceptance-list article,
   .error-state {
     grid-template-columns: 1fr;
+  }
+
+  .pilot-readiness__head,
+  .pilot-gates article,
+  .pilot-gates,
+  .pilot-actions,
+  .pilot-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .pilot-form h3,
+  .pilot-form > button {
+    grid-column: auto;
   }
 
   .error-state {

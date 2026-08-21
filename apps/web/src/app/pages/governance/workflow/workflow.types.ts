@@ -11,6 +11,7 @@ export interface Paged<T> {
 export interface Ref { id: string; code?: string; nameEn: string; nameAr: string; }
 export interface UserRef { id: string; email: string; displayName: string; }
 export interface TaskCaseRef { id: string; code: string; title: string; type: string; status: string; }
+export type WorkflowDecisionValue = 'approved' | 'rejected' | 'return_for_clarification';
 
 export interface Task {
   id: string;
@@ -79,6 +80,7 @@ export interface WorkflowTemplateStage {
   nodeType?: string | null;
   taskType: string;
   assignmentStrategy?: string | null;
+  assignmentConfigJson?: unknown | null;
   assigneeRoleCode?: string | null;
   dueDays: number;
   formSchemaJson?: unknown | null;
@@ -101,6 +103,7 @@ export interface WorkflowTemplateTransition {
   toStageId: string;
   labelEn: string;
   labelAr: string;
+  connectorType?: string | null;
   decision?: string | null;
   conditionExpression?: string | null;
   conditionJson?: unknown | null;
@@ -117,6 +120,12 @@ export interface WorkflowTemplate {
   trigger: string;
   domain?: Ref | null;
   defaultSlaDays: number;
+  designerVersion?: number;
+  designerJson?: Record<string, unknown> | null;
+  lastPublishedAt?: string | null;
+  lastPublishedBy?: string | null;
+  isSystem?: boolean;
+  isActive?: boolean;
   stages: WorkflowTemplateStage[];
   transitions: WorkflowTemplateTransition[];
   _count?: { cases: number; stages: number };
@@ -158,6 +167,69 @@ export interface WorkflowGraph {
   edges: WorkflowGraphEdge[];
 }
 
+export interface WorkflowNodeDefinition {
+  code: string;
+  label: string;
+  category: string;
+  priority: 'core' | 'advanced';
+  description: string;
+  configuration: string[];
+  aliases?: string[];
+}
+
+export interface WorkflowConnectorType {
+  code: string;
+  label: string;
+  priority: 'core' | 'advanced';
+  outcomes: string[];
+  description?: string;
+  allowedOutcomes?: string[];
+}
+
+export interface WorkflowVariableDefinition {
+  id?: string;
+  templateId?: string | null;
+  code: string;
+  nameEn: string;
+  nameAr?: string | null;
+  description?: string | null;
+  variableType: 'text' | 'number' | 'boolean' | 'date' | 'user' | 'role' | 'list';
+  scope: string;
+  source: string;
+  required?: boolean;
+  isRequired?: boolean;
+  defaultValueJson?: unknown;
+  allowedValuesJson?: unknown;
+}
+
+export interface WorkflowAuditEventDefinition {
+  action: string;
+  entityType: string;
+  metadata: string[];
+}
+
+export interface WorkflowCanvasMvpGate {
+  status: 'ready' | 'watch' | 'blocked';
+  summary: {
+    templatesChecked: number;
+    ready: number;
+    watch: number;
+    blocked: number;
+    coreNodesRegistered: number;
+    requiredCoreNodes: number;
+    publishEvidenceReady: boolean;
+  };
+  criteria: Array<{
+    code: string;
+    label: string;
+    trace: string;
+    priority: 'core' | 'advanced';
+    status: 'pass' | 'warning' | 'fail';
+  }>;
+  nodePalette: WorkflowNodeDefinition[];
+  connectorTypes: WorkflowConnectorType[];
+}
+
 export interface WorkflowConfiguration {
   status: string;
   generatedAt: string;
@@ -172,6 +244,10 @@ export interface WorkflowConfiguration {
     unassignedTasks: number;
     notificationRules: number;
     escalationTemplates: number;
+    designerTestRuns?: number;
+    automatedExecutionEvents?: number;
+    workflowMvpReady?: boolean;
+    workflowMvpBlocked?: number;
   };
   caseTypeRegistry: Array<{
     caseType: string;
@@ -188,6 +264,79 @@ export interface WorkflowConfiguration {
     controls: Array<{ code: string; status: string; evidence: string }>;
     pageContracts: Array<{ route: string; api: string; roleAction: string }>;
   };
+  workflowCanvasMvp?: WorkflowCanvasMvpGate;
+  nodePalette?: WorkflowNodeDefinition[];
+  connectorTypes?: WorkflowConnectorType[];
+  variableRegistry?: WorkflowVariableDefinition[];
+  auditEventCatalog?: WorkflowAuditEventDefinition[];
+  acceptanceCriteria?: Array<{ code: string; label: string; trace: string; priority: 'core' | 'advanced' }>;
+  designerLifecycle?: Record<string, unknown>;
+  productionPilotGuardrails?: Record<string, unknown>;
+  testIsolation?: {
+    status: string;
+    testRuns: number;
+    productionTablesTouched: boolean;
+    evidence: string;
+  };
+}
+
+export interface WorkflowTokenTrace {
+  caseId: string;
+  tokens: Array<{
+    id: string;
+    instanceKey: string;
+    state: string;
+    tokenType: string;
+    parentTokenId?: string | null;
+    rootTokenId?: string | null;
+    branchKey?: string | null;
+    branchIndex?: number | null;
+    joinKey?: string | null;
+    sourceTransitionId?: string | null;
+    parallelGroup?: string | null;
+    stage?: {
+      id: string;
+      code: string;
+      nameEn: string;
+      nodeType?: string | null;
+      isDecision: boolean;
+      isFinal: boolean;
+    } | null;
+    task?: {
+      id: string;
+      title: string;
+      status: string;
+      decision?: string | null;
+      completedAt?: string | null;
+    } | null;
+    dataJson?: Record<string, unknown> | null;
+    activatedAt: string;
+    completedAt?: string | null;
+    parentStageCode?: string | null;
+  }>;
+  lineage: Array<{
+    id: string;
+    parentTokenId?: string | null;
+    rootTokenId: string;
+    branchKey?: string | null;
+    joinKey?: string | null;
+    state: string;
+  }>;
+  executions?: Array<{
+    id: string;
+    taskId: string;
+    executionKind: string;
+    status: string;
+    attemptCount: number;
+    maxAttempts: number;
+    nextAttemptAt?: string | null;
+    outcome?: string | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    createdAt: string;
+  }>;
 }
 
 export interface WorkflowDashboard {
@@ -265,6 +414,10 @@ export interface WorkflowDesignerEnterprise {
     isDecision: boolean;
     isFinal: boolean;
   }>;
+  nodePalette?: WorkflowNodeDefinition[];
+  connectorTypes?: WorkflowConnectorType[];
+  endOutcomes?: string[];
+  designerLifecycle?: Record<string, unknown>;
 }
 
 export interface WorkflowTemplateVersionsResponse {
@@ -349,6 +502,71 @@ export interface WorkflowDesignerSimulation {
   warnings: string[];
 }
 
+export interface WorkflowDesignerTestRun {
+  id: string;
+  templateId: string;
+  runNumber: number;
+  environment: string;
+  status: 'ready' | 'warning' | 'blocked' | 'reset';
+  validation: WorkflowBpmnValidation | Record<string, unknown>;
+  input: Record<string, unknown>;
+  simulation: WorkflowDesignerSimulation | Record<string, unknown>;
+  executedPath: {
+    path?: WorkflowDesignerSimulation['path'];
+    blockers?: string[];
+    warnings?: string[];
+    summary?: WorkflowDesignerSimulation['summary'];
+  } | Record<string, unknown>;
+  isolation: {
+    mode: string;
+    productionCasesCreated: number;
+    productionTasksCreated: number;
+    productionRuntimeTokensCreated: number;
+  };
+  resetAt?: string | null;
+  resetBy?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowOperationsReport {
+  generatedAt: string;
+  period: { days: number; start: string; end: string };
+  filters: Record<string, string | null>;
+  sample: { limit: number; returnedCases: number; truncated: boolean };
+  summary: {
+    initiatedWorkflows: number;
+    completedWorkflows: number;
+    activeWorkflows: number;
+    failedWorkflows: number;
+    openTasks: number;
+    overdueTasks: number;
+    averageWorkflowCompletionHours: number;
+    averageTaskCompletionHours: number;
+    slaCompliancePercentage: number;
+  };
+  volumeByStatus: Array<{ key: string; count: number }>;
+  volumeByType: Array<{ key: string; count: number }>;
+  volumeByWorkflow: Array<{ key: string; count: number }>;
+  volumeByOrgUnit: Array<{ key: string; count: number }>;
+  stagePerformance: Array<{
+    stage: string;
+    workflow: string;
+    open: number;
+    overdue: number;
+    completed: number;
+    averageCompletionHours: number;
+    slaCompliancePercentage: number;
+  }>;
+  acceptanceEvidence: {
+    criterion: string;
+    trace: string;
+    filtersSupported: string[];
+    scoped: boolean;
+  };
+}
+
 export interface WorkflowMigrationPreview {
   risk: 'safe' | 'caution' | 'blocked';
   validation: WorkflowBpmnValidation;
@@ -390,6 +608,9 @@ export const CASE_STATUS_KIND: Record<string, StatusKind> = {
   decision_made: 'info',
   approved: 'success',
   implemented: 'success',
+  suspended: 'warning',
+  cancelled: 'muted',
+  failed: 'danger',
   rejected: 'danger',
   closed: 'muted',
 };

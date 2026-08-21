@@ -54,12 +54,23 @@ interface OpenDataCandidateMini {
   nextReviewAt?: string | null;
   publishedAt?: string | null;
 }
+interface AssetTypePanel {
+  code: string;
+  title: string;
+  emptyState: string;
+  expectedEvidence: string[];
+}
 interface Asset {
   id: string;
   code: string;
   nameEn: string;
   nameAr: string;
   description?: string | null;
+  assetType: string;
+  assetSubtype?: string | null;
+  v6LifecycleState: string;
+  lifecyclePhase: string;
+  assetTypePanel?: AssetTypePanel;
   lifecycleStatus: string;
   ownerStatus: string;
   ownerName?: string | null;
@@ -119,6 +130,10 @@ interface Draft {
   nameEn: string;
   nameAr: string;
   description: string;
+  assetType: string;
+  assetSubtype: string;
+  v6LifecycleState: string;
+  lifecyclePhase: string;
   lifecycleStatus: string;
   ownerName: string;
   domainId: string;
@@ -135,12 +150,76 @@ interface Filters {
   subjectId: string;
   classificationId: string;
   systemId: string;
+  assetType: string;
+  assetSubtype: string;
+  v6LifecycleState: string;
   lifecycleStatus: string;
   ownerStatus: string;
 }
 
+interface ImportIssue {
+  row: number;
+  message: string;
+}
+
+interface ImportPreviewRow {
+  row: number;
+  code: string;
+  action: 'create' | 'update';
+  assetType: string;
+  assetSubtype?: string | null;
+  v6LifecycleState: string;
+  lifecyclePhase: string;
+  subjectCount: number;
+}
+
+interface ImportPreviewResult {
+  processed: number;
+  validRows: number;
+  errors: ImportIssue[];
+  rows: ImportPreviewRow[];
+}
+
+interface ImportCommitResult {
+  processed: number;
+  created: number;
+  updated: number;
+  errors: ImportIssue[];
+}
+
 const SAMPLE_CSV = `code,nameEn,nameAr,description,lifecycleStatus,ownerName,domainCode,orgUnitCode,systemCode,capabilityCode,classificationCode,subjectCodes
 AST-SAMPLE-1,Sample Claims Dataset,مجموعة مطالبات,Sample import row,active,Sample Owner,finance,,,revenue_cycle,internal,patient|supplier`;
+
+const SAMPLE_CSV_V6 = `code,nameEn,nameAr,description,lifecycleStatus,ownerName,domainCode,orgUnitCode,systemCode,capabilityCode,classificationCode,subjectCodes,assetType,assetSubtype,v6LifecycleState,lifecyclePhase,typeMetadataJson
+AST-SAMPLE-1,Sample Claims Dataset,Sample Claims Dataset,Sample import row,active,Sample Owner,finance,,,revenue_cycle,internal,patient|supplier,dataset,transactional_dataset,registered,discover,"{""refreshCadence"":""daily"",""qualityTier"":""silver""}"`;
+
+const ASSET_TYPES = [
+  'dataset',
+  'file',
+  'document_record',
+  'api_data_feed',
+  'bi_report_dashboard',
+  'ai_data_product',
+];
+const ASSET_SUBTYPES: Record<string, string[]> = {
+  dataset: ['master_dataset', 'transactional_dataset', 'reference_dataset', 'analytical_dataset'],
+  file: ['flat_file', 'extract', 'spreadsheet', 'media_file'],
+  document_record: ['policy_record', 'case_record', 'contract_record', 'retention_record'],
+  api_data_feed: ['rest_api', 'event_stream', 'batch_feed', 'integration_feed'],
+  bi_report_dashboard: ['dashboard', 'certified_report', 'self_service_report', 'regulatory_report'],
+  ai_data_product: ['model', 'feature_set', 'training_dataset', 'prompt_library'],
+};
+const V6_LIFECYCLE_STATES = [
+  'registered',
+  'designed',
+  'built',
+  'validated',
+  'published',
+  'operational',
+  'deprecated',
+  'retired',
+];
+const LIFECYCLE_PHASES = ['discover', 'design', 'build', 'operate', 'retire'];
 
 const ASSET_CODE_PATTERN = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$/;
 const ASSET_CODE_MAX = 48;
@@ -183,6 +262,9 @@ export class AssetsPage implements OnInit {
     subjectId: '',
     classificationId: '',
     systemId: '',
+    assetType: '',
+    assetSubtype: '',
+    v6LifecycleState: '',
     lifecycleStatus: '',
     ownerStatus: '',
   });
@@ -196,13 +278,10 @@ export class AssetsPage implements OnInit {
   // CSV import modal
   protected readonly importOpen = signal(false);
   protected readonly importCsv = signal('');
+  protected readonly previewingImport = signal(false);
   protected readonly importing = signal(false);
-  protected readonly importResult = signal<{
-    processed: number;
-    created: number;
-    updated: number;
-    errors: { row: number; message: string }[];
-  } | null>(null);
+  protected readonly importPreviewResult = signal<ImportPreviewResult | null>(null);
+  protected readonly importResult = signal<ImportCommitResult | null>(null);
 
   // Relationship form (in Asset 360)
   protected readonly relType = signal('related_to');
@@ -223,6 +302,10 @@ export class AssetsPage implements OnInit {
   protected readonly approvalKindMap = APPROVAL_KIND;
 
   protected readonly lifecycles = ['draft', 'active', 'deprecated', 'retired'];
+  protected readonly assetTypes = ASSET_TYPES;
+  protected readonly assetSubtypes = ASSET_SUBTYPES;
+  protected readonly v6LifecycleStates = V6_LIFECYCLE_STATES;
+  protected readonly lifecyclePhases = LIFECYCLE_PHASES;
   protected readonly relTypes = ['derived_from', 'feeds', 'replicates', 'related_to'];
   protected readonly assetCodeMax = ASSET_CODE_MAX;
   protected readonly assetCodePatternText = ASSET_CODE_PATTERN.source;
@@ -314,7 +397,13 @@ export class AssetsPage implements OnInit {
 
   // ---------- filters ----------
   protected setFilter<K extends keyof Filters>(key: K, value: Filters[K]): void {
-    this.filters.update((f) => ({ ...f, [key]: value }));
+    this.filters.update((f) => {
+      const patch = { ...f, [key]: value };
+      if (key === 'assetType' && !this.subtypesFor(String(value || 'dataset')).includes(patch.assetSubtype)) {
+        patch.assetSubtype = '';
+      }
+      return patch;
+    });
     this.load();
   }
 
@@ -374,6 +463,30 @@ export class AssetsPage implements OnInit {
     return this.t('assets.rel.' + type);
   }
 
+  protected assetTypeLabel(type?: string | null): string {
+    return type ? this.t('assets.type.' + type) : this.t('assets.type.dataset');
+  }
+
+  protected assetSubtypeLabel(subtype?: string | null): string {
+    return subtype ? this.t('assets.subtype.' + subtype) : this.t('assets.none');
+  }
+
+  protected v6LifecycleLabel(state?: string | null): string {
+    return state ? this.t('assets.v6state.' + state) : this.t('assets.v6state.registered');
+  }
+
+  protected lifecyclePhaseLabel(phase?: string | null): string {
+    return phase ? this.t('assets.phase.' + phase) : this.t('assets.phase.discover');
+  }
+
+  protected subtypesFor(type?: string | null): string[] {
+    return ASSET_SUBTYPES[type || 'dataset'] ?? ASSET_SUBTYPES['dataset'];
+  }
+
+  protected evidenceLabel(code: string): string {
+    return this.t('assets.evidence.' + code);
+  }
+
   // ---------- create / edit ----------
   private emptyDraft(): Draft {
     return {
@@ -381,6 +494,10 @@ export class AssetsPage implements OnInit {
       nameEn: '',
       nameAr: '',
       description: '',
+      assetType: 'dataset',
+      assetSubtype: '',
+      v6LifecycleState: 'registered',
+      lifecyclePhase: 'discover',
       lifecycleStatus: 'draft',
       ownerName: '',
       domainId: '',
@@ -394,7 +511,13 @@ export class AssetsPage implements OnInit {
 
   protected set<K extends keyof Draft>(key: K, value: Draft[K]): void {
     const next = key === 'code' && typeof value === 'string' ? value.trim().toUpperCase() : value;
-    this.draft.update((d) => ({ ...d, [key]: next as Draft[K] }));
+    this.draft.update((d) => {
+      const patch = { ...d, [key]: next as Draft[K] };
+      if (key === 'assetType' && typeof next === 'string' && !this.subtypesFor(next).includes(patch.assetSubtype)) {
+        patch.assetSubtype = '';
+      }
+      return patch;
+    });
   }
 
   protected toggleSubject(id: string): void {
@@ -423,6 +546,10 @@ export class AssetsPage implements OnInit {
       nameEn: a.nameEn,
       nameAr: a.nameAr,
       description: a.description ?? '',
+      assetType: a.assetType || 'dataset',
+      assetSubtype: a.assetSubtype ?? '',
+      v6LifecycleState: a.v6LifecycleState || 'registered',
+      lifecyclePhase: a.lifecyclePhase || 'discover',
       lifecycleStatus: a.lifecycleStatus,
       ownerName: a.ownerName ?? '',
       domainId: a.domainId ?? '',
@@ -451,6 +578,10 @@ export class AssetsPage implements OnInit {
       nameEn: d.nameEn.trim(),
       nameAr: d.nameAr.trim(),
       description: d.description.trim() || null,
+      assetType: d.assetType,
+      assetSubtype: d.assetSubtype || null,
+      v6LifecycleState: d.v6LifecycleState,
+      lifecyclePhase: d.lifecyclePhase,
       lifecycleStatus: d.lifecycleStatus,
       ownerName: d.ownerName.trim() || null,
       domainId: d.domainId || null,
@@ -514,6 +645,12 @@ export class AssetsPage implements OnInit {
     }
     if (description.length > ASSET_DESCRIPTION_MAX) errors.push(this.t('assets.validation.descriptionLength'));
     if (ownerName.length > ASSET_OWNER_MAX) errors.push(this.t('assets.validation.ownerLength'));
+    if (!ASSET_TYPES.includes(d.assetType)) errors.push(this.t('assets.validation.assetType'));
+    if (d.assetSubtype && !this.subtypesFor(d.assetType).includes(d.assetSubtype)) {
+      errors.push(this.t('assets.validation.assetSubtype'));
+    }
+    if (!V6_LIFECYCLE_STATES.includes(d.v6LifecycleState)) errors.push(this.t('assets.validation.v6State'));
+    if (!LIFECYCLE_PHASES.includes(d.lifecyclePhase)) errors.push(this.t('assets.validation.lifecyclePhase'));
     if (d.subjectIds.length > 0 && !classification) {
       errors.push(this.t('assets.validation.subjectNeedsClassification'));
     }
@@ -722,24 +859,40 @@ export class AssetsPage implements OnInit {
   // ---------- CSV import ----------
   protected openImport(): void {
     this.importCsv.set('');
+    this.importPreviewResult.set(null);
     this.importResult.set(null);
     this.importOpen.set(true);
   }
 
   protected insertSample(): void {
-    this.importCsv.set(SAMPLE_CSV);
+    this.importCsv.set(SAMPLE_CSV_V6);
+    this.importPreviewResult.set(null);
+    this.importResult.set(null);
+  }
+
+  protected runImportPreview(): void {
+    if (!this.importCsv().trim() || this.previewingImport() || this.importing()) return;
+    this.previewingImport.set(true);
+    this.http
+      .post<ImportPreviewResult>('/api/assets/import-preview', { csv: this.importCsv() })
+      .subscribe({
+        next: (res) => {
+          this.importPreviewResult.set(res);
+          this.importResult.set(null);
+          this.previewingImport.set(false);
+        },
+        error: (err) => {
+          this.toast.errorFrom(err, this.t('assets.saveError'));
+          this.previewingImport.set(false);
+        },
+      });
   }
 
   protected runImport(): void {
     if (!this.importCsv().trim() || this.importing()) return;
     this.importing.set(true);
     this.http
-      .post<{
-        processed: number;
-        created: number;
-        updated: number;
-        errors: { row: number; message: string }[];
-      }>('/api/assets/import', { csv: this.importCsv() })
+      .post<ImportCommitResult>('/api/assets/import', { csv: this.importCsv() })
       .subscribe({
         next: (res) => {
           this.importResult.set(res);
@@ -750,6 +903,23 @@ export class AssetsPage implements OnInit {
           this.importing.set(false);
         },
       });
+  }
+
+  protected canRunImport(): boolean {
+    const preview = this.importPreviewResult();
+    return Boolean(this.importCsv().trim()) &&
+      !this.importing() &&
+      !this.previewingImport() &&
+      (!preview || preview.validRows > 0);
+  }
+
+  protected importPreviewSummary(): string {
+    const r = this.importPreviewResult();
+    if (!r) return '';
+    return this.t('assets.import.previewResult')
+      .replace('{processed}', String(r.processed))
+      .replace('{valid}', String(r.validRows))
+      .replace('{errors}', String(r.errors.length));
   }
 
   protected importSummary(): string {

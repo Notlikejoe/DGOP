@@ -44,11 +44,17 @@ const connector = {
 };
 const TEST_WEBHOOK_TOKEN = 'test-webhook-token-32-characters-ok';
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 function serviceWith(
   prisma: Record<string, any>,
   auditLog: unknown[] = [],
   scope: any = { orgUnits: 'all', domains: 'all', maxClassRank: null },
 ) {
+  prisma.businessSequence ??= sequenceDelegate();
   return new IntegrationsService(
     prisma as never,
     { log: async (entry: unknown) => auditLog.push(entry) } as never,
@@ -77,6 +83,7 @@ function trustPublicConnectorDns(service: IntegrationsService, address = '93.184
 function prismaBase(tx: Record<string, any>) {
   const reconciliationReports: any[] = [];
   const txClient = {
+    businessSequence: tx.businessSequence ?? sequenceDelegate(),
     ...tx,
     integrationReconciliationReport: tx.integrationReconciliationReport ?? {
       count: async () => reconciliationReports.length,
@@ -89,6 +96,7 @@ function prismaBase(tx: Record<string, any>) {
     },
   };
   return {
+    businessSequence: sequenceDelegate(),
     integrationConnector: {
       findFirst: async () => connector,
       count: async () => 1,
@@ -1156,6 +1164,7 @@ test('receiveWebhook persists, processes, reconciles, and audits integration eve
     },
     $transaction: async (fn: (client: unknown) => unknown) =>
       fn({
+        businessSequence: sequenceDelegate(),
         integrationEvent: {
           findUnique: async () => ({ ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } }),
           update: async (args: any) => {
@@ -1228,6 +1237,7 @@ test('retryEvent reprocesses retry-scheduled events through the same engine', as
     },
     $transaction: async (fn: (client: unknown) => unknown) =>
       fn({
+        businessSequence: sequenceDelegate(),
         integrationEvent: {
           findUnique: async () => ({ ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } }),
           update: async (args: any) => {

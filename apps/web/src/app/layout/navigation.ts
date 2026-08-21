@@ -298,6 +298,16 @@ export const NAV_SECTIONS: NavSection[] = [
     titleKey: 'nav.section.accessManagement',
     items: [
       {
+        labelKey: 'nav.accessGrants',
+        descriptionKey: 'nav.desc.accessGrants',
+        icon: 'AG',
+        iconName: 'shield',
+        link: '/governance/access',
+        permission: 'access_grants.view',
+        groupKey: 'hub.group.access',
+        featured: true,
+      },
+      {
         labelKey: 'nav.roles',
         descriptionKey: 'nav.desc.roles',
         icon: 'RO',

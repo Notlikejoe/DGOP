@@ -16,10 +16,13 @@ import {
   IntegrationConnectorStatus,
   IntegrationEventStatus,
   NdiEvidenceStatus,
+  PilotReleaseRehearsalStatus,
+  PilotSignOffDecision,
   Prisma,
   TaskStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { AuthUser } from '../auth/auth.types';
@@ -28,6 +31,8 @@ import {
   CreateComplianceCalendarTemplateDto,
   CreateGovernanceNotificationDto,
   CreateKsaHolidayDto,
+  CreatePilotReleaseRehearsalDto,
+  CreatePilotSignOffDto,
   DispatchNotificationsDto,
   UpdateComplianceCalendarTemplateDto,
   UpdateEscalationDto,
@@ -66,6 +71,7 @@ import {
   operatingPressureStatus,
   platformArchitectureStatus,
   platformServiceStatus,
+  ProductionReadinessStatus,
   summarizeNotificationLayer,
 } from './governance-operations.logic';
 
@@ -93,6 +99,16 @@ const notificationInclude = {
 type NotificationWithLinks = Prisma.GovernanceNotificationGetPayload<{ include: typeof notificationInclude }>;
 
 const GOVERNANCE_SCHEDULER_LOCK_KEY = 174205361;
+const PILOT_RELEASE_CODE = 'v6-production-pilot';
+const PILOT_SIGN_OFF_GATES = [
+  { code: 'workflow_canvas_uat', label: 'Workflow Canvas UAT' },
+  { code: 'access_management_uat', label: 'Access Management UAT' },
+  { code: 'security_controls', label: 'Security and control evidence' },
+  { code: 'performance_exceptions', label: 'Performance evidence and exceptions' },
+  { code: 'production_go_no_go', label: 'Production pilot go/no-go' },
+] as const;
+const PILOT_SIGN_OFF_GATE_CODES = new Set<string>(PILOT_SIGN_OFF_GATES.map((gate) => gate.code));
+const PILOT_SIGN_OFF_ROLES = new Set(['system_admin', 'dmo_admin', 'security_admin', 'executive_sponsor']);
 
 function workflowTaskSignalKey(taskId: string, kind: 'notification' | 'escalation'): string {
   return `workflow_task:${taskId}:${kind}`;
@@ -195,6 +211,12 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       visible.push({ AND: [{ assetId: null }, { tasks: { some: { OR: taskVisibility } } }] });
     }
     return visible.length ? { OR: visible } : { id: '__no_visible_governance_operations__' };
+  }
+
+  private workflowTemplateScopeWhere(scope: EffectiveScope): Prisma.WorkflowTemplateWhereInput {
+    const where: Prisma.WorkflowTemplateWhereInput = { deletedAt: null, isActive: true };
+    if (scope.domains !== 'all') where.OR = [{ domainId: null }, { domainId: { in: scope.domains } }];
+    return where;
   }
 
   private workflowLinkScopeWhere(
@@ -518,6 +540,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     const scope = await this.scope.resolve(user.roles);
     const assetIds = await this.visibleAssetIds(scope);
     const caseWhere = this.workflowCaseScopeWhere(assetIds, user);
+    const templateWhere = this.workflowTemplateScopeWhere(scope);
     const taskWhere: Prisma.WorkflowTaskWhereInput = {
       status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
       case: caseWhere,
@@ -548,6 +571,14 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       openEscalations,
       auditChain,
       legacyBaselineAccepted,
+      workflowTemplateCount,
+      workflowSignedSnapshotCount,
+      workflowDesignerTestRunCount,
+      workflowAutomatedExecutionCount,
+      accessGrantCount,
+      accessRequestedCount,
+      accessPendingEnforcementCount,
+      accessFailedEnforcementCount,
     ] = await Promise.all([
       this.prisma.dataAsset.count({ where: this.assetScopeWhere(scope) }),
       this.prisma.workflowCase.count({ where: { AND: [caseWhere, { status: { not: CaseStatus.closed } }] } }),
@@ -592,17 +623,47 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       }),
       this.audit.verifyChain(1000),
       this.audit.legacyBaselineAccepted(),
+      this.prisma.workflowTemplate.count({ where: templateWhere }),
+      this.prisma.workflowTemplateVersion.count({
+        where: { template: { is: templateWhere }, modelSignature: { not: null } },
+      }),
+      this.prisma.workflowDesignerTestRun.count({
+        where: { template: { is: templateWhere }, status: { not: 'reset' } },
+      }),
+      this.prisma.workflowEvent.count({
+        where: {
+          action: 'route.automation.completed',
+          case: { template: { is: templateWhere } },
+        },
+      }),
+      this.prisma.accessGrant.count({ where: { asset: this.assetScopeWhere(scope) } }),
+      this.prisma.accessGrant.count({ where: { asset: this.assetScopeWhere(scope), status: 'requested' } }),
+      this.prisma.accessGrant.count({ where: { asset: this.assetScopeWhere(scope), enforcementStatus: 'pending' } }),
+      this.prisma.accessGrant.count({ where: { asset: this.assetScopeWhere(scope), enforcementStatus: 'failed' } }),
     ]);
 
     const taskSignals = taskRows.map((task) => ksaSlaSignal(task, now, holidayDates, recurringHolidayDates));
     const overdueTasks = taskSignals.filter((signal) => signal === 'overdue').length;
     const atRiskTasks = taskSignals.filter((signal) => signal === 'at_risk').length;
     const integrationProblemCount = retryEvents + deadLetterEvents + failedBatches + troubledConnectors;
+    const dqReadinessBaseline = Math.max(dqIssueCount, assetCount, 10);
     const auditStatus = !auditChain.valid
       ? 'blocked'
       : auditRows === 0 || (auditChain.legacyRows > 0 && !legacyBaselineAccepted)
         ? 'watch'
         : 'ready';
+    const workflowCanvasStatus = workflowTemplateCount === 0 || workflowSignedSnapshotCount === 0
+      ? 'blocked'
+      : workflowDesignerTestRunCount === 0 || workflowAutomatedExecutionCount === 0
+        ? 'watch'
+        : 'ready';
+    const accessGovernanceStatus = accessGrantCount === 0
+      ? 'watch'
+      : accessFailedEnforcementCount > 0
+        ? 'blocked'
+        : accessRequestedCount > 0 || accessPendingEnforcementCount > 0
+          ? 'watch'
+          : 'ready';
     const checks = [
       {
         code: 'workflow_backlog',
@@ -610,6 +671,30 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         status: backlogStatus(openTaskCount, overdueTasks, atRiskTasks),
         metric: { openTasks: openTaskCount, overdueTasks, atRiskTasks, sampledTasks: taskRows.length },
         guidance: 'Keep active workflow tasks inside SLA before client demonstrations or production handover.',
+      },
+      {
+        code: 'workflow_canvas_mvp',
+        label: 'Workflow Canvas MVP',
+        status: workflowCanvasStatus,
+        metric: {
+          activeTemplates: workflowTemplateCount,
+          signedSnapshots: workflowSignedSnapshotCount,
+          designerTestRuns: workflowDesignerTestRunCount,
+          automatedExecutions: workflowAutomatedExecutionCount,
+        },
+        guidance: 'Keep at least one signed route snapshot, isolated designer test run, and automation execution evidence before production pilot sign-off.',
+      },
+      {
+        code: 'access_governance',
+        label: 'Access governance',
+        status: accessGovernanceStatus,
+        metric: {
+          grants: accessGrantCount,
+          awaitingOwnerDecision: accessRequestedCount,
+          pendingEnforcement: accessPendingEnforcementCount,
+          failedEnforcement: accessFailedEnforcementCount,
+        },
+        guidance: 'Review owner decisions, enforcement status, and manual-provisioning evidence before pilot sign-off.',
       },
       {
         code: 'integration_reliability',
@@ -639,12 +724,12 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       {
         code: 'data_quality_pressure',
         label: 'Data quality pressure',
-        status: issueRatioStatus(dqOpenIssueCount, Math.max(dqIssueCount, assetCount), {
+        status: issueRatioStatus(dqOpenIssueCount, dqReadinessBaseline, {
           watchPct: 0.1,
           blockedPct: 0.35,
           absoluteBlock: 25,
         }),
-        metric: { dqIssueCount, dqOpenIssueCount, governedAssets: assetCount },
+        metric: { dqIssueCount, dqOpenIssueCount, governedAssets: assetCount, readinessBaseline: dqReadinessBaseline },
         guidance: 'Open quality issues should be triaged and linked to owners before production reporting.',
       },
       {
@@ -679,6 +764,14 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         integrationProblems: integrationProblemCount,
         openQualityIssues: dqOpenIssueCount,
         activeEscalations: openEscalations,
+        workflowTemplates: workflowTemplateCount,
+        workflowSignedSnapshots: workflowSignedSnapshotCount,
+        workflowDesignerTestRuns: workflowDesignerTestRunCount,
+        workflowAutomatedExecutions: workflowAutomatedExecutionCount,
+        accessGrants: accessGrantCount,
+        accessRequested: accessRequestedCount,
+        accessPendingEnforcement: accessPendingEnforcementCount,
+        accessFailedEnforcement: accessFailedEnforcementCount,
       },
       checks,
     };
@@ -821,9 +914,10 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
 
   async productionAcceptancePackage(user: AuthUser) {
     const readiness = await this.productionReadiness(user);
+    const pilotEvidence = await this.pilotEvidenceRecords();
     const readinessByCode = new Map(readiness.checks.map((check) => [check.code, check.status]));
     const items = PRODUCTION_ACCEPTANCE_DEFINITIONS.map((definition) => {
-      const mappedStatus =
+      const mappedStatus: ProductionReadinessStatus =
         definition.family === 'performance'
           ? 'watch'
           : definition.code === 'module_acceptance'
@@ -840,9 +934,26 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       };
     });
 
+    const pilotGates = PILOT_SIGN_OFF_GATES.map((gate) => {
+      const latest = pilotEvidence.latestSignOffByGate.get(gate.code) ?? null;
+      const status: ProductionReadinessStatus = latest?.decision === PilotSignOffDecision.declined
+        ? 'blocked'
+        : latest?.decision === PilotSignOffDecision.approved
+          ? 'ready'
+          : 'watch';
+      return { ...gate, status, latestSignOff: latest };
+    });
+    const rehearsalStatus: ProductionReadinessStatus = pilotEvidence.latestRehearsal?.status === PilotReleaseRehearsalStatus.failed
+      ? 'blocked'
+      : pilotEvidence.latestRehearsal?.status === PilotReleaseRehearsalStatus.passed &&
+          pilotEvidence.latestRehearsal.rollbackTested &&
+          !!pilotEvidence.latestRehearsal.rollbackCompletedAt
+        ? 'ready'
+        : 'watch';
+
     return {
       generatedAt: new Date().toISOString(),
-      status: combineReadinessStatus([readiness.status, ...items.map((item) => item.status)]),
+      status: combineReadinessStatus([readiness.status, ...items.map((item) => item.status), ...pilotGates.map((gate) => gate.status), rehearsalStatus]),
       readiness,
       summary: {
         items: items.length,
@@ -850,8 +961,12 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         watch: items.filter((item) => item.status === 'watch').length,
         blocked: items.filter((item) => item.status === 'blocked').length,
         acceptedDeferrals: items.filter((item) => item.acceptedDeferral).length,
+        pilotGatesSigned: pilotGates.filter((gate) => gate.latestSignOff).length,
+        pilotGatesBlocked: pilotGates.filter((gate) => gate.status === 'blocked').length,
       },
       items,
+      pilotGates,
+      latestRehearsal: pilotEvidence.latestRehearsal,
       environments: ['DEV', 'TEST', 'UAT', 'PRE-PROD', 'PROD', 'DR'].map((name) => ({
         name,
         status: name === 'DEV' || name === 'UAT' ? 'ready' : 'watch',
@@ -859,6 +974,137 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         exit: name === 'DR' ? 'Recovery runbook exercised and evidence captured.' : 'Smoke checks, access checks, workflow checks, and known issues updated.',
       })),
     };
+  }
+
+  async pilotReadiness(user: AuthUser) {
+    const [acceptance, evidence] = await Promise.all([
+      this.productionAcceptancePackage(user),
+      this.pilotEvidenceRecords(),
+    ]);
+    return {
+      generatedAt: new Date().toISOString(),
+      status: acceptance.status,
+      acceptance,
+      signOffs: evidence.signOffs,
+      rehearsals: evidence.rehearsals,
+      controls: {
+        releaseCode: PILOT_RELEASE_CODE,
+        signOffGates: PILOT_SIGN_OFF_GATES,
+        appendOnly: true,
+        approvalRule: 'Blocked evidence must be recorded as an exception or declined; it cannot be approved silently.',
+      },
+    };
+  }
+
+  async recordPilotSignOff(dto: CreatePilotSignOffDto, user: AuthUser) {
+    this.assertPilotOperator(user);
+    if (!PILOT_SIGN_OFF_GATE_CODES.has(dto.gateCode)) {
+      throw new BadRequestException('Pilot sign-off gate is not recognized');
+    }
+    const exceptionSummary = dto.exceptionSummary?.trim() || null;
+    if (dto.decision === PilotSignOffDecision.approved_with_exception && !exceptionSummary) {
+      throw new BadRequestException('A signed exception requires a mitigation summary');
+    }
+    if (dto.decision === PilotSignOffDecision.approved && exceptionSummary) {
+      throw new BadRequestException('Use approved_with_exception when recording an exception');
+    }
+    const readiness = await this.productionReadiness(user);
+    const readinessCheckByGate: Record<string, string> = {
+      workflow_canvas_uat: 'workflow_canvas_mvp',
+      access_management_uat: 'access_governance',
+      security_controls: 'audit_chain',
+      performance_exceptions: 'integration_reliability',
+    };
+    const baselineStatus = dto.gateCode === 'production_go_no_go'
+      ? readiness.status
+      : readiness.checks.find((check) => check.code === readinessCheckByGate[dto.gateCode])?.status ?? 'watch';
+    if (dto.decision === PilotSignOffDecision.approved && baselineStatus === 'blocked') {
+      throw new BadRequestException('A blocked readiness control cannot receive an unconditional approval');
+    }
+    const record = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.pilotSignOff.create({
+        data: {
+          releaseCode: PILOT_RELEASE_CODE,
+          gateCode: dto.gateCode,
+          decision: dto.decision,
+          exceptionSummary,
+          evidenceLinksJson: dto.evidenceLinks?.map((value) => value.trim()).filter(Boolean) ?? [],
+          recordedBy: user.email,
+        },
+      });
+      await this.audit.log({
+        actor: user.email,
+        action: 'production_pilot.sign_off.recorded',
+        entityType: 'pilot_sign_off',
+        entityId: created.id,
+        metadata: { releaseCode: created.releaseCode, gateCode: created.gateCode, decision: created.decision, evidenceCount: dto.evidenceLinks?.length ?? 0 },
+      }, tx);
+      return created;
+    });
+    return record;
+  }
+
+  async recordPilotReleaseRehearsal(dto: CreatePilotReleaseRehearsalDto, user: AuthUser) {
+    this.assertPilotOperator(user);
+    const deployedAt = this.parseDate(dto.deployedAt);
+    const verifiedAt = dto.verifiedAt ? this.parseDate(dto.verifiedAt) : null;
+    const rollbackCompletedAt = dto.rollbackCompletedAt ? this.parseDate(dto.rollbackCompletedAt) : null;
+    if (verifiedAt && verifiedAt < deployedAt) throw new BadRequestException('Verification time cannot precede deployment time');
+    if (rollbackCompletedAt && rollbackCompletedAt < deployedAt) throw new BadRequestException('Rollback completion cannot precede deployment time');
+    if (dto.status === PilotReleaseRehearsalStatus.passed && (!dto.rollbackTested || !rollbackCompletedAt)) {
+      throw new BadRequestException('A passed rehearsal requires a completed rollback drill');
+    }
+    const record = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.pilotReleaseRehearsal.create({
+        data: {
+          releaseCode: PILOT_RELEASE_CODE,
+          environment: dto.environment.trim().toUpperCase(),
+          status: dto.status,
+          deployedAt,
+          verifiedAt,
+          rollbackTested: dto.rollbackTested,
+          rollbackCompletedAt,
+          summary: dto.summary.trim(),
+          evidenceLinksJson: dto.evidenceLinks?.map((value) => value.trim()).filter(Boolean) ?? [],
+          recordedBy: user.email,
+        },
+      });
+      await this.audit.log({
+        actor: user.email,
+        action: 'production_pilot.release_rehearsal.recorded',
+        entityType: 'pilot_release_rehearsal',
+        entityId: created.id,
+        metadata: { releaseCode: created.releaseCode, environment: created.environment, status: created.status, rollbackTested: created.rollbackTested },
+      }, tx);
+      return created;
+    });
+    return record;
+  }
+
+  private async pilotEvidenceRecords() {
+    const [signOffs, rehearsals] = await Promise.all([
+      this.prisma.pilotSignOff.findMany({
+        where: { releaseCode: PILOT_RELEASE_CODE },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+      }),
+      this.prisma.pilotReleaseRehearsal.findMany({
+        where: { releaseCode: PILOT_RELEASE_CODE },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        take: 25,
+      }),
+    ]);
+    const latestSignOffByGate = new Map<string, (typeof signOffs)[number]>();
+    for (const signOff of signOffs) {
+      if (!latestSignOffByGate.has(signOff.gateCode)) latestSignOffByGate.set(signOff.gateCode, signOff);
+    }
+    return { signOffs, rehearsals, latestSignOffByGate, latestRehearsal: rehearsals[0] ?? null };
+  }
+
+  private assertPilotOperator(user: AuthUser) {
+    if (!user.roles.some((role) => PILOT_SIGN_OFF_ROLES.has(role))) {
+      throw new ForbiddenException('Only designated pilot approvers can record release controls');
+    }
   }
 
   async errorExperienceReadiness(user: AuthUser) {
@@ -2143,17 +2389,25 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
 
   private async nextCode(model: 'governanceEscalation' | 'complianceCalendarTemplate', prefix: string): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const where = { code: { startsWith: `${prefix}-${day}` } };
-    const count =
-      model === 'governanceEscalation'
-        ? await this.prisma.governanceEscalation.count({ where })
-        : await this.prisma.complianceCalendarTemplate.count({ where });
-    return `${prefix}-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      this.prisma,
+      `governance_operations:${model}:${day}`,
+      (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(
+        model === 'governanceEscalation'
+          ? await this.prisma.governanceEscalation.findUnique({ where: { code } })
+          : await this.prisma.complianceCalendarTemplate.findUnique({ where: { code } })
+      ),
+    );
   }
 
   private async nextWorkflowCode(tx: Prisma.TransactionClient, prefix: string): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const count = await tx.workflowCase.count({ where: { code: { startsWith: `${prefix}-${day}` } } });
-    return `${prefix}-${day}-${String(count + 1).padStart(3, '0')}`;
+    return nextAvailableBusinessCode(
+      tx,
+      `workflow_case:${prefix.toLowerCase()}:${day}`,
+      (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
+      async (code) => !(await tx.workflowCase.findUnique({ where: { code }, select: { id: true } })),
+    );
   }
 }

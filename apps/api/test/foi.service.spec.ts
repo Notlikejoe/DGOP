@@ -10,6 +10,11 @@ function test(name: string, fn: TestFn) {
   tests.push({ name, fn });
 }
 
+function sequenceDelegate() {
+  let value = 0n;
+  return { upsert: async () => ({ value: ++value }) };
+}
+
 test('addKsaBusinessDays skips Friday and Saturday placeholder weekend', () => {
   const thursday = new Date('2026-07-16T08:00:00Z');
   const due = addKsaBusinessDays(thursday, 1);
@@ -40,6 +45,7 @@ function makeService() {
     audit: [],
   };
   const tx: Record<string, any> = {
+    businessSequence: sequenceDelegate(),
     foiRequest: {
       count: async () => 0,
       findUnique: async () => null,

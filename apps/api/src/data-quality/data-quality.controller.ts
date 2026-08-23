@@ -22,6 +22,7 @@ import {
   DataQualityRuleTransitionDto,
   ImportDataQualityProfileDto,
   ImportDataQualityIssuesDto,
+  RunDataQualityProfileFileDto,
   RunDataQualityProfileDto,
   UpdateDataQualityIssueDto,
   UpdateDataQualityRuleDto,
@@ -29,18 +30,13 @@ import {
 } from './data-quality.dto';
 import {
   DATA_QUALITY_IMPORT_API_MESSAGES,
+  DATA_QUALITY_IMPORT_MAX_FIELDS,
+  DATA_QUALITY_IMPORT_MAX_FIELD_SIZE_BYTES,
   DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES,
   dataQualityPageConfig,
   isAcceptedDataQualityImportFile,
   isSafeDataQualityImportContent,
 } from './data-quality.config';
-
-function parseOptionalBoolean(value: unknown): boolean | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  if (value === true || value === 'true' || value === '1' || value === 'yes') return true;
-  if (value === false || value === 'false' || value === '0' || value === 'no') return false;
-  return undefined;
-}
 
 @Controller('data-quality')
 export class DataQualityController {
@@ -139,10 +135,16 @@ export class DataQualityController {
 
   @Post('profiles/run-file')
   @RequirePermissions('data_quality_profiles.create')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES } }))
+  @UseInterceptors(FileInterceptor('file', { limits: {
+    fileSize: DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES,
+    fieldSize: DATA_QUALITY_IMPORT_MAX_FIELD_SIZE_BYTES,
+    fields: DATA_QUALITY_IMPORT_MAX_FIELDS,
+    files: 1,
+    parts: DATA_QUALITY_IMPORT_MAX_FIELDS + 1,
+  } }))
   runProfileFile(
     @UploadedFile() file: Express.Multer.File | undefined,
-    @Body() body: Record<string, string | undefined>,
+    @Body() body: RunDataQualityProfileFileDto,
     @CurrentUser() user: AuthUser,
   ) {
     if (!file) throw new BadRequestException(DATA_QUALITY_IMPORT_API_MESSAGES.fileRequired);
@@ -158,8 +160,8 @@ export class DataQualityController {
       source: body.source || 'native_csv_profiler',
       datasetName: body.datasetName || file.originalname,
       csv: file.buffer.toString('utf8'),
-      createIssues: parseOptionalBoolean(body.createIssues),
-      createRuleDrafts: parseOptionalBoolean(body.createRuleDrafts),
+      createIssues: body.createIssues,
+      createRuleDrafts: body.createRuleDrafts,
     }, user.email);
   }
 

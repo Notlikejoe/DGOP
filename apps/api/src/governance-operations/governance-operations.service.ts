@@ -22,6 +22,7 @@ import {
   TaskStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { boundedEnvInteger } from '../common/runtime-safety';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
@@ -142,7 +143,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       );
     }
     if (process.env.GOVERNANCE_OPERATIONS_SCHEDULER === 'false') return;
-    const intervalMs = Math.max(Number(process.env.GOVERNANCE_OPERATIONS_SCHEDULER_MS ?? 300000), 60000);
+    const intervalMs = boundedEnvInteger('GOVERNANCE_OPERATIONS_SCHEDULER_MS', 300_000, 60_000, 3_600_000);
     this.slaWorker = setInterval(() => void this.runScheduledGovernanceCycle(), intervalMs);
     void this.runScheduledGovernanceCycle();
   }
@@ -630,10 +631,10 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       this.prisma.workflowDesignerTestRun.count({
         where: { template: { is: templateWhere }, status: { not: 'reset' } },
       }),
-      this.prisma.workflowEvent.count({
+      this.prisma.workflowExecutionAttempt.count({
         where: {
-          action: 'route.automation.completed',
-          case: { template: { is: templateWhere } },
+          status: 'succeeded',
+          templateStage: { template: { is: templateWhere } },
         },
       }),
       this.prisma.accessGrant.count({ where: { asset: this.assetScopeWhere(scope) } }),

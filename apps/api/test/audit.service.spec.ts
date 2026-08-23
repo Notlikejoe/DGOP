@@ -47,7 +47,9 @@ test('sanitizeAuditMetadata redacts sensitive keys before persistence', () => {
 
 test('AuditService writes linked hashes and verification detects tampering', async () => {
   const rows: any[] = [];
-  const prisma = {
+  let transactions = 0;
+  let chainLocks = 0;
+  const prisma: any = {
     auditLog: {
       findFirst: async () => rows.at(-1) ? { entryHash: rows.at(-1).entryHash } : null,
       create: async (args: any) => {
@@ -59,6 +61,11 @@ test('AuditService writes linked hashes and verification detects tampering', asy
       findMany: async () => rows,
     },
   };
+  prisma.$transaction = async (fn: (tx: any) => unknown) => {
+    transactions++;
+    return fn(prisma);
+  };
+  prisma.$queryRaw = async () => { chainLocks++; return []; };
   const service = new AuditService(prisma as never);
   await service.log({
     actor: 'admin@dgop.local',
@@ -75,6 +82,8 @@ test('AuditService writes linked hashes and verification detects tampering', asy
   });
 
   assert.strictEqual(rows.length, 2);
+  assert.strictEqual(transactions, 2);
+  assert.strictEqual(chainLocks, 2);
   assert.ok(rows[0].entryHash);
   assert.strictEqual(rows[1].previousHash, rows[0].entryHash);
   assert.strictEqual((await service.verifyChain()).valid, true);
@@ -85,7 +94,7 @@ test('AuditService writes linked hashes and verification detects tampering', asy
 
 test('AuditService hashes and stores redacted metadata', async () => {
   const rows: any[] = [];
-  const prisma = {
+  const prisma: any = {
     auditLog: {
       findFirst: async () => rows.at(-1) ? { entryHash: rows.at(-1).entryHash } : null,
       create: async (args: any) => {
@@ -97,6 +106,8 @@ test('AuditService hashes and stores redacted metadata', async () => {
       findMany: async () => rows,
     },
   };
+  prisma.$transaction = async (fn: (tx: any) => unknown) => fn(prisma);
+  prisma.$queryRaw = async () => [];
   const service = new AuditService(prisma as never);
 
   await service.log({
@@ -127,7 +138,7 @@ test('AuditService accepts a valid legacy audit baseline without rewriting legac
       chainVersion: null,
     },
   ];
-  const prisma = {
+  const prisma: any = {
     auditLog: {
       findFirst: async (args?: any) => {
         if (args?.where?.action === 'audit_chain.legacy_baseline.accepted') {
@@ -144,6 +155,8 @@ test('AuditService accepts a valid legacy audit baseline without rewriting legac
       findMany: async () => rows,
     },
   };
+  prisma.$transaction = async (fn: (tx: any) => unknown) => fn(prisma);
+  prisma.$queryRaw = async () => [];
   const service = new AuditService(prisma as never);
 
   const accepted = await service.acceptLegacyBaseline('admin@dgop.local');
@@ -172,7 +185,7 @@ test('AuditService fails legacy baseline acceptance when the control event is no
       chainVersion: null,
     },
   ];
-  const prisma = {
+  const prisma: any = {
     auditLog: {
       findFirst: async (args?: any) => {
         if (args?.where?.action === 'audit_chain.legacy_baseline.accepted') return null;
@@ -185,6 +198,8 @@ test('AuditService fails legacy baseline acceptance when the control event is no
       findMany: async () => rows,
     },
   };
+  prisma.$transaction = async (fn: (tx: any) => unknown) => fn(prisma);
+  prisma.$queryRaw = async () => [];
   const service = new AuditService(prisma as never);
   (service as any).logger = { error: () => undefined };
 
@@ -202,7 +217,7 @@ test('AuditService fails legacy baseline acceptance when the control event is no
 test('AuditService fails closed when strict audit persistence is enabled', async () => {
   const previous = process.env.DGOP_AUDIT_FAIL_CLOSED;
   process.env.DGOP_AUDIT_FAIL_CLOSED = 'true';
-  const prisma = {
+  const prisma: any = {
     auditLog: {
       findFirst: async () => null,
       create: async () => {
@@ -210,6 +225,8 @@ test('AuditService fails closed when strict audit persistence is enabled', async
       },
     },
   };
+  prisma.$transaction = async (fn: (tx: any) => unknown) => fn(prisma);
+  prisma.$queryRaw = async () => [];
   const service = new AuditService(prisma as never);
   (service as any).logger = { error: () => undefined };
 

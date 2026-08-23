@@ -59,21 +59,28 @@
 
             @if (isSectionOpen(section)) {
               <div class="nav-workspace__items">
-                @for (item of section.items; track item.link) {
-                  <a
-                    class="nav__item nav__item--nested"
-                    [routerLink]="item.link"
-                    routerLinkActive="nav__item--active"
-                    (click)="closeMobileNav()"
-                  >
-                    <span class="nav__icon" aria-hidden="true">
-                      <app-icon [name]="item.iconName" />
-                    </span>
-                    <span>{{ t(item.labelKey) }}</span>
-                    @if (item.badge && openTasks() > 0) {
-                      <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+                @for (group of sectionGroups(section); track group.key) {
+                  <section class="nav-workspace__group">
+                    @if (group.key) {
+                      <span class="nav-workspace__group-label">{{ t(group.key + '.title') }}</span>
                     }
-                  </a>
+                    @for (item of group.items; track item.link) {
+                      <a
+                        class="nav__item nav__item--nested"
+                        [routerLink]="item.link"
+                        routerLinkActive="nav__item--active"
+                        (click)="closeMobileNav()"
+                      >
+                        <span class="nav__icon" aria-hidden="true">
+                          <app-icon [name]="item.iconName" />
+                        </span>
+                        <span>{{ t(item.labelKey) }}</span>
+                        @if (item.badge && openTasks() > 0) {
+                          <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+                        }
+                      </a>
+                    }
+                  </section>
                 }
               </div>
             }
@@ -227,7 +234,9 @@
             <span class="profile__avatar" aria-hidden="true">{{ initials() }}</span>
             <span class="profile__meta">
               <span class="profile__name">{{ auth.currentUser()?.displayName }}</span>
-              <span class="profile__role">{{ primaryRole() }}</span>
+              @if (showPrimaryRole()) {
+                <span class="profile__role">{{ primaryRole() }}</span>
+              }
             </span>
           </button>
 

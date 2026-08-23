@@ -19,6 +19,7 @@
   width: min(1120px, 100%);
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  grid-template-areas: 'story panel';
   gap: var(--space-5);
 }
 
@@ -30,6 +31,7 @@
 }
 
 .auth__story {
+  grid-area: story;
   min-height: 560px;
   display: flex;
   flex-direction: column;
@@ -75,7 +77,8 @@
   margin: var(--space-2) 0 0;
   max-width: 720px;
   color: var(--command-on);
-  font-size: clamp(2.4rem, 5vw, 4.8rem);
+  font-size: 3.4rem;
+  line-height: 1.05;
 }
 
 .auth__story p {
@@ -123,6 +126,7 @@
 }
 
 .auth__panel {
+  grid-area: panel;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -195,18 +199,27 @@
 
 @media (max-width: 900px) {
   .auth {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
     padding: var(--space-4);
     align-items: start;
+    overflow-x: clip;
   }
 
   .auth__toggles {
     position: static;
-    justify-self: end;
+    align-self: flex-end;
     margin-bottom: var(--space-4);
   }
 
   .auth__layout {
+    width: 100%;
+    min-width: 0;
     grid-template-columns: 1fr;
+    grid-template-areas:
+      'panel'
+      'story';
   }
 
   .auth__story {
@@ -214,7 +227,77 @@
     padding: var(--space-5);
   }
 
+  .auth__story h1 {
+    font-size: 2.25rem;
+  }
+
   .auth__signals {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .auth {
+    padding: var(--space-3);
+  }
+
+  .auth__toggles {
+    width: 100%;
+    justify-content: flex-end;
+    margin-bottom: var(--space-3);
+  }
+
+  .auth__toggles .ds-btn {
+    min-width: 0;
+    padding-inline: var(--space-3);
+  }
+
+  .auth__layout {
+    gap: var(--space-3);
+  }
+
+  .auth__panel,
+  .auth__story {
+    min-width: 0;
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+  }
+
+  .auth__brand {
+    gap: var(--space-3);
+  }
+
+  .auth__mark {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+  }
+
+  .auth__story h1 {
+    font-size: 1.75rem;
+  }
+
+  .auth__story p {
+    margin: var(--space-4) 0;
+    font-size: var(--font-size-md);
+    line-height: 1.5;
+  }
+
+  .auth__signals {
+    gap: var(--space-2);
+  }
+
+  .auth__signals div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .auth__signals strong {
+    min-width: 0;
+    font-size: var(--font-size-md);
+    overflow-wrap: anywhere;
+    text-align: end;
   }
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -7,7 +8,10 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { existsSync, mkdirSync } from 'node:fs';
+import { unlink, writeFile } from 'node:fs/promises';
 import { createCipheriv, createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { isAbsolute, relative, resolve } from 'node:path';
 import {
   ApprovalStatus,
   AssignmentTargetType,
@@ -26,12 +30,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
 import { AssignmentsService } from '../ownership/assignments.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import { AuthUser } from '../auth/auth.types';
 import { parsePageParams, toPaged } from '../common/pagination';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
+import { sanitizeAttachmentFilename } from '../common/download';
+import { boundedEnvInteger } from '../common/runtime-safety';
 import {
   AddTaskDto,
-  AddWorkflowAttachmentDto,
   AddWorkflowCommentDto,
   CreateWorkflowDelegationDto,
   CreateWorkflowTemplateDto,
@@ -39,6 +45,7 @@ import {
   DecisionDto,
   ListWorkflowDesignerTestRunsDto,
   SaveWorkflowBpmnDto,
+  SaveWorkflowTaskFormDraftDto,
   SubmitWorkflowTaskFormDto,
   SubmitAssignmentDto,
   WorkflowCaseControlDto,
@@ -50,6 +57,7 @@ import {
   UpdateWorkflowDelegationDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  UploadWorkflowAttachmentDto,
   UpsertWorkflowVariableDto,
   UpsertWorkflowSlaTemplateDto,
   WorkflowOperationsReportQueryDto,
@@ -97,6 +105,7 @@ import {
   type WorkflowStageRouteNode,
   type WorkflowTemplateSeed,
 } from './workflow.logic';
+import { validateWorkflowAutomationConfig } from './workflow.automation';
 import {
   parseBpmnXml,
   simulateWorkflowRoute,
@@ -256,6 +265,7 @@ type WorkflowTokenLineageContext = {
   branchKey?: string | null;
   branchIndex?: number | null;
   joinKey?: string | null;
+  joinStack?: string[];
 };
 type RouteAdvancePlan = {
   fromStage: WorkflowStageWithRoute;
@@ -275,18 +285,33 @@ type RouteAdvancePlan = {
 };
 type WorkflowWriter = PrismaService | Prisma.TransactionClient;
 
+export interface WorkflowAttachmentFile {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
+const WORKFLOW_ATTACHMENT_OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+
 @Injectable()
 export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WorkflowService.name);
   private executionWorker: ReturnType<typeof setInterval> | null = null;
   private executionWorkerRunning = false;
+  private readonly attachmentStorageDir: string;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
     private readonly assignments: AssignmentsService,
-  ) {}
+    private readonly integrations: IntegrationsService,
+  ) {
+    const configured = process.env.WORKFLOW_ATTACHMENT_STORAGE_DIR || 'storage/workflow-attachments';
+    this.attachmentStorageDir = isAbsolute(configured) ? resolve(configured) : resolve(process.cwd(), configured);
+    if (!existsSync(this.attachmentStorageDir)) mkdirSync(this.attachmentStorageDir, { recursive: true });
+  }
 
   async onModuleInit(): Promise<void> {
     try {
@@ -310,7 +335,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Failed to initialize default workflow templates', err as Error);
     }
     if (process.env.WORKFLOW_EXECUTION_SCHEDULER !== 'false') {
-      const intervalMs = Math.max(Number(process.env.WORKFLOW_EXECUTION_SCHEDULER_MS ?? 60000), 60000);
+      const intervalMs = boundedEnvInteger('WORKFLOW_EXECUTION_SCHEDULER_MS', 60_000, 60_000, 3_600_000);
       this.executionWorker = setInterval(() => void this.processRunnableExecutions(), intervalMs);
       void this.processRunnableExecutions();
     }
@@ -2045,6 +2070,20 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
+  async processRuntimeExecutions(user: AuthUser) {
+    if (!user.roles.some((role) => ADMIN_ROLES.includes(role))) {
+      throw new ForbiddenException('Only workflow administrators can trigger the execution worker');
+    }
+    const result = await this.processRunnableExecutions();
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_execution.worker.triggered',
+      entityType: 'workflow_engine',
+      metadata: result,
+    });
+    return result;
+  }
+
   async routePreview(dto: WorkflowRoutePreviewDto, roleCodes: string[]) {
     const { template, domainId } = await this.resolveRouteTemplate(dto, roleCodes);
     return {
@@ -2227,10 +2266,10 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           this.prisma.workflowDesignerTestRun.count({
             where: { templateId: { in: visibleTemplateIds }, status: { not: 'reset' } },
           }),
-          this.prisma.workflowEvent.count({
+          this.prisma.workflowExecutionAttempt.count({
             where: {
-              action: 'route.automation.completed',
-              case: { templateId: { in: visibleTemplateIds } },
+              status: 'succeeded',
+              templateStage: { templateId: { in: visibleTemplateIds } },
             },
           }),
         ])
@@ -2665,13 +2704,53 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     });
     if (!wfCase) throw new NotFoundException('workflow case not found');
     await this.assertCaseVisible(user.roles, wfCase, user);
-    return this.prisma.workflowTaskAttachment.findMany({
+    const rows = await this.prisma.workflowTaskAttachment.findMany({
       where: { caseId },
       orderBy: { createdAt: 'desc' },
     });
+    return rows.map(({ storedName: _storedName, ...attachment }) => attachment);
   }
 
-  async addCaseAttachment(caseId: string, dto: AddWorkflowAttachmentDto, user: AuthUser) {
+  private attachmentStoragePath(storedName: string): string {
+    const target = resolve(this.attachmentStorageDir, storedName);
+    const rel = relative(this.attachmentStorageDir, target);
+    if (!storedName || rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+      throw new NotFoundException('workflow attachment file not found');
+    }
+    return target;
+  }
+
+  private assertWorkflowAttachmentContent(file: WorkflowAttachmentFile): void {
+    if (!file?.buffer?.length) throw new BadRequestException('An attachment file is required');
+    const startsWith = (signature: Buffer | string) =>
+      typeof signature === 'string'
+        ? file.buffer.subarray(0, signature.length).toString('utf8') === signature
+        : file.buffer.subarray(0, signature.length).equals(signature);
+    const textLike = () => !file.buffer.includes(0);
+    const officePackage = (requiredPart: string) =>
+      startsWith('PK') &&
+      file.buffer.includes(Buffer.from('[Content_Types].xml', 'utf8')) &&
+      file.buffer.includes(Buffer.from(requiredPart, 'utf8'));
+    const valid =
+      (file.mimetype === 'application/pdf' && startsWith('%PDF-')) ||
+      (file.mimetype === 'image/png' && startsWith(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) ||
+      (file.mimetype === 'image/jpeg' && startsWith(Buffer.from([0xff, 0xd8, 0xff]))) ||
+      ((file.mimetype === 'text/plain' || file.mimetype === 'text/csv') && textLike()) ||
+      (file.mimetype === 'application/msword' && startsWith(WORKFLOW_ATTACHMENT_OLE_MAGIC)) ||
+      (file.mimetype === 'application/vnd.ms-excel' && startsWith(WORKFLOW_ATTACHMENT_OLE_MAGIC)) ||
+      (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+        officePackage('word/document.xml')) ||
+      (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' &&
+        officePackage('xl/workbook.xml'));
+    if (!valid) throw new BadRequestException('File content does not match the declared file type');
+  }
+
+  async addCaseAttachment(
+    caseId: string,
+    dto: UploadWorkflowAttachmentDto,
+    file: WorkflowAttachmentFile,
+    user: AuthUser,
+  ) {
     const wfCase = await this.prisma.workflowCase.findUnique({
       where: { id: caseId },
       select: { id: true, assetId: true, status: true },
@@ -2680,46 +2759,82 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     await this.assertCaseVisible(user.roles, wfCase, user);
     this.assertCaseCanChange(wfCase.status);
     if (dto.taskId) await this.assertTaskBelongsToCase(dto.taskId, caseId);
-    if (dto.sizeBytes != null && dto.sizeBytes < 0) throw new BadRequestException('Attachment size cannot be negative');
-    const fileName = dto.fileName.trim();
-    const storageUrl = dto.storageUrl.trim();
-    if (!fileName || !storageUrl) throw new BadRequestException('Attachment file name and storage URL are required');
-    const attachment = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.workflowTaskAttachment.create({
-        data: {
-          caseId,
-          taskId: dto.taskId ?? null,
-          fileName,
-          storageUrl,
-          mimeType: dto.mimeType?.trim() || null,
-          checksum: dto.checksum?.trim() || null,
-          sizeBytes: dto.sizeBytes ?? null,
-          kind: dto.kind ?? WorkflowAttachmentKind.evidence,
-          createdBy: user.email,
-        },
+    this.assertWorkflowAttachmentContent(file);
+    const attachmentId = randomUUID();
+    const safeExtension = (file.originalname.match(/\.[A-Za-z0-9]{1,8}$/u)?.[0] ?? '').toLowerCase();
+    const storedName = `${randomUUID()}${safeExtension}`;
+    const storedPath = this.attachmentStoragePath(storedName);
+    const fileName = sanitizeAttachmentFilename(file.originalname, 'workflow-attachment');
+    const checksum = createHash('sha256').update(file.buffer).digest('hex');
+    await writeFile(storedPath, file.buffer);
+    try {
+      const attachment = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.workflowTaskAttachment.create({
+          data: {
+            id: attachmentId,
+            caseId,
+            taskId: dto.taskId ?? null,
+            fileName,
+            storedName,
+            storageUrl: `/api/workflow/attachments/${attachmentId}/file`,
+            mimeType: file.mimetype,
+            checksum,
+            sizeBytes: file.buffer.length,
+            kind: dto.kind ?? WorkflowAttachmentKind.evidence,
+            createdBy: user.email,
+          },
+        });
+        await tx.workflowEvent.create({
+          data: {
+            caseId,
+            taskId: dto.taskId ?? null,
+            actor: user.email,
+            action: 'attachment.added',
+            comment: fileName,
+          },
+        });
+        await this.audit.log(
+          {
+            actor: user.email,
+            action: 'workflow_attachment.create',
+            entityType: 'workflow_attachment',
+            entityId: created.id,
+            metadata: { caseId, taskId: dto.taskId ?? null, kind: created.kind, checksum, sizeBytes: file.buffer.length },
+          },
+          tx,
+        );
+        return created;
       });
-      await tx.workflowEvent.create({
-        data: {
-          caseId,
-          taskId: dto.taskId ?? null,
-          actor: user.email,
-          action: 'attachment.added',
-          comment: fileName,
-        },
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: 'workflow_attachment.create',
-          entityType: 'workflow_case',
-          entityId: caseId,
-          metadata: { taskId: dto.taskId ?? null, kind: created.kind, checksum: created.checksum },
-        },
-        tx,
-      );
-      return created;
+      const { storedName: _storedName, ...publicAttachment } = attachment;
+      return publicAttachment;
+    } catch (error) {
+      await unlink(storedPath).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async attachmentFile(id: string, user: AuthUser) {
+    const attachment = await this.prisma.workflowTaskAttachment.findUnique({
+      where: { id },
+      include: { case: { select: { id: true, assetId: true } } },
     });
-    return attachment;
+    if (!attachment) throw new NotFoundException('workflow attachment not found');
+    await this.assertCaseVisible(user.roles, attachment.case, user);
+    if (!attachment.storedName) throw new NotFoundException('A managed file is not available for this legacy attachment');
+    const path = this.attachmentStoragePath(attachment.storedName);
+    if (!existsSync(path)) throw new NotFoundException('workflow attachment file not found');
+    await this.audit.log({
+      actor: user.email,
+      action: 'workflow_attachment.download',
+      entityType: 'workflow_attachment',
+      entityId: attachment.id,
+      metadata: { caseId: attachment.caseId, checksum: attachment.checksum },
+    });
+    return {
+      path,
+      originalName: attachment.fileName,
+      mimeType: attachment.mimeType ?? 'application/octet-stream',
+    };
   }
 
   async listDelegations(user: AuthUser) {
@@ -4557,6 +4672,64 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return summary;
   }
 
+  private async executeConfiguredAutomation(
+    attempt: { caseId: string; taskId: string },
+    config: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const validation = validateWorkflowAutomationConfig(config);
+    if (!validation.valid || !validation.action) {
+      throw new BadRequestException(`Invalid workflow automation configuration: ${validation.errors.join('; ')}`);
+    }
+
+    if (validation.action === 'invoke_connector') {
+      const result = await this.integrations.executeWorkflowConnectorAction({
+        connectorId: typeof config['connectorId'] === 'string' ? config['connectorId'] : null,
+        connectorCode: typeof config['connectorCode'] === 'string' ? config['connectorCode'] : null,
+        endpoint: config['endpoint'] === 'writeback' ? 'writeback' : 'health',
+        payload: config['payload'],
+      });
+      return {
+        action: validation.action,
+        endpoint: result.endpoint,
+        status: result.status,
+        durationMs: result.durationMs,
+      };
+    }
+
+    if (validation.action === 'set_runtime_variables') {
+      const values = this.jsonRecord(config['values']);
+      const tokens = await this.prisma.workflowRuntimeToken.findMany({
+        where: { taskId: attempt.taskId, state: 'active' },
+        select: { id: true, dataJson: true },
+      });
+      for (const token of tokens) {
+        const data = this.jsonRecord(token.dataJson);
+        await this.prisma.workflowRuntimeToken.update({
+          where: { id: token.id },
+          data: {
+            dataJson: {
+              ...data,
+              variables: { ...this.jsonRecord(data['variables']), ...values },
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
+      return { action: validation.action, updatedVariables: Object.keys(values).sort() };
+    }
+
+    const eventAction = String(config['eventAction']);
+    await this.prisma.workflowEvent.create({
+      data: {
+        caseId: attempt.caseId,
+        taskId: attempt.taskId,
+        actor: 'system@workflow.dgop.local',
+        action: `route.control.${eventAction}`,
+        comment: typeof config['comment'] === 'string' ? config['comment'].slice(0, 500) : null,
+      },
+    });
+    return { action: validation.action, eventAction };
+  }
+
   private async claimAndExecuteAttempt(id: string): Promise<{ processed: number; succeeded: number; retried: number; failed: number; waiting: number }> {
     const claimed = await this.prisma.workflowExecutionAttempt.updateMany({
       where: { id, status: { in: ['queued', 'retrying'] }, nextAttemptAt: { lte: new Date() } },
@@ -4606,9 +4779,17 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       }
       const forcedFailure = config['simulateFailure'] === true || Number(config['failUntilAttempt'] ?? 0) >= attempt.attemptCount;
       if (forcedFailure) throw new Error('Configured automation failure for resilience validation');
-      if (attempt.executionKind === 'notification_task') await this.persistNodeNotification(attempt.id, attempt.caseId, attempt.taskId, attempt.templateStage, config);
+      let result: Record<string, unknown> = { nodeType: attempt.executionKind };
+      if (attempt.executionKind === 'notification_task') {
+        await this.persistNodeNotification(attempt.id, attempt.caseId, attempt.taskId, attempt.templateStage, config);
+        result = { ...result, action: 'send_notification' };
+      } else if (attempt.executionKind === 'timer_event') {
+        result = { ...result, action: 'timer_elapsed' };
+      } else {
+        result = { ...result, ...await this.executeConfiguredAutomation(attempt, config) };
+      }
       const outcome = attempt.executionKind === 'timer_event' ? 'timeout' : 'approved';
-      await this.completeExecutionAttempt(id, outcome, { nodeType: attempt.executionKind, configurationAction: config['action'] ?? 'noop' });
+      await this.completeExecutionAttempt(id, outcome, result);
       return { processed: 1, succeeded: 1, retried: 0, failed: 0, waiting: 0 };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -4752,6 +4933,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     const runtimeToken = (client as unknown as { workflowRuntimeToken?: { create: (args: unknown) => Promise<unknown> } }).workflowRuntimeToken;
     if (!runtimeToken) return;
     try {
+      const joinStack = (lineage.joinStack ?? (lineage.joinKey ? [lineage.joinKey] : [])).filter(Boolean);
+      const currentJoinKey = joinStack.at(-1) ?? null;
       await runtimeToken.create({
         data: {
           instanceKey: `${task.caseId}:${stage.id}:${task.id}`,
@@ -4762,11 +4945,11 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           rootTokenId: lineage.rootTokenId ?? lineage.parentTokenId ?? null,
           branchKey: lineage.branchKey ?? null,
           branchIndex: lineage.branchIndex ?? null,
-          joinKey: lineage.joinKey ?? null,
+          joinKey: currentJoinKey,
           sourceTransitionId: lineage.sourceTransitionId ?? null,
           state: 'active',
           tokenType: approvalMode ? 'approval' : 'stage',
-          parallelGroup: approvalGroupId ?? lineage.joinKey ?? stage.parallelGroup ?? null,
+          parallelGroup: approvalGroupId ?? currentJoinKey ?? stage.parallelGroup ?? null,
           dataJson: {
             stageCode: stage.code,
             actor,
@@ -4775,7 +4958,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             rootTokenId: lineage.rootTokenId ?? lineage.parentTokenId ?? null,
             branchKey: lineage.branchKey ?? null,
             branchIndex: lineage.branchIndex ?? null,
-            joinKey: lineage.joinKey ?? null,
+            joinKey: currentJoinKey,
+            joinStack,
             sourceTransitionId: lineage.sourceTransitionId ?? null,
           } as Prisma.InputJsonValue,
         },
@@ -4797,21 +4981,33 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   private async latestRuntimeTokenForTask(
     client: Prisma.TransactionClient,
     taskId?: string | null,
-  ): Promise<{ id: string; rootTokenId: string | null; branchKey: string | null; joinKey: string | null } | null> {
+  ): Promise<{ id: string; rootTokenId: string | null; branchKey: string | null; joinKey: string | null; joinStack: string[] } | null> {
     if (!taskId) return null;
     const runtimeToken = (
       client as unknown as {
         workflowRuntimeToken?: {
-          findFirst: (args: unknown) => Promise<{ id: string; rootTokenId: string | null; branchKey: string | null; joinKey: string | null } | null>;
+          findFirst: (args: unknown) => Promise<{ id: string; rootTokenId: string | null; branchKey: string | null; joinKey: string | null; dataJson: Prisma.JsonValue | null } | null>;
         };
       }
     ).workflowRuntimeToken;
     if (!runtimeToken?.findFirst) return null;
-    return runtimeToken.findFirst({
+    const token = await runtimeToken.findFirst({
       where: { taskId },
       orderBy: [{ completedAt: 'desc' }, { updatedAt: 'desc' }],
-      select: { id: true, rootTokenId: true, branchKey: true, joinKey: true },
+      select: { id: true, rootTokenId: true, branchKey: true, joinKey: true, dataJson: true },
     });
+    if (!token) return null;
+    const data = this.jsonRecord(token.dataJson);
+    const configuredStack = Array.isArray(data['joinStack'])
+      ? data['joinStack'].filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim()))
+      : [];
+    return {
+      id: token.id,
+      rootTokenId: token.rootTokenId,
+      branchKey: token.branchKey,
+      joinKey: token.joinKey,
+      joinStack: configuredStack.length ? configuredStack : token.joinKey ? [token.joinKey] : [],
+    };
   }
 
   private averageHours(spans: Array<{ start: Date; end: Date }>): number {
@@ -5257,16 +5453,18 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
 
       await this.assertStageDecisionPrerequisites(writer, task, input.decision, input.comment);
       const routePlan = await this.planRouteAdvance(writer, task, input.decision);
-      const decided = await writer.workflowTask.update({
-        where: { id: input.taskId },
+      const claim = await writer.workflowTask.updateMany({
+        where: { id: input.taskId, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
         data: {
           status: TaskStatus.completed,
           decision: input.decision === WORKFLOW_RETURN_FOR_CLARIFICATION ? null : input.decision as TaskDecision,
           decisionComment: input.comment ?? null,
           completedAt: new Date(),
         },
-        include: taskInclude,
       });
+      if (claim.count !== 1) throw new ConflictException('This task was decided by another user');
+      const decided = await writer.workflowTask.findUnique({ where: { id: input.taskId }, include: taskInclude });
+      if (!decided) throw new NotFoundException('workflow task not found after decision');
       await writer.workflowEvent.create({
         data: {
           caseId: task.caseId,
@@ -5407,7 +5605,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return this.withSla(updated);
   }
 
-  async submitTaskForm(id: string, dto: SubmitWorkflowTaskFormDto, user: AuthUser) {
+  private async editableTaskForForm(id: string, user: AuthUser) {
     const task = await this.prisma.workflowTask.findUnique({
       where: { id },
       include: { case: true, templateStage: { select: decisionStageSelect } },
@@ -5421,8 +5619,53 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     const isAdmin = user.roles.some((role) => ADMIN_ROLES.includes(role));
     const queueRole = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
     if (!isAdmin && task.assigneeUserId !== user.id && !(queueRole && user.roles.includes(queueRole))) {
-      throw new ForbiddenException('Only the task assignee or owning role queue can submit this form');
+      throw new ForbiddenException('Only the task assignee or owning role queue can edit this form');
     }
+    return task;
+  }
+
+  async saveTaskFormDraft(id: string, dto: SaveWorkflowTaskFormDraftDto, user: AuthUser) {
+    const task = await this.editableTaskForForm(id, user);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.workflowTask.update({
+        where: { id },
+        data: {
+          formDataJson: dto.data as Prisma.InputJsonValue,
+          formSubmittedAt: null,
+          formSubmittedBy: null,
+        },
+        include: taskInclude,
+      });
+      await tx.workflowEvent.create({
+        data: {
+          caseId: task.caseId,
+          taskId: id,
+          actor: user.email,
+          action: 'task.form.draft_saved',
+          comment: task.templateStage?.nameEn ?? task.title,
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: 'workflow_task.form.draft.save',
+          entityType: 'workflow_task',
+          entityId: id,
+          metadata: {
+            stageCode: task.templateStage?.code ?? null,
+            fieldCount: Object.keys(dto.data).length,
+            previousSubmittedAt: task.formSubmittedAt?.toISOString?.() ?? null,
+          },
+        },
+        tx,
+      );
+      return saved;
+    });
+    return this.withSla(updated);
+  }
+
+  async submitTaskForm(id: string, dto: SubmitWorkflowTaskFormDto, user: AuthUser) {
+    const task = await this.editableTaskForForm(id, user);
     const validation = validateWorkflowFormData(task.templateStage?.formSchemaJson, dto.data);
     if (!validation.valid) {
       const detail = [...validation.missing.map((field) => `Missing ${field}`), ...validation.errors].join('; ');
@@ -5544,6 +5787,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     template: WorkflowTemplateWithRoute,
     gateway: WorkflowStageWithRoute,
     task: {
+      id?: string | null;
       dueDate?: Date | null;
       formDataJson?: unknown | null;
       case: { id: string; status: CaseStatus; type?: string | null; assetId?: string | null };
@@ -5553,7 +5797,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     const outgoing = template.transitions
       .filter((transition) => transition.fromStageId === gateway.id)
       .sort((a, b) => a.sortOrder - b.sortOrder);
-    const joinKey = gateway.parallelGroup ?? `join:${gateway.id}`;
+    const joinGroup = gateway.parallelGroup ?? `join:${gateway.id}`;
+    const joinKey = `${joinGroup}:instance:${task.id ?? task.case.id}`;
     return outgoing.flatMap((transition, index) => {
       const stage = this.firstActionableAfterTransition(template, transition, task, decision);
       if (!stage) return [];
@@ -5596,7 +5841,24 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     template: WorkflowTemplateWithRoute,
     mergeStage: WorkflowStageWithRoute,
     currentTaskId?: string | null,
+    completedMergeDepth = 0,
   ): Promise<boolean> {
+    const currentToken = await this.latestRuntimeTokenForTask(client, currentTaskId);
+    const activeJoinKey = currentToken?.joinStack.at(-(completedMergeDepth + 1)) ?? null;
+    if (activeJoinKey && currentToken) {
+      const activeSiblingTokens = await client.workflowRuntimeToken.count({
+        where: {
+          caseId,
+          joinKey: activeJoinKey,
+          state: 'active',
+          id: { not: currentToken.id },
+        },
+      });
+      return activeSiblingTokens > 0;
+    }
+
+    // Compatibility path for cases created before durable runtime tokens were
+    // introduced. New route instances always synchronize through joinKey.
     const incomingStageIds = template.transitions
       .filter((transition) => transition.toStageId === mergeStage.id)
       .map((transition) => transition.fromStageId);
@@ -5756,6 +6018,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       id: string;
       caseId: string;
       formDataJson?: unknown | null;
+      formSubmittedAt?: Date | null;
       templateStage?: {
         code: string;
         nameEn: string;
@@ -5789,6 +6052,11 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
 
     const requiredFields = workflowFormRequiredFields(task.templateStage.formSchemaJson);
     if (requiredFields.length > 0) {
+      if (!task.formSubmittedAt) {
+        throw new BadRequestException(
+          `Before approving ${task.templateStage.nameEn}, submit the completed task form from the workflow inbox.`,
+        );
+      }
       const validation = validateWorkflowFormData(task.templateStage.formSchemaJson, task.formDataJson);
       if (!validation.valid) {
         const missing = validation.missing.length ? validation.missing.join(', ') : validation.errors.join(', ');
@@ -5917,6 +6185,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('The next workflow route stage is not configured');
     }
     const passThroughStages: WorkflowStageWithRoute[] = [];
+    let completedMergeDepth = 0;
     let candidateStage = nextStage;
     let candidateTransition: WorkflowTransitionWithRoute | null = transition;
     let guard = 0;
@@ -5960,7 +6229,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         };
       }
       if (this.isMergeGatewayStage(candidateStage)) {
-        if (await this.hasOpenIncomingMergeTasks(client, task.case.id, runtimeTemplate, candidateStage, task.id ?? null)) {
+        if (await this.hasOpenIncomingMergeTasks(client, task.case.id, runtimeTemplate, candidateStage, task.id ?? null, completedMergeDepth)) {
           return {
             fromStage,
             transition: candidateTransition,
@@ -5968,6 +6237,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             mergeWaitStage: candidateStage,
           };
         }
+        completedMergeDepth++;
       }
       passThroughStages.push(candidateStage);
       const nextTransition = this.selectTransitionWithDmn(runtimeTemplate.transitions, candidateStage, task, decision);
@@ -6068,11 +6338,16 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       plan.transition?.toStage?.code ??
       'Route complete';
     const parentToken = await this.latestRuntimeTokenForTask(client, task.id ?? null);
+    const completedMergeCount = (plan.passThroughStages ?? []).filter((stage) => this.isMergeGatewayStage(stage)).length;
+    const continuationJoinStack = completedMergeCount
+      ? (parentToken?.joinStack ?? []).slice(0, -completedMergeCount)
+      : parentToken?.joinStack ?? [];
     const baseLineage: WorkflowTokenLineageContext = {
       parentTokenId: parentToken?.id ?? null,
       rootTokenId: parentToken?.rootTokenId ?? parentToken?.id ?? null,
       branchKey: parentToken?.branchKey ?? null,
-      joinKey: parentToken?.joinKey ?? null,
+      joinKey: continuationJoinStack.at(-1) ?? null,
+      joinStack: continuationJoinStack,
       sourceTransitionId: plan.transition?.id ?? null,
     };
     if (plan.transition) {
@@ -6124,6 +6399,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             branchKey: branch.branchKey,
             branchIndex: branch.branchIndex,
             joinKey: branch.joinKey,
+            joinStack: [...continuationJoinStack, branch.joinKey],
           },
         });
       }
@@ -6237,8 +6513,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       const routePlan = isApprovalTask
         ? null
         : await this.planRouteAdvance(tx, task, dto.decision);
-      const decided = await tx.workflowTask.update({
-        where: { id },
+      const claim = await tx.workflowTask.updateMany({
+        where: { id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
         data: {
           status: TaskStatus.completed,
           decision: returnedForClarification ? null : dto.decision as TaskDecision,
@@ -6246,8 +6522,10 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           completedAt: new Date(),
           ...(isRoleQueueDecision ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode } : {}),
         },
-        include: taskInclude,
       });
+      if (claim.count !== 1) throw new ConflictException('This task was decided by another user');
+      const decided = await tx.workflowTask.findUnique({ where: { id }, include: taskInclude });
+      if (!decided) throw new NotFoundException('workflow task not found after decision');
       if (isRoleQueueDecision) {
         await tx.workflowEvent.create({
           data: {

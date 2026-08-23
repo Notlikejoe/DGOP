@@ -8,6 +8,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Matches,
@@ -167,6 +168,10 @@ export class SubmitWorkflowTaskFormDto {
   @IsObject() data!: Record<string, unknown>;
 }
 
+export class SaveWorkflowTaskFormDraftDto {
+  @IsObject() data!: Record<string, unknown>;
+}
+
 export class SubmitAssignmentDto {
   @IsString() @IsNotEmpty() assignmentId!: string;
   @IsString() @IsNotEmpty() approverUserId!: string;
@@ -179,14 +184,9 @@ export class AddWorkflowCommentDto {
   @IsOptional() @IsString() taskId?: string | null;
 }
 
-export class AddWorkflowAttachmentDto {
-  @IsString() @IsNotEmpty() @MaxLength(220) fileName!: string;
-  @IsString() @IsNotEmpty() @MaxLength(1200) storageUrl!: string;
-  @IsOptional() @IsString() @MaxLength(120) mimeType?: string | null;
-  @IsOptional() @IsString() @MaxLength(160) checksum?: string | null;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100_000_000) sizeBytes?: number | null;
+export class UploadWorkflowAttachmentDto {
   @IsOptional() @IsEnum(WorkflowAttachmentKind) kind?: WorkflowAttachmentKind;
-  @IsOptional() @IsString() taskId?: string | null;
+  @IsOptional() @IsUUID('4') taskId?: string | null;
 }
 
 export class CreateWorkflowDelegationDto {

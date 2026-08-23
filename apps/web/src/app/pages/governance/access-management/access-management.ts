@@ -167,7 +167,7 @@ interface AccessMatrix {
     readCells: number;
     writeCells: number;
   };
-  constraints: { assetLimit: number; principalLimit: number; maximumAssets: number; maximumPrincipals: number; note: string };
+  constraints: { assetLimit: number; principalLimit: number; maximumAssets: number; maximumPrincipals: number; maximumGrants: number; note: string };
 }
 
 type AccessMatrixCell = AccessMatrix['cells'][number];
@@ -288,6 +288,9 @@ export class AccessManagementPage implements OnInit {
   protected readonly mobileMatrixPrincipalKey = signal('');
   protected readonly catalogueOpen = signal(false);
   protected readonly effectiveAccess = signal<EffectiveAccessResult | null>(null);
+  protected readonly effectiveAccessState = signal<'loading' | 'ready' | 'error'>('loading');
+  protected readonly effectiveAccessPage = signal(1);
+  protected readonly effectiveAccessPageSize = 25;
   protected readonly report = signal<AccessReport | null>(null);
   protected readonly viewMode = signal<'register' | 'matrix' | 'effective' | 'reports'>(
     this.accessView(this.route.snapshot.queryParamMap.get('view')),
@@ -340,23 +343,23 @@ export class AccessManagementPage implements OnInit {
   protected readonly canEdit = this.auth.hasPermission('access_grants.edit');
   protected readonly statusOptions = ['requested', 'scheduled', 'active', 'expired', 'rejected', 'revoked'];
 
-  protected readonly selectedAsset = computed(() =>
-    this.assets().find((asset) => asset.id === this.grantForm.assetId) ?? null,
-  );
+  protected selectedAsset(): AssetRef | null {
+    return this.assets().find((asset) => asset.id === this.grantForm.assetId) ?? null;
+  }
 
-  protected readonly availablePermissions = computed(() => {
+  protected availablePermissions(): PermissionRef[] {
     const assetType = this.selectedAsset()?.assetType;
     return assetType ? this.permissions().filter((permission) => permission.assetType === assetType) : [];
-  });
+  }
 
-  protected readonly availableProfiles = computed(() => {
+  protected availableProfiles(): ProfileRef[] {
     const assetType = this.selectedAsset()?.assetType;
     return assetType ? this.profiles().filter((profile) => profile.assetType === assetType) : [];
-  });
+  }
 
-  protected readonly availablePrincipals = computed(() =>
-    this.principals().filter((principal) => principal.type === this.grantForm.principalType),
-  );
+  protected availablePrincipals(): PrincipalRef[] {
+    return this.principals().filter((principal) => principal.type === this.grantForm.principalType);
+  }
 
   protected matrixFilterProfiles(): ProfileRef[] {
     return this.matrixFilters.assetType
@@ -370,19 +373,37 @@ export class AccessManagementPage implements OnInit {
       : this.permissions();
   }
 
-  protected readonly selectedProfile = computed(() =>
-    this.profiles().find((profile) => profile.id === this.grantForm.profileId) ?? null,
-  );
+  protected selectedProfile(): ProfileRef | null {
+    return this.profiles().find((profile) => profile.id === this.grantForm.profileId) ?? null;
+  }
 
-  protected readonly selectedPermissionCodes = computed(() => {
+  protected selectedPermissionCodes(): string[] {
     const profile = this.selectedProfile();
     if (!profile) return this.grantForm.permissionCodes;
     return this.profilePermissionCodes(profile);
-  });
+  }
 
-  protected readonly selectedHighRiskCount = computed(() =>
-    this.selectedPermissionCodes().filter((code) => this.permissionIsHighRisk(code)).length,
-  );
+  protected selectedHighRiskCount(): number {
+    return this.selectedPermissionCodes().filter((code) => this.permissionIsHighRisk(code)).length;
+  }
+
+  protected grantTargetReady(): boolean {
+    return Boolean(this.grantForm.assetId && this.grantForm.principalId.trim());
+  }
+
+  protected grantRightsReady(): boolean {
+    return this.selectedPermissionCodes().length > 0;
+  }
+
+  protected grantRecordReady(): boolean {
+    if (!this.grantForm.justification.trim()) return false;
+    if (!this.grantForm.startsAt || !this.grantForm.expiresAt) return true;
+    return new Date(this.grantForm.expiresAt).getTime() > new Date(this.grantForm.startsAt).getTime();
+  }
+
+  protected grantFormValid(): boolean {
+    return this.grantTargetReady() && this.grantRightsReady() && this.grantRecordReady();
+  }
 
   protected readonly bulkAssetTypes = computed(() => {
     const selectedAssetIds = new Set(this.selectedMatrixCells().map((cell) => cell.assetId));
@@ -478,8 +499,8 @@ export class AccessManagementPage implements OnInit {
     this.matrixState.set('loading');
     const params: Record<string, string> = {
       assetPage: String(page),
-      assetLimit: '500',
-      principalLimit: '100',
+      assetLimit: '25',
+      principalLimit: '50',
       sortBy: 'code',
       sortDirection: 'asc',
     };
@@ -520,11 +541,40 @@ export class AccessManagementPage implements OnInit {
     if (next !== matrix.summary.assetPage) this.loadMatrix(next);
   }
 
-  protected loadEffectiveAccess(): void {
-    this.http.get<EffectiveAccessResult>('/api/access/effective-access', { params: { page: '1', pageSize: '100' } }).subscribe({
-      next: (result) => this.effectiveAccess.set(result),
-      error: (error) => this.toast.errorFrom(error, this.t('access.toast.loadEffectiveError')),
+  protected loadEffectiveAccess(page = this.effectiveAccessPage()): void {
+    this.effectiveAccessState.set('loading');
+    this.http.get<EffectiveAccessResult>('/api/access/effective-access', {
+      params: { page: String(page), pageSize: String(this.effectiveAccessPageSize) },
+    }).subscribe({
+      next: (result) => {
+        this.effectiveAccess.set(result);
+        this.effectiveAccessPage.set(result.page);
+        this.effectiveAccessState.set('ready');
+      },
+      error: (error) => {
+        this.effectiveAccessState.set('error');
+        this.toast.errorFrom(error, this.t('access.toast.loadEffectiveError'));
+      },
     });
+  }
+
+  protected effectiveAccessPageCount(result: EffectiveAccessResult): number {
+    return Math.max(1, Math.ceil(result.total / result.pageSize));
+  }
+
+  protected changeEffectiveAccessPage(delta: number): void {
+    const result = this.effectiveAccess();
+    if (!result || this.effectiveAccessState() === 'loading') return;
+    const next = Math.min(Math.max(result.page + delta, 1), this.effectiveAccessPageCount(result));
+    if (next !== result.page) this.loadEffectiveAccess(next);
+  }
+
+  protected effectiveAccessRangeStart(result: EffectiveAccessResult): number {
+    return result.total === 0 ? 0 : (result.page - 1) * result.pageSize + 1;
+  }
+
+  protected effectiveAccessRangeEnd(result: EffectiveAccessResult): number {
+    return Math.min(result.total, result.page * result.pageSize);
   }
 
   protected loadReport(): void {
@@ -580,7 +630,7 @@ export class AccessManagementPage implements OnInit {
 
   protected createGrant(): void {
     if (!this.canCreate || this.busy()) return;
-    if (!this.grantForm.assetId || !this.grantForm.principalId.trim() || !this.selectedPermissionCodes().length || !this.grantForm.justification.trim()) {
+    if (!this.grantFormValid()) {
       this.toast.error(this.t('access.toast.requiredGrantFields'));
       return;
     }
@@ -609,7 +659,7 @@ export class AccessManagementPage implements OnInit {
         this.busy.set(false);
         this.createOpen.set(false);
         this.editing.set(null);
-        this.toast.success(this.format(editing ? 'access.toast.grantRevised' : 'access.toast.grantReady', { code: grant.code }));
+        this.toast.success(this.format(editing ? 'access.toast.grantRevised' : 'access.toast.grantSaved', { code: grant.code }));
         this.load();
         this.select(grant);
       },

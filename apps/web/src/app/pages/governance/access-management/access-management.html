@@ -252,38 +252,72 @@
           } @else { <div class="empty-state">{{ t('access.reports.loading') }}</div> }
         </div>
       } @else if (viewMode() === 'effective') {
-        <div class="grant-list ds-card effective-panel">
+        <div class="grant-list ds-card effective-panel" [attr.aria-busy]="effectiveAccessState() === 'loading'">
           <div class="toolbar">
             <div>
               <span class="eyebrow">{{ t('access.effective.eyebrow') }}</span>
               <h2>{{ t('access.effective.title') }}</h2>
             </div>
-            <button type="button" class="icon-button" [attr.title]="t('access.effective.refresh')" [attr.aria-label]="t('access.effective.refresh')" (click)="loadEffectiveAccess()"><app-icon name="refresh" /></button>
+            <button type="button" class="icon-button" [disabled]="effectiveAccessState() === 'loading'" [attr.title]="t('access.effective.refresh')" [attr.aria-label]="t('access.effective.refresh')" (click)="loadEffectiveAccess()"><app-icon name="refresh" /></button>
           </div>
-          @if (effectiveAccess(); as effective) {
+          @if (effectiveAccessState() === 'error' && !effectiveAccess()) {
+            <div class="empty-state">
+              <strong>{{ t('access.effective.error') }}</strong>
+              <button type="button" class="ds-btn ds-btn--primary" (click)="loadEffectiveAccess()">{{ t('crud.retry') }}</button>
+            </div>
+          } @else if (effectiveAccess(); as effective) {
             <div class="matrix-summary">
               <span>{{ effective.summary.totalEffectiveRows }} {{ t('access.effective.rows') }}</span>
               <span>{{ effective.summary.current }} {{ t('access.value.current') }}</span>
               <span>{{ effective.summary.enforcementGaps }} {{ t('access.effective.gaps') }}</span>
               <span>{{ effective.summary.externalUnverified }} {{ t('access.effective.external') }}</span>
             </div>
-            <div class="table-wrap">
-              <table class="ds-table effective-table">
-                <thead><tr><th>{{ t('access.field.subject') }}</th><th>{{ t('access.field.asset') }}</th><th>{{ t('access.field.permission') }}</th><th>{{ t('access.field.source') }}</th><th>{{ t('access.field.lifecycle') }}</th><th>{{ t('access.field.enforcement') }}</th><th>{{ t('access.field.window') }}</th></tr></thead>
-                <tbody>
-                  @for (row of effective.data; track row.grantId + ':' + row.subjectType + ':' + row.subjectId) {
-                    <tr [class.needs-attention-row]="row.enforcementGap || row.expansionStatus === 'external_unverified'">
-                      <td><strong>{{ row.subjectLabel }}</strong><small>{{ label(row.subjectType) }} &middot; {{ row.subjectId }}</small></td>
-                      <td><strong>{{ row.asset.code }}</strong><small>{{ assetName(row.asset) }}</small></td>
-                      <td>{{ row.permissionCode }}</td>
-                      <td><strong>{{ label(row.source) }}</strong><small>{{ label(row.expansionStatus) }}</small></td>
-                      <td><app-status-chip [kind]="kind(row.lifecycleState)" [label]="label(row.lifecycleState)" /></td>
-                      <td><app-status-chip [kind]="kind(row.enforcementStatus)" [label]="label(row.enforcementStatus)" /></td>
-                      <td><small>{{ date(row.startsAt) }} {{ t('access.to') }} {{ date(row.expiresAt) }}</small></td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+            @if (effective.data.length === 0) {
+              <div class="empty-state">{{ t('access.effective.empty') }}</div>
+            } @else {
+              <div class="table-wrap effective-table-wrap">
+                <table class="ds-table effective-table">
+                  <thead><tr><th>{{ t('access.field.subject') }}</th><th>{{ t('access.field.asset') }}</th><th>{{ t('access.field.permission') }}</th><th>{{ t('access.field.source') }}</th><th>{{ t('access.field.lifecycle') }}</th><th>{{ t('access.field.enforcement') }}</th><th>{{ t('access.field.window') }}</th></tr></thead>
+                  <tbody>
+                    @for (row of effective.data; track row.grantId + ':' + row.subjectType + ':' + row.subjectId) {
+                      <tr [class.needs-attention-row]="row.enforcementGap || row.expansionStatus === 'external_unverified'">
+                        <td><strong>{{ row.subjectLabel }}</strong><small>{{ label(row.subjectType) }} &middot; {{ row.subjectId }}</small></td>
+                        <td><strong>{{ row.asset.code }}</strong><small>{{ assetName(row.asset) }}</small></td>
+                        <td>{{ row.permissionCode }}</td>
+                        <td><strong>{{ label(row.source) }}</strong><small>{{ label(row.expansionStatus) }}</small></td>
+                        <td><app-status-chip [kind]="kind(row.lifecycleState)" [label]="label(row.lifecycleState)" /></td>
+                        <td><app-status-chip [kind]="kind(row.enforcementStatus)" [label]="label(row.enforcementStatus)" /></td>
+                        <td><small>{{ date(row.startsAt) }} {{ t('access.to') }} {{ date(row.expiresAt) }}</small></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <div class="effective-cards">
+                @for (row of effective.data; track row.grantId + ':' + row.subjectType + ':' + row.subjectId) {
+                  <article [class.effective-card--attention]="row.enforcementGap || row.expansionStatus === 'external_unverified'">
+                    <header>
+                      <div><small>{{ t('access.field.subject') }}</small><strong>{{ row.subjectLabel }}</strong><span>{{ label(row.subjectType) }}</span></div>
+                      <app-status-chip [kind]="kind(row.lifecycleState)" [label]="label(row.lifecycleState)" />
+                    </header>
+                    <dl>
+                      <div><dt>{{ t('access.field.asset') }}</dt><dd><strong>{{ row.asset.code }}</strong><span>{{ assetName(row.asset) }}</span></dd></div>
+                      <div><dt>{{ t('access.field.permission') }}</dt><dd>{{ row.permissionCode }}</dd></div>
+                      <div><dt>{{ t('access.field.source') }}</dt><dd>{{ label(row.source) }}</dd></div>
+                      <div><dt>{{ t('access.field.enforcement') }}</dt><dd><app-status-chip [kind]="kind(row.enforcementStatus)" [label]="label(row.enforcementStatus)" /></dd></div>
+                    </dl>
+                    <footer>{{ date(row.startsAt) }} {{ t('access.to') }} {{ date(row.expiresAt) }}</footer>
+                  </article>
+                }
+              </div>
+            }
+            <div class="matrix-footer effective-footer">
+              <span>{{ t('access.effective.showing') }} {{ effectiveAccessRangeStart(effective) }}-{{ effectiveAccessRangeEnd(effective) }} {{ t('access.matrix.of') }} {{ effective.total }}</span>
+              <div>
+                <button type="button" class="icon-button" [attr.title]="t('access.effective.previousPage')" [attr.aria-label]="t('access.effective.previousPage')" [disabled]="effective.page <= 1 || effectiveAccessState() === 'loading'" (click)="changeEffectiveAccessPage(-1)"><app-icon name="undo" /></button>
+                <strong>{{ t('access.matrix.page') }} {{ effective.page }} {{ t('access.matrix.of') }} {{ effectiveAccessPageCount(effective) }}</strong>
+                <button type="button" class="icon-button" [attr.title]="t('access.effective.nextPage')" [attr.aria-label]="t('access.effective.nextPage')" [disabled]="effective.page >= effectiveAccessPageCount(effective) || effectiveAccessState() === 'loading'" (click)="changeEffectiveAccessPage(1)"><app-icon name="redo" /></button>
+              </div>
             </div>
           } @else {
             <div class="empty-state">{{ t('access.effective.loading') }}</div>
@@ -445,8 +479,14 @@
           @if (editing()) { <label class="form-grid__wide"><span>{{ t('access.field.changeReason') }}</span><textarea rows="3" [(ngModel)]="grantForm.changeReason" [placeholder]="t('access.placeholder.changeReason')"></textarea></label> }
         </div>
       </section>
+      <section class="grant-save-readiness" [attr.aria-label]="t('access.saveReadiness.title')">
+        <strong>{{ t('access.saveReadiness.title') }}</strong>
+        <span [class.is-ready]="grantTargetReady()"><app-icon [name]="grantTargetReady() ? 'check' : 'info'" /> {{ t('access.saveReadiness.target') }}</span>
+        <span [class.is-ready]="grantRightsReady()"><app-icon [name]="grantRightsReady() ? 'check' : 'info'" /> {{ t('access.saveReadiness.rights') }}</span>
+        <span [class.is-ready]="grantRecordReady()"><app-icon [name]="grantRecordReady() ? 'check' : 'info'" /> {{ t('access.saveReadiness.record') }}</span>
+      </section>
     </div>
-    <div footer><button type="button" class="ds-btn ds-btn--ghost" (click)="createOpen.set(false); editing.set(null)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy()" (click)="createGrant()">{{ editing() ? t('access.action.saveRevision') : t('access.action.createGrant') }}</button></div>
+    <div footer class="grant-save-actions"><span>{{ t('access.saveReadiness.help') }}</span><button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="createOpen.set(false); editing.set(null)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="busy() || !grantFormValid()" (click)="createGrant()"><app-icon name="save" /> {{ busy() ? t('crud.saving') : editing() ? t('access.action.saveRevision') : t('access.action.createGrant') }}</button></div>
   </app-modal>
 }
 

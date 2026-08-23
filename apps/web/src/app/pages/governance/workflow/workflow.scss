@@ -42,6 +42,23 @@
 .req { color: var(--ds-danger, #c0392b); margin-inline-start: 0.15rem; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
 
+.workflow-work-item { display: grid; gap: 1rem; }
+.workflow-work-item__summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.workflow-work-item__summary h3 { margin: 0.15rem 0; font-size: 1.1rem; }
+.workflow-work-item__summary p, .workflow-work-item__help { margin: 0; color: var(--on-surface-muted); }
+.workflow-work-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem; }
+.workflow-work-form label { display: grid; align-content: start; gap: 0.35rem; min-width: 0; color: var(--on-surface-muted); font-size: 0.82rem; font-weight: 750; }
+.workflow-work-form input, .workflow-work-form select, .workflow-work-form textarea { width: 100%; color: var(--on-surface); background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.workflow-work-form__wide { grid-column: 1 / -1; }
+.workflow-work-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+.workflow-work-actions > span { margin-inline-end: auto; color: var(--on-surface-muted); font-size: 0.78rem; }
+
+@media (max-width: 700px) {
+  .workflow-work-form { grid-template-columns: 1fr; }
+  .workflow-work-form__wide { grid-column: auto; }
+  .workflow-work-item__summary, .workflow-work-actions { align-items: stretch; display: grid; }
+}
+
 .workflow-console {
   display: grid;
   gap: 1rem;

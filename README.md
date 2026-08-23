@@ -14,6 +14,10 @@ Database handoff details for another developer are documented in [`docs/DATABASE
 - PostgreSQL running locally and reachable through `DATABASE_URL`
 - All configuration comes from the root **`.env`** (see `.env.example`)
 
+`DGOP_TRUST_PROXY` is disabled by default. Configure only explicit proxy
+IP/CIDR ranges (or `loopback` for the local Cloudflare tunnel); hop counts and
+permissive trust settings are rejected.
+
 ## 1. Install
 
 ```bash
@@ -61,6 +65,13 @@ npm run start:demo
 ```
 
 Health check: `GET http://localhost:3005/api/health`
+
+Workflow evidence files use controlled server storage. Upload with multipart
+field `file` to `POST /api/workflow/cases/:caseId/attachments`; optional body
+fields are `taskId` and `kind`. Authorized downloads use the returned internal
+`storageUrl`. Configure `WORKFLOW_ATTACHMENT_STORAGE_DIR` as a secured,
+backed-up mounted path in shared environments. Arbitrary external attachment
+URLs are rejected.
 
 ## 4. Publish externally (simplest, temporary)
 
@@ -131,6 +142,7 @@ Detailed per-sprint QA packs are kept where deeper test stories were written:
 - [`QA/Sprint-23/`](QA/Sprint-23/README.md) - data sharing governance: sharing requests, review decisions, agreements, renewal/usage monitoring, workflow creation, and exchange workspace.
 
 Local admin email for demo data: `admin@dgop.local`. Run `npm run demo:prepare`
-and `npm run db:seed:local`, then use the ignored local `.env` value
+and `npm run db:sync-demo-credentials` for an existing local database, or
+`npm run db:seed:local` for a fresh dataset, then use the ignored local `.env` value
 `SEED_ADMIN_PASSWORD` for admin login. Seeded person demo accounts use the ignored
 local `.env` value `SEED_PERSON_PASSWORD`. Do not commit or share these passwords.

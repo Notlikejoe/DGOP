@@ -25,6 +25,9 @@ export interface Task {
   dueDate?: string | null;
   decision?: string | null;
   decisionComment?: string | null;
+  formDataJson?: Record<string, unknown> | null;
+  formSubmittedAt?: string | null;
+  formSubmittedBy?: string | null;
   completedAt?: string | null;
   slaStatus: string;
   assignee?: UserRef | null;

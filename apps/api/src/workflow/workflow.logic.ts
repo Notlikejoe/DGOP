@@ -428,6 +428,7 @@ export const WORKFLOW_AUDIT_EVENT_CATALOG = [
   { action: 'workflow_case.suspend', entityType: 'workflow_case', metadata: ['fromStatus', 'toStatus', 'reason'] },
   { action: 'workflow_case.resume', entityType: 'workflow_case', metadata: ['fromStatus', 'toStatus', 'reason'] },
   { action: 'workflow_case.cancel', entityType: 'workflow_case', metadata: ['fromStatus', 'toStatus', 'reason'] },
+  { action: 'workflow_task.form.draft.save', entityType: 'workflow_task', metadata: ['stageCode', 'fieldCount', 'previousSubmittedAt'] },
   { action: 'workflow_task.form.submit', entityType: 'workflow_task', metadata: ['stageCode', 'validatedFields', 'attachmentFields'] },
   { action: 'workflow_task.approved', entityType: 'workflow_task', metadata: ['decision', 'stageCode', 'routeTransitionId'] },
   { action: 'workflow_task.rejected', entityType: 'workflow_task', metadata: ['decision', 'stageCode', 'routeTransitionId'] },
@@ -572,13 +573,24 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplateSeed[] = [
       stage('intake', 'Intake', 'استلام', 'Capture the request and linked data context.', 'intake', 'information', undefined, 1, { isStart: true }),
       stage('review', 'Review', 'مراجعة', 'Steward reviews the impact and evidence needed.', 'review', 'review', 'data_steward', 3),
       stage('decision', 'Decision', 'قرار', 'Decision owner approves, rejects, or asks for more information.', 'decision', 'approval', 'data_owner', 2, { isDecision: true }),
+      stage('decision-control', 'Decision control record', 'سجل ضبط القرار', 'Persist the approved governance decision as executable control evidence.', 'automation', 'automation', undefined, 0, {
+        nodeType: 'automated_task',
+        assignmentStrategy: 'automation',
+        automationConfigJson: {
+          action: 'record_control_event',
+          eventAction: 'governance.decision.recorded',
+          comment: 'Approved governance decision recorded by the workflow engine.',
+        },
+      }),
       stage('closure', 'Closure', 'إغلاق', 'Close the loop and leave an auditable decision trail.', 'closure', 'review', undefined, 1, { isFinal: true }),
     ],
     transitions: [
       link('intake', 'review', 'Ready for review', 'جاهز للمراجعة'),
       link('review', 'decision', 'Ready for decision', 'جاهز للقرار'),
-      link('decision', 'closure', 'Decision recorded', 'تم تسجيل القرار', 'approved'),
+      link('decision', 'decision-control', 'Record approved decision', 'تسجيل القرار المعتمد', 'approved'),
       link('decision', 'review', 'More information', 'معلومات إضافية', 'rejected', false),
+      link('decision-control', 'closure', 'Control evidence recorded', 'تم تسجيل دليل الضبط', 'approved', true, 'success'),
+      link('decision-control', 'review', 'Control recording failed', 'فشل تسجيل الضبط', 'rejected', false, 'failure'),
     ],
   },
   {

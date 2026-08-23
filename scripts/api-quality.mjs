@@ -711,7 +711,8 @@ if (
   !mainText.includes("baseUri: [\"'self'\"]") ||
   !mainText.includes("formAction: [\"'self'\"]") ||
   !mainText.includes("frameAncestors: [\"'none'\"]") ||
-  !mainText.includes("instance.set('trust proxy', 1)") ||
+  !mainText.includes("instance.set('trust proxy', configuredTrustProxy())") ||
+  !runtimeSafetyText.includes('export function configuredTrustProxy') ||
   !mainText.includes('app.enableCors({ origin: corsOrigins, credentials: true })')
 ) {
   fail('API runtime must keep strict runtime validation, Helmet CSP/frame protections, trusted proxy handling, and credentialed allowlisted CORS enabled.');

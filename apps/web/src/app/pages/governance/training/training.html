@@ -20,15 +20,63 @@
   </header>
 
   @if (summary(); as s) {
-    <div class="kpi-row">
-      <div class="kpi kpi--accent"><span class="kpi__label">{{ t('training.metric.readiness') }}</span><strong class="kpi__value">{{ s.awarenessReadiness }}%</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('training.metric.courses') }}</span><strong class="kpi__value">{{ s.courses }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('training.metric.assignments') }}</span><strong class="kpi__value">{{ s.assignments }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('training.metric.completed') }}</span><strong class="kpi__value">{{ s.completionRate }}%</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('training.metric.certifications') }}</span><strong class="kpi__value">{{ s.activeCertifications }}/{{ s.certificationTracks }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('training.metric.ceHours') }}</span><strong class="kpi__value">{{ s.ceHours }}</strong></div>
-      <div class="kpi"><span class="kpi__label">{{ t('training.metric.overdue') }}</span><strong class="kpi__value">{{ s.overdue }}</strong></div>
-    </div>
+    <section class="training-summary" [attr.aria-label]="t('training.title')">
+      <article class="training-summary__readiness">
+        <span class="training-summary__label">{{ t('training.metric.readiness') }}</span>
+        <strong>{{ s.awarenessReadiness }}%</strong>
+        <div
+          class="training-progress"
+          role="progressbar"
+          [attr.aria-label]="t('training.metric.readiness')"
+          [attr.aria-valuenow]="s.awarenessReadiness"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <span [style.width.%]="s.awarenessReadiness"></span>
+        </div>
+      </article>
+
+      <div class="training-summary__activity">
+        <article class="training-summary__metric">
+          <span>{{ t('training.metric.courses') }}</span>
+          <strong>{{ s.courses }}</strong>
+        </article>
+        <article class="training-summary__metric">
+          <span>{{ t('training.metric.assignments') }}</span>
+          <strong>{{ s.assignments }}</strong>
+        </article>
+        <article class="training-summary__metric">
+          <span>{{ t('training.metric.certifications') }}</span>
+          <strong>{{ s.activeCertifications }}/{{ s.certificationTracks }}</strong>
+        </article>
+        <article class="training-summary__metric">
+          <span>{{ t('training.metric.ceHours') }}</span>
+          <strong>{{ s.ceHours }}</strong>
+        </article>
+      </div>
+
+      <div class="training-summary__outcomes">
+        <article class="training-summary__outcome">
+          <span>{{ t('training.metric.completed') }}</span>
+          <strong>{{ s.completionRate }}%</strong>
+          <div
+            class="training-progress training-progress--compact"
+            role="progressbar"
+            [attr.aria-label]="t('training.metric.completed')"
+            [attr.aria-valuenow]="s.completionRate"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span [style.width.%]="s.completionRate"></span>
+          </div>
+        </article>
+        <article class="training-summary__outcome training-summary__outcome--risk" [class.has-risk]="s.overdue > 0">
+          <span>{{ t('training.metric.overdue') }}</span>
+          <strong>{{ s.overdue }}</strong>
+          <i aria-hidden="true"></i>
+        </article>
+      </div>
+    </section>
   }
 
   <div class="awareness-layout">

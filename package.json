@@ -11,6 +11,7 @@
     "db:deploy": "node scripts/db.mjs deploy",
     "db:seed": "node scripts/db.mjs seed",
     "db:seed:local": "node scripts/seed-local.mjs",
+    "db:sync-demo-credentials": "node scripts/sync-demo-credentials.mjs",
     "db:local:start": "node scripts/local-postgres.mjs start",
     "db:local:stop": "node scripts/local-postgres.mjs stop",
     "db:local:status": "node scripts/local-postgres.mjs status",
@@ -28,5 +29,8 @@
     "dev": "node scripts/dev.mjs",
     "publish:external": "node scripts/publish.mjs",
     "publish:external:dry-run": "node scripts/publish.mjs --dry-run"
+  },
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26"
   }
 }

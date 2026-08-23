@@ -8,11 +8,20 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+function multipartBoolean(value: unknown): unknown {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (value === true || value === 'true' || value === '1' || value === 'yes') return true;
+  if (value === false || value === 'false' || value === '0' || value === 'no') return false;
+  return value;
+}
 
 export const DQ_STATUSES = ['open', 'triaged', 'in_progress', 'resolved', 'closed', 'cancelled'] as const;
 export const DQ_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
@@ -134,6 +143,15 @@ export class RunDataQualityProfileDto {
   @IsOptional() @IsBoolean() createRuleDrafts?: boolean;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => RelatedDataQualityProfileDatasetDto)
   relatedDatasets?: RelatedDataQualityProfileDatasetDto[];
+}
+
+export class RunDataQualityProfileFileDto {
+  @IsOptional() @IsUUID('4') assetId?: string;
+  @IsOptional() @IsUUID('4') domainId?: string;
+  @IsOptional() @IsString() @MaxLength(120) source?: string;
+  @IsOptional() @IsString() @MaxLength(240) datasetName?: string;
+  @IsOptional() @Transform(({ value }) => multipartBoolean(value)) @IsBoolean() createIssues?: boolean;
+  @IsOptional() @Transform(({ value }) => multipartBoolean(value)) @IsBoolean() createRuleDrafts?: boolean;
 }
 
 export class UpsertDataQualityRcaDto {

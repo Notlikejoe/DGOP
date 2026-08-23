@@ -4,6 +4,9 @@
  * (no jest dependency). Run with: ts-node test/workflow.service.spec.ts
  */
 import assert from 'node:assert';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { WorkflowService } from '../src/workflow/workflow.service';
 import {
   DEFAULT_WORKFLOW_TEMPLATES,
@@ -31,6 +34,7 @@ import {
   templateToBpmnXml,
   validateWorkflowRoute,
 } from '../src/workflow/workflow.bpmn';
+import { validateWorkflowAutomationConfig } from '../src/workflow/workflow.automation';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -56,6 +60,7 @@ type Over = {
   caseFindFirstArgs?: any[];
   caseFindFirstResult?: any;
   taskBulkUpdates?: any[];
+  taskUpdateManyCount?: number;
   taskUpdates?: any[];
   tasks?: any[];
   taskFindManyArgs?: any;
@@ -64,6 +69,8 @@ type Over = {
   runtimeTokenUpdates?: any[];
   runtimeTokenFindManyArgs?: any;
   runtimeTokenFindFirstArgs?: any;
+  integrationCalls?: unknown[];
+  integrationResult?: any;
   executionAttempts?: any[];
   executionAttemptFindManyArgs?: any;
   executionAttemptUpdates?: any[];
@@ -83,6 +90,7 @@ type Over = {
   userRoleCandidatesByRole?: Record<string, any[]>;
   setCalls?: any[][];
   attachmentCount?: number;
+  attachmentCreates?: any[];
 };
 
 function makeService(over: Over): WorkflowService {
@@ -98,9 +106,13 @@ function makeService(over: Over): WorkflowService {
         (over.taskUpdates ??= []).push(data);
         return { ...over.task, ...data, assignee: null };
       },
-      updateMany: async ({ data }: any) => {
+      updateMany: async ({ where, data }: any) => {
         (over.taskBulkUpdates ??= []).push(data);
-        return { count: 1 };
+        const atomicDecision = where?.id && Array.isArray(where?.status?.in);
+        const count = over.taskUpdateManyCount ??
+          (atomicDecision && over.task ? (where.status.in.includes(over.task.status) ? 1 : 0) : 1);
+        if (count === 1 && over.task) over.task = { ...over.task, ...data };
+        return { count };
       },
       findMany: async (args: any) => {
         over.taskFindManyArgs = args;
@@ -113,6 +125,16 @@ function makeService(over: Over): WorkflowService {
     },
     workflowTaskAttachment: {
       count: async () => over.attachmentCount ?? 0,
+      create: async ({ data }: any) => {
+        const row = { ...data, createdAt: new Date('2026-08-23T10:00:00Z') };
+        (over.attachmentCreates ??= []).push(row);
+        return row;
+      },
+      findMany: async () => over.attachmentCreates ?? [],
+      findUnique: async ({ where }: any) => {
+        const row = (over.attachmentCreates ?? []).find((attachment) => attachment.id === where.id);
+        return row ? { ...row, case: over.case ?? { id: row.caseId, assetId: null } } : null;
+      },
     },
     workflowCase: {
       update: async ({ data }: any) => {
@@ -183,6 +205,15 @@ function makeService(over: Over): WorkflowService {
       findMany: async () => [],
     },
     workflowRuntimeToken: {
+      count: async (args: any) => {
+        over.runtimeTokenFindManyArgs = args;
+        return (over.runtimeTokens ?? []).filter((token) =>
+          token.caseId === args.where.caseId &&
+          token.joinKey === args.where.joinKey &&
+          token.state === args.where.state &&
+          token.id !== args.where.id?.not,
+        ).length;
+      },
       create: async (args: any) => {
         const token = { id: `token-${(over.runtimeTokenCreates?.length ?? 0) + 1}`, ...args.data };
         (over.runtimeTokenCreates ??= []).push(token);
@@ -191,6 +222,12 @@ function makeService(over: Over): WorkflowService {
       updateMany: async (args: any) => {
         (over.runtimeTokenUpdates ??= []).push(args);
         return { count: 1 };
+      },
+      update: async ({ where, data }: any) => {
+        (over.runtimeTokenUpdates ??= []).push({ where, data });
+        const token = (over.runtimeTokens ?? []).find((entry) => entry.id === where.id);
+        if (token) Object.assign(token, data);
+        return { ...(token ?? { id: where.id }), ...data };
       },
       findFirst: async (args: any) => {
         over.runtimeTokenFindFirstArgs = args;
@@ -202,6 +239,9 @@ function makeService(over: Over): WorkflowService {
       },
     },
     workflowExecutionAttempt: {
+      count: async ({ where }: any = {}) => (over.executionAttempts ?? []).filter((attempt) =>
+        (!where.status || attempt.status === where.status),
+      ).length,
       create: async ({ data }: any) => {
         const row = {
           id: `execution-${(over.executionAttempts?.length ?? 0) + 1}`,
@@ -347,11 +387,18 @@ function makeService(over: Over): WorkflowService {
       (over.setCalls ??= []).push(args);
     },
   };
+  const integrations = {
+    executeWorkflowConnectorAction: async (input: unknown) => {
+      (over.integrationCalls ??= []).push(input);
+      return over.integrationResult ?? { ok: true, status: 200, statusText: 'OK', body: {}, durationMs: 1, endpoint: 'health' };
+    },
+  };
   return new WorkflowService(
     prisma as never,
     audit as never,
     scope as never,
     assignments as never,
+    integrations as never,
   );
 }
 
@@ -709,7 +756,7 @@ test('recordDomainTaskDecision: completes task and advances configured route', a
     eventAction: 'domain.task.approved',
   });
 
-  assert.strictEqual(over.taskUpdates?.[0].status, 'completed');
+  assert.strictEqual(over.taskBulkUpdates?.[0].status, 'completed');
   assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-decision');
   assert.strictEqual(over.caseUpdates?.[0].status, 'under_review');
   assert.strictEqual(over.runtimeTokenUpdates?.[0].where.taskId, 't1');
@@ -1764,7 +1811,7 @@ test('recordDomainTaskDecision: auto-assigns next stage only to a scoped role ho
   const over: Over = {
     createdTasks: [],
     caseUpdates: [],
-    taskUpdates: [],
+    taskBulkUpdates: [],
     events: [],
     task: {
       id: 't1',
@@ -1883,6 +1930,68 @@ test('decideTask: required stage evidence blocks approval until evidence exists'
   await assert.rejects(
     () => svc.decideTask('task-evidence', { decision: 'approved', comment: 'Looks fine' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never),
     /attach the required evidence/,
+  );
+});
+
+test('workflow inbox saves task form progress as an audited draft', async () => {
+  const over: Over = {
+    taskUpdates: [],
+    events: [],
+    auditEntries: [],
+    task: {
+      id: 'task-draft',
+      title: 'Capture request',
+      assigneeUserId: 'u1',
+      assigneeRoleCode: null,
+      status: 'pending',
+      caseId: 'case-draft',
+      formSubmittedAt: new Date('2026-08-20T08:00:00Z'),
+      case: { id: 'case-draft', type: 'general', status: 'submitted', createdBy: 'u1@dgop.local', assetId: null },
+      templateStage: {
+        code: 'intake',
+        nameEn: 'Request intake',
+        assigneeRoleCode: null,
+        formSchemaJson: { fields: ['request_summary'], required: ['request_summary'] },
+      },
+    },
+  };
+  const svc = makeService(over);
+
+  const saved = await svc.saveTaskFormDraft(
+    'task-draft',
+    { data: { request_summary: 'Draft governance request' } },
+    { id: 'u1', email: 'u1@dgop.local', roles: [] } as never,
+  );
+
+  assert.deepStrictEqual(over.taskUpdates?.[0].formDataJson, { request_summary: 'Draft governance request' });
+  assert.strictEqual(over.taskUpdates?.[0].formSubmittedAt, null);
+  assert.strictEqual(over.events?.[0].action, 'task.form.draft_saved');
+  assert.strictEqual(over.auditEntries?.[0].action, 'workflow_task.form.draft.save');
+  assert.deepStrictEqual(saved.formDataJson, { request_summary: 'Draft governance request' });
+});
+
+test('decideTask: a complete but unsubmitted inbox draft cannot be approved', async () => {
+  const svc = makeService({
+    task: {
+      id: 'task-form-draft',
+      assigneeUserId: 'u1',
+      status: 'pending',
+      caseId: 'case-form-draft',
+      formDataJson: { request_summary: 'Complete draft' },
+      formSubmittedAt: null,
+      case: { id: 'case-form-draft', type: 'general', status: 'submitted', createdBy: 'u1@dgop.local', assetId: null },
+      templateStage: {
+        code: 'intake',
+        nameEn: 'Request intake',
+        evidenceRequirementsJson: null,
+        formSchemaJson: { fields: ['request_summary'], required: ['request_summary'] },
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => svc.decideTask('task-form-draft', { decision: 'approved', comment: 'Approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never),
+    /submit the completed task form/i,
   );
 });
 
@@ -2016,6 +2125,253 @@ test('slaOf: past due date is overdue', () => {
 });
 
 // ---------- decision authority ----------
+test('workflow attachments: controlled upload hashes content and authorizes managed download', async () => {
+  const previousStorage = process.env.WORKFLOW_ATTACHMENT_STORAGE_DIR;
+  const storageDir = await mkdtemp(join(tmpdir(), 'dgop-workflow-attachment-'));
+  process.env.WORKFLOW_ATTACHMENT_STORAGE_DIR = storageDir;
+  const over: Over = {
+    attachmentCreates: [],
+    events: [],
+    auditEntries: [],
+    case: {
+      id: 'case-attachment',
+      assetId: null,
+      status: 'submitted',
+      type: 'general',
+      createdBy: 'admin@dgop.local',
+    },
+  };
+  try {
+    const svc = makeService(over);
+    const file = {
+      originalname: 'decision-evidence.pdf',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\nDGOP workflow evidence'),
+      size: 32,
+    };
+    const user = { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] } as never;
+
+    const attachment = await svc.addCaseAttachment('case-attachment', {} as never, file, user);
+
+    assert.strictEqual(attachment.checksum?.length, 64);
+    assert.match(attachment.storageUrl, /^\/api\/workflow\/attachments\/[0-9a-f-]+\/file$/u);
+    assert.strictEqual('storedName' in attachment, false);
+    assert.strictEqual((await readdir(storageDir)).length, 1);
+    const managedFile = await svc.attachmentFile(attachment.id, user);
+    assert.strictEqual(managedFile.originalName, 'decision-evidence.pdf');
+    assert.ok(managedFile.path.startsWith(storageDir));
+
+    await assert.rejects(
+      () => svc.addCaseAttachment(
+        'case-attachment',
+        {} as never,
+        { ...file, buffer: Buffer.from('not a pdf') },
+        user,
+      ),
+      /does not match the declared file type/,
+    );
+  } finally {
+    if (previousStorage === undefined) delete process.env.WORKFLOW_ATTACHMENT_STORAGE_DIR;
+    else process.env.WORKFLOW_ATTACHMENT_STORAGE_DIR = previousStorage;
+    await rm(storageDir, { recursive: true, force: true });
+  }
+});
+
+test('merge gateway waits for an active sibling token even when that branch is still upstream', async () => {
+  let tokenWhere: any;
+  const client = {
+    workflowRuntimeToken: {
+      findFirst: async () => ({ id: 'token-current', rootTokenId: 'token-root', branchKey: 'branch-1', joinKey: 'join:review:instance:task-split' }),
+      count: async ({ where }: any) => { tokenWhere = where; return 1; },
+    },
+    workflowTask: { count: async () => 0 },
+  };
+  const svc = makeService({});
+
+  const waiting = await (svc as any).hasOpenIncomingMergeTasks(
+    client,
+    'case-1',
+    { transitions: [] },
+    { id: 'merge-1' },
+    'task-current',
+  );
+
+  assert.strictEqual(waiting, true);
+  assert.deepStrictEqual(tokenWhere, {
+    caseId: 'case-1',
+    joinKey: 'join:review:instance:task-split',
+    state: 'active',
+    id: { not: 'token-current' },
+  });
+});
+
+test('nested merge gateways resolve the active join from the lineage stack', async () => {
+  let tokenWhere: any;
+  const client = {
+    workflowRuntimeToken: {
+      findFirst: async () => ({
+        id: 'token-current',
+        rootTokenId: 'token-root',
+        branchKey: 'inner-branch',
+        joinKey: 'join:inner',
+        dataJson: { joinStack: ['join:outer', 'join:inner'] },
+      }),
+      count: async ({ where }: any) => { tokenWhere = where; return 1; },
+    },
+    workflowTask: { count: async () => 0 },
+  };
+  const svc = makeService({});
+
+  const waiting = await (svc as any).hasOpenIncomingMergeTasks(
+    client,
+    'case-1',
+    { transitions: [] },
+    { id: 'merge-outer' },
+    'task-current',
+    1,
+  );
+
+  assert.strictEqual(waiting, true);
+  assert.strictEqual(tokenWhere.joinKey, 'join:outer');
+});
+
+test('automation configuration rejects no-op actions and validates governed actions', () => {
+  assert.strictEqual(validateWorkflowAutomationConfig({ action: 'noop' }).valid, false);
+  assert.strictEqual(validateWorkflowAutomationConfig({ action: 'record_control_event', eventAction: 'control.checked' }).valid, true);
+  assert.strictEqual(validateWorkflowAutomationConfig({ action: 'set_runtime_variables', values: { riskScore: 4 } }).valid, true);
+  assert.strictEqual(validateWorkflowAutomationConfig({ action: 'invoke_connector', connectorCode: 'CATALOG-API', endpoint: 'health' }).valid, true);
+});
+
+test('configured automation updates runtime variables and executes connectors through the integration boundary', async () => {
+  const over: Over = {
+    runtimeTokens: [{ id: 'token-1', taskId: 'task-1', state: 'active', dataJson: { joinStack: ['join:1'], variables: { existing: true } } }],
+    runtimeTokenUpdates: [],
+    integrationCalls: [],
+  };
+  const svc = makeService(over);
+
+  const variableResult = await (svc as any).executeConfiguredAutomation(
+    { caseId: 'case-1', taskId: 'task-1' },
+    { action: 'set_runtime_variables', values: { riskScore: 4 } },
+  );
+  const connectorResult = await (svc as any).executeConfiguredAutomation(
+    { caseId: 'case-1', taskId: 'task-1' },
+    { action: 'invoke_connector', connectorCode: 'CATALOG-API', endpoint: 'health' },
+  );
+
+  assert.deepStrictEqual(variableResult.updatedVariables, ['riskScore']);
+  assert.deepStrictEqual((over.runtimeTokenUpdates?.[0] as any).data.dataJson.variables, { existing: true, riskScore: 4 });
+  assert.deepStrictEqual(over.integrationCalls, [{ connectorId: null, connectorCode: 'CATALOG-API', endpoint: 'health', payload: undefined }]);
+  assert.strictEqual(connectorResult.status, 200);
+});
+
+test('manual execution worker trigger is restricted to administrators and audited', async () => {
+  const over: Over = { executionAttempts: [], auditEntries: [] };
+  const svc = makeService(over);
+  await assert.rejects(
+    () => svc.processRuntimeExecutions({ email: 'steward@dgop.local', roles: ['data_steward'] } as never),
+    /Only workflow administrators/,
+  );
+
+  const result = await svc.processRuntimeExecutions({ email: 'admin@dgop.local', roles: ['system_admin'] } as never);
+  assert.strictEqual(result.processed, 0);
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_execution.worker.triggered'));
+});
+
+test('parallel gateway assigns a distinct join key to each split instance', () => {
+  const gateway = { id: 'gateway-parallel', code: 'parallel', parallelGroup: 'review-group', nodeType: 'parallel_gateway' };
+  const branchA = { id: 'stage-a', code: 'branch-a', nodeType: 'user_task', taskType: 'review', kind: 'review', isFinal: false, isActive: true };
+  const branchB = { id: 'stage-b', code: 'branch-b', nodeType: 'user_task', taskType: 'review', kind: 'review', isFinal: false, isActive: true };
+  const template = {
+    stages: [gateway, branchA, branchB],
+    transitions: [
+      { id: 'transition-a', fromStageId: gateway.id, toStageId: branchA.id, sortOrder: 1 },
+      { id: 'transition-b', fromStageId: gateway.id, toStageId: branchB.id, sortOrder: 2 },
+    ],
+  };
+  const svc = makeService({});
+  const task = { case: { id: 'case-1', status: 'submitted', type: 'general', assetId: null } };
+
+  const first = (svc as any).parallelBranchesForGateway(template, gateway, { ...task, id: 'split-task-1' }, 'approved');
+  const second = (svc as any).parallelBranchesForGateway(template, gateway, { ...task, id: 'split-task-2' }, 'approved');
+
+  assert.strictEqual(first[0].joinKey, first[1].joinKey);
+  assert.notStrictEqual(first[0].joinKey, second[0].joinKey);
+  assert.match(first[0].joinKey, /instance:split-task-1$/u);
+});
+
+test('decideTask: a stale concurrent decision cannot emit events or advance the route', async () => {
+  const over: Over = {
+    taskUpdateManyCount: 0,
+    events: [],
+    createdTasks: [],
+    task: {
+      id: 'task-raced',
+      assigneeUserId: 'u1',
+      status: 'pending',
+      caseId: 'case-raced',
+      templateStageId: null,
+      templateStage: null,
+      case: {
+        id: 'case-raced',
+        type: 'general',
+        status: 'submitted',
+        createdBy: 'owner@dgop.local',
+        assignmentId: null,
+        templateId: null,
+        assetId: null,
+      },
+    },
+  };
+  const svc = makeService(over);
+
+  await assert.rejects(
+    () => svc.decideTask(
+      'task-raced',
+      { decision: 'approved' } as never,
+      { id: 'u1', email: 'u1@dgop.local', roles: [] } as never,
+    ),
+    /decided by another user/,
+  );
+  assert.strictEqual(over.events?.length, 0);
+  assert.strictEqual(over.createdTasks?.length, 0);
+});
+
+test('decideTask: concurrent submissions produce exactly one committed decision', async () => {
+  const over: Over = {
+    events: [],
+    createdTasks: [],
+    task: {
+      id: 'task-concurrent',
+      assigneeUserId: 'u1',
+      status: 'pending',
+      caseId: 'case-concurrent',
+      templateStageId: null,
+      templateStage: null,
+      case: {
+        id: 'case-concurrent',
+        type: 'general',
+        status: 'submitted',
+        createdBy: 'owner@dgop.local',
+        assignmentId: null,
+        templateId: null,
+        assetId: null,
+      },
+    },
+  };
+  const svc = makeService(over);
+  const actor = { id: 'u1', email: 'u1@dgop.local', roles: [] } as never;
+
+  const results = await Promise.allSettled([
+    svc.decideTask('task-concurrent', { decision: 'approved' } as never, actor),
+    svc.decideTask('task-concurrent', { decision: 'rejected' } as never, actor),
+  ]);
+
+  assert.strictEqual(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.strictEqual(results.filter((result) => result.status === 'rejected').length, 1);
+  assert.strictEqual(over.events?.filter((event) => String(event.action).startsWith('decision.')).length, 1);
+});
+
 test('decideTask: non-assignee without admin role is forbidden', async () => {
   const svc = makeService({
     task: { id: 't1', assigneeUserId: 'u-owner', status: 'pending', caseId: 'c1', case: { type: 'generic', createdBy: 'x@dgop.local' } },
@@ -2028,7 +2384,7 @@ test('decideTask: non-assignee without admin role is forbidden', async () => {
 
 test('decideTask: role queue member can claim and decide an unassigned routed task', async () => {
   const over: Over = {
-    taskUpdates: [],
+    taskBulkUpdates: [],
     events: [],
     task: {
       id: 't-role',
@@ -2057,7 +2413,7 @@ test('decideTask: role queue member can claim and decide an unassigned routed ta
   );
 
   assert.strictEqual(res.status, 'completed');
-  assert.strictEqual(over.taskUpdates?.[0].assigneeUserId, 'u-steward');
+  assert.strictEqual(over.taskBulkUpdates?.[0].assigneeUserId, 'u-steward');
   assert.ok(over.events?.some((event) => event.action === 'task.claimed'));
 });
 
@@ -2303,7 +2659,7 @@ test('decideTask: return for clarification opens an information task for the sub
   const over: Over = {
     createdTasks: [],
     caseUpdates: [],
-    taskUpdates: [],
+    taskBulkUpdates: [],
     events: [],
     auditEntries: [],
     submitter: { id: 'u-submit' },
@@ -2332,7 +2688,7 @@ test('decideTask: return for clarification opens an information task for the sub
     { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never,
   );
 
-  assert.strictEqual(over.taskUpdates?.[0].decision, null);
+  assert.strictEqual(over.taskBulkUpdates?.[0].decision, null);
   assert.strictEqual(over.createdTasks?.[0].type, 'information');
   assert.strictEqual(over.createdTasks?.[0].assigneeUserId, 'u-submit');
   assert.strictEqual(over.caseUpdates?.[0].status, 'awaiting_information');
@@ -2516,6 +2872,7 @@ test('enterprise workflow runtime: completed child workflow is resumed exactly o
     (first as any).audit,
     (first as any).scope,
     (first as any).assignments,
+    (first as any).integrations,
   );
 
   const results = await Promise.all([

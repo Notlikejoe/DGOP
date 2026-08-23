@@ -146,9 +146,16 @@ try {
       const shapes = page.locator('.bpmn-canvas .djs-shape');
       await shapes.first().waitFor({ state: 'visible', timeout: 10_000 });
       const shapeCountBefore = await shapes.count();
-      await shapes.first().click({ force: true });
       await splitButton.waitFor({ state: 'visible', timeout: 5_000 });
-      const splitEnabled = await splitButton.isEnabled();
+      let splitEnabled = false;
+      for (let index = 0; index < shapeCountBefore; index += 1) {
+        const shape = shapes.nth(index);
+        const elementId = (await shape.getAttribute('data-element-id')) ?? '';
+        if (!elementId || elementId.endsWith('_label')) continue;
+        await shape.click({ force: true });
+        splitEnabled = await splitButton.isEnabled();
+        if (splitEnabled) break;
+      }
       if (splitEnabled) await splitButton.click();
       const shapeCountAfter = await shapes.count();
       featureControls = splitEnabled && (await mergeButton.isVisible()) && shapeCountAfter >= shapeCountBefore + 4;

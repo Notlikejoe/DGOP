@@ -72,8 +72,28 @@ The local database was checked during handoff preparation and had:
 
 ```text
 Public tables: 134
-Applied Prisma migrations: 43
+Applied Prisma migrations: 60
 ```
+
+The `20260822153000_retain_access_governance_evidence` migration changes four
+foreign keys from cascading deletion to `RESTRICT`. It preserves access-grant
+versions, permission evidence, enforcement attempts, and asset-linked grants;
+it does not delete or backfill rows. Deploy it before the matching API build.
+On a busy shared database, schedule the deployment where brief foreign-key
+constraint locks are acceptable. Rollback requires restoring the four foreign
+keys to `ON DELETE CASCADE` only after confirming that evidence deletion is an
+accepted governance policy.
+
+The `20260823173000_workflow_integrity_hardening` migration must be deployed
+before the matching API build. It adds the managed workflow-attachment storage
+column, prevents audit-chain forks with a unique predecessor index, constrains
+workflow/access lifecycle values, adds runtime-token lineage foreign keys, and
+changes workflow/NDI evidence relations from cascading deletion to `RESTRICT`.
+Preflight deployment should confirm there are no duplicate non-null audit
+predecessors, orphan token lineage IDs, or lifecycle values outside the allowed
+sets. Rollback can remove the new checks, lineage keys, and nullable storage
+column, but restoring cascading deletion requires explicit records-retention
+approval.
 
 ## Optional Data Dump
 
@@ -121,6 +141,7 @@ JWT_SECRET
 JWT_EXPIRES_IN
 PUBLIC_ORIGIN
 CORS_ORIGINS
+DGOP_TRUST_PROXY
 SEED_ADMIN_EMAIL
 SEED_ADMIN_PASSWORD
 SEED_PERSON_PASSWORD
@@ -129,6 +150,8 @@ DGOP_AUDIT_FAIL_CLOSED
 DGOP_SEED_RISK_SCENARIO
 EVIDENCE_STORAGE_DIR
 EVIDENCE_MAX_BYTES
+WORKFLOW_ATTACHMENT_STORAGE_DIR
+WORKFLOW_ATTACHMENT_MAX_BYTES
 ```
 
 PowerShell command to prepare a local-only secret handoff file outside git:
@@ -153,4 +176,7 @@ admin@dgop.local
 
 Passwords come from ignored `.env` values such as `SEED_ADMIN_PASSWORD` and
 `SEED_PERSON_PASSWORD`. Rotate them before any shared demo and do not commit or
-publish those values.
+publish those values. For an existing loopback-only database, run
+`npm run db:sync-demo-credentials`; this updates only canonical demo accounts and
+does not recreate governance data. Use `npm run db:seed:local` only when a fresh
+demo dataset is intended.

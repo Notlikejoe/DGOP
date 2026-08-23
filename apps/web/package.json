@@ -31,9 +31,24 @@
     "vitest": "^4.0.8"
   },
   "overrides": {
+    "@hono/node-server": "1.19.17",
     "@babel/core": "7.29.7",
+    "brace-expansion": "5.0.9",
     "esbuild": "0.28.1",
+    "fast-uri": "3.1.6",
+    "hono": "4.13.3",
+    "immutable": "5.1.8",
+    "ip-address": "10.5.0",
+    "jsdom": {
+      "undici": "7.29.0"
+    },
+    "nanoid": "3.3.18",
+    "node-gyp": {
+      "undici": "6.28.0"
+    },
     "piscina": "5.2.0",
+    "postcss": "8.5.26",
+    "tar": "7.5.22",
     "vite": "7.3.6"
   }
 }

@@ -97,7 +97,7 @@ export class Shell implements OnDestroy {
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private searchRequestId = 0;
   private readonly compactQuery =
-    typeof window === 'undefined' ? null : window.matchMedia('(max-width: 980px)');
+    typeof window === 'undefined' ? null : window.matchMedia('(max-width: 1120px)');
 
   protected readonly sections = computed<NavSection[]>(() =>
     NAV_SECTIONS.map((section) => ({
@@ -118,6 +118,12 @@ export class Shell implements OnDestroy {
     const roles = this.auth.currentUser()?.roles ?? [];
     if (roles.length === 0) return '';
     return this.i18n.lang() === 'ar' ? roles[0].nameAr : roles[0].nameEn;
+  });
+
+  protected readonly showPrimaryRole = computed(() => {
+    const role = this.primaryRole().trim().toLocaleLowerCase();
+    const name = (this.auth.currentUser()?.displayName ?? '').trim().toLocaleLowerCase();
+    return !!role && role !== name;
   });
 
   protected readonly sidebarHidden = computed(() => this.compactNav() && !this.mobileNavOpen());
@@ -178,6 +184,15 @@ export class Shell implements OnDestroy {
 
   protected isWorkspaceSection(section: NavSection): boolean {
     return !!section.homeLink && !!section.summaryKey;
+  }
+
+  protected sectionGroups(section: NavSection): Array<{ key: string; items: NavItem[] }> {
+    const groups = new Map<string, NavItem[]>();
+    for (const item of section.items) {
+      const key = item.groupKey ?? '';
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+    return [...groups.entries()].map(([key, items]) => ({ key, items }));
   }
 
   protected isSectionActive(section: NavSection): boolean {

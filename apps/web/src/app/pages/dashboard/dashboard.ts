@@ -4,7 +4,6 @@ import { RouterLink } from '@angular/router';
 import { ApiService, HealthResponse } from '../../core/api.service';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
-import { ProgressBar, BarKind } from '../../shared/progress-bar';
 
 type State = 'loading' | 'ok' | 'error';
 type GapType = 'missing' | 'expired' | 'rejected' | 'unassigned' | 'stuck';
@@ -56,12 +55,13 @@ interface JourneyNode {
   value: string;
   detail: string;
   kind: Severity;
+  link: string;
 }
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusChip, RouterLink, ProgressBar],
+  imports: [StatusChip, RouterLink],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -130,6 +130,21 @@ export class Dashboard implements OnInit {
     if (kind === 'danger') return this.t('cmd.health.critical');
     if (kind === 'warning') return this.t('cmd.health.review');
     return this.t('cmd.health.checking');
+  });
+
+  protected readonly stewardedAssetCount = computed(() => {
+    const governance = this.summary()?.governance;
+    if (!governance) return 0;
+    return Math.min(
+      governance.assets.total,
+      Math.max(0, Math.round((governance.assets.total * governance.stewardshipCoveragePct) / 100)),
+    );
+  });
+
+  protected readonly stewardshipGapCount = computed(() => {
+    const governance = this.summary()?.governance;
+    if (!governance) return 0;
+    return Math.max(0, governance.assets.total - this.stewardedAssetCount());
   });
 
   protected readonly primaryAction = computed<ActionItem | null>(() => {
@@ -268,30 +283,35 @@ export class Dashboard implements OnInit {
         value: `${s.governance?.assets.total ?? 0}`,
         detail: this.t('cmd.journey.catalogDetail'),
         kind: 'info',
+        link: '/assets',
       },
       {
         label: this.t('cmd.journey.ownership'),
-        value: `${s.governance?.ownershipCoveragePct ?? 0}%`,
+        value: `${s.governance?.assets.withOwner ?? 0}/${s.governance?.assets.total ?? 0}`,
         detail: this.t('cmd.journey.ownershipDetail'),
         kind: this.coverageTone(s.governance?.ownershipCoveragePct ?? 0),
+        link: '/governance/ownership',
       },
       {
         label: this.t('cmd.journey.stewardship'),
-        value: `${s.governance?.stewardshipCoveragePct ?? 0}%`,
+        value: `${this.stewardedAssetCount()}/${s.governance?.assets.total ?? 0}`,
         detail: this.t('cmd.journey.stewardshipDetail'),
         kind: this.coverageTone(s.governance?.stewardshipCoveragePct ?? 0),
+        link: '/governance/ownership',
       },
       {
         label: this.t('cmd.journey.evidence'),
         value: s.ndi ? `${s.ndi.satisfied}/${s.ndi.specifications}` : '0',
         detail: this.t('cmd.journey.evidenceDetail'),
         kind: this.readinessTone(s.ndi?.readinessPct ?? 0),
+        link: '/governance/ndi/readiness',
       },
       {
-        label: this.t('cmd.journey.audit'),
-        value: s.ndi ? `${s.ndi.readinessPct}%` : '0%',
-        detail: this.t('cmd.journey.auditDetail'),
-        kind: this.readinessTone(s.ndi?.readinessPct ?? 0),
+        label: this.t('cmd.journey.action'),
+        value: `${this.riskTotal()}`,
+        detail: this.t('cmd.journey.actionDetail'),
+        kind: this.healthKind(),
+        link: this.primaryAction()?.link ?? '/governance/exception-queue',
       },
     ];
   });
@@ -322,19 +342,6 @@ export class Dashboard implements OnInit {
 
   protected coverageTone(pct: number): Severity {
     if (pct >= 80) return 'success';
-    if (pct >= 50) return 'warning';
-    return 'danger';
-  }
-
-  protected coverageBar(pct: number): BarKind {
-    if (pct >= 80) return 'success';
-    if (pct >= 50) return 'warning';
-    return 'danger';
-  }
-
-  protected readinessBar(pct: number): BarKind {
-    if (pct >= 80) return 'success';
-    if (pct >= 40) return 'info';
     if (pct >= 20) return 'warning';
     return 'danger';
   }

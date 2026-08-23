@@ -17,8 +17,9 @@ import { CreateEvidenceDto, ReviewEvidenceDto } from './evidence.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import { sanitizeAttachmentFilename } from '../common/download';
+import { boundedEnvInteger } from '../common/runtime-safety';
 
-const MAX_BYTES = Number(process.env.EVIDENCE_MAX_BYTES ?? 15 * 1024 * 1024);
+const MAX_BYTES = boundedEnvInteger('EVIDENCE_MAX_BYTES', 15 * 1024 * 1024, 1, 100 * 1024 * 1024);
 const ALLOWED_MIME = new Set([
   'application/pdf',
   'image/png',

@@ -1,4 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
+import { validateWorkflowAutomationConfig } from './workflow.automation';
 
 const BPMN_TASK_TAGS = [
   'task',
@@ -552,8 +553,11 @@ export function validateWorkflowRoute(
     if ((stage.kind === 'intake' || stage.taskType === 'information') && !hasStructuredRequirement(stage.formSchemaJson)) {
       warnings.push(`Information stage ${stage.code} should define the form fields users must complete.`);
     }
-    if (AUTOMATED_NODE_TYPES.has(stageNodeType(stage)) && !['notification_task', 'sub_workflow'].includes(nodeType) && !hasStructuredRequirement(stage.automationConfigJson)) {
-      errors.push(`Automated stage ${stage.code} must define the integration, rule, or service action.`);
+    if (AUTOMATED_NODE_TYPES.has(stageNodeType(stage)) && !['notification_task', 'sub_workflow'].includes(nodeType)) {
+      const validation = validateWorkflowAutomationConfig(stage.automationConfigJson);
+      if (!validation.valid) {
+        errors.push(`Automated stage ${stage.code} has an invalid executable action: ${validation.errors.join('; ')}.`);
+      }
     }
     if (nodeType === 'notification_task' && !hasStructuredRequirement(stage.notificationRulesJson)) {
       errors.push(`Notification stage ${stage.code} must define at least one notification rule.`);
@@ -785,7 +789,12 @@ function buildEnterpriseChecklist(
   const decisionEdges = decisionStages.filter((stage) => transitions.filter((edge) => edge.fromStageId === stage.code).length >= 2).length;
   const notificationStages = stages.filter((stage) => hasStructuredRequirement(stage.notificationRulesJson)).length;
   const automatedStages = stages.filter((stage) => AUTOMATED_NODE_TYPES.has(stageNodeType(stage)));
-  const automatedReady = automatedStages.filter((stage) => hasStructuredRequirement(stage.automationConfigJson)).length;
+  const automatedReady = automatedStages.filter((stage) => {
+    const nodeType = stageNodeType(stage);
+    if (nodeType === 'notification_task') return hasStructuredRequirement(stage.notificationRulesJson);
+    if (nodeType === 'sub_workflow') return hasSubWorkflowReference(stage.automationConfigJson);
+    return validateWorkflowAutomationConfig(stage.automationConfigJson).valid;
+  }).length;
 
   return [
     checklistItem('route_shape', 'Route has exactly one start and a clear end', startCount === 1 && hasFinal, hasStart || hasFinal, `${startCount} start stage(s), ${stages.length} stages, ${transitions.length} transitions`),

@@ -115,4 +115,4 @@ writeFileSync(envPath, `${state.lines.join('\n').replace(/\n+$/u, '')}\n`);
 
 console.log('Local demo environment prepared in ignored .env.');
 console.log(`Rotated keys: ${rotated.length ? rotated.join(', ') : 'none'}.`);
-console.log('Run `npm run db:seed:local` to apply rotated SEED_ADMIN_PASSWORD and SEED_PERSON_PASSWORD values to local demo accounts.');
+console.log('Run `npm run db:sync-demo-credentials` to apply demo passwords without reseeding, or `npm run db:seed:local` for a fresh dataset.');

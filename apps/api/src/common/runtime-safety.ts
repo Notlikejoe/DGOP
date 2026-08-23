@@ -1,5 +1,8 @@
+import { isIP } from 'node:net';
+
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'off']);
+const TRUST_PROXY_PRESETS = new Set(['loopback', 'linklocal', 'uniquelocal']);
 
 const UNSAFE_JWT_SECRETS = new Set([
   'dev-insecure-secret',
@@ -20,6 +23,41 @@ const UNSAFE_DEMO_PASSWORDS = new Set([
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 type RuntimeEnv = Record<string, string | undefined>;
+export type TrustProxySetting = false | string | string[];
+
+export function boundedEnvInteger(
+  name: string,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  env: RuntimeEnv = process.env,
+): number {
+  const raw = env[name]?.trim();
+  const parsed = raw ? Number(raw) : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.floor(parsed), minimum), maximum);
+}
+
+function isTrustedProxyAddress(value: string): boolean {
+  const [address, prefix, ...rest] = value.split('/');
+  if (rest.length || !address) return false;
+  const version = isIP(address);
+  if (!version) return false;
+  if (prefix === undefined) return true;
+  if (!/^\d+$/.test(prefix)) return false;
+  const bits = Number(prefix);
+  return bits >= 0 && bits <= (version === 4 ? 32 : 128);
+}
+
+export function configuredTrustProxy(env: RuntimeEnv = process.env): TrustProxySetting {
+  const raw = env.DGOP_TRUST_PROXY?.trim();
+  if (!raw || FALSE_VALUES.has(raw.toLowerCase())) return false;
+  const entries = raw.split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean);
+  if (!entries.length || entries.some((entry) => !TRUST_PROXY_PRESETS.has(entry) && !isTrustedProxyAddress(entry))) {
+    throw new Error('DGOP_TRUST_PROXY must contain only loopback/linklocal/uniquelocal or explicit IP/CIDR ranges');
+  }
+  return entries.length === 1 ? entries[0] : entries;
+}
 
 export function isProductionLikeRuntime(env: RuntimeEnv = process.env): boolean {
   const nodeEnv = env.NODE_ENV ?? 'development';
@@ -77,6 +115,12 @@ export function collectRuntimeSafetyIssues(env: RuntimeEnv = process.env): strin
   const issues: string[] = [];
   const origins = configuredCorsOrigins(env);
   const webhookToken = env.DGOP_WEBHOOK_TOKEN?.trim();
+
+  try {
+    configuredTrustProxy(env);
+  } catch (error) {
+    issues.push((error as Error).message);
+  }
 
   if (!env.DATABASE_URL?.trim()) {
     issues.push('DATABASE_URL must be configured');

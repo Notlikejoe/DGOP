@@ -12,7 +12,9 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import {
   assertSafeRuntimeConfig,
+  boundedEnvInteger,
   configuredCorsOrigins,
+  configuredTrustProxy,
   isProductionLikeRuntime,
 } from './common/runtime-safety';
 
@@ -34,8 +36,8 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   const instance = app.getHttpAdapter().getInstance();
-  // Required so rate limiting and client IPs work behind the tunnel/proxy.
-  instance.set('trust proxy', 1);
+  // Trust only configured proxy addresses so forwarded client IPs cannot be spoofed.
+  instance.set('trust proxy', configuredTrustProxy());
 
   assertSafeRuntimeConfig();
   const strictConfig = isProductionLikeRuntime();
@@ -109,7 +111,7 @@ async function bootstrap(): Promise<void> {
     logger.warn(`Web build not found at ${webDir} (run the web build to serve the UI).`);
   }
 
-  const port = Number(process.env.PORT ?? 3005);
+  const port = boundedEnvInteger('PORT', 3005, 1, 65535);
   await app.listen(port, '0.0.0.0');
   logger.log(`DGOP API listening on http://localhost:${port}/api`);
 }

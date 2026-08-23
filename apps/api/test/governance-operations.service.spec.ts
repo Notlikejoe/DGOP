@@ -75,8 +75,8 @@ function addWorkflowCanvasReadinessDelegates(
   prisma.workflowTemplateVersion.count ??= async () => evidence.signedSnapshots ?? 1;
   prisma.workflowDesignerTestRun ??= {};
   prisma.workflowDesignerTestRun.count ??= async () => evidence.testRuns ?? 1;
-  prisma.workflowEvent ??= {};
-  prisma.workflowEvent.count ??= async () => evidence.automationEvents ?? 1;
+  prisma.workflowExecutionAttempt ??= {};
+  prisma.workflowExecutionAttempt.count ??= async () => evidence.automationEvents ?? 1;
   prisma.accessGrant ??= {};
   prisma.accessGrant.count ??= async (args: any) => {
     if (args?.where?.status === 'requested') return evidence.requestedAccessGrants ?? 0;

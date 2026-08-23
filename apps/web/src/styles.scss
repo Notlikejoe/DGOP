@@ -846,6 +846,218 @@ a {
   background: var(--command-active);
 }
 
+[dir='rtl'] app-workflow .bpmn-canvas .djs-palette {
+  right: 1rem !important;
+  left: auto !important;
+}
+
+app-workflow .bpmn-canvas .djs-connection .djs-visual > path {
+  stroke: color-mix(in srgb, var(--command-on) 82%, var(--command-accent)) !important;
+  stroke-width: 2px !important;
+}
+
+app-workflow .bpmn-canvas svg defs marker path {
+  fill: color-mix(in srgb, var(--command-on) 82%, var(--command-accent)) !important;
+  stroke: color-mix(in srgb, var(--command-on) 82%, var(--command-accent)) !important;
+}
+
+app-workflow .bpmn-canvas [data-element-id$='_label'] text {
+  fill: var(--command-on) !important;
+  paint-order: stroke;
+  stroke: var(--command-surface-2);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+app-workflow .bpmn-canvas .djs-connection.hover .djs-visual > path,
+app-workflow .bpmn-canvas .djs-connection.selected .djs-visual > path {
+  stroke: var(--command-accent) !important;
+  stroke-width: 3px !important;
+}
+
+app-workflow .designer-command-bar__group--routing {
+  padding-inline: 0.5rem;
+  border-inline: 1px solid var(--command-border);
+}
+
+app-workflow .designer-command-bar__label {
+  color: var(--command-muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+app-workflow .bpmn-canvas--muted {
+  opacity: 0.34;
+}
+
+app-workflow .bpmn-canvas-state {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  color: var(--command-on);
+  text-align: center;
+  background: color-mix(in srgb, var(--command-surface-2) 88%, transparent);
+}
+
+app-workflow .bpmn-canvas-state small {
+  max-width: 34rem;
+  color: var(--command-muted);
+  line-height: 1.5;
+}
+
+app-workflow .bpmn-canvas-state__spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid var(--command-border);
+  border-top-color: var(--command-accent);
+  border-radius: 50%;
+  animation: dgop-canvas-spin 800ms linear infinite;
+}
+
+app-workflow .bpmn-canvas-state--error {
+  background: color-mix(in srgb, var(--danger-soft) 72%, var(--command-surface-2));
+}
+
+app-access-management .effective-cards {
+  display: none;
+}
+
+app-access-management .effective-footer {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+app-access-management .effective-footer .icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes dgop-canvas-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  app-workflow .designer-command-bar__group--routing {
+    padding: 0.5rem 0;
+    border-inline: 0;
+    border-block: 1px solid var(--command-border);
+  }
+
+  app-workflow .designer-command-bar__label {
+    width: 100%;
+  }
+
+  app-access-management .effective-table-wrap {
+    display: none;
+  }
+
+  app-access-management .effective-cards {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  app-access-management .effective-cards article {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+  }
+
+  app-access-management .effective-cards article.effective-card--attention {
+    border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+    box-shadow: inset 3px 0 0 var(--warning);
+  }
+
+  app-access-management .effective-cards header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  app-access-management .effective-cards header > div,
+  app-access-management .effective-cards header strong,
+  app-access-management .effective-cards header span {
+    display: block;
+    min-width: 0;
+  }
+
+  app-access-management .effective-cards header small,
+  app-access-management .effective-cards dt {
+    color: var(--on-surface-muted);
+    font-size: var(--font-size-xs);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  app-access-management .effective-cards header span {
+    margin-top: 0.15rem;
+    color: var(--on-surface-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  app-access-management .effective-cards dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+  }
+
+  app-access-management .effective-cards dl > div {
+    min-width: 0;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+
+  app-access-management .effective-cards dl > div:nth-child(odd) {
+    border-inline-end: 1px solid var(--border);
+  }
+
+  app-access-management .effective-cards dt,
+  app-access-management .effective-cards dd {
+    margin: 0;
+  }
+
+  app-access-management .effective-cards dd {
+    margin-top: 0.25rem;
+    overflow-wrap: anywhere;
+  }
+
+  app-access-management .effective-cards dd strong,
+  app-access-management .effective-cards dd span {
+    display: block;
+  }
+
+  app-access-management .effective-cards dd span {
+    color: var(--on-surface-muted);
+    font-size: var(--font-size-sm);
+  }
+
+  app-access-management .effective-cards footer {
+    padding: var(--space-2) var(--space-3);
+    color: var(--on-surface-muted);
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 420px) {
+  app-access-management .effective-cards dl {
+    grid-template-columns: 1fr;
+  }
+
+  app-access-management .effective-cards dl > div:nth-child(odd) {
+    border-inline-end: 0;
+  }
+}
+
 .content .page .panel-head-actions {
   display: inline-flex;
   flex: 0 0 auto;

@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -34,6 +34,21 @@ function satisfiesAngular(version) {
 }
 
 function scanBundledNode() {
+  const codexRuntime = join(
+    homedir(),
+    '.cache',
+    'codex-runtimes',
+    'codex-primary-runtime',
+    'dependencies',
+    'node',
+    'bin',
+    process.platform === 'win32' ? 'node.exe' : 'node',
+  );
+  if (existsSync(codexRuntime)) {
+    const result = spawnSync(codexRuntime, ['-v'], { encoding: 'utf8' });
+    if (result.status === 0 && satisfiesAngular(parseVersion(result.stdout.trim()))) return codexRuntime;
+  }
+
   const rootDir = join(tmpdir(), 'dgop-node-runtime');
   if (!existsSync(rootDir)) return null;
   const candidates = readdirSync(rootDir, { withFileTypes: true })

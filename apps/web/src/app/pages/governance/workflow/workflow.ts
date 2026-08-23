@@ -109,6 +109,14 @@ interface DesignerFormField {
   options: string;
 }
 
+interface WorkflowInboxField {
+  name: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date' | 'boolean' | 'select';
+  required: boolean;
+  options: string[];
+}
+
 interface WorkflowVariableDraft {
   id: string;
   code: string;
@@ -234,6 +242,9 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private bpmnStylesLoaded = false;
   private bpmnRenderGeneration = 0;
   private bpmnImporting: Promise<boolean> | null = null;
+  private bpmnResizeObserver: ResizeObserver | null = null;
+  private bpmnDirectionObserver: MutationObserver | null = null;
+  private bpmnFitFrame: number | null = null;
   private designerLoadRequestId = 0;
   private designerPreviewRequestId = 0;
   private dashboardTimer: ReturnType<typeof setInterval> | null = null;
@@ -267,6 +278,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly designer = signal<WorkflowDesignerResponse | null>(null);
   protected readonly designerTemplateId = signal<string>('');
   protected readonly designerState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  protected readonly bpmnCanvasState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
   protected readonly designerSaving = signal(false);
   protected readonly designerPreviewing = signal(false);
   protected readonly designerTestRunning = signal(false);
@@ -452,6 +464,10 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly controlCase = signal<CaseRow | null>(null);
   protected readonly controlAction = signal<'suspend' | 'resume' | 'cancel'>('suspend');
   protected readonly controlReason = signal('');
+  protected readonly workTask = signal<Task | null>(null);
+  protected readonly workFormData = signal<Record<string, unknown>>({});
+  protected readonly workSaving = signal<'draft' | 'submit' | null>(null);
+  protected readonly workFormFields = computed<WorkflowInboxField[]>(() => this.inboxFormFields(this.workTask()));
 
   // new case modal
   protected readonly caseModalOpen = signal(false);
@@ -546,6 +562,13 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
+    if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+      this.bpmnDirectionObserver = new MutationObserver(() => {
+        const canvas = this.bpmnModeler?.get?.('canvas');
+        if (canvas) this.fitDesignerCanvas(canvas);
+      });
+      this.bpmnDirectionObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
+    }
     if (this.tab() === 'designer') this.ensureDesignerLoaded();
   }
 
@@ -553,6 +576,8 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.dashboardTimer) clearInterval(this.dashboardTimer);
     if (typeof window !== 'undefined') window.removeEventListener('focus', this.refreshDesignerOnFocus);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.refreshDesignerOnFocus);
+    this.bpmnDirectionObserver?.disconnect();
+    this.bpmnDirectionObserver = null;
     this.destroyBpmnModeler();
   }
 
@@ -723,6 +748,62 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // ---------- decision ----------
+  protected openTaskWork(task: Task): void {
+    this.workTask.set(task);
+    this.workFormData.set({ ...(task.formDataJson ?? {}) });
+  }
+
+  protected closeTaskWork(): void {
+    if (this.workSaving()) return;
+    this.workTask.set(null);
+    this.workFormData.set({});
+  }
+
+  protected updateWorkField(field: WorkflowInboxField, value: unknown): void {
+    const normalized = field.type === 'number' && value !== '' ? Number(value) : value;
+    this.workFormData.update((current) => ({ ...current, [field.name]: normalized }));
+  }
+
+  protected workFieldValue(name: string): unknown {
+    return this.workFormData()[name] ?? '';
+  }
+
+  protected workRequiredMissing(): boolean {
+    const data = this.workFormData();
+    return this.workFormFields().some((field) => {
+      if (!field.required) return false;
+      const value = data[field.name];
+      return value === undefined || value === null || value === '';
+    });
+  }
+
+  protected saveTaskWork(mode: 'draft' | 'submit'): void {
+    const task = this.workTask();
+    if (!task || this.workSaving()) return;
+    if (mode === 'submit' && this.workRequiredMissing()) {
+      this.toast.error(this.t('wf.inbox.requiredFields'));
+      return;
+    }
+    this.workSaving.set(mode);
+    const request = mode === 'draft'
+      ? this.http.patch<Task>(`/api/workflow/tasks/${task.id}/form`, { data: this.workFormData() })
+      : this.http.post<Task>(`/api/workflow/tasks/${task.id}/form`, { data: this.workFormData() });
+    request.subscribe({
+      next: (saved) => {
+        this.tasks.update((rows) => rows.map((row) => row.id === saved.id ? { ...row, ...saved } : row));
+        this.workTask.set(saved);
+        this.workFormData.set({ ...(saved.formDataJson ?? {}) });
+        this.workSaving.set(null);
+        this.toast.success(this.t(mode === 'draft' ? 'wf.inbox.draftSaved' : 'wf.inbox.formSubmitted'));
+        if (mode === 'submit') this.closeTaskWork();
+      },
+      error: (err) => {
+        this.workSaving.set(null);
+        this.toast.errorFrom(err, this.t('wf.inbox.formSaveError'));
+      },
+    });
+  }
+
   protected openDecision(task: Task, decision: WorkflowDecisionValue): void {
     this.decideTask.set(task);
     this.decision.set(decision);
@@ -744,6 +825,43 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
 
   protected decisionCommentRequired(): boolean {
     return this.decision() === this.clarificationDecision;
+  }
+
+  private inboxFormFields(task: Task | null): WorkflowInboxField[] {
+    const schema = task?.templateStage?.formSchemaJson;
+    const record = schema && typeof schema === 'object' && !Array.isArray(schema)
+      ? schema as Record<string, unknown>
+      : {};
+    const requiredNames = new Set(Array.isArray(record['required']) ? record['required'].map(String) : []);
+    const rawFields = Array.isArray(record['fields']) ? record['fields'] : [];
+    const fields = rawFields.flatMap((raw, index): WorkflowInboxField[] => {
+      if (typeof raw === 'string') {
+        return [{ name: raw, label: this.humanizeFieldName(raw), type: 'text', required: requiredNames.has(raw), options: [] }];
+      }
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+      const field = raw as Record<string, unknown>;
+      const name = String(field['name'] ?? field['code'] ?? field['key'] ?? `field_${index + 1}`).trim();
+      if (!name) return [];
+      const rawType = String(field['type'] ?? 'text').toLowerCase();
+      const type: WorkflowInboxField['type'] = ['textarea', 'number', 'date', 'boolean', 'select'].includes(rawType)
+        ? rawType as WorkflowInboxField['type']
+        : 'text';
+      const localizedLabel = this.i18n.lang() === 'ar' ? field['labelAr'] : field['labelEn'];
+      const label = String(localizedLabel ?? field['label'] ?? this.humanizeFieldName(name));
+      const options = Array.isArray(field['options']) ? field['options'].map(String) : [];
+      return [{ name, label, type, required: Boolean(field['required']) || requiredNames.has(name), options }];
+    });
+    return fields.length ? fields : [{
+      name: 'work_notes',
+      label: this.t('wf.inbox.workNotes'),
+      type: 'textarea',
+      required: false,
+      options: [],
+    }];
+  }
+
+  private humanizeFieldName(value: string): string {
+    return value.replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   protected submitDecision(): void {
@@ -1004,7 +1122,12 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected resetDesignerCanvas(): void {
     const xml = this.designer()?.bpmnXml;
     if (!xml) return;
-    this.renderBpmn(xml);
+    void this.renderBpmn(xml);
+  }
+
+  protected retryBpmnCanvas(): void {
+    const xml = this.bpmnImportText().trim() || this.designer()?.bpmnXml || '';
+    if (xml) void this.renderBpmn(xml);
   }
 
   protected undoDesigner(): void {
@@ -1863,6 +1986,15 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         container,
       });
       this.bpmnModelerContainer = container;
+      this.bpmnResizeObserver?.disconnect();
+      if (typeof ResizeObserver !== 'undefined') {
+        this.bpmnResizeObserver = new ResizeObserver(() => {
+          if (this.bpmnCanvasState() !== 'ready' || !this.bpmnModeler) return;
+          const canvas = this.bpmnModeler.get?.('canvas');
+          if (canvas) this.fitDesignerCanvas(canvas);
+        });
+        this.bpmnResizeObserver.observe(container);
+      }
       const eventBus = this.bpmnModeler.get?.('eventBus');
       eventBus?.on?.('selection.changed', (event: { newSelection?: any[] }) => {
         this.captureDesignerSelection(event.newSelection?.[0] ?? null);
@@ -2142,6 +2274,13 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private destroyBpmnModeler(): void {
     this.bpmnRenderGeneration++;
     this.bpmnImporting = null;
+    this.bpmnResizeObserver?.disconnect();
+    this.bpmnResizeObserver = null;
+    if (this.bpmnFitFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(this.bpmnFitFrame);
+      this.bpmnFitFrame = null;
+    }
+    this.bpmnCanvasState.set('idle');
     if (!this.bpmnModeler) {
       this.bpmnModelerContainer = null;
       return;
@@ -2175,22 +2314,35 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     if (!xml.trim()) return false;
     if (this.designerViewMode() !== 'technical') return true;
     const generation = ++this.bpmnRenderGeneration;
+    this.bpmnCanvasState.set('loading');
     const importTask = (async (): Promise<boolean> => {
+      let timeout: ReturnType<typeof setTimeout> | null = null;
       try {
         const modeler = await this.ensureModeler();
         if (!modeler || generation !== this.bpmnRenderGeneration) return false;
-        const result = await modeler.importXML(xml);
+        const result = await Promise.race([
+          modeler.importXML(xml),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(() => reject(new Error('BPMN import timed out')), 12_000);
+          }),
+        ]);
         if (generation !== this.bpmnRenderGeneration || modeler !== this.bpmnModeler) return false;
         const canvas = modeler.get?.('canvas');
         if (canvas) this.fitDesignerCanvas(canvas);
+        this.bpmnCanvasState.set('ready');
         this.selectedDesignerElement.set(null);
         this.syncDesignerHistory();
         const warnings = result?.warnings?.length ?? 0;
         if (warnings > 0) this.toast.show(this.t('wf.designer.importWarnings'), 'info');
         return true;
       } catch {
-        if (generation === this.bpmnRenderGeneration) this.toast.error(this.t('wf.designer.invalidXml'));
+        if (generation === this.bpmnRenderGeneration) {
+          this.bpmnCanvasState.set('error');
+          this.toast.error(this.t('wf.designer.invalidXml'));
+        }
         return false;
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
     })();
     this.bpmnImporting = importTask;
@@ -2212,12 +2364,31 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private fitDesignerCanvas(canvas: any): void {
-    canvas.zoom?.('fit-viewport', 'auto');
-    const width = this.bpmnCanvas?.nativeElement.clientWidth ?? 0;
-    if (width > 0 && width < 520) {
+    const fit = (): void => {
+      canvas.resized?.();
+      canvas.zoom?.('fit-viewport', 'auto');
       const fittedZoom = Number(canvas.zoom?.() ?? 1);
-      canvas.zoom?.(Math.max(fittedZoom, 0.85));
+      if (Number.isFinite(fittedZoom) && fittedZoom > 0) {
+        const width = this.bpmnCanvas?.nativeElement.clientWidth ?? 0;
+        const clearanceFactor = width > 0 && width < 1200 ? 0.8 : 0.88;
+        canvas.zoom?.(Math.max(0.2, fittedZoom * clearanceFactor), 'auto');
+        if (width > 760) {
+          const direction = typeof document !== 'undefined' && document.documentElement.dir === 'rtl' ? -1 : 1;
+          canvas.scroll?.({ dx: 36 * direction, dy: 0 });
+        }
+      }
+    };
+    if (typeof requestAnimationFrame === 'undefined') {
+      fit();
+      return;
     }
+    if (this.bpmnFitFrame !== null) cancelAnimationFrame(this.bpmnFitFrame);
+    this.bpmnFitFrame = requestAnimationFrame(() => {
+      this.bpmnFitFrame = requestAnimationFrame(() => {
+        this.bpmnFitFrame = null;
+        fit();
+      });
+    });
   }
 
   private async persistDesigner(mode: 'save' | 'publish'): Promise<void> {

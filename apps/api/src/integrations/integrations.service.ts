@@ -81,6 +81,13 @@ type ConnectorWithConfig = {
   configJson?: Prisma.JsonValue | null;
 };
 
+export type WorkflowConnectorActionInput = {
+  connectorId?: string | null;
+  connectorCode?: string | null;
+  endpoint?: 'health' | 'writeback';
+  payload?: unknown;
+};
+
 const DEFAULT_CATALOG_CONNECTOR_CODE = 'CATALOG-MVP';
 const MAX_INTEGRATION_LIST_LIMIT = 100;
 
@@ -523,6 +530,33 @@ export class IntegrationsService implements OnModuleInit {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async executeWorkflowConnectorAction(input: WorkflowConnectorActionInput): Promise<ExternalConnectorResult> {
+    const connectorId = input.connectorId?.trim();
+    const connectorCode = input.connectorCode?.trim();
+    if (!connectorId && !connectorCode) {
+      throw new BadRequestException('Workflow connector action requires connectorId or connectorCode');
+    }
+    const connector = await this.prisma.integrationConnector.findFirst({
+      where: {
+        ...(connectorId ? { id: connectorId } : { code: connectorCode }),
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true, code: true, type: true, sourceTrust: true, configJson: true },
+    });
+    if (!connector) throw new NotFoundException('Configured workflow connector is not active');
+
+    const endpoint = input.endpoint ?? (input.payload == null ? 'health' : 'writeback');
+    const result = await this.callEnterpriseConnector(connector, endpoint, {
+      method: endpoint === 'health' ? 'GET' : 'POST',
+      payload: endpoint === 'health' ? undefined : input.payload ?? {},
+    });
+    if (!result.ok) {
+      throw new BadRequestException(`Connector ${connector.code} returned ${result.status || 'no response'}: ${result.statusText}`);
+    }
+    return result;
   }
 
   private webhookTokenIsValid(token?: string | null): boolean {

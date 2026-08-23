@@ -23,6 +23,9 @@ export interface AuditFilters {
 
 type AuditWriter = PrismaService | Prisma.TransactionClient;
 const LEGACY_BASELINE_ACTION = 'audit_chain.legacy_baseline.accepted';
+// A single transaction-scoped PostgreSQL advisory lock keeps the global hash
+// chain linear even when unrelated governance operations commit concurrently.
+const AUDIT_CHAIN_LOCK_KEY = 1_832_705_417;
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'off']);
 
 function auditFailClosed(): boolean {
@@ -52,39 +55,45 @@ export class AuditService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async log(entry: AuditEntry, client: AuditWriter = this.prisma): Promise<void> {
-    try {
-      const metadata = sanitizeAuditMetadata(entry.metadata ?? null);
-      const previous = await client.auditLog.findFirst({
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        select: { entryHash: true },
-      });
-      const createdAt = new Date();
-      const previousHash = previous?.entryHash ?? null;
-      const chainVersion = 1;
-      const entryHash = hashAuditEntry({
+  private async writeLocked(entry: AuditEntry, client: AuditWriter): Promise<void> {
+    await client.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY}) IS NULL AS "locked"`;
+    const metadata = sanitizeAuditMetadata(entry.metadata ?? null);
+    const previous = await client.auditLog.findFirst({
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { entryHash: true },
+    });
+    const createdAt = new Date();
+    const previousHash = previous?.entryHash ?? null;
+    const chainVersion = 1;
+    const entryHash = hashAuditEntry({
+      actor: entry.actor,
+      action: entry.action,
+      entityType: entry.entityType,
+      entityId: entry.entityId ?? null,
+      metadata,
+      createdAt,
+      previousHash,
+      chainVersion,
+    });
+    await client.auditLog.create({
+      data: {
         actor: entry.actor,
         action: entry.action,
         entityType: entry.entityType,
         entityId: entry.entityId ?? null,
-        metadata,
-        createdAt,
+        metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
         previousHash,
+        entryHash,
         chainVersion,
-      });
-      await client.auditLog.create({
-        data: {
-          actor: entry.actor,
-          action: entry.action,
-          entityType: entry.entityType,
-          entityId: entry.entityId ?? null,
-          metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
-          previousHash,
-          entryHash,
-          chainVersion,
-          createdAt,
-        },
-      });
+        createdAt,
+      },
+    });
+  }
+
+  async log(entry: AuditEntry, client?: AuditWriter): Promise<void> {
+    try {
+      if (client) await this.writeLocked(entry, client);
+      else await this.prisma.$transaction((tx) => this.writeLocked(entry, tx));
     } catch (err) {
       this.logger.error(`Failed to write audit log for ${entry.action}`, err as Error);
       if (auditFailClosed()) {

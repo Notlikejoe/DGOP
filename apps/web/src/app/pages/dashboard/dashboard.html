@@ -34,32 +34,61 @@
       </header>
 
       <section class="status-strip" [attr.aria-label]="t('cmd.governanceStatus')">
-        <a class="status-metric" routerLink="/assets">
+        <a class="status-metric status-metric--info" routerLink="/assets">
           <span class="status-metric__label">{{ t('cmd.metric.assets') }}</span>
           <strong>{{ s.governance ? s.governance.assets.total : 0 }}</strong>
           <span>{{ s.governance ? s.governance.assets.withOwner : 0 }} {{ t('cmd.metric.owned') }}</span>
         </a>
-        <a class="status-metric" routerLink="/governance/ownership">
+        <a
+          class="status-metric"
+          [class.status-metric--success]="(s.governance?.ownershipCoveragePct ?? 0) >= 80"
+          [class.status-metric--warning]="(s.governance?.ownershipCoveragePct ?? 0) >= 20 && (s.governance?.ownershipCoveragePct ?? 0) < 80"
+          [class.status-metric--danger]="(s.governance?.ownershipCoveragePct ?? 0) < 20"
+          routerLink="/governance/ownership"
+        >
           <span class="status-metric__label">{{ t('cmd.metric.ownershipCoverage') }}</span>
           <strong>{{ s.governance?.ownershipCoveragePct ?? 0 }}%</strong>
           <span>{{ s.governance ? s.governance.assets.unassigned : 0 }} {{ t('cmd.metric.missingOwners') }}</span>
         </a>
-        <a class="status-metric" routerLink="/governance/ndi/readiness">
+        <a
+          class="status-metric"
+          [class.status-metric--success]="(s.ndi?.readinessPct ?? 0) >= 80"
+          [class.status-metric--warning]="(s.ndi?.readinessPct ?? 0) >= 20 && (s.ndi?.readinessPct ?? 0) < 80"
+          [class.status-metric--danger]="(s.ndi?.readinessPct ?? 0) < 20"
+          routerLink="/governance/ndi/readiness"
+        >
           <span class="status-metric__label">{{ t('cmd.metric.ndiReadiness') }}</span>
           <strong>{{ s.ndi?.readinessPct ?? 0 }}%</strong>
           <span>{{ s.ndi?.satisfied ?? 0 }}/{{ s.ndi?.specifications ?? 0 }} {{ t('cmd.metric.controlsProven') }}</span>
         </a>
-        <a class="status-metric" routerLink="/governance/workflow">
+        <a
+          class="status-metric"
+          [class.status-metric--danger]="(s.workflow?.myOverdueTasks ?? 0) > 0"
+          [class.status-metric--info]="(s.workflow?.myOverdueTasks ?? 0) === 0"
+          routerLink="/governance/workflow"
+        >
           <span class="status-metric__label">{{ t('cmd.metric.workflow') }}</span>
           <strong>{{ s.workflow?.myOpenTasks ?? 0 }}</strong>
           <span>{{ s.workflow?.myOverdueTasks ?? 0 }} {{ t('cmd.metric.overdue') }}</span>
         </a>
-        <a class="status-metric" routerLink="/governance/data-quality">
+        <a
+          class="status-metric"
+          [class.status-metric--danger]="(s.dataQuality?.critical ?? 0) > 0"
+          [class.status-metric--warning]="(s.dataQuality?.critical ?? 0) === 0 && (s.dataQuality?.open ?? 0) > 0"
+          [class.status-metric--success]="(s.dataQuality?.open ?? 0) === 0"
+          routerLink="/governance/data-quality"
+        >
           <span class="status-metric__label">{{ t('cmd.metric.dataQuality') }}</span>
           <strong>{{ s.dataQuality?.open ?? 0 }}</strong>
           <span>{{ s.dataQuality?.critical ?? 0 }} {{ t('cmd.metric.critical') }}</span>
         </a>
-        <a class="status-metric" routerLink="/governance/training">
+        <a
+          class="status-metric"
+          [class.status-metric--success]="(s.training?.awarenessReadiness ?? 0) >= 80"
+          [class.status-metric--warning]="(s.training?.awarenessReadiness ?? 0) >= 20 && (s.training?.awarenessReadiness ?? 0) < 80"
+          [class.status-metric--danger]="(s.training?.awarenessReadiness ?? 0) < 20"
+          routerLink="/governance/training"
+        >
           <span class="status-metric__label">{{ t('cmd.metric.training') }}</span>
           <strong>{{ s.training?.awarenessReadiness ?? 0 }}%</strong>
           <span>{{ s.training?.activeCertifications ?? 0 }}/{{ s.training?.certificationTracks ?? 0 }} {{ t('training.metric.certifications') }}</span>
@@ -73,49 +102,41 @@
               <div>
                 <span class="eyebrow">{{ t('cmd.executiveView') }}</span>
                 <h2>{{ t('cmd.governancePosture') }}</h2>
+                <p class="panel__intro">{{ t('cmd.governancePostureCopy') }}</p>
               </div>
               <app-status-chip [kind]="healthKind()" [label]="healthLabel()" />
             </div>
 
-            <div class="posture-grid">
-              <div class="posture">
-                <div class="posture__top">
-                  <span>{{ t('cmd.metric.ownershipCoverage') }}</span>
-                  <strong>{{ s.governance?.ownershipCoveragePct ?? 0 }}%</strong>
+            <div class="priority-grid">
+              <section class="priority priority--warning">
+                <span class="priority__label">{{ t('cmd.metric.ownershipCoverage') }}</span>
+                <div class="priority__measure">
+                  <strong>{{ s.governance ? s.governance.assets.unassigned : 0 }}</strong>
+                  <span>{{ t('cmd.assetsNeedOwners') }}</span>
                 </div>
-                <app-progress-bar
-                  [value]="s.governance?.ownershipCoveragePct ?? 0"
-                  [kind]="coverageBar(s.governance?.ownershipCoveragePct ?? 0)"
-                  [label]="t('cmd.metric.ownershipCoverage')"
-                />
                 <p>{{ s.governance ? s.governance.assets.withOwner : 0 }} {{ t('cmd.of') }} {{ s.governance ? s.governance.assets.total : 0 }} {{ t('cmd.namedAccountability') }}</p>
-              </div>
+                <a class="priority__action" routerLink="/governance/exception-queue">{{ t('cmd.assignOwners') }}</a>
+              </section>
 
-              <div class="posture">
-                <div class="posture__top">
-                  <span>{{ t('cmd.stewardshipCoverage') }}</span>
-                  <strong>{{ s.governance?.stewardshipCoveragePct ?? 0 }}%</strong>
+              <section class="priority priority--warning">
+                <span class="priority__label">{{ t('cmd.stewardshipCoverage') }}</span>
+                <div class="priority__measure">
+                  <strong>{{ stewardshipGapCount() }}</strong>
+                  <span>{{ t('cmd.assetsNeedStewards') }}</span>
                 </div>
-                <app-progress-bar
-                  [value]="s.governance?.stewardshipCoveragePct ?? 0"
-                  [kind]="coverageBar(s.governance?.stewardshipCoveragePct ?? 0)"
-                  [label]="t('cmd.stewardshipCoverage')"
-                />
                 <p>{{ t('cmd.stewardshipCopy') }}</p>
-              </div>
+                <a class="priority__action" routerLink="/governance/ownership">{{ t('cmd.assignStewards') }}</a>
+              </section>
 
-              <div class="posture">
-                <div class="posture__top">
-                  <span>{{ t('cmd.metric.ndiReadiness') }}</span>
-                  <strong>{{ s.ndi?.readinessPct ?? 0 }}%</strong>
+              <section class="priority priority--success">
+                <span class="priority__label">{{ t('cmd.evidenceScope') }}</span>
+                <div class="priority__measure">
+                  <strong>{{ s.ndi?.satisfied ?? 0 }}/{{ s.ndi?.specifications ?? 0 }}</strong>
+                  <span>{{ t('cmd.controlsEvidenced') }}</span>
                 </div>
-                <app-progress-bar
-                  [value]="s.ndi?.readinessPct ?? 0"
-                  [kind]="readinessBar(s.ndi?.readinessPct ?? 0)"
-                  [label]="t('cmd.metric.ndiReadiness')"
-                />
-                <p>{{ s.ndi?.satisfied ?? 0 }} {{ t('cmd.evidenceLinksOutOf') }} {{ s.ndi?.specifications ?? 0 }} {{ t('cmd.requiredSpecifications') }}</p>
-              </div>
+                <p>{{ t('cmd.evidenceScopeCopy') }}</p>
+                <a class="priority__action" routerLink="/governance/ndi/readiness">{{ t('cmd.reviewEvidence') }}</a>
+              </section>
             </div>
           </article>
 
@@ -124,16 +145,18 @@
               <div>
                 <span class="eyebrow">{{ t('cmd.dataJourney') }}</span>
                 <h2>{{ t('cmd.fromCatalog') }}</h2>
+                <p class="panel__intro">{{ t('cmd.journeyCopy') }}</p>
               </div>
             </div>
 
             <div class="journey">
-              @for (node of journeyNodes(); track node.label) {
-                <div class="journey__node journey__node--{{ node.kind }}">
-                  <span>{{ node.label }}</span>
+              @for (node of journeyNodes(); track node.label; let step = $index) {
+                <a class="journey__node journey__node--{{ node.kind }}" [routerLink]="node.link">
+                  <span class="journey__step">0{{ step + 1 }}</span>
+                  <span class="journey__label">{{ node.label }}</span>
                   <strong>{{ node.value }}</strong>
                   <small>{{ node.detail }}</small>
-                </div>
+                </a>
               }
             </div>
           </article>

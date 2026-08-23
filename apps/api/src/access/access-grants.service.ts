@@ -31,6 +31,10 @@ const ACCESS_GRANT_DEFAULT_PAGE_SIZE = 50;
 const ACTIVE_GRANT_STATUSES = new Set(['requested', 'active']);
 const TERMINAL_GRANT_STATUSES = ['expired', 'rejected', 'revoked'] as const;
 const DEFAULT_ACCESS_IMPORT_ROW_LIMIT = 10_000;
+const ACCESS_MATRIX_MAX_ASSETS = 100;
+const ACCESS_MATRIX_MAX_PRINCIPALS = 50;
+const ACCESS_MATRIX_MAX_GRANTS = 10_000;
+const EFFECTIVE_ACCESS_BATCH_SIZE = 500;
 
 type ImportAction = 'create' | 'update' | 'revoke';
 type ImportPlanRow = {
@@ -98,6 +102,32 @@ const grantInclude = {
     },
     orderBy: { permissionCode: 'asc' as const },
   },
+};
+
+type AccessGrantWithInclude = Prisma.AccessGrantGetPayload<{ include: typeof grantInclude }>;
+type EffectiveAccessRow = {
+  grantId: string;
+  grantCode: string;
+  grantVersion: number;
+  asset: AccessGrantWithInclude['asset'];
+  principalType: string;
+  principalId: string;
+  permissionCode: string;
+  permissionCodes: string[];
+  grantStatus: string;
+  ownerDecision: string;
+  enforcementStatus: string;
+  startsAt: Date;
+  expiresAt: Date | null;
+  lifecycleState: string;
+  enforcementGap: boolean;
+  subjectType: string;
+  subjectId: string;
+  subjectLabel: string;
+  expansionStatus: string;
+  source: string;
+  expandedFromRoleCode?: string;
+  expandedFromRoleName?: string;
 };
 
 const grantDetailInclude = {
@@ -194,9 +224,9 @@ export class AccessGrantsService {
   }
 
   async accessMatrix(user: AuthUser, query: AccessMatrixQueryDto) {
-    const assetLimit = Math.min(Math.max(query.assetLimit ?? 100, 1), 500);
+    const assetLimit = Math.min(Math.max(query.assetLimit ?? ACCESS_MATRIX_MAX_ASSETS, 1), ACCESS_MATRIX_MAX_ASSETS);
     const assetPage = Math.max(query.assetPage ?? 1, 1);
-    const principalLimit = Math.min(Math.max(query.principalLimit ?? 100, 1), 100);
+    const principalLimit = Math.min(Math.max(query.principalLimit ?? ACCESS_MATRIX_MAX_PRINCIPALS, 1), ACCESS_MATRIX_MAX_PRINCIPALS);
     const principalTypes = query.principalType ? [query.principalType] : ['role', 'group'];
     const grantFilter: Prisma.AccessGrantWhereInput = {
       principalType: { in: principalTypes },
@@ -253,7 +283,7 @@ export class AccessGrantsService {
     ]);
     const assetIds = assets.map((asset) => asset.id);
     const principalSearch = query.principalSearch?.trim();
-    const [roles, groups, grants, permissions] = await Promise.all([
+    const [roles, groups, referencedPrincipals, permissions] = await Promise.all([
       principalTypes.includes('role')
         ? this.prisma.role.findMany({
             where: {
@@ -296,35 +326,15 @@ export class AccessGrantsService {
             where: {
               assetId: { in: assetIds },
               ...grantFilter,
+              ...(principalSearch ? { principalId: { contains: principalSearch, mode: 'insensitive' } } : {}),
             },
             select: {
-              id: true,
-              code: true,
-              assetId: true,
               principalType: true,
               principalId: true,
-              permissionCode: true,
-              profile: { select: { id: true, code: true, nameEn: true, nameAr: true, version: true } },
-              permissions: {
-                select: {
-                  permissionCode: true,
-                  permission: { select: { action: true, nameEn: true, nameAr: true, riskLevel: true } },
-                },
-              },
-              status: true,
-              ownerDecision: true,
-              enforcementStatus: true,
-              startsAt: true,
-              expiresAt: true,
-              updatedAt: true,
-              reviewItems: {
-                select: { decision: true, reviewedAt: true, reviewer: true },
-                orderBy: { updatedAt: 'desc' },
-                take: 1,
-              },
             },
-            orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-            take: 50_000,
+            distinct: ['principalType', 'principalId'],
+            orderBy: [{ principalType: 'asc' }, { principalId: 'asc' }],
+            take: principalLimit,
           })
         : Promise.resolve([]),
       this.prisma.accessPermissionCatalog.findMany({
@@ -342,7 +352,7 @@ export class AccessGrantsService {
     for (const group of groups) {
       principalMap.set(`group:${group.externalId}`, { type: 'group', id: group.externalId, label: group.nameEn, nameAr: group.nameAr, source: group.source });
     }
-    for (const principal of grants) {
+    for (const principal of referencedPrincipals) {
       const key = `${principal.principalType}:${principal.principalId}`;
       if (!principalMap.has(key)) {
         principalMap.set(key, {
@@ -353,10 +363,65 @@ export class AccessGrantsService {
         });
       }
     }
+    const referencedPrincipalKeys = new Set(
+      referencedPrincipals.map((principal) => `${principal.principalType}:${principal.principalId}`),
+    );
     const principals = [...principalMap.values()]
-      .sort((left, right) => `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`))
+      .sort((left, right) => {
+        const leftReferenced = referencedPrincipalKeys.has(`${left.type}:${left.id}`);
+        const rightReferenced = referencedPrincipalKeys.has(`${right.type}:${right.id}`);
+        if (leftReferenced !== rightReferenced) return leftReferenced ? -1 : 1;
+        return `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`);
+      })
       .slice(0, principalLimit);
     const principalKeys = new Set(principals.map((principal) => `${principal.type}:${principal.id}`));
+    const principalWhere = principals.map((principal) => ({ principalType: principal.type, principalId: principal.id }));
+    const matrixGrantWhere: Prisma.AccessGrantWhereInput = {
+      assetId: { in: assetIds },
+      ...grantFilter,
+      OR: principalWhere,
+    };
+    const matrixGrantCount = assetIds.length && principalWhere.length
+      ? await this.prisma.accessGrant.count({ where: matrixGrantWhere })
+      : 0;
+    if (matrixGrantCount > ACCESS_MATRIX_MAX_GRANTS) {
+      throw new BadRequestException(
+        `Matrix selection contains ${matrixGrantCount} grants; narrow the asset or principal filters below ${ACCESS_MATRIX_MAX_GRANTS}`,
+      );
+    }
+    const grants = matrixGrantCount
+      ? await this.prisma.accessGrant.findMany({
+          where: matrixGrantWhere,
+          select: {
+            id: true,
+            code: true,
+            assetId: true,
+            principalType: true,
+            principalId: true,
+            permissionCode: true,
+            profile: { select: { id: true, code: true, nameEn: true, nameAr: true, version: true } },
+            permissions: {
+              select: {
+                permissionCode: true,
+                permission: { select: { action: true, nameEn: true, nameAr: true, riskLevel: true } },
+              },
+            },
+            status: true,
+            ownerDecision: true,
+            enforcementStatus: true,
+            startsAt: true,
+            expiresAt: true,
+            updatedAt: true,
+            reviewItems: {
+              select: { decision: true, reviewedAt: true, reviewer: true },
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+            },
+          },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+          take: ACCESS_MATRIX_MAX_GRANTS,
+        })
+      : [];
     const cellMap = new Map<string, typeof grants>();
     for (const grant of grants) {
       const principalKey = `${grant.principalType}:${grant.principalId}`;
@@ -473,9 +538,10 @@ export class AccessGrantsService {
       constraints: {
         assetLimit,
         principalLimit,
-        maximumAssets: 500,
-        maximumPrincipals: 100,
-        note: 'Matrix cells are derived from the governed authorization record. No Access is the default state.',
+        maximumAssets: ACCESS_MATRIX_MAX_ASSETS,
+        maximumPrincipals: ACCESS_MATRIX_MAX_PRINCIPALS,
+        maximumGrants: ACCESS_MATRIX_MAX_GRANTS,
+        note: 'Matrix cells are derived from the governed authorization record. Oversized selections must be narrowed; No Access is the default state.',
       },
     };
   }
@@ -491,118 +557,136 @@ export class AccessGrantsService {
     if (filters.assetId) where.assetId = filters.assetId;
     if (filters.principalId) where.principalId = filters.principalId;
     if (filters.principalType) where.principalType = filters.principalType;
-    const grants = await this.prisma.accessGrant.findMany({
-      where,
-      include: grantInclude,
-      orderBy: [{ assetId: 'asc' }, { principalType: 'asc' }, { principalId: 'asc' }, { permissionCode: 'asc' }],
-      take: 2_000,
-    });
-
-    const userIds = [...new Set(grants.filter((grant) => grant.principalType === 'user').map((grant) => grant.principalId))];
-    const roleCodes = [...new Set(grants.filter((grant) => grant.principalType === 'role').map((grant) => grant.principalId))];
-    const [users, roleMemberships] = await Promise.all([
-      userIds.length
-        ? this.prisma.user.findMany({
-            where: { id: { in: userIds }, isActive: true },
-            select: { id: true, email: true, displayName: true },
-          })
-        : Promise.resolve([]),
-      roleCodes.length
-        ? this.prisma.userRole.findMany({
-            where: { role: { code: { in: roleCodes }, isActive: true, deletedAt: null }, user: { isActive: true } },
-            select: {
-              userId: true,
-              user: { select: { id: true, email: true, displayName: true } },
-              role: { select: { id: true, code: true, nameEn: true } },
-            },
-            orderBy: [{ roleId: 'asc' }, { userId: 'asc' }],
-          })
-        : Promise.resolve([]),
-    ]);
-    const userById = new Map(users.map((row) => [row.id, row] as const));
-    const membershipsByRoleCode = new Map<string, typeof roleMemberships>();
-    for (const membership of roleMemberships) {
-      const rows = membershipsByRoleCode.get(membership.role.code) ?? [];
-      rows.push(membership);
-      membershipsByRoleCode.set(membership.role.code, rows);
-    }
-
-    const rows = grants.flatMap((grant) => {
-      const lifecycleState = this.effectiveAccessLifecycle(grant.startsAt, grant.expiresAt, grant.status, now);
-      const enforcementGap = grant.enforcementStatus !== 'enforced' && lifecycleState === 'current';
-      const permissionCodes = this.grantPermissionCodes(grant);
-      const base = {
-        grantId: grant.id,
-        grantCode: grant.code,
-        grantVersion: grant.version,
-        asset: grant.asset,
-        principalType: grant.principalType,
-        principalId: grant.principalId,
-        permissionCode: grant.permissionCode,
-        permissionCodes,
-        grantStatus: grant.status,
-        ownerDecision: grant.ownerDecision,
-        enforcementStatus: grant.enforcementStatus,
-        startsAt: grant.startsAt,
-        expiresAt: grant.expiresAt,
-        lifecycleState,
-        enforcementGap,
-      };
-      if (grant.principalType === 'user') {
-        const resolvedUser = userById.get(grant.principalId);
-        return [{
-          ...base,
-          subjectType: 'user',
-          subjectId: grant.principalId,
-          subjectLabel: resolvedUser?.displayName || resolvedUser?.email || grant.principalId,
-          expansionStatus: resolvedUser ? 'resolved' : 'missing_user',
-          source: 'direct_grant',
-        }];
-      }
-      if (grant.principalType === 'role') {
-        const memberships = membershipsByRoleCode.get(grant.principalId) ?? [];
-        if (!memberships.length) {
-          return [{
-            ...base,
-            subjectType: 'role',
-            subjectId: grant.principalId,
-            subjectLabel: grant.principalId,
-            expansionStatus: 'no_active_members',
-            source: 'role_grant',
-          }];
-        }
-        return memberships.map((membership) => ({
-          ...base,
-          subjectType: 'user',
-          subjectId: membership.userId,
-          subjectLabel: membership.user.displayName || membership.user.email,
-          expandedFromRoleCode: membership.role.code,
-          expandedFromRoleName: membership.role.nameEn,
-          expansionStatus: 'resolved',
-          source: 'role_membership',
-        }));
-      }
-      return [{
-        ...base,
-        subjectType: grant.principalType,
-        subjectId: grant.principalId,
-        subjectLabel: grant.principalId,
-        expansionStatus: 'external_unverified',
-        source: 'external_principal',
-      }];
-    });
-    const start = page.skip;
-    const data = rows.slice(start, start + page.take);
     const summary = {
-      totalEffectiveRows: rows.length,
-      current: rows.filter((row) => row.lifecycleState === 'current').length,
-      scheduled: rows.filter((row) => row.lifecycleState === 'scheduled').length,
-      expired: rows.filter((row) => row.lifecycleState === 'expired').length,
-      revoked: rows.filter((row) => row.lifecycleState === 'revoked').length,
-      enforcementGaps: rows.filter((row) => row.enforcementGap).length,
-      externalUnverified: rows.filter((row) => row.expansionStatus === 'external_unverified').length,
+      totalEffectiveRows: 0,
+      current: 0,
+      scheduled: 0,
+      expired: 0,
+      revoked: 0,
+      enforcementGaps: 0,
+      externalUnverified: 0,
     };
-    return { ...toPaged(data, rows.length, page), summary };
+    const data: EffectiveAccessRow[] = [];
+    let sourceOffset = 0;
+    while (true) {
+      const grants = await this.prisma.accessGrant.findMany({
+        where,
+        include: grantInclude,
+        orderBy: [
+          { assetId: 'asc' },
+          { principalType: 'asc' },
+          { principalId: 'asc' },
+          { permissionCode: 'asc' },
+          { id: 'asc' },
+        ],
+        skip: sourceOffset,
+        take: EFFECTIVE_ACCESS_BATCH_SIZE,
+      });
+      if (!grants.length) break;
+
+      const userIds = [...new Set(grants.filter((grant) => grant.principalType === 'user').map((grant) => grant.principalId))];
+      const roleCodes = [...new Set(grants.filter((grant) => grant.principalType === 'role').map((grant) => grant.principalId))];
+      const [users, roleMemberships] = await Promise.all([
+        userIds.length
+          ? this.prisma.user.findMany({
+              where: { id: { in: userIds }, isActive: true },
+              select: { id: true, email: true, displayName: true },
+            })
+          : Promise.resolve([]),
+        roleCodes.length
+          ? this.prisma.userRole.findMany({
+              where: { role: { code: { in: roleCodes }, isActive: true, deletedAt: null }, user: { isActive: true } },
+              select: {
+                userId: true,
+                user: { select: { id: true, email: true, displayName: true } },
+                role: { select: { id: true, code: true, nameEn: true } },
+              },
+              orderBy: [{ roleId: 'asc' }, { userId: 'asc' }],
+            })
+          : Promise.resolve([]),
+      ]);
+      const userById = new Map(users.map((row) => [row.id, row] as const));
+      const membershipsByRoleCode = new Map<string, typeof roleMemberships>();
+      for (const membership of roleMemberships) {
+        const memberships = membershipsByRoleCode.get(membership.role.code) ?? [];
+        memberships.push(membership);
+        membershipsByRoleCode.set(membership.role.code, memberships);
+      }
+
+      for (const grant of grants) {
+        const lifecycleState = this.effectiveAccessLifecycle(grant.startsAt, grant.expiresAt, grant.status, now);
+        const enforcementGap = grant.enforcementStatus !== 'enforced' && lifecycleState === 'current';
+        const base = {
+          grantId: grant.id,
+          grantCode: grant.code,
+          grantVersion: grant.version,
+          asset: grant.asset,
+          principalType: grant.principalType,
+          principalId: grant.principalId,
+          permissionCode: grant.permissionCode,
+          permissionCodes: this.grantPermissionCodes(grant),
+          grantStatus: grant.status,
+          ownerDecision: grant.ownerDecision,
+          enforcementStatus: grant.enforcementStatus,
+          startsAt: grant.startsAt,
+          expiresAt: grant.expiresAt,
+          lifecycleState,
+          enforcementGap,
+        };
+        const expandedRows: EffectiveAccessRow[] = grant.principalType === 'user'
+          ? [{
+              ...base,
+              subjectType: 'user',
+              subjectId: grant.principalId,
+              subjectLabel: userById.get(grant.principalId)?.displayName || userById.get(grant.principalId)?.email || grant.principalId,
+              expansionStatus: userById.has(grant.principalId) ? 'resolved' : 'missing_user',
+              source: 'direct_grant',
+            }]
+          : grant.principalType === 'role'
+            ? (membershipsByRoleCode.get(grant.principalId)?.length
+                ? membershipsByRoleCode.get(grant.principalId)!.map((membership) => ({
+                    ...base,
+                    subjectType: 'user',
+                    subjectId: membership.userId,
+                    subjectLabel: membership.user.displayName || membership.user.email,
+                    expandedFromRoleCode: membership.role.code,
+                    expandedFromRoleName: membership.role.nameEn,
+                    expansionStatus: 'resolved',
+                    source: 'role_membership',
+                  }))
+                : [{
+                    ...base,
+                    subjectType: 'role',
+                    subjectId: grant.principalId,
+                    subjectLabel: grant.principalId,
+                    expansionStatus: 'no_active_members',
+                    source: 'role_grant',
+                  }])
+            : [{
+                ...base,
+                subjectType: grant.principalType,
+                subjectId: grant.principalId,
+                subjectLabel: grant.principalId,
+                expansionStatus: 'external_unverified',
+                source: 'external_principal',
+              }];
+
+        for (const row of expandedRows) {
+          const rowNumber = summary.totalEffectiveRows;
+          if (rowNumber >= page.skip && data.length < page.take) data.push(row);
+          summary.totalEffectiveRows++;
+          if (row.lifecycleState === 'current') summary.current++;
+          if (row.lifecycleState === 'scheduled') summary.scheduled++;
+          if (row.lifecycleState === 'expired') summary.expired++;
+          if (row.lifecycleState === 'revoked') summary.revoked++;
+          if (row.enforcementGap) summary.enforcementGaps++;
+          if (row.expansionStatus === 'external_unverified') summary.externalUnverified++;
+        }
+      }
+      sourceOffset += grants.length;
+      if (grants.length < EFFECTIVE_ACCESS_BATCH_SIZE) break;
+    }
+    return { ...toPaged(data, summary.totalEffectiveRows, page), summary, processedGrantCount: sourceOffset };
   }
 
   async accessManagementReport(user: AuthUser) {
@@ -1366,16 +1450,18 @@ export class AccessGrantsService {
     dto: { expectedVersion: number; comment?: string },
     user: AuthUser,
   ) {
-    const idempotencyKey = `access-enforcement:dgop-policy:${id}:v${dto.expectedVersion}`;
     const grant = await this.getGrant(id, user);
+    const revocation = ['pending_revocation', 'revocation_failed'].includes(grant.status);
+    const operation = revocation ? 'revoke_rules' : 'apply_rules';
+    const idempotencyKey = `access-enforcement:dgop-policy:${operation}:${id}:v${dto.expectedVersion}`;
     const previousAttempt = await this.prisma.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
     if (previousAttempt) return { attempt: previousAttempt, deduplicated: true };
 
     if (grant.version !== dto.expectedVersion) {
       throw new ConflictException('Grant changed before its access rules could be applied');
     }
-    if (grant.ownerDecision !== 'approved' || grant.status !== 'active') {
-      throw new BadRequestException('Only active owner-approved grants can be applied to the policy store');
+    if (!revocation && (grant.ownerDecision !== 'approved' || grant.status !== 'active')) {
+      throw new BadRequestException('Policy activation requires an active owner-approved grant; revocation requires a pending-revocation grant');
     }
     const permissionCodes = this.grantPermissionCodes(grant);
     if (!permissionCodes.length) throw new BadRequestException('The grant has no permission rules to apply');
@@ -1387,7 +1473,7 @@ export class AccessGrantsService {
         data: {
           grantId: grant.id,
           idempotencyKey,
-          operation: 'apply_rules',
+          operation,
           connectorCode: 'dgop_policy_store',
           status: 'succeeded',
           attemptCount: 1,
@@ -1405,7 +1491,9 @@ export class AccessGrantsService {
           } as Prisma.InputJsonValue,
           responseJson: {
             policyStore: 'dgop',
-            appliedPermissionCount: permissionCodes.length,
+            ...(revocation
+              ? { removedPermissionCount: permissionCodes.length }
+              : { appliedPermissionCount: permissionCodes.length }),
             comment: dto.comment?.trim() || null,
             appliedBy: user.email,
           } as Prisma.InputJsonValue,
@@ -1414,12 +1502,21 @@ export class AccessGrantsService {
       });
       await tx.accessGrant.update({
         where: { id: grant.id },
-        data: { enforcementStatus: 'enforced', updatedBy: user.email, version: { increment: 1 } },
+        data: revocation
+          ? {
+              status: 'revoked',
+              enforcementStatus: 'revoked',
+              revokedAt: completedAt,
+              revokedBy: user.email,
+              updatedBy: user.email,
+              version: { increment: 1 },
+            }
+          : { enforcementStatus: 'enforced', updatedBy: user.email, version: { increment: 1 } },
       });
       await this.audit.log(
         {
           actor: user.email,
-          action: 'access_grant.rules_applied',
+          action: revocation ? 'access_grant.rules_revoked' : 'access_grant.rules_applied',
           entityType: 'access_enforcement_attempt',
           entityId: created.id,
           metadata: {
@@ -1428,6 +1525,7 @@ export class AccessGrantsService {
             profileId: grant.profileId,
             permissionCodes,
             policyStore: 'dgop',
+            operation,
           },
         },
         tx,

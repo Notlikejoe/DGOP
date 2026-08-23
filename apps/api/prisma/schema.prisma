@@ -452,7 +452,7 @@ model NdiEvidence {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
-  spec                   NdiSpecification        @relation(fields: [specId], references: [id], onDelete: Cascade)
+  spec                   NdiSpecification        @relation(fields: [specId], references: [id], onDelete: Restrict)
   openDataAssessments    OpenDataAssessment[]    @relation("OpenDataAssessmentEvidence")
   openDataPublications   OpenDataPublication[]   @relation("OpenDataPublicationEvidence")
   mdmMatchCandidates     MdmMatchCandidate[]     @relation("MdmMatchEvidence")
@@ -945,7 +945,7 @@ model WorkflowEvent {
   toStatus   String?
   comment    String?
   createdAt  DateTime      @default(now())
-  case       WorkflowCase  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case       WorkflowCase  @relation(fields: [caseId], references: [id], onDelete: Restrict)
   task       WorkflowTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
@@ -977,6 +977,10 @@ model WorkflowRuntimeToken {
   case               WorkflowCase           @relation(fields: [caseId], references: [id], onDelete: Cascade)
   templateStage      WorkflowTemplateStage? @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
   task               WorkflowTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  parentToken        WorkflowRuntimeToken?  @relation("WorkflowTokenParent", fields: [parentTokenId], references: [id], onDelete: SetNull)
+  childTokens        WorkflowRuntimeToken[] @relation("WorkflowTokenParent")
+  rootToken          WorkflowRuntimeToken?  @relation("WorkflowTokenRoot", fields: [rootTokenId], references: [id], onDelete: SetNull)
+  rootDescendants    WorkflowRuntimeToken[] @relation("WorkflowTokenRoot")
 
   @@index([caseId])
   @@index([templateStageId])
@@ -1071,12 +1075,13 @@ model WorkflowTaskAttachment {
   fileName   String
   mimeType   String?
   storageUrl String
+  storedName String?
   checksum   String?
   sizeBytes  Int?
   kind       WorkflowAttachmentKind @default(evidence)
   createdBy  String
   createdAt  DateTime               @default(now())
-  case       WorkflowCase           @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case       WorkflowCase           @relation(fields: [caseId], references: [id], onDelete: Restrict)
   task       WorkflowTask?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([caseId])
@@ -1165,7 +1170,7 @@ model WorkflowTemplateVersion {
   securityJson          Json?
   createdBy             String
   createdAt             DateTime         @default(now())
-  template              WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template              WorkflowTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
 
   @@unique([templateId, version])
   @@index([templateId])
@@ -1310,7 +1315,7 @@ model AuditLog {
   entityType   String
   entityId     String?
   metadata     Json?
-  previousHash String?
+  previousHash String?  @unique
   entryHash    String?
   chainVersion Int      @default(1)
   createdAt    DateTime @default(now())
@@ -3123,7 +3128,7 @@ model AccessGrant {
   revocationReason  String?
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
-  asset             DataAsset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset             DataAsset                @relation(fields: [assetId], references: [id], onDelete: Restrict)
   profile           AccessPermissionProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
   workflowCase      WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
   reviewItems       AccessReviewItem[]
@@ -3152,7 +3157,7 @@ model AccessGrantVersion {
   changeReason String?     @map("change_reason")
   changedBy    String      @map("changed_by")
   createdAt    DateTime    @default(now()) @map("created_at")
-  grant        AccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  grant        AccessGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
 
   @@unique([grantId, version])
   @@index([grantId, createdAt])
@@ -3166,7 +3171,7 @@ model AccessGrantPermission {
   permissionCode String                  @map("permission_code")
   source         String                  @default("custom")
   createdAt      DateTime                @default(now()) @map("created_at")
-  grant          AccessGrant             @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  grant          AccessGrant             @relation(fields: [grantId], references: [id], onDelete: Restrict)
   permission     AccessPermissionCatalog @relation(fields: [permissionCode], references: [code], onDelete: Restrict)
 
   @@unique([grantId, permissionCode])
@@ -3213,7 +3218,7 @@ model AccessEnforcementAttempt {
   createdBy       String
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-  grant           AccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  grant           AccessGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
 
   @@index([grantId])
   @@index([status, nextAttemptAt])

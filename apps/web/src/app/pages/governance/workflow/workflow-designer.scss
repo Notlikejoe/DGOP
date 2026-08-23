@@ -1,9 +1,10 @@
 /* ----- enterprise workflow designer ----- */
 .designer-console--enterprise {
   display: grid;
-  gap: 1rem;
-  max-width: 1440px;
-  margin-inline: auto;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
   min-width: 0;
   overflow: hidden;
   container-type: inline-size;
@@ -23,7 +24,8 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  padding: 1rem;
+  padding: 1.15rem 1.25rem;
+  border-inline-start: 4px solid var(--command-accent);
 }
 
 .designer-commandbar h2,
@@ -105,7 +107,7 @@
 .designer-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(130px, 1fr));
-  gap: 0.75rem;
+  gap: 0.65rem;
   width: 100%;
 }
 
@@ -115,7 +117,7 @@
   padding: 0.75rem;
   border: 1px solid var(--command-border);
   border-radius: 8px;
-  background: var(--command-surface-2);
+  background: color-mix(in srgb, var(--command-surface) 88%, var(--command-surface-2));
 }
 
 .designer-kpis strong,
@@ -134,8 +136,73 @@
   align-items: start;
   min-width: 0;
   width: 100%;
-  max-width: 1440px;
-  margin-inline: auto;
+  max-width: none;
+  margin-inline: 0;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-workspace {
+  width: 100%;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-side-stack {
+  width: 100%;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-inspector-body {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-control-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.15rem;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-route-browser {
+  grid-column: span 5;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-route-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .node-palette-panel {
+  grid-column: span 7;
+  align-content: start;
+  height: 100%;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-variable-panel {
+  grid-column: span 5;
+  margin: 0;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-checklist {
+  grid-column: span 7;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-new-route {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-panel--publish {
+  grid-column: span 7;
+  height: 100%;
+}
+
+.designer-client-layout:not(.designer-client-layout--technical) .designer-panel--versions {
+  grid-column: span 5;
+  height: 100%;
 }
 
 .designer-client-layout--technical {
@@ -225,6 +292,13 @@
   align-self: start;
 }
 
+.designer-route-browser {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  align-content: start;
+}
+
 .designer-inspector-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -287,7 +361,7 @@
 }
 
 .designer-console--technical {
-  max-width: 1800px;
+  max-width: none;
 }
 
 .designer-console--technical .designer-commandbar {
@@ -1498,16 +1572,27 @@
     grid-column: 1 / -1;
   }
 
-  .designer-panel--publish {
-    grid-column: 1 / -1;
-  }
-
   .route-health-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
-@container (max-width: 900px) {
+@container (max-width: 1350px) {
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-route-browser,
+  .designer-client-layout:not(.designer-client-layout--technical) .node-palette-panel,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-variable-panel,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-checklist,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-panel--publish,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-panel--versions {
+    grid-column: span 6;
+  }
+
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-route-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 1100px) {
   .designer-commandbar {
     grid-template-columns: 1fr;
   }
@@ -1529,6 +1614,21 @@
     grid-template-rows: auto minmax(0, 1fr);
     height: min(76dvh, 680px);
     overflow: hidden;
+  }
+
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-control-panel,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-inspector-body {
+    grid-template-columns: 1fr;
+  }
+
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-route-browser,
+  .designer-client-layout:not(.designer-client-layout--technical) .node-palette-panel,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-variable-panel,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-checklist,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-panel--publish,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-panel--versions,
+  .designer-client-layout:not(.designer-client-layout--technical) .designer-new-route {
+    grid-column: 1;
   }
 
 }

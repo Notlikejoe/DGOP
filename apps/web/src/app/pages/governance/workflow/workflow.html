@@ -518,13 +518,16 @@
                   <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'" (click)="publishDesigner()">
                     {{ t('wf.designer.toolbar.publish') }}
                   </button>
-                  <span class="designer-command-bar__divider"></span>
+                </div>
+                <div class="designer-command-bar__group designer-command-bar__group--routing">
+                  <span class="designer-command-bar__label">{{ t('wf.designer.toolbar.flowStructure') }}</span>
                   <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canEditDesigner || !selectedDesignerElement()" [title]="t('wf.designer.toolbar.splitHelp')" (click)="createParallelSplit()">
                     <app-icon name="gitFork" /> {{ t('wf.designer.toolbar.split') }}
                   </button>
                   <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canEditDesigner || !selectedDesignerElement()" [title]="t('wf.designer.toolbar.mergeHelp')" (click)="createParallelMerge()">
                     <app-icon name="gitMerge" /> {{ t('wf.designer.toolbar.merge') }}
                   </button>
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerAutoLayoutRunning()" (click)="autoLayoutDesigner()"><app-icon name="layout" /> {{ t('wf.designer.toolbar.autoLayout') }}</button>
                 </div>
                 <div class="designer-command-bar__group">
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.undo')" [attr.aria-label]="t('wf.designer.toolbar.undo')" [disabled]="!designerCanUndo()" (click)="undoDesigner()"><app-icon name="undo" /></button>
@@ -533,7 +536,6 @@
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.zoomIn')" [attr.aria-label]="t('wf.designer.toolbar.zoomIn')" (click)="zoomDesigner(0.15)"><app-icon name="zoomIn" /></button>
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.zoomOut')" [attr.aria-label]="t('wf.designer.toolbar.zoomOut')" (click)="zoomDesigner(-0.15)"><app-icon name="zoomOut" /></button>
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.fit')" [attr.aria-label]="t('wf.designer.toolbar.fit')" (click)="fitDesigner()"><app-icon name="maximize" /></button>
-                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerAutoLayoutRunning()" (click)="autoLayoutDesigner()"><app-icon name="layout" /> {{ t('wf.designer.toolbar.autoLayout') }}</button>
                   <span class="designer-command-bar__divider"></span>
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.copy')" [attr.aria-label]="t('wf.designer.toolbar.copy')" [disabled]="!selectedDesignerElement()" (click)="copyDesignerSelection()"><app-icon name="copy" /></button>
                   <button type="button" class="icon-button" [title]="t('wf.designer.toolbar.paste')" [attr.aria-label]="t('wf.designer.toolbar.paste')" [disabled]="!designerClipboardReady()" (click)="pasteDesignerSelection()"><app-icon name="clipboard" /></button>
@@ -565,7 +567,11 @@
                   <button type="button" class="ds-btn ds-btn--primary" (click)="ensureDesignerLoaded()">{{ t('crud.retry') }}</button>
                 </div>
               } @else {
-                <div class="designer-canvas-shell" [class.designer-canvas-shell--expanded]="designerCanvasExpanded()">
+                <div
+                  class="designer-canvas-shell"
+                  [class.designer-canvas-shell--expanded]="designerCanvasExpanded()"
+                  [attr.aria-busy]="bpmnCanvasState() === 'loading'"
+                >
                   <div class="designer-canvas-shell__rail">
                     <div>
                       <span>{{ t('wf.designer.volume2Ready') }}</span>
@@ -578,7 +584,27 @@
                       <button type="button" [attr.aria-label]="t(designerCanvasExpanded() ? 'wf.designer.toolbar.closeCanvas' : 'wf.designer.toolbar.expandCanvas')" [title]="t(designerCanvasExpanded() ? 'wf.designer.toolbar.closeCanvas' : 'wf.designer.toolbar.expandCanvas')" (click)="toggleDesignerCanvas()"><app-icon [name]="designerCanvasExpanded() ? 'x' : 'maximize'" /></button>
                     </div>
                   </div>
-                  <div #bpmnCanvas class="bpmn-canvas" [attr.aria-label]="t('wf.designer.canvasTitle')"></div>
+                  <div
+                    #bpmnCanvas
+                    class="bpmn-canvas"
+                    [class.bpmn-canvas--muted]="bpmnCanvasState() !== 'ready'"
+                    [attr.aria-label]="t('wf.designer.canvasTitle')"
+                  ></div>
+                  @if (bpmnCanvasState() === 'loading' || bpmnCanvasState() === 'idle') {
+                    <div class="bpmn-canvas-state" role="status">
+                      <span class="bpmn-canvas-state__spinner" aria-hidden="true"></span>
+                      <strong>{{ t('wf.designer.canvasLoading') }}</strong>
+                      <small>{{ t('wf.designer.canvasLoadingHelp') }}</small>
+                    </div>
+                  } @else if (bpmnCanvasState() === 'error') {
+                    <div class="bpmn-canvas-state bpmn-canvas-state--error" role="alert">
+                      <strong>{{ t('wf.designer.canvasError') }}</strong>
+                      <small>{{ t('wf.designer.canvasErrorHelp') }}</small>
+                      <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="retryBpmnCanvas()">
+                        {{ t('crud.retry') }}
+                      </button>
+                    </div>
+                  }
                 </div>
               }
             } @else {
@@ -858,55 +884,57 @@
               </section>
             }
             @if (designerViewMode() !== 'technical' || designerInspectorTab() !== 'properties') {
-            <section class="designer-panel designer-panel--compact">
+            <section class="designer-panel designer-panel--compact designer-control-panel">
             @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'build') {
-            <div class="designer-panel__head">
-              <span class="section-kicker">{{ t('wf.designer.eyebrow') }}</span>
-              <h2>{{ t('wf.designer.routeLibrary') }}</h2>
-              <p>{{ t('wf.designer.routeLibraryHelp') }}</p>
-            </div>
+            <div class="designer-route-browser">
+              <div class="designer-panel__head">
+                <span class="section-kicker">{{ t('wf.designer.eyebrow') }}</span>
+                <h2>{{ t('wf.designer.routeLibrary') }}</h2>
+                <p>{{ t('wf.designer.routeLibraryHelp') }}</p>
+              </div>
 
-            <label class="field">
-              <span class="field__label">{{ t('wf.field.route') }}</span>
-              <select class="field__input" [ngModel]="designerTemplateId()" (ngModelChange)="selectDesignerTemplate($event)" name="designerRoute">
-                @for (group of designerRouteGroups(); track group.key) {
-                  <optgroup [label]="t(group.labelKey)">
-                    @for (template of group.templates; track template.id) {
-                      <option [value]="template.id">{{ templateName(template) }} - {{ template.code }}</option>
-                    }
-                  </optgroup>
+              <label class="field">
+                <span class="field__label">{{ t('wf.field.route') }}</span>
+                <select class="field__input" [ngModel]="designerTemplateId()" (ngModelChange)="selectDesignerTemplate($event)" name="designerRoute">
+                  @for (group of designerRouteGroups(); track group.key) {
+                    <optgroup [label]="t(group.labelKey)">
+                      @for (template of group.templates; track template.id) {
+                        <option [value]="template.id">{{ templateName(template) }} - {{ template.code }}</option>
+                      }
+                    </optgroup>
                 }
-              </select>
-            </label>
+                </select>
+              </label>
 
-            <div class="designer-route-library">
-              @for (group of designerRouteGroups(); track group.key) {
-                <section class="designer-route-group">
-                  <h3>{{ t(group.labelKey) }}</h3>
-                  <div class="designer-route-options">
-                    @for (template of group.templates; track template.id) {
-                      <button
-                        type="button"
-                        class="designer-route-option"
-                        [class.designer-route-option--active]="designerTemplateId() === template.id"
-                        (click)="selectDesignerTemplate(template.id)"
-                      >
-                        <span>{{ t('wf.type.' + template.caseType) }}</span>
-                        <strong>{{ templateName(template) }}</strong>
-                        <small>
-                          {{ designerRouteMeta(template) }}
-                          &middot;
-                          {{ designerRouteCaseCount(template) }} {{ t('wf.graph.activeCases') }}
-                        </small>
-                        <app-status-chip
-                          [kind]="designerRouteStatus(template)"
-                          [label]="t('wf.graph.status.' + (routeSummaryByTemplateId().get(template.id)?.status ?? 'healthy'))"
-                        />
-                      </button>
-                    }
-                  </div>
-                </section>
-              }
+              <div class="designer-route-library">
+                @for (group of designerRouteGroups(); track group.key) {
+                  <section class="designer-route-group">
+                    <h3>{{ t(group.labelKey) }}</h3>
+                    <div class="designer-route-options">
+                      @for (template of group.templates; track template.id) {
+                        <button
+                          type="button"
+                          class="designer-route-option"
+                          [class.designer-route-option--active]="designerTemplateId() === template.id"
+                          (click)="selectDesignerTemplate(template.id)"
+                        >
+                          <span>{{ t('wf.type.' + template.caseType) }}</span>
+                          <strong>{{ templateName(template) }}</strong>
+                          <small>
+                            {{ designerRouteMeta(template) }}
+                            &middot;
+                            {{ designerRouteCaseCount(template) }} {{ t('wf.graph.activeCases') }}
+                          </small>
+                          <app-status-chip
+                            [kind]="designerRouteStatus(template)"
+                            [label]="t('wf.graph.status.' + (routeSummaryByTemplateId().get(template.id)?.status ?? 'healthy'))"
+                          />
+                        </button>
+                      }
+                    </div>
+                  </section>
+                }
+              </div>
             </div>
             }
 
@@ -1016,7 +1044,7 @@
             }
 
             @if (designerViewMode() !== 'technical' || designerInspectorTab() === 'build') {
-            <button type="button" class="ds-btn ds-btn--ghost" (click)="openRouteModal()">
+            <button type="button" class="ds-btn ds-btn--ghost designer-new-route" (click)="openRouteModal()">
               {{ t('wf.designer.newRoute') }}
             </button>
             }
@@ -1320,6 +1348,7 @@
                   <td>{{ fmtDate(task.dueDate) }}</td>
                   <td><app-status-chip [kind]="slaKind(task.slaStatus)" [label]="t('sla.' + task.slaStatus)" /></td>
                   <td class="actions-col">
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openTaskWork(task)"><app-icon name="edit" /> {{ t('wf.inbox.openWork') }}</button>
                     <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openDecision(task, 'approved')">{{ t('wf.approve') }}</button>
                     <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'rejected')">{{ t('wf.reject') }}</button>
                     <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'return_for_clarification')">{{ t('wf.returnForClarification') }}</button>
@@ -1373,6 +1402,39 @@
       }
     }
   </div>
+
+  @if (workTask(); as task) {
+    <app-modal [title]="t('wf.inbox.workItemTitle')" size="lg" (close)="closeTaskWork()">
+      <div class="workflow-work-item">
+        <header class="workflow-work-item__summary">
+          <div><span class="eyebrow">{{ task.case?.code }}</span><h3>{{ task.title }}</h3><p>{{ task.case?.title }}</p></div>
+          <app-status-chip [kind]="task.formSubmittedAt ? 'success' : 'warning'" [label]="t(task.formSubmittedAt ? 'wf.inbox.submitted' : 'wf.inbox.draft')" />
+        </header>
+        <p class="workflow-work-item__help">{{ t('wf.inbox.workItemHelp') }}</p>
+        <div class="workflow-work-form">
+          @for (field of workFormFields(); track field.name) {
+            <label [class.workflow-work-form__wide]="field.type === 'textarea'">
+              <span>{{ field.label }}@if (field.required) { <b class="req">*</b> }</span>
+              @if (field.type === 'textarea') {
+                <textarea rows="4" [ngModel]="workFieldValue(field.name)" (ngModelChange)="updateWorkField(field, $event)"></textarea>
+              } @else if (field.type === 'boolean') {
+                <select [ngModel]="workFieldValue(field.name)" (ngModelChange)="updateWorkField(field, $event)"><option value="">{{ t('crud.select') }}</option><option [ngValue]="true">{{ t('common.yes') }}</option><option [ngValue]="false">{{ t('common.no') }}</option></select>
+              } @else if (field.type === 'select') {
+                <select [ngModel]="workFieldValue(field.name)" (ngModelChange)="updateWorkField(field, $event)"><option value="">{{ t('crud.select') }}</option>@for (option of field.options; track option) { <option [value]="option">{{ option }}</option> }</select>
+              } @else {
+                <input [type]="field.type" [ngModel]="workFieldValue(field.name)" (ngModelChange)="updateWorkField(field, $event)" />
+              }
+            </label>
+          }
+        </div>
+      </div>
+      <div footer class="workflow-work-actions">
+        <span>{{ t('wf.inbox.saveHelp') }}</span>
+        <button type="button" class="ds-btn ds-btn--ghost" [disabled]="!!workSaving()" (click)="saveTaskWork('draft')"><app-icon name="save" /> {{ workSaving() === 'draft' ? t('crud.saving') : t('wf.inbox.saveDraft') }}</button>
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!!workSaving() || workRequiredMissing()" (click)="saveTaskWork('submit')"><app-icon name="check" /> {{ workSaving() === 'submit' ? t('crud.saving') : t('wf.inbox.submitForm') }}</button>
+      </div>
+    </app-modal>
+  }
 
   @if (decideTask(); as task) {
     <app-modal [title]="decisionTitle()" (close)="closeDecision()">

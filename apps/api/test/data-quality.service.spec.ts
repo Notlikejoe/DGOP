@@ -5,7 +5,10 @@
 import assert from 'node:assert';
 import { BadRequestException } from '@nestjs/common';
 import { DataQualityDimension, DataQualityPriority, DataQualitySeverity } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { DataQualityService } from '../src/data-quality/data-quality.service';
+import { RunDataQualityProfileFileDto } from '../src/data-quality/data-quality.dto';
 import { priorityForSeverity, profileScore, slaDueDates } from '../src/data-quality/data-quality.logic';
 import {
   isAcceptedDataQualityImportFile,
@@ -16,6 +19,36 @@ import { profileCsvRows } from '../src/data-quality/data-quality.profiling';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
+
+test('multipart profile metadata validates and transforms supported boolean values', async () => {
+  const dto = plainToInstance(RunDataQualityProfileFileDto, {
+    assetId: '550e8400-e29b-41d4-a716-446655440000',
+    domainId: '550e8400-e29b-41d4-a716-446655440001',
+    source: 'secure-upload',
+    datasetName: 'Customer master extract',
+    createIssues: 'true',
+    createRuleDrafts: '0',
+  });
+
+  assert.equal(dto.createIssues, true);
+  assert.equal(dto.createRuleDrafts, false);
+  assert.deepEqual(await validate(dto), []);
+});
+
+test('multipart profile metadata rejects malformed identifiers, booleans, and oversized labels', async () => {
+  const dto = plainToInstance(RunDataQualityProfileFileDto, {
+    assetId: 'not-a-uuid',
+    source: 'x'.repeat(121),
+    datasetName: 'x'.repeat(241),
+    createIssues: 'sometimes',
+  });
+  const errors = await validate(dto);
+
+  assert.ok(errors.some((error) => error.property === 'assetId'));
+  assert.ok(errors.some((error) => error.property === 'source'));
+  assert.ok(errors.some((error) => error.property === 'datasetName'));
+  assert.ok(errors.some((error) => error.property === 'createIssues'));
+});
 
 function includesScopedAsset(where: unknown, assetId: string): boolean {
   const text = JSON.stringify(where);

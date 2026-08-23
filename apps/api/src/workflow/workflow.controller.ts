@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,11 +8,15 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { WorkflowService } from './workflow.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
+import { WorkflowService, type WorkflowAttachmentFile } from './workflow.service';
 import {
   AddTaskDto,
-  AddWorkflowAttachmentDto,
   AddWorkflowCommentDto,
   CreateWorkflowDelegationDto,
   CreateCaseDto,
@@ -21,6 +26,7 @@ import {
   ListWorkflowDesignerTestRunsDto,
   ListWorkflowCasesDto,
   SaveWorkflowBpmnDto,
+  SaveWorkflowTaskFormDraftDto,
   SubmitWorkflowTaskFormDto,
   SubmitAssignmentDto,
   WorkflowCaseControlDto,
@@ -32,6 +38,7 @@ import {
   UpdateWorkflowDelegationDto,
   UpdateCaseDto,
   UpdateTaskDto,
+  UploadWorkflowAttachmentDto,
   UpsertWorkflowVariableDto,
   UpsertWorkflowSlaTemplateDto,
   WorkflowOperationsReportQueryDto,
@@ -41,6 +48,21 @@ import {
 } from './workflow.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
+import { sanitizeAttachmentFilename } from '../common/download';
+import { boundedEnvInteger } from '../common/runtime-safety';
+
+const WORKFLOW_ATTACHMENT_MAX_BYTES = boundedEnvInteger('WORKFLOW_ATTACHMENT_MAX_BYTES', 15 * 1024 * 1024, 1, 100 * 1024 * 1024);
+const WORKFLOW_ATTACHMENT_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'text/plain',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
 
 @Controller('workflow')
 export class WorkflowController {
@@ -269,8 +291,8 @@ export class WorkflowController {
 
   @Post('runtime/process')
   @RequirePermissions('workflow_cases.edit')
-  processRuntime() {
-    return this.service.processRunnableExecutions();
+  processRuntime(@CurrentUser() user: AuthUser) {
+    return this.service.processRuntimeExecutions(user);
   }
 
   @Post('runtime/executions/:id/retry')
@@ -354,8 +376,34 @@ export class WorkflowController {
 
   @Post('cases/:id/attachments')
   @RequirePermissions('workflow_tasks.edit')
-  addCaseAttachment(@Param('id') id: string, @Body() dto: AddWorkflowAttachmentDto, @CurrentUser() user: AuthUser) {
-    return this.service.addCaseAttachment(id, dto, user);
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: WORKFLOW_ATTACHMENT_MAX_BYTES },
+      fileFilter: (_req, file, cb) => {
+        if (WORKFLOW_ATTACHMENT_MIME_TYPES.has(file.mimetype)) return cb(null, true);
+        cb(new BadRequestException(`Unsupported file type: ${file.mimetype}`), false);
+      },
+    }),
+  )
+  addCaseAttachment(
+    @Param('id') id: string,
+    @Body() dto: UploadWorkflowAttachmentDto,
+    @UploadedFile() file: WorkflowAttachmentFile,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.addCaseAttachment(id, dto, file, user);
+  }
+
+  @Get('attachments/:attachmentId/file')
+  @RequirePermissions('workflow_cases.view')
+  async downloadAttachment(
+    @Param('attachmentId') attachmentId: string,
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    const file = await this.service.attachmentFile(attachmentId, user);
+    res.setHeader('Content-Type', file.mimeType);
+    res.download(file.path, sanitizeAttachmentFilename(file.originalName, 'workflow-attachment'));
   }
 
   @Patch('cases/:id')
@@ -424,6 +472,12 @@ export class WorkflowController {
   @RequirePermissions('workflow_tasks.edit')
   submitTaskForm(@Param('id') id: string, @Body() dto: SubmitWorkflowTaskFormDto, @CurrentUser() user: AuthUser) {
     return this.service.submitTaskForm(id, dto, user);
+  }
+
+  @Patch('tasks/:id/form')
+  @RequirePermissions('workflow_tasks.edit')
+  saveTaskFormDraft(@Param('id') id: string, @Body() dto: SaveWorkflowTaskFormDraftDto, @CurrentUser() user: AuthUser) {
+    return this.service.saveTaskFormDraft(id, dto, user);
   }
 
   @Post('tasks/:id/decision')

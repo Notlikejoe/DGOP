@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,6 +79,7 @@ loadRootEnv();
 process.env.NODE_ENV = 'production';
 process.env.DGOP_REQUIRE_STRICT_RUNTIME = 'true';
 process.env.HEALTH_INCLUDE_DETAILS ??= 'false';
+process.env.DGOP_TRUST_PROXY ??= 'loopback';
 
 requireEnv('DATABASE_URL');
 requireEnv('JWT_SECRET', isSafeSecret);
@@ -92,6 +93,17 @@ const apiEntry = join(root, 'apps', 'api', 'dist', 'main.js');
 if (!existsSync(apiEntry)) {
   console.error('API build not found. Run npm run build before npm run start:demo.');
   process.exit(1);
+}
+
+const credentialSync = spawnSync(process.execPath, [join(root, 'scripts', 'sync-demo-credentials.mjs')], {
+  cwd: root,
+  env: process.env,
+  stdio: 'inherit',
+  shell: false,
+});
+if (credentialSync.status !== 0) {
+  console.error('Strict demo startup stopped because canonical demo credentials could not be synchronized safely.');
+  process.exit(credentialSync.status ?? 1);
 }
 
 const child = spawn(process.execPath, [apiEntry], {

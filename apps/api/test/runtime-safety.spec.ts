@@ -4,8 +4,10 @@
  */
 import assert from 'node:assert';
 import {
+  boundedEnvInteger,
   collectRuntimeSafetyIssues,
   configuredCorsOrigins,
+  configuredTrustProxy,
   isProductionLikeRuntime,
   isUnsafeDefaultAdminCredential,
 } from '../src/common/runtime-safety';
@@ -138,6 +140,21 @@ test('configuredCorsOrigins deduplicates CORS and public origin values', () => {
   );
 });
 
+test('proxy trust is disabled by default and accepts only explicit addresses', () => {
+  assert.strictEqual(configuredTrustProxy({}), false);
+  assert.strictEqual(configuredTrustProxy({ DGOP_TRUST_PROXY: 'loopback' }), 'loopback');
+  assert.deepStrictEqual(
+    configuredTrustProxy({ DGOP_TRUST_PROXY: 'loopback,10.20.0.0/16,2001:db8::/32' }),
+    ['loopback', '10.20.0.0/16', '2001:db8::/32'],
+  );
+});
+
+test('proxy trust rejects hop counts and permissive proxy settings', () => {
+  for (const value of ['1', 'true', '*', 'not-a-network', '10.0.0.0/99']) {
+    assert.throws(() => configuredTrustProxy({ DGOP_TRUST_PROXY: value }), /DGOP_TRUST_PROXY/);
+  }
+});
+
 test('unsafe default admin credential is recognized for strict login blocking', () => {
   assert.strictEqual(
     isUnsafeDefaultAdminCredential('admin@dgop.local', 'Admin@12345', {}),
@@ -147,6 +164,13 @@ test('unsafe default admin credential is recognized for strict login blocking', 
     isUnsafeDefaultAdminCredential('admin@dgop.local', 'rotated-admin-password-2026', {}),
     false,
   );
+});
+
+test('bounded numeric settings fall back safely and enforce operational limits', () => {
+  assert.strictEqual(boundedEnvInteger('LIMIT', 50, 10, 100, { LIMIT: 'not-a-number' }), 50);
+  assert.strictEqual(boundedEnvInteger('LIMIT', 50, 10, 100, { LIMIT: '-10' }), 10);
+  assert.strictEqual(boundedEnvInteger('LIMIT', 50, 10, 100, { LIMIT: '500' }), 100);
+  assert.strictEqual(boundedEnvInteger('LIMIT', 50, 10, 100, { LIMIT: '42.8' }), 42);
 });
 
 (() => {

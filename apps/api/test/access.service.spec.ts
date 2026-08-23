@@ -260,6 +260,117 @@ test('effective access expands role grants into active user memberships', async 
   assert.equal(result.data[0].expansionStatus, 'resolved');
 });
 
+test('effective access paginates expanded rows across bounded source batches without truncation', async () => {
+  const startsAt = new Date('2026-08-01T00:00:00.000Z');
+  const grants = Array.from({ length: 501 }, (_, index) => ({
+    id: `grant-${String(index + 1).padStart(4, '0')}`,
+    code: `AGR-${String(index + 1).padStart(5, '0')}`,
+    version: 1,
+    assetId: 'asset-1',
+    principalType: 'group',
+    principalId: `GROUP-${String(index + 1).padStart(4, '0')}`,
+    permissionCode: 'dataset.read',
+    status: 'active',
+    ownerDecision: 'approved',
+    enforcementStatus: 'enforced',
+    startsAt,
+    expiresAt: null,
+    asset: {
+      id: 'asset-1',
+      code: 'AST-1',
+      nameEn: 'Dataset',
+      nameAr: 'Dataset',
+      assetType: 'dataset',
+      domainId: null,
+      orgUnitId: null,
+      classificationId: null,
+    },
+    profile: null,
+    workflowCase: null,
+    permissions: [],
+  }));
+  let sourceQueries = 0;
+  const service = new AccessGrantsService(
+    {
+      accessGrant: {
+        findMany: async (args: { skip: number; take: number }) => {
+          sourceQueries++;
+          return grants.slice(args.skip, args.skip + args.take);
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+    {} as never,
+  );
+
+  const result = await service.listEffectiveAccess(
+    { id: 'admin', email: 'admin@dgop.local', roles: ['dmo_admin'] },
+    { page: 6, pageSize: 100 },
+  );
+
+  assert.equal(result.total, 501);
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].subjectId, 'GROUP-0501');
+  assert.equal(result.summary.current, 501);
+  assert.equal(result.processedGrantCount, 501);
+  assert.equal(sourceQueries, 2);
+});
+
+test('access matrix clamps its dimensions and rejects an oversized grant selection', async () => {
+  let capturedAssetTake = 0;
+  let capturedRoleTake = 0;
+  const service = new AccessGrantsService(
+    {
+      dataAsset: {
+        findMany: async (args: { take: number }) => {
+          capturedAssetTake = args.take;
+          return [{
+            id: 'asset-1',
+            code: 'AST-1',
+            nameEn: 'Dataset',
+            nameAr: 'Dataset',
+            assetType: 'dataset',
+            assetSubtype: null,
+            lifecycleStatus: 'active',
+            ownerStatus: 'assigned',
+            ownerName: 'Owner',
+            domain: null,
+            classification: null,
+            system: null,
+          }];
+        },
+        count: async () => 1,
+      },
+      role: {
+        findMany: async (args: { take: number }) => {
+          capturedRoleTake = args.take;
+          return [{ code: 'data_steward', nameEn: 'Data Steward', nameAr: null }];
+        },
+      },
+      accessPrincipalDirectory: { findMany: async () => [] },
+      accessPermissionCatalog: { findMany: async () => [] },
+      accessGrant: {
+        findMany: async () => [{ principalType: 'role', principalId: 'data_steward' }],
+        count: async () => 10_001,
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+    {} as never,
+  );
+
+  await assert.rejects(
+    service.accessMatrix(
+      { id: 'admin', email: 'admin@dgop.local', roles: ['dmo_admin'] },
+      { assetLimit: 500, principalLimit: 100 },
+    ),
+    /narrow the asset or principal filters/,
+  );
+  assert.equal(capturedAssetTake, 100);
+  assert.equal(capturedRoleTake, 50);
+});
+
 test('access grant state changes claim the exact expected version', async () => {
   let captured: unknown;
   const service = new AccessGrantsService({} as never, {} as never, {} as never, {} as never);
@@ -351,6 +462,44 @@ test('approved grant rules are applied atomically to the DGOP policy store', asy
   assert.deepEqual(attempts[0].requestJson.permissionCodes, ['dataset.read', 'dataset.update']);
   assert.equal(updates[0].data.enforcementStatus, 'enforced');
   assert.ok(auditActions.includes('access_grant.rules_applied'));
+});
+
+test('pending revocation removes DGOP policy rules and closes the grant lifecycle atomically', async () => {
+  const attempts: any[] = [];
+  const updates: any[] = [];
+  const auditActions: string[] = [];
+  const tx = {
+    accessGrant: {
+      updateMany: async () => ({ count: 1 }),
+      update: async (args: any) => { updates.push(args); return args.data; },
+    },
+    accessEnforcementAttempt: {
+      create: async (args: any) => { const row = { id: 'attempt-revoke-1', ...args.data }; attempts.push(row); return row; },
+    },
+  };
+  const service = new AccessGrantsService(
+    { accessEnforcementAttempt: { findUnique: async () => null }, $transaction: async (fn: any) => fn(tx) } as never,
+    { log: async (entry: any) => auditActions.push(entry.action) } as never,
+    {} as never,
+    {} as never,
+  );
+  (service as any).getGrant = async () => ({
+    id: 'grant-1', code: 'AGR-00001', version: 5, assetId: 'asset-1', principalType: 'role',
+    principalId: 'data_steward', profileId: null, permissionCode: 'dataset.delete', permissions: [],
+    ownerDecision: 'pending', status: 'pending_revocation',
+  });
+
+  await service.applyGrantRules(
+    'grant-1',
+    { expectedVersion: 5, comment: 'Remove internal policy access' },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['dmo_admin'] },
+  );
+
+  assert.equal(attempts[0].operation, 'revoke_rules');
+  assert.equal(attempts[0].responseJson.removedPermissionCount, 1);
+  assert.equal(updates[0].data.status, 'revoked');
+  assert.equal(updates[0].data.enforcementStatus, 'revoked');
+  assert.ok(auditActions.includes('access_grant.rules_revoked'));
 });
 
 test('policy-store deduplication still enforces grant visibility', async () => {

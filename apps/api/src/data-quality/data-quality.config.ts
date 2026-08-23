@@ -7,6 +7,8 @@ import {
 
 export const DATA_QUALITY_IMPORT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 export const DATA_QUALITY_IMPORT_MAX_FILE_SIZE_LABEL = '10 MB';
+export const DATA_QUALITY_IMPORT_MAX_FIELDS = 6;
+export const DATA_QUALITY_IMPORT_MAX_FIELD_SIZE_BYTES = 1024;
 export const DATA_QUALITY_IMPORT_EXTENSIONS = ['.csv'] as const;
 export const DATA_QUALITY_IMPORT_MIME_TYPES = [
   'text/csv',

@@ -2370,7 +2370,7 @@ async function main() {
   }
 
   // Seed people; give each a login account (1:1) so they can act in workflows, and link them.
-  const dmoRole = await prisma.role.findUnique({ where: { code: 'dmo_admin' } });
+  const legacyDmoRole = await prisma.role.findUnique({ where: { code: 'dmo_admin' } });
   const personPassword = process.env.SEED_PERSON_PASSWORD;
   if (!personPassword) {
     throw new Error('SEED_PERSON_PASSWORD must be set before seeding. Run `npm run demo:prepare` for local demo credentials.');
@@ -2386,11 +2386,11 @@ async function main() {
       },
       create: { email: p.email, passwordHash: personPasswordHash, displayName: p.fullNameEn, isActive: true },
     });
-    if (dmoRole) {
-      await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: user.id, roleId: dmoRole.id } },
-        update: {},
-        create: { userId: user.id, roleId: dmoRole.id },
+    if (legacyDmoRole) {
+      // Earlier demo seeds elevated every persona. Keep the directory users but
+      // remove that legacy grant so their explicit persona roles remain testable.
+      await prisma.userRole.deleteMany({
+        where: { userId: user.id, roleId: legacyDmoRole.id },
       });
     }
     await prisma.person.upsert({

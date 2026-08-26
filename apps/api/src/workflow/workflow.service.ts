@@ -139,9 +139,10 @@ const WORKFLOW_CASE_DEFAULT_PAGE_SIZE = 50;
 const WORKFLOW_TASK_DEFAULT_PAGE_SIZE = 50;
 const WORKFLOW_GRAPH_CASE_LIMIT = 200;
 const WORKFLOW_TEST_RUN_DEFAULT_PAGE_SIZE = 10;
+const WORKFLOW_TEST_RUN_CREATE_ATTEMPTS = 5;
 const WORKFLOW_REPORT_CASE_LIMIT = 2_000;
 const SYSTEM_ROUTE_GRAPH_REVISIONS: Readonly<Record<string, string>> = Object.fromEntries(
-  DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code, 'v6-volume2-complete-2']),
+  DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code, 'v6-volume2-complete-3']),
 );
 const WORKFLOW_ROUTE_TYPE_PRIORITY = [
   'owner_assignment_approval',
@@ -1597,7 +1598,12 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Workflow draft changed after approval; submit it for review again');
     }
     const reviewedBy = String(lifecycle['reviewedBy'] ?? '');
-    const sodOverride = this.workflowLifecycleSodOverride(user, reviewedBy);
+    const sodOverride = this.workflowLifecycleSodOverride(
+      user,
+      reviewedBy,
+      String(lifecycle['reviewRequestedBy'] ?? ''),
+      String(lifecycle['lastDesignedBy'] ?? ''),
+    );
     const migration = await this.workflowTemplateMigrationPreview(id, dto, user);
     if (migration.summary.manualReviewCases > 0 && !dto.acknowledgeMigrationRisk) {
       throw new BadRequestException(
@@ -1722,13 +1728,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     if (!template) throw new NotFoundException('workflow route template not found');
     const route = this.designerRouteFromPayload(template, dto.bpmnXml);
     route.validation = await this.validateTemplateVariableReferences(id, route.stages, route.transitions, route.validation);
-    if (route.validation.status === 'blocked') {
-      throw new BadRequestException(`Workflow test run cannot start: ${route.validation.errors.join(' ')}`);
-    }
-    const simulation = simulateWorkflowRoute(route.stages, route.transitions, dto.decisions ?? {});
-    if (simulation.status === 'blocked') {
-      throw new BadRequestException(`Workflow test run is blocked: ${simulation.blockers.join(' ')}`);
-    }
+    const simulated = simulateWorkflowRoute(route.stages, route.transitions, dto.decisions ?? {});
+    const simulation = route.validation.status === 'blocked'
+      ? {
+          ...simulated,
+          status: 'blocked' as const,
+          blockers: [...new Set([...simulated.blockers, ...route.validation.errors])],
+        }
+      : simulated;
     const inputJson = {
       environment: dto.environment ?? 'test',
       variables: dto.variables ?? {},
@@ -1740,50 +1747,66 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         productionRuntimeTokensCreated: 0,
       },
     };
-    const run = await this.prisma.$transaction(async (tx) => {
-      const latest = await tx.workflowDesignerTestRun.aggregate({
-        where: { templateId: id },
-        _max: { runNumber: true },
-      });
-      const created = await tx.workflowDesignerTestRun.create({
-        data: {
-          templateId: id,
-          runNumber: (latest._max.runNumber ?? 0) + 1,
-          environment: dto.environment ?? 'test',
-          status: simulation.status,
-          bpmnXml: route.bpmnXml,
-          validationJson: route.validation as unknown as Prisma.InputJsonValue,
-          inputJson: inputJson as Prisma.InputJsonValue,
-          simulationJson: simulation as unknown as Prisma.InputJsonValue,
-          executedPathJson: {
-            path: simulation.path,
-            blockers: simulation.blockers,
-            warnings: simulation.warnings,
-            summary: simulation.summary,
-          } as Prisma.InputJsonValue,
-          createdBy: user.email,
-        },
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: 'workflow_template.test_run.execute',
-          entityType: 'workflow_template',
-          entityId: id,
-          metadata: {
-            runId: created.id,
-            runNumber: created.runNumber,
-            status: created.status,
-            environment: created.environment,
-            pathLength: simulation.path.length,
-            productionCasesCreated: 0,
-            productionTasksCreated: 0,
-          },
-        },
-        tx,
-      );
-      return created;
-    });
+    let run: Awaited<ReturnType<typeof this.prisma.workflowDesignerTestRun.create>> | null = null;
+    for (let attempt = 0; attempt < WORKFLOW_TEST_RUN_CREATE_ATTEMPTS; attempt++) {
+      try {
+        run = await this.prisma.$transaction(async (tx) => {
+          const latest = await tx.workflowDesignerTestRun.aggregate({
+            where: { templateId: id },
+            _max: { runNumber: true },
+          });
+          const created = await tx.workflowDesignerTestRun.create({
+            data: {
+              templateId: id,
+              runNumber: (latest._max.runNumber ?? 0) + 1,
+              environment: dto.environment ?? 'test',
+              status: simulation.status,
+              bpmnXml: route.bpmnXml,
+              validationJson: route.validation as unknown as Prisma.InputJsonValue,
+              inputJson: inputJson as Prisma.InputJsonValue,
+              simulationJson: simulation as unknown as Prisma.InputJsonValue,
+              executedPathJson: {
+                path: simulation.path,
+                blockers: simulation.blockers,
+                warnings: simulation.warnings,
+                summary: simulation.summary,
+              } as Prisma.InputJsonValue,
+              createdBy: user.email,
+            },
+          });
+          await this.audit.log(
+            {
+              actor: user.email,
+              action: 'workflow_template.test_run.execute',
+              entityType: 'workflow_template',
+              entityId: id,
+              metadata: {
+                runId: created.id,
+                runNumber: created.runNumber,
+                status: created.status,
+                environment: created.environment,
+                pathLength: simulation.path.length,
+                productionCasesCreated: 0,
+                productionTasksCreated: 0,
+              },
+            },
+            tx,
+          );
+          return created;
+        }, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 3_000,
+          timeout: 8_000,
+        });
+        break;
+      } catch (error) {
+        const code = typeof error === 'object' && error ? String((error as { code?: unknown }).code ?? '') : '';
+        const retryableCollision = code === 'P2002' || code === 'P2034';
+        if (!retryableCollision || attempt === WORKFLOW_TEST_RUN_CREATE_ATTEMPTS - 1) throw error;
+        await new Promise<void>((resolve) => setTimeout(resolve, 20 * (attempt + 1) + Math.floor(Math.random() * 20)));
+      }
+    }
+    if (!run) throw new ConflictException('Could not allocate an isolated workflow test run number');
     return this.designerTestRunResponse(run);
   }
 
@@ -3018,13 +3041,11 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return user.roles.some((code) => allowed.includes(code));
   }
 
-  private workflowLifecycleSodOverride(user: AuthUser, previousActor?: string | null): boolean {
-    if (!previousActor || previousActor !== user.email) return false;
-    const adminOverride = user.roles.some((role) => ADMIN_ROLES.includes(role));
-    if (!adminOverride || process.env.DGOP_STRICT_WORKFLOW_SOD === 'true' || process.env.NODE_ENV === 'production') {
+  private workflowLifecycleSodOverride(user: AuthUser, ...previousActors: Array<string | null | undefined>): boolean {
+    if (previousActors.some((actor) => !!actor && actor === user.email)) {
       throw new ForbiddenException('Segregation of duties requires a different workflow actor for this action');
     }
-    return true;
+    return false;
   }
 
   private parseDesignerBpmn(xml: string): ReturnType<typeof parseBpmnXml> {
@@ -4595,12 +4616,47 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return String(stage.nodeType ?? 'automated_task').trim().toLowerCase() || 'automated_task';
   }
 
-  private executionScheduleForStage(stage: { nodeType?: string | null; automationConfigJson?: unknown | null }): Date {
-    const config = this.jsonRecord(stage.automationConfigJson);
-    const explicitDueAt = typeof config['dueAt'] === 'string' ? new Date(config['dueAt']) : null;
-    if (explicitDueAt && !Number.isNaN(explicitDueAt.getTime())) return explicitDueAt;
-    const delaySeconds = Math.min(Math.max(Number(config['delaySeconds'] ?? 0), 0), 31_536_000);
-    return new Date(Date.now() + delaySeconds * 1000);
+  private executionConfigForStage(stage: { nodeType?: string | null; automationConfigJson?: unknown | null; slaConfigJson?: unknown | null }): Record<string, unknown> {
+    const automation = this.jsonRecord(stage.automationConfigJson);
+    if (this.executionKindForStage(stage) !== 'timer_event') return automation;
+    return { ...automation, ...this.jsonRecord(stage.slaConfigJson) };
+  }
+
+  private executionScheduleForStage(stage: { nodeType?: string | null; automationConfigJson?: unknown | null; slaConfigJson?: unknown | null }): Date {
+    const config = this.executionConfigForStage(stage);
+    for (const key of ['dueAt', 'dueDate', 'timeoutAt', 'slaExpiresAt']) {
+      if (typeof config[key] !== 'string') continue;
+      const date = new Date(config[key] as string);
+      if (!Number.isNaN(date.getTime())) return date;
+    }
+    const relativeDurations: Array<[string, number]> = [
+      ['delaySeconds', 1],
+      ['durationSeconds', 1],
+      ['durationMinutes', 60],
+      ['timeoutMinutes', 60],
+      ['durationHours', 3_600],
+      ['timeoutHours', 3_600],
+      ['dueDays', 86_400],
+    ];
+    for (const [key, multiplier] of relativeDurations) {
+      if (config[key] == null) continue;
+      const value = Number(config[key]);
+      if (Number.isFinite(value) && value >= 0) {
+        const delaySeconds = Math.min(value * multiplier, 31_536_000);
+        return new Date(Date.now() + delaySeconds * 1000);
+      }
+    }
+    for (const key of ['duration', 'timeout']) {
+      if (typeof config[key] !== 'string') continue;
+      const match = /^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i.exec(config[key] as string);
+      if (!match) continue;
+      const seconds = Number(match[1] ?? 0) * 86_400 + Number(match[2] ?? 0) * 3_600 + Number(match[3] ?? 0) * 60 + Number(match[4] ?? 0);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return new Date(Date.now() + Math.min(seconds, 31_536_000) * 1000);
+      }
+    }
+    if (this.executionKindForStage(stage) !== 'timer_event') return new Date();
+    throw new BadRequestException('Timer workflow stage requires a valid due date, duration, timeout, or SLA expiration');
   }
 
   private async enqueueStageExecution(
@@ -4609,17 +4665,21 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     stage: WorkflowStageWithRoute,
     actor: string,
   ): Promise<void> {
-    const config = this.jsonRecord(stage.automationConfigJson);
-    const maxAttempts = Math.min(Math.max(Number(config['maxAttempts'] ?? 3), 1), 8);
+    const config = this.executionConfigForStage(stage);
+    const executionKind = this.executionKindForStage(stage);
+    const maxAttempts = executionKind === 'timer_event'
+      ? 1
+      : Math.min(Math.max(Number(config['maxAttempts'] ?? 3), 1), 8);
+    const nextAttemptAt = this.executionScheduleForStage(stage);
     await client.workflowExecutionAttempt.create({
       data: {
         idempotencyKey: `workflow:${task.caseId}:${stage.id}:${task.id}`,
         caseId: task.caseId,
         taskId: task.id,
         templateStageId: stage.id,
-        executionKind: this.executionKindForStage(stage),
+        executionKind,
         maxAttempts,
-        nextAttemptAt: this.executionScheduleForStage(stage),
+        nextAttemptAt,
         inputJson: config as Prisma.InputJsonValue,
         createdBy: actor,
       },
@@ -4629,8 +4689,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         caseId: task.caseId,
         taskId: task.id,
         actor,
-        action: 'route.automation.queued',
-        comment: `${stage.nameEn} (${this.executionKindForStage(stage)})`,
+        action: executionKind === 'timer_event' ? 'route.timer.scheduled' : 'route.automation.queued',
+        comment: `${stage.nameEn} (${executionKind}) scheduled for ${nextAttemptAt.toISOString()}`,
       },
     });
   }
@@ -4894,7 +4954,10 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         where: { id },
         data: { status: outcome === 'rejected' ? 'failed' : 'succeeded', completedAt: new Date(), outcome, resultJson: result as Prisma.InputJsonValue },
       });
-      await tx.workflowEvent.create({ data: { caseId: attempt.caseId, taskId: attempt.taskId, actor: 'system@workflow.dgop.local', action: `route.automation.${outcome}`, comment: attempt.templateStage.nameEn } });
+      const completionAction = attempt.executionKind === 'timer_event'
+        ? 'route.timer.elapsed'
+        : `route.automation.${outcome}`;
+      await tx.workflowEvent.create({ data: { caseId: attempt.caseId, taskId: attempt.taskId, actor: 'system@workflow.dgop.local', action: completionAction, comment: attempt.templateStage.nameEn } });
       await this.completeRuntimeTokensForTask(tx, attempt.taskId);
       await this.applyRouteAdvance(tx, attempt.task, routePlan, 'system@workflow.dgop.local', outcome as WorkflowDecisionValue);
       await this.audit.log({ actor: 'system@workflow.dgop.local', action: 'workflow_execution.completed', entityType: 'workflow_execution_attempt', entityId: id, metadata: { caseId: attempt.caseId, taskId: attempt.taskId, outcome } }, tx);

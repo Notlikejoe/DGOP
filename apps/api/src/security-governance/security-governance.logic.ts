@@ -37,6 +37,7 @@ export type AbacPurpose = (typeof ABAC_PURPOSES)[number];
 export type AbacNetworkZone = (typeof ABAC_NETWORK_ZONES)[number];
 export type AbacRisk = 'low' | 'medium' | 'high' | 'critical';
 export type AbacRuleOutcome = 'pass' | 'fail' | 'review' | 'obligation';
+export type AccessPrivilegeClass = 'read' | 'write' | 'share_export' | 'administer';
 
 export interface AccessDecisionInput {
   hasMapping: boolean;
@@ -100,6 +101,24 @@ function normalizeText(value: string | null | undefined): string {
 function normalizeAction(value: string | null | undefined): AbacAction | null {
   const action = normalizeText(value || 'read').toLowerCase();
   return ACTIONS.has(action) ? (action as AbacAction) : null;
+}
+
+export function accessPrivilegeClass(value: string | null | undefined): AccessPrivilegeClass {
+  const action = normalizeText(value).toLowerCase();
+  if (/(download|export|extract|share|reshare|bulk_consume)/.test(action)) return 'share_export';
+  if (/(delete|admin|manage_|configure_|operate_)/.test(action)) return 'administer';
+  if (/(write|update|insert|edit|upload|create_|submit|publish|build|contribute)/.test(action)) return 'write';
+  return 'read';
+}
+
+export function accessGrantCoversAction(requestedAction: string, grantedActions: string[]): boolean {
+  const requested = normalizeAction(requestedAction);
+  if (!requested) return false;
+  const requestedClass = accessPrivilegeClass(requested);
+  return grantedActions.some((action) => {
+    const normalized = normalizeText(action).toLowerCase();
+    return normalized === requested || accessPrivilegeClass(normalized) === requestedClass;
+  });
 }
 
 function normalizePurpose(value: string | null | undefined): AbacPurpose | null {
@@ -222,11 +241,11 @@ export function evaluateAbacDecision(input: AbacDecisionInput): AbacDecisionResu
   ruleTrace.push({ rule: 'network-zone-vocabulary', outcome: 'pass', message: `Network zone ${networkZone} is recognized.` });
 
   if (!input.hasMapping) {
-    violations.push('missing_role_data_mapping');
-    ruleTrace.push({ rule: 'role-data-mapping', outcome: 'fail', message: 'No active role-to-data mapping matched this asset.' });
-    return result(AccessDecision.deny, 'No approved role-to-data mapping exists for this domain and classification.', context);
+    violations.push('missing_effective_access_grant');
+    ruleTrace.push({ rule: 'effective-access-grant', outcome: 'fail', message: 'No active, approved, enforced access grant covers this operation.' });
+    return result(AccessDecision.deny, 'No effective access grant authorizes this operation for the selected asset and role.', context);
   }
-  ruleTrace.push({ rule: 'role-data-mapping', outcome: 'pass', message: 'An active role-to-data mapping matched this asset.' });
+  ruleTrace.push({ rule: 'effective-access-grant', outcome: 'pass', message: 'An active, approved, enforced access grant covers this operation.' });
 
   if (
     input.assetClassificationRank != null &&
@@ -295,7 +314,7 @@ export function evaluateAbacDecision(input: AbacDecisionInput): AbacDecisionResu
   }
 
   ruleTrace.push({ rule: 'final-allow', outcome: 'pass', message: 'All ABAC checks passed without masking or review obligations.' });
-  return result(AccessDecision.allow, 'Access is allowed by the active role-to-data mapping.', context);
+  return result(AccessDecision.allow, 'Access is allowed by the effective access grant.', context);
 }
 
 export function evaluateAccessDecision(input: AccessDecisionInput): {

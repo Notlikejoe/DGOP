@@ -25,7 +25,7 @@ import {
   SimulateAccessDecisionDto,
   UpdateAccessReviewItemDto,
 } from './security-governance.dto';
-import { evaluateAbacDecision, validateRoleDataAccessMapIntegrity } from './security-governance.logic';
+import { accessGrantCoversAction, evaluateAbacDecision, validateRoleDataAccessMapIntegrity } from './security-governance.logic';
 
 type PrismaWriter = PrismaService | Prisma.TransactionClient;
 const SECURITY_MAINTENANCE_ROLES = new Set(['system_admin', 'dmo_admin']);
@@ -945,24 +945,72 @@ export class SecurityGovernanceService {
     ]);
     if (!asset) throw new NotFoundException('Data asset not found');
     if (!role) throw new NotFoundException('Role not found');
-    const mappings = await this.prisma.roleDataAccessMap.findMany({
+    const now = new Date();
+    const grants = await this.prisma.accessGrant.findMany({
       where: {
-        roleId: role.id,
-        isActive: true,
-        OR: [{ domainId: asset.domainId }, { domainId: null }],
+        assetId: asset.id,
+        principalType: 'role',
+        principalId: role.code,
+        status: 'active',
+        ownerDecision: 'approved',
+        enforcementStatus: 'enforced',
+        startsAt: { lte: now },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
-      include: mappingInclude,
+      include: {
+        permissions: {
+          where: { permission: { isActive: true, deletedAt: null } },
+          include: { permission: { select: { action: true, riskLevel: true } } },
+          orderBy: { permissionCode: 'asc' },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
     });
-    const mapping = mappings
-      .sort((a, b) => {
-        const aSpecific = (a.domainId ? 1 : 0) + (a.classificationId ? 1 : 0);
-        const bSpecific = (b.domainId ? 1 : 0) + (b.classificationId ? 1 : 0);
-        return bSpecific - aSpecific;
-      })
-      .find((row) => !row.classification || !asset.classification || row.classification.rank >= asset.classification.rank);
+    const requestedAction = dto.requestedAction ?? 'read';
+    const grantMatches = grants.map((grant) => {
+      const normalizedPermissions = grant.permissions.map((row) => ({
+        code: row.permissionCode,
+        action: row.permission.action,
+        riskLevel: row.permission.riskLevel,
+      }));
+      const fallbackAction = grant.permissionCode.split('.').at(-1) ?? grant.permissionCode;
+      const grantedActions = normalizedPermissions.length
+        ? normalizedPermissions.map((permission) => permission.action)
+        : [fallbackAction];
+      return {
+        grant,
+        normalizedPermissions,
+        coversAction: accessGrantCoversAction(requestedAction, grantedActions),
+      };
+    });
+    const authorization = grantMatches.find((candidate) => candidate.coversAction) ?? null;
+    const matchingPermission = authorization?.normalizedPermissions.find((permission) =>
+      accessGrantCoversAction(requestedAction, [permission.action]),
+    ) ?? null;
+    const maskingPolicies = dto.personalDataRequested
+      ? await this.prisma.maskingPolicy.findMany({
+          where: {
+            isActive: true,
+            deletedAt: null,
+            appliesToPersonalData: true,
+            OR: [
+              { domainId: asset.domainId, classificationId: asset.classificationId },
+              { domainId: asset.domainId, classificationId: null },
+              { domainId: null, classificationId: asset.classificationId },
+              { domainId: null, classificationId: null },
+            ],
+          },
+          orderBy: [{ updatedAt: 'desc' }],
+          take: 25,
+        })
+      : [];
+    const maskingPolicy = maskingPolicies
+      .sort((a, b) =>
+        Number(!!b.domainId) + Number(!!b.classificationId) - Number(!!a.domainId) - Number(!!a.classificationId),
+      )[0] ?? null;
     const result = evaluateAbacDecision({
-      hasMapping: !!mapping,
-      requestedAction: dto.requestedAction ?? 'read',
+      hasMapping: !!authorization,
+      requestedAction,
       purpose: dto.purpose ?? 'governance',
       networkZone: dto.networkZone ?? 'internal',
       personalDataRequested: dto.personalDataRequested ?? false,
@@ -970,9 +1018,9 @@ export class SecurityGovernanceService {
       emergencyAccess: dto.emergencyAccess ?? false,
       approvalTicketId: dto.approvalTicketId ?? null,
       businessJustification: dto.businessJustification ?? null,
-      personalDataAllowed: mapping?.personalDataAllowed ?? false,
-      approvalRequired: mapping?.approvalRequired ?? true,
-      hasMaskingPolicy: !!mapping?.maskingPolicy,
+      personalDataAllowed: !!authorization && !maskingPolicy,
+      approvalRequired: matchingPermission?.riskLevel === 'high',
+      hasMaskingPolicy: !!maskingPolicy,
       assetClassificationRank: asset.classification?.rank ?? null,
       allowedClassificationRank: role.maxClassificationRank,
     });
@@ -983,7 +1031,7 @@ export class SecurityGovernanceService {
         assetId: asset.id,
         domainId: asset.domainId,
         classificationId: asset.classificationId,
-        maskingPolicyId: mapping?.maskingPolicyId ?? null,
+        maskingPolicyId: maskingPolicy?.id ?? null,
         requestedAction: result.normalizedAction,
         decision: result.decision as AccessDecision,
         reason: result.reason,
@@ -1010,6 +1058,11 @@ export class SecurityGovernanceService {
         ruleTrace: result.ruleTrace,
         hasBusinessJustification: !!dto.businessJustification?.trim(),
         approvalTicketId: dto.approvalTicketId ?? null,
+        authorizationSource: 'access_grant',
+        accessGrantId: authorization?.grant.id ?? null,
+        accessGrantCode: authorization?.grant.code ?? null,
+        accessGrantVersion: authorization?.grant.version ?? null,
+        permissionCodes: authorization?.normalizedPermissions.map((permission) => permission.code) ?? [],
       },
     });
     return {
@@ -1021,6 +1074,13 @@ export class SecurityGovernanceService {
         obligations: result.obligations,
         violations: result.violations,
         ruleTrace: result.ruleTrace,
+        authorizationSource: 'access_grant',
+        accessGrant: authorization ? {
+          id: authorization.grant.id,
+          code: authorization.grant.code,
+          version: authorization.grant.version,
+          permissionCodes: authorization.normalizedPermissions.map((permission) => permission.code),
+        } : null,
       },
     };
   }

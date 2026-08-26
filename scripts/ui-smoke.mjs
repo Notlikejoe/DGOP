@@ -73,6 +73,9 @@ if (!password) fail('DGOP UI smoke requires DGOP_SMOKE_PASSWORD or SEED_ADMIN_PA
 const routes = (env.DGOP_SMOKE_ROUTES ?? [
   '/dashboard',
   '/governance/workflow',
+  '/governance/workflow/designer',
+  '/governance/access',
+  '/governance/training',
   '/governance/operations',
   '/governance/data-quality',
   '/governance/security',

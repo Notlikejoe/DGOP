@@ -20,6 +20,8 @@ import {
   buildWorkflowVersionDiff,
   evaluateWorkflowDmnTable,
   firstActionableWorkflowStage,
+  isAutomatedWorkflowStage,
+  isRoutingOnlyWorkflowStage,
   routeGateForOpenStagePeers,
   selectWorkflowTransitionForDecision,
   selectWorkflowTemplate,
@@ -82,6 +84,7 @@ type Over = {
   testRunFindManyArgs?: any;
   testRunFindFirstArgs?: any;
   testRunAggregateMax?: number;
+  testRunCreateErrors?: string[];
   submitter?: any;
   visibleAssets?: { id: string }[];
   scope?: any;
@@ -243,6 +246,12 @@ function makeService(over: Over): WorkflowService {
         (!where.status || attempt.status === where.status),
       ).length,
       create: async ({ data }: any) => {
+        const errorCode = over.testRunCreateErrors?.shift();
+        if (errorCode) {
+          const error = new Error(`simulated ${errorCode}`) as Error & { code: string };
+          error.code = errorCode;
+          throw error;
+        }
         const row = {
           id: `execution-${(over.executionAttempts?.length ?? 0) + 1}`,
           status: 'queued',
@@ -842,6 +851,70 @@ test('BPMN designer: validation blocks routes without a final stage', () => {
   assert.ok(validation.errors.some((message) => message.includes('final stage')));
 });
 
+test('BPMN designer: explicit connector decisions survive notification labels without false rejection inference', () => {
+  const base = designerTemplateFixture();
+  const stages = base.stages.map((stage: any) => stage.code === 'review' ? { ...stage, isDecision: true } : stage);
+  const stageByCode = new Map(stages.map((stage: any) => [stage.code, stage]));
+  const transitions = [
+    {
+      ...base.transitions[0],
+      fromStage: stageByCode.get('intake'),
+      toStage: stageByCode.get('review'),
+    },
+    {
+      ...base.transitions[1],
+      labelEn: 'Notification recorded',
+      labelAr: 'Notification recorded',
+      fromStage: stageByCode.get('review'),
+      toStage: stageByCode.get('closure'),
+    },
+    {
+      ...base.transitions[1],
+      id: 'transition-review-intake',
+      fromStageId: 'stage-review',
+      toStageId: 'stage-intake',
+      fromStage: stageByCode.get('review'),
+      toStage: stageByCode.get('intake'),
+      labelEn: 'Containment incomplete',
+      labelAr: 'Containment incomplete',
+      connectorType: 'failure',
+      decision: 'rejected',
+      isDefaultPath: true,
+      isHappyPath: false,
+      sortOrder: 3,
+    },
+  ];
+  const xml = designerFixtureBpmn({ ...base, stages, transitions });
+  assert.ok(xml.includes('dgop:decision="approved"'));
+  assert.ok(xml.includes('dgop:isHappyPath="false"'));
+
+  const parsed = parseBpmnXml(xml);
+  const reviewTransitions = parsed.transitions.filter((transition) => transition.fromStageId === 'review');
+  assert.equal(reviewTransitions.find((transition) => transition.toStageId === 'closure')?.decision, 'approved');
+  assert.equal(reviewTransitions.find((transition) => transition.toStageId === 'intake')?.decision, 'rejected');
+  assert.equal(reviewTransitions.filter((transition) => transition.isDefaultPath).length, 1);
+  assert.ok(!parsed.validation.errors.some((message) => message.includes('multiple default connector paths')));
+
+  const legacyParsed = parseBpmnXml(xml.replace(' dgop:decision="approved"', ''));
+  assert.equal(
+    legacyParsed.transitions.find((transition) => transition.fromStageId === 'review' && transition.toStageId === 'closure')?.decision,
+    'approved',
+  );
+});
+
+test('BPMN designer: accepts JSON extension attributes escaped by a canvas export round trip', () => {
+  const xml = designerFixtureBpmn();
+  const canvasExport = xml.replace(/&quot;/g, '&amp;quot;');
+  const parsed = parseBpmnXml(canvasExport);
+
+  assert.ok(parsed.stages.every((stage) => stage.invalidConfigurationFields?.length === 0));
+  assert.deepStrictEqual(
+    parsed.stages.find((stage) => stage.code === 'intake')?.formSchemaJson,
+    { fields: ['request_title'], required: ['request_title'] },
+  );
+  assert.ok(!parsed.validation.errors.some((message) => message.includes('invalid JSON')));
+});
+
 test('BPMN designer: validation enforces exactly one active start node', () => {
   const validation = validateWorkflowRoute(
     [
@@ -1172,6 +1245,52 @@ test('workflow designer test run persists isolated route evidence without produc
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.test_run.execute'));
 });
 
+test('workflow designer test run persists blocked diagnostics instead of failing the request', async () => {
+  const template = designerTemplateFixture();
+  const over: Over = {
+    template,
+    templates: [template],
+    testRuns: [],
+    auditEntries: [],
+  };
+  const svc = makeService(over);
+  const invalidXml = designerFixtureBpmn(template).replace(' dgop:assigneeRoleCode="data_owner"', '');
+
+  const run = await svc.executeDesignerTestRun(
+    template.id,
+    { environment: 'test', bpmnXml: invalidXml },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(run.status, 'blocked');
+  assert.ok((run.executedPath as any).blockers.some((message: string) => message.includes('responsible role')));
+  assert.equal(over.testRunCreates?.[0].status, 'blocked');
+  assert.equal(over.workflowCases?.length ?? 0, 0);
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.test_run.execute'));
+});
+
+test('workflow designer test run retries a concurrent run-number collision', async () => {
+  const template = designerTemplateFixture();
+  const over: Over = {
+    template,
+    templates: [template],
+    testRuns: [],
+    auditEntries: [],
+    testRunCreateErrors: ['P2002'],
+  };
+  const svc = makeService(over);
+
+  const run = await svc.executeDesignerTestRun(
+    template.id,
+    { environment: 'test' },
+    { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] },
+  );
+
+  assert.equal(run.runNumber, 1);
+  assert.equal(over.testRunCreates?.length, 1);
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.test_run.execute'));
+});
+
 test('workflow designer test run reset preserves evidence and records audit', async () => {
   const template = designerTemplateFixture();
   const existing = {
@@ -1352,6 +1471,30 @@ test('workflow designer lifecycle: submit, approve and publish records reviewer 
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.submit'));
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn.publish'));
+});
+
+test('workflow designer lifecycle: administrators cannot override three-actor segregation of duties', async () => {
+  const template = designerTemplateFixture();
+  const xml = designerFixtureBpmn(template);
+  const over: Over = { template, workflowCases: [], templateUpdates: [], templateVersionCreates: [], auditEntries: [] };
+  const svc = makeService(over);
+  const designer = { id: 'admin-designer', email: 'admin-designer@dgop.local', roles: ['system_admin'] };
+
+  await svc.submitTemplateReview(template.id, { bpmnXml: xml, comment: 'Ready' }, designer);
+  await assert.rejects(
+    () => svc.approveTemplateReview(template.id, { comment: 'Self approval' }, designer),
+    /Segregation of duties/,
+  );
+  await svc.approveTemplateReview(
+    template.id,
+    { comment: 'Independent approval' },
+    { id: 'reviewer', email: 'reviewer@dgop.local', roles: ['workflow_reviewer'] },
+  );
+  await assert.rejects(
+    () => svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Self publish' }, designer),
+    /Segregation of duties/,
+  );
+  assert.ok(!over.templateVersionCreates?.length);
 });
 
 test('workflow designer lifecycle: publish rejects diagrams changed after approval', async () => {
@@ -2886,6 +3029,50 @@ test('enterprise workflow runtime: completed child workflow is resumed exactly o
     1,
   );
   assert.strictEqual(attempt.status, 'succeeded');
+});
+
+test('enterprise workflow runtime: timer nodes create durable future execution attempts from SLA configuration', async () => {
+  const over: Over = { createdTasks: [], executionAttempts: [], events: [] };
+  const svc = makeService(over);
+  const timerStage = {
+    id: 'stage-timer',
+    code: 'wait_for_sla',
+    nameEn: 'Wait for SLA',
+    nodeType: 'timer_event',
+    kind: 'timer',
+    taskType: 'routing',
+    assignmentStrategy: 'automation',
+    assigneeRoleCode: null,
+    dueDays: 0,
+    slaConfigJson: { durationMinutes: 5 },
+    automationConfigJson: null,
+    gatewayConfigJson: null,
+    parallelGroup: null,
+    isStart: false,
+    isFinal: false,
+    isActive: true,
+  };
+  const before = Date.now();
+
+  await (svc as any).createStageTask((svc as any).prisma, 'case-timer', timerStage, 'system:test');
+
+  assert.strictEqual(isAutomatedWorkflowStage(timerStage), true);
+  assert.strictEqual(isRoutingOnlyWorkflowStage(timerStage), false);
+  assert.strictEqual(over.createdTasks?.length, 1);
+  assert.strictEqual(over.executionAttempts?.length, 1);
+  assert.strictEqual(over.executionAttempts?.[0].executionKind, 'timer_event');
+  assert.strictEqual(over.executionAttempts?.[0].maxAttempts, 1);
+  assert.deepStrictEqual(over.executionAttempts?.[0].inputJson, { durationMinutes: 5 });
+  assert.ok(over.executionAttempts?.[0].nextAttemptAt.getTime() >= before + 299_000);
+  assert.ok(over.events?.some((event) => event.action === 'route.timer.scheduled'));
+});
+
+test('enterprise workflow runtime: invalid timer schedules fail closed', () => {
+  const svc = makeService({});
+  assert.throws(
+    () => (svc as any).executionScheduleForStage({ nodeType: 'timer_event', slaConfigJson: { label: 'later' } }),
+    /requires a valid due date, duration, timeout, or SLA expiration/,
+  );
 });
 
 (async () => {

@@ -916,8 +916,7 @@ export class AccessManagementPage implements OnInit {
 
   protected cellLabel(assetId: string, principalType: string, principalId: string): string {
     const cell = this.matrixCell(assetId, principalType, principalId);
-    if (!cell || cell.grantCount === 0) return 'No Access';
-    return cell.displayValue;
+    return cell ? this.matrixCellValue(cell) : this.t('access.matrix.noAccess');
   }
 
   protected matrixCellFocused(assetId: string, principalType: string, principalId: string): boolean {
@@ -926,9 +925,10 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected permissionAction(code: string): string {
-    return this.permissions().find((permission) => permission.code === code)?.action?.replace(/_/g, ' ').toUpperCase()
-      ?? code.split('.').at(-1)?.replace(/_/g, ' ').toUpperCase()
-      ?? code;
+    const permission = this.permissions().find((candidate) => candidate.code === code);
+    return permission
+      ? this.privilegeClassLabel(this.permissionClass(permission.action))
+      : this.label(code.split('.').at(-1) ?? code);
   }
 
   protected profilePermissionCodes(profile: ProfileRef): string[] {
@@ -938,7 +938,7 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected profileOptionLabel(profile: ProfileRef): string {
-    const actions = this.profilePermissionCodes(profile).map((code) => this.permissionAction(code));
+    const actions = [...new Set(this.profilePermissionCodes(profile).map((code) => this.permissionAction(code)))];
     const visible = actions.slice(0, 4).join(' / ');
     const remainder = actions.length > 4 ? ` +${actions.length - 4} ${this.t('access.more')}` : '';
     return `${this.profileName(profile)} | ${visible}${remainder}`;
@@ -996,7 +996,26 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected matrixCellValue(cell: AccessMatrixCell): string {
-    return cell.grantCount ? cell.displayValue : this.t('access.matrix.noAccess');
+    if (!cell.grantCount) return this.t('access.matrix.noAccess');
+
+    const localizedProfiles = cell.profileNames
+      .map((name) => this.localizedProfileDisplayName(name))
+      .filter(Boolean);
+    if (localizedProfiles.length) return [...new Set(localizedProfiles)].join(' + ');
+
+    const normalized = cell.displayValue.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (normalized === 'custom' || cell.permissions.length) return this.t('access.value.custom');
+    return this.label(normalized || cell.accessState);
+  }
+
+  private localizedProfileDisplayName(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    const profile = this.profiles().find((candidate) =>
+      [candidate.code, candidate.nameEn, candidate.nameAr]
+        .filter((name): name is string => Boolean(name))
+        .some((name) => name.trim().toLowerCase() === normalized),
+    );
+    return profile ? this.profileName(profile) : this.label(normalized.replace(/[\s-]+/g, '_'));
   }
 
   protected permissionsForAssetType(assetType: string): PermissionRef[] {

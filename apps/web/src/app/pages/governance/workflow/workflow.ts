@@ -14,6 +14,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { finalize, Subscription, timeout } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
 import { AuthService } from '../../../core/auth.service';
 import { ToastService } from '../../../shared/toast.service';
@@ -245,19 +246,27 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private bpmnResizeObserver: ResizeObserver | null = null;
   private bpmnDirectionObserver: MutationObserver | null = null;
   private bpmnFitFrame: number | null = null;
+  private bpmnFitRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private designerLoadRequestId = 0;
   private designerPreviewRequestId = 0;
+  private designerTestRequestId = 0;
+  private designerTestSubscription: Subscription | null = null;
+  private designerTestElapsedTimer: ReturnType<typeof setInterval> | null = null;
   private dashboardTimer: ReturnType<typeof setInterval> | null = null;
   private lastDesignerFocusRefreshAt = 0;
   private readonly refreshDesignerOnFocus = (): void => {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-    if (this.tab() !== 'designer' || this.designerSaving()) return;
+    if (
+      this.tab() !== 'designer' ||
+      this.designerSaving() ||
+      this.designerTestRunning() ||
+      this.designerPreviewing() ||
+      this.designerAutoLayoutRunning()
+    ) return;
     const now = Date.now();
     if (now - this.lastDesignerFocusRefreshAt < 10_000) return;
     this.lastDesignerFocusRefreshAt = now;
     this.loadAll();
-    const templateId = this.designerTemplateId();
-    if (templateId) this.loadDesigner(templateId);
   };
 
   protected readonly tab = signal<'map' | 'tasks' | 'cases' | 'designer'>(
@@ -282,6 +291,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly designerSaving = signal(false);
   protected readonly designerPreviewing = signal(false);
   protected readonly designerTestRunning = signal(false);
+  protected readonly designerTestElapsedSeconds = signal(0);
   protected readonly designerSummary = signal('');
   // The BPMN canvas is the primary designer surface; the business map remains an optional simplified view.
   protected readonly designerViewMode = signal<'business' | 'technical'>('technical');
@@ -294,6 +304,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly designerDiff = signal<WorkflowVersionDiff | null>(null);
   protected readonly designerTestRuns = signal<WorkflowDesignerTestRun[]>([]);
   protected readonly designerTestRunsTotal = signal(0);
+  protected readonly selectedDesignerTestRunId = signal('');
   protected readonly selectedDesignerStageId = signal('');
   protected readonly selectedDesignerElement = signal<DesignerElementSelection | null>(null);
   protected readonly designerCanUndo = signal(false);
@@ -344,6 +355,11 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly designerReadiness = computed(() =>
     this.designer()?.enterprise?.readinessScore ?? this.designer()?.validation.readinessScore ?? 0,
   );
+
+  protected readonly selectedDesignerTestRun = computed(() => {
+    const runs = this.designerTestRuns();
+    return runs.find((run) => run.id === this.selectedDesignerTestRunId()) ?? runs[0] ?? null;
+  });
 
   protected readonly designerRouteStages = computed(() =>
     [...(this.designer()?.template.stages ?? [])].filter((stage) => stage.isActive !== false).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -450,6 +466,35 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly canPublishWorkflowRoute = computed(() =>
     this.auth.hasAnyRole(['system_admin', 'dmo_admin', 'workflow_publisher']),
   );
+  protected readonly designerPublishGateKind = computed<StatusKind>(() => {
+    if (this.designerSaving()) return 'info';
+    if (!this.canPublishWorkflowRoute()) return 'muted';
+    const status = this.designerReviewStatus();
+    if (status === 'approved') return 'success';
+    if (status === 'pending') return 'info';
+    if (status === 'not_submitted') return 'warning';
+    return status === 'published' ? 'success' : 'warning';
+  });
+  protected readonly designerPublishGateLabel = computed(() => {
+    if (this.designerSaving()) return this.t('wf.designer.publishGate.saving');
+    if (!this.canPublishWorkflowRoute()) return this.t('wf.designer.publishGate.restricted');
+    const status = this.designerReviewStatus();
+    if (status === 'approved') return this.t('wf.designer.publishGate.ready');
+    if (status === 'pending') return this.t('wf.designer.publishGate.pending');
+    if (status === 'not_submitted') return this.t('wf.designer.publishGate.notSubmitted');
+    if (status === 'published') return this.t('wf.designer.publishGate.published');
+    return this.t('wf.designer.publishGate.blocked');
+  });
+  protected readonly designerPublishGateHelp = computed(() => {
+    if (this.designerSaving()) return this.t('wf.designer.publishGate.savingHelp');
+    if (!this.canPublishWorkflowRoute()) return this.t('wf.designer.publishGate.restrictedHelp');
+    const status = this.designerReviewStatus();
+    if (status === 'approved') return this.t('wf.designer.publishGate.readyHelp');
+    if (status === 'pending') return this.t('wf.designer.publishGate.pendingHelp');
+    if (status === 'not_submitted') return this.t('wf.designer.publishGate.notSubmittedHelp');
+    if (status === 'published') return this.t('wf.designer.publishGate.publishedHelp');
+    return this.t('wf.designer.publishGate.blockedHelp');
+  });
 
   protected readonly caseTypes = computed(() => {
     const types = [...new Set(this.templates().map((template) => template.caseType).filter(Boolean))];
@@ -574,6 +619,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     if (this.dashboardTimer) clearInterval(this.dashboardTimer);
+    this.finishDesignerTestActivity();
     if (typeof window !== 'undefined') window.removeEventListener('focus', this.refreshDesignerOnFocus);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.refreshDesignerOnFocus);
     this.bpmnDirectionObserver?.disconnect();
@@ -1127,7 +1173,9 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
 
   protected retryBpmnCanvas(): void {
     const xml = this.bpmnImportText().trim() || this.designer()?.bpmnXml || '';
-    if (xml) void this.renderBpmn(xml);
+    if (!xml) return;
+    this.destroyBpmnModeler();
+    void this.renderBpmn(xml);
   }
 
   protected undoDesigner(): void {
@@ -1144,9 +1192,15 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
 
   protected zoomDesigner(delta: number): void {
     const canvas = this.bpmnModeler?.get?.('canvas');
-    if (!canvas) return;
-    const current = Number(canvas.zoom?.() ?? 1);
-    canvas.zoom(Math.min(2.5, Math.max(0.25, current + delta)));
+    const container = this.bpmnCanvas?.nativeElement;
+    if (!canvas || !this.isBpmnCanvasMeasurable(container)) return;
+    try {
+      const current = Number(canvas.zoom?.() ?? 1);
+      const baseline = Number.isFinite(current) && current > 0 ? current : 1;
+      canvas.zoom(Math.min(2.5, Math.max(0.25, baseline + delta)));
+    } catch {
+      this.fitDesignerCanvas(canvas);
+    }
   }
 
   protected fitDesigner(): void {
@@ -1259,6 +1313,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
       if (node.code === 'timer_event' || node.code === 'error_event') {
         const eventDefinitionType = node.code === 'timer_event' ? 'bpmn:TimerEventDefinition' : 'bpmn:ErrorEventDefinition';
         properties['eventDefinitions'] = [modeler.get?.('bpmnFactory')?.create?.(eventDefinitionType)];
+        if (node.code === 'timer_event') properties['dgop:slaConfig'] = JSON.stringify({ durationMinutes: 5 });
       }
       modeling.updateProperties(created, properties);
       selection?.select?.(created);
@@ -1520,29 +1575,52 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected async executeDesignerTestRun(): Promise<void> {
     const template = this.designer()?.template;
     if (!template || this.designerTestRunning()) return;
-    this.designerTestRunning.set(true);
+    const requestId = ++this.designerTestRequestId;
+    this.beginDesignerTestActivity();
     try {
       const xml = await this.currentBpmnXml();
-      this.http.post<WorkflowDesignerTestRun>(
+      if (requestId !== this.designerTestRequestId || this.designerTemplateId() !== template.id) return;
+      this.designerTestSubscription = this.http.post<WorkflowDesignerTestRun>(
         `/api/workflow/templates/${template.id}/designer/test-runs`,
         { bpmnXml: xml, environment: 'test' },
+      ).pipe(
+        timeout(15_000),
+        finalize(() => {
+          if (requestId === this.designerTestRequestId) {
+            this.designerTestSubscription = null;
+            this.finishDesignerTestActivity();
+          }
+        }),
       ).subscribe({
         next: (run) => {
-          this.designerTestRunning.set(false);
+          if (requestId !== this.designerTestRequestId || this.designerTemplateId() !== template.id) return;
           this.designerSimulation.set(run.simulation as WorkflowDesignerSimulation);
+          this.selectedDesignerTestRunId.set(run.id);
+          this.designerTestRuns.update((runs) => [run, ...runs.filter((item) => item.id !== run.id)].slice(0, 5));
+          this.designerTestRunsTotal.update((total) => total + 1);
           this.loadDesignerTestRuns(template.id);
-          this.loadAll();
           this.toast.success(this.t('wf.designer.testRunDone'));
         },
         error: (err) => {
-          this.toast.errorFrom(err, this.t('wf.saveError'));
-          this.designerTestRunning.set(false);
+          if (requestId !== this.designerTestRequestId) return;
+          if (err?.name === 'TimeoutError') this.toast.errorFrom(err, this.t('wf.designer.testTimeout'));
+          else this.toast.errorFrom(err, this.t('wf.saveError'));
         },
       });
     } catch (err) {
-      this.toast.errorFrom(err, this.t('wf.designer.exportError'));
-      this.designerTestRunning.set(false);
+      if (requestId !== this.designerTestRequestId) return;
+      this.finishDesignerTestActivity();
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('timed out')) this.toast.error(this.t('wf.designer.testTimeout'));
+      else this.toast.errorFrom(err, this.t('wf.designer.exportError'));
     }
+  }
+
+  protected cancelDesignerTestRun(): void {
+    if (!this.designerTestRunning()) return;
+    this.designerTestRequestId++;
+    this.finishDesignerTestActivity();
+    this.toast.show(this.t('wf.designer.testCancelled'), 'info');
   }
 
   protected resetDesignerTestRun(run: WorkflowDesignerTestRun): void {
@@ -1554,7 +1632,6 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     ).subscribe({
       next: () => {
         this.loadDesignerTestRuns(template.id);
-        this.loadAll();
         this.toast.success(this.t('wf.designer.testRunReset'));
       },
       error: (err) => this.toast.errorFrom(err, this.t('wf.saveError')),
@@ -1596,11 +1673,26 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   protected testRunPathLength(run: WorkflowDesignerTestRun): number {
+    return this.testRunSteps(run).length;
+  }
+
+  protected testRunSteps(run: WorkflowDesignerTestRun): WorkflowDesignerSimulation['path'] {
     const executedPath = run.executedPath as { path?: unknown[] };
     const simulation = run.simulation as { path?: unknown[] };
-    if (Array.isArray(executedPath.path)) return executedPath.path.length;
-    if (Array.isArray(simulation.path)) return simulation.path.length;
-    return 0;
+    if (Array.isArray(executedPath.path)) return executedPath.path as WorkflowDesignerSimulation['path'];
+    if (Array.isArray(simulation.path)) return simulation.path as WorkflowDesignerSimulation['path'];
+    return [];
+  }
+
+  protected testRunMessages(run: WorkflowDesignerTestRun, type: 'blockers' | 'warnings'): string[] {
+    const executedPath = run.executedPath as { blockers?: unknown[]; warnings?: unknown[] };
+    const simulation = run.simulation as { blockers?: unknown[]; warnings?: unknown[] };
+    const values = executedPath[type] ?? simulation[type] ?? [];
+    return Array.isArray(values) ? values.map(String).filter(Boolean) : [];
+  }
+
+  protected inspectDesignerTestRun(run: WorkflowDesignerTestRun): void {
+    this.selectedDesignerTestRunId.set(run.id);
   }
 
   protected hasManualMigrationReview(): boolean {
@@ -1792,7 +1884,12 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     const selected = this.designerTemplateId() || this.selectedTemplateId() || templates[0].id;
     this.designerTemplateId.set(selected);
     if (this.designer()?.template.id === selected && this.designerState() === 'ready') {
-      setTimeout(() => void this.renderBpmn(this.designer()?.bpmnXml ?? ''), 0);
+      if (
+        this.designerViewMode() === 'technical' &&
+        (!this.bpmnModeler || this.bpmnCanvasState() === 'idle' || this.bpmnCanvasState() === 'error')
+      ) {
+        setTimeout(() => void this.renderBpmn(this.designer()?.bpmnXml ?? ''), 0);
+      }
       return;
     }
     this.loadDesigner(selected);
@@ -1801,6 +1898,8 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private loadDesigner(templateId: string): void {
     const requestId = ++this.designerLoadRequestId;
     this.designerPreviewRequestId++;
+    this.designerTestRequestId++;
+    this.finishDesignerTestActivity();
     this.designerState.set('loading');
     this.designerPreviewing.set(false);
     this.designerSimulation.set(null);
@@ -1808,6 +1907,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     this.designerDiff.set(null);
     this.designerTestRuns.set([]);
     this.designerTestRunsTotal.set(0);
+    this.selectedDesignerTestRunId.set('');
     if (this.designerViewMode() === 'technical') this.destroyBpmnModeler();
     this.http.get<WorkflowDesignerResponse>(`/api/workflow/templates/${templateId}/designer`, {
       params: { routeRevision: String(Date.now()) },
@@ -1865,11 +1965,15 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         if (this.designerTemplateId() !== templateId) return;
         this.designerTestRuns.set(res.data);
         this.designerTestRunsTotal.set(res.total);
+        if (!res.data.some((run) => run.id === this.selectedDesignerTestRunId())) {
+          this.selectedDesignerTestRunId.set(res.data[0]?.id ?? '');
+        }
       },
       error: () => {
         if (this.designerTemplateId() !== templateId) return;
         this.designerTestRuns.set([]);
         this.designerTestRunsTotal.set(0);
+        this.selectedDesignerTestRunId.set('');
       },
     });
   }
@@ -1972,7 +2076,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
-  private async ensureModeler(): Promise<any | null> {
+  private async ensureModeler(expectedGeneration?: number): Promise<any | null> {
     const container = this.bpmnCanvas?.nativeElement;
     if (!container) return null;
     if (typeof document !== 'undefined' && !document.body.contains(container)) return null;
@@ -1982,6 +2086,8 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     }
     if (!this.bpmnModeler) {
       const module = await import('bpmn-js/lib/Modeler');
+      if (expectedGeneration != null && expectedGeneration !== this.bpmnRenderGeneration) return null;
+      if (!container.isConnected || this.bpmnCanvas?.nativeElement !== container) return null;
       this.bpmnModeler = new module.default({
         container,
       });
@@ -2280,6 +2386,10 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
       cancelAnimationFrame(this.bpmnFitFrame);
       this.bpmnFitFrame = null;
     }
+    if (this.bpmnFitRetryTimer) {
+      clearTimeout(this.bpmnFitRetryTimer);
+      this.bpmnFitRetryTimer = null;
+    }
     this.bpmnCanvasState.set('idle');
     if (!this.bpmnModeler) {
       this.bpmnModelerContainer = null;
@@ -2311,15 +2421,26 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async renderBpmn(xml: string): Promise<boolean> {
-    if (!xml.trim()) return false;
+    if (!xml.trim()) {
+      this.bpmnCanvasState.set('error');
+      return false;
+    }
     if (this.designerViewMode() !== 'technical') return true;
     const generation = ++this.bpmnRenderGeneration;
     this.bpmnCanvasState.set('loading');
     const importTask = (async (): Promise<boolean> => {
       let timeout: ReturnType<typeof setTimeout> | null = null;
       try {
-        const modeler = await this.ensureModeler();
-        if (!modeler || generation !== this.bpmnRenderGeneration) return false;
+        const container = await this.waitForBpmnCanvasContainer(generation);
+        if (generation !== this.bpmnRenderGeneration) return false;
+        if (!container) throw new Error('BPMN canvas layout timed out');
+        const modeler = await this.withDeadline(
+          this.ensureModeler(generation),
+          8_000,
+          'BPMN modeler load timed out',
+        );
+        if (generation !== this.bpmnRenderGeneration) return false;
+        if (!modeler) throw new Error('BPMN canvas is unavailable');
         const result = await Promise.race([
           modeler.importXML(xml),
           new Promise<never>((_, reject) => {
@@ -2327,18 +2448,24 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
           }),
         ]);
         if (generation !== this.bpmnRenderGeneration || modeler !== this.bpmnModeler) return false;
+        this.bpmnCanvasState.set('ready');
         const canvas = modeler.get?.('canvas');
         if (canvas) this.fitDesignerCanvas(canvas);
-        this.bpmnCanvasState.set('ready');
         this.selectedDesignerElement.set(null);
         this.syncDesignerHistory();
         const warnings = result?.warnings?.length ?? 0;
         if (warnings > 0) this.toast.show(this.t('wf.designer.importWarnings'), 'info');
         return true;
-      } catch {
+      } catch (error) {
         if (generation === this.bpmnRenderGeneration) {
+          this.destroyBpmnModeler();
           this.bpmnCanvasState.set('error');
-          this.toast.error(this.t('wf.designer.invalidXml'));
+          const message = error instanceof Error ? error.message : '';
+          this.toast.error(this.t(
+            message.includes('canvas') || message.includes('timed out')
+              ? 'wf.designer.canvasError'
+              : 'wf.designer.invalidXml',
+          ));
         }
         return false;
       } finally {
@@ -2357,25 +2484,100 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.designerViewMode() !== 'technical') return this.designer()?.bpmnXml ?? '';
     const importInFlight = this.bpmnImporting;
     if (importInFlight) await importInFlight;
-    const modeler = await this.ensureModeler();
+    if (this.bpmnCanvasState() !== 'ready') return this.designer()?.bpmnXml ?? '';
+    const modeler = await this.withDeadline(
+      this.ensureModeler(),
+      8_000,
+      'BPMN modeler load timed out',
+    );
     if (!modeler) return this.designer()?.bpmnXml ?? '';
-    const result = await modeler.saveXML({ format: true });
-    return result.xml;
+    const result = await this.withDeadline<{ xml: string }>(
+      modeler.saveXML({ format: true }) as Promise<{ xml: string }>,
+      8_000,
+      'BPMN export timed out',
+    );
+    return this.normalizeDesignerExtensionAttributes(result.xml);
   }
 
-  private fitDesignerCanvas(canvas: any): void {
+  private async waitForBpmnCanvasContainer(generation: number, timeoutMs = 3_000): Promise<HTMLElement | null> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (generation !== this.bpmnRenderGeneration || this.designerViewMode() !== 'technical') return null;
+      const container = this.bpmnCanvas?.nativeElement;
+      if (this.isBpmnCanvasMeasurable(container)) return container;
+      await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    }
+    return null;
+  }
+
+  private isBpmnCanvasMeasurable(container?: HTMLElement | null): container is HTMLElement {
+    if (!container?.isConnected) return false;
+    const rect = container.getBoundingClientRect();
+    return Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width >= 120 && rect.height >= 240;
+  }
+
+  private async withDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private normalizeDesignerExtensionAttributes(xml: string): string {
+    return xml.replace(/(\sdgop:[\w.-]+=")([^"]*)(")/gi, (_match, prefix: string, value: string, suffix: string) => {
+      // bpmn-js preserves unknown extension attributes, but escapes their existing
+      // XML entities once more when exporting. Remove only that added layer.
+      const normalized = value.replace(
+        /&amp;((?:amp|quot|apos|lt|gt|#\d+|#x[0-9a-f]+);)/gi,
+        '&$1',
+      );
+      return `${prefix}${normalized}${suffix}`;
+    });
+  }
+
+  private fitDesignerCanvas(canvas: any, attempt = 0): void {
     const fit = (): void => {
-      canvas.resized?.();
-      canvas.zoom?.('fit-viewport', 'auto');
-      const fittedZoom = Number(canvas.zoom?.() ?? 1);
-      if (Number.isFinite(fittedZoom) && fittedZoom > 0) {
-        const width = this.bpmnCanvas?.nativeElement.clientWidth ?? 0;
-        const clearanceFactor = width > 0 && width < 1200 ? 0.8 : 0.88;
-        canvas.zoom?.(Math.max(0.2, fittedZoom * clearanceFactor), 'auto');
-        if (width > 760) {
+      this.bpmnFitFrame = null;
+      const container = this.bpmnCanvas?.nativeElement;
+      if (!this.isBpmnCanvasMeasurable(container) || canvas !== this.bpmnModeler?.get?.('canvas')) {
+        this.retryDesignerFit(canvas, attempt);
+        return;
+      }
+      try {
+        canvas.resized?.();
+        const viewbox = canvas.viewbox?.();
+        const innerWidth = Number(viewbox?.inner?.width ?? 0);
+        const innerHeight = Number(viewbox?.inner?.height ?? 0);
+        const outerWidth = Number(viewbox?.outer?.width ?? container.clientWidth);
+        const outerHeight = Number(viewbox?.outer?.height ?? container.clientHeight);
+        if (
+          !Number.isFinite(innerWidth) || !Number.isFinite(innerHeight) ||
+          !Number.isFinite(outerWidth) || !Number.isFinite(outerHeight) ||
+          innerWidth <= 0 || innerHeight <= 0 || outerWidth <= 0 || outerHeight <= 0
+        ) {
+          this.retryDesignerFit(canvas, attempt);
+          return;
+        }
+        const clearanceFactor = container.clientWidth < 1200 ? 0.8 : 0.88;
+        const fittedZoom = Math.min(outerWidth / innerWidth, outerHeight / innerHeight) * clearanceFactor;
+        if (!Number.isFinite(fittedZoom) || fittedZoom <= 0) {
+          this.retryDesignerFit(canvas, attempt);
+          return;
+        }
+        canvas.zoom?.(Math.min(2.5, Math.max(0.2, fittedZoom)), 'auto');
+        if (container.clientWidth > 760) {
           const direction = typeof document !== 'undefined' && document.documentElement.dir === 'rtl' ? -1 : 1;
           canvas.scroll?.({ dx: 36 * direction, dy: 0 });
         }
+      } catch {
+        this.retryDesignerFit(canvas, attempt);
       }
     };
     if (typeof requestAnimationFrame === 'undefined') {
@@ -2383,12 +2585,36 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     if (this.bpmnFitFrame !== null) cancelAnimationFrame(this.bpmnFitFrame);
-    this.bpmnFitFrame = requestAnimationFrame(() => {
-      this.bpmnFitFrame = requestAnimationFrame(() => {
-        this.bpmnFitFrame = null;
-        fit();
-      });
-    });
+    this.bpmnFitFrame = requestAnimationFrame(fit);
+  }
+
+  private retryDesignerFit(canvas: any, attempt: number): void {
+    if (attempt >= 12 || this.designerViewMode() !== 'technical' || canvas !== this.bpmnModeler?.get?.('canvas')) return;
+    if (this.bpmnFitRetryTimer) clearTimeout(this.bpmnFitRetryTimer);
+    this.bpmnFitRetryTimer = setTimeout(() => {
+      this.bpmnFitRetryTimer = null;
+      this.fitDesignerCanvas(canvas, attempt + 1);
+    }, Math.min(240, 40 + attempt * 20));
+  }
+
+  private beginDesignerTestActivity(): void {
+    this.finishDesignerTestActivity();
+    this.designerTestRunning.set(true);
+    this.designerTestElapsedSeconds.set(0);
+    const startedAt = Date.now();
+    this.designerTestElapsedTimer = setInterval(() => {
+      this.designerTestElapsedSeconds.set(Math.floor((Date.now() - startedAt) / 1_000));
+    }, 1_000);
+  }
+
+  private finishDesignerTestActivity(): void {
+    this.designerTestSubscription?.unsubscribe();
+    this.designerTestSubscription = null;
+    if (this.designerTestElapsedTimer) {
+      clearInterval(this.designerTestElapsedTimer);
+      this.designerTestElapsedTimer = null;
+    }
+    this.designerTestRunning.set(false);
   }
 
   private async persistDesigner(mode: 'save' | 'publish'): Promise<void> {

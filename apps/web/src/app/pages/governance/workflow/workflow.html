@@ -445,16 +445,18 @@
                   {{ t('wf.designer.advancedCanvas') }}
                   </button>
                 </div>
-                @if (canEditDesigner) {
-                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerTestRunning()" (click)="executeDesignerTestRun()">
-                    {{ designerTestRunning() ? t('wf.designer.runningTest') : t('wf.designer.runTest') }}
-                  </button>
-                }
-                <div class="designer-score">
-                  <span>{{ t('wf.designer.readiness') }}</span>
-                  <strong>{{ designerReadiness() }}%</strong>
-                <app-status-chip [kind]="validationKind(d.validation.status)" [label]="t('wf.designer.status.' + d.validation.status)" />
-              </div>
+                <div class="designer-governance-state">
+                  <div class="designer-score">
+                    <span>{{ t('wf.designer.readiness') }}</span>
+                    <strong>{{ designerReadiness() }}%</strong>
+                    <app-status-chip [kind]="validationKind(d.validation.status)" [label]="t('wf.designer.status.' + d.validation.status)" />
+                  </div>
+                  <div class="designer-publish-gate" id="designer-publish-gate" aria-live="polite">
+                    <span>{{ t('wf.designer.publishGate') }}</span>
+                    <app-status-chip [kind]="designerPublishGateKind()" [label]="designerPublishGateLabel()" />
+                    <small>{{ designerPublishGateHelp() }}</small>
+                  </div>
+                </div>
             </div>
           </div>
 
@@ -512,10 +514,10 @@
                   <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerPreviewing()" (click)="refreshDesignerPreviews()">
                     <app-icon name="check" /> {{ t('wf.designer.toolbar.validate') }}
                   </button>
-                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="designerTestRunning()" (click)="executeDesignerTestRun()">
+                  <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="!canEditDesigner || designerTestRunning()" (click)="executeDesignerTestRun()">
                     <app-icon name="play" /> {{ t('wf.designer.toolbar.test') }}
                   </button>
-                  <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'" (click)="publishDesigner()">
+                  <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'" [title]="designerPublishGateHelp()" aria-describedby="designer-publish-gate" (click)="publishDesigner()">
                     {{ t('wf.designer.toolbar.publish') }}
                   </button>
                 </div>
@@ -559,6 +561,102 @@
                   <small>{{ t('wf.designer.parallelHelp') }}</small>
                 </article>
               </div>
+              <section
+                class="isolated-test-console"
+                [class.isolated-test-console--running]="designerTestRunning()"
+                [class.isolated-test-console--blocked]="!designerTestRunning() && selectedDesignerTestRun()?.status === 'blocked'"
+                aria-live="polite"
+              >
+                <div class="isolated-test-console__head">
+                  <div class="isolated-test-console__title">
+                    <span class="section-kicker">{{ t('wf.designer.testConsoleEyebrow') }}</span>
+                    <h3>{{ t('wf.designer.testConsoleTitle') }}</h3>
+                    <p>{{ t('wf.designer.testConsoleHelp') }}</p>
+                  </div>
+                  <div class="isolated-test-console__actions">
+                    @if (designerTestRunning()) {
+                      <span class="isolated-test-console__progress" role="status">
+                        <span aria-hidden="true"></span>{{ t('wf.designer.runningTest') }} {{ designerTestElapsedSeconds() }}s
+                      </span>
+                    } @else if (selectedDesignerTestRun(); as run) {
+                      <app-status-chip [kind]="testRunKind(run.status)" [label]="t('wf.designer.status.' + run.status)" />
+                    }
+                    @if (designerTestRunning()) {
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="cancelDesignerTestRun()">
+                        <app-icon name="x" />{{ t('wf.designer.cancelTest') }}
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="ds-btn ds-btn--primary btn-sm"
+                        [disabled]="!canEditDesigner"
+                        (click)="executeDesignerTestRun()"
+                      >
+                        <app-icon name="play" />{{ t('wf.designer.runTest') }}
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                @if (designerTestRunning()) {
+                  <div class="isolated-test-progress" role="status">
+                    <div class="isolated-test-progress__bar" aria-hidden="true"><span></span></div>
+                    <div class="isolated-test-progress__steps">
+                      <div><app-icon name="fileCheck" /><span>{{ t('wf.designer.testPhaseSnapshot') }}</span></div>
+                      <div><app-icon name="gitFork" /><span>{{ t('wf.designer.testPhaseSimulate') }}</span></div>
+                      <div><app-icon name="shield" /><span>{{ t('wf.designer.testPhaseVerify') }}</span></div>
+                    </div>
+                    <p>{{ t('wf.designer.testRunningHelp') }}</p>
+                  </div>
+                } @else if (selectedDesignerTestRun(); as run) {
+                  <dl class="isolated-test-console__metrics">
+                    <div><dt>{{ t('wf.designer.testRun') }}</dt><dd>#{{ run.runNumber }}</dd></div>
+                    <div><dt>{{ t('wf.designer.environment') }}</dt><dd>{{ run.environment }}</dd></div>
+                    <div><dt>{{ t('wf.designer.pathLength') }}</dt><dd>{{ testRunPathLength(run) }}</dd></div>
+                    <div><dt>{{ t('wf.designer.productionWrites') }}</dt><dd>0</dd></div>
+                  </dl>
+
+                  @if (testRunSteps(run).length) {
+                    <div class="isolated-test-path" [attr.aria-label]="t('wf.designer.executedPath')">
+                      @for (step of testRunSteps(run); track step.code; let index = $index) {
+                        <article>
+                          <span>{{ index + 1 }}</span>
+                          <div>
+                            <strong>{{ step.nameEn }}</strong>
+                            <small>
+                              {{ nodeTypeLabel(step.nodeType) }}
+                              @if (step.chosenDecision) { &middot; {{ t('wf.designer.branch') }}: {{ step.chosenDecision }} }
+                            </small>
+                          </div>
+                        </article>
+                      }
+                    </div>
+                  }
+
+                  @if (testRunMessages(run, 'blockers').length || testRunMessages(run, 'warnings').length) {
+                    <div class="isolated-test-console__messages">
+                      @for (message of testRunMessages(run, 'blockers'); track message) {
+                        <p class="isolated-test-console__message isolated-test-console__message--blocked"><app-icon name="alert" />{{ message }}</p>
+                      }
+                      @for (message of testRunMessages(run, 'warnings'); track message) {
+                        <p class="isolated-test-console__message"><app-icon name="info" />{{ message }}</p>
+                      }
+                    </div>
+                  } @else {
+                    <p class="isolated-test-console__clean"><app-icon name="check" />{{ t('wf.designer.testNoIssues') }}</p>
+                  }
+
+                  <p class="isolated-test-console__isolation">
+                    <app-icon name="shield" />
+                    {{ t('wf.designer.testIsolationProof') }}
+                  </p>
+                } @else {
+                  <div class="isolated-test-console__empty">
+                    <app-icon name="activity" />
+                    <div><strong>{{ t('wf.designer.noTestSelected') }}</strong><span>{{ t('wf.designer.noTestSelectedHelp') }}</span></div>
+                  </div>
+                }
+              </section>
               @if (designerState() === 'loading') {
                 <div class="empty"><p>{{ t('crud.loading') }}</p></div>
               } @else if (designerState() === 'error') {
@@ -584,27 +682,47 @@
                       <button type="button" [attr.aria-label]="t(designerCanvasExpanded() ? 'wf.designer.toolbar.closeCanvas' : 'wf.designer.toolbar.expandCanvas')" [title]="t(designerCanvasExpanded() ? 'wf.designer.toolbar.closeCanvas' : 'wf.designer.toolbar.expandCanvas')" (click)="toggleDesignerCanvas()"><app-icon [name]="designerCanvasExpanded() ? 'x' : 'maximize'" /></button>
                     </div>
                   </div>
-                  <div
-                    #bpmnCanvas
-                    class="bpmn-canvas"
-                    [class.bpmn-canvas--muted]="bpmnCanvasState() !== 'ready'"
-                    [attr.aria-label]="t('wf.designer.canvasTitle')"
-                  ></div>
-                  @if (bpmnCanvasState() === 'loading' || bpmnCanvasState() === 'idle') {
-                    <div class="bpmn-canvas-state" role="status">
-                      <span class="bpmn-canvas-state__spinner" aria-hidden="true"></span>
-                      <strong>{{ t('wf.designer.canvasLoading') }}</strong>
-                      <small>{{ t('wf.designer.canvasLoadingHelp') }}</small>
-                    </div>
-                  } @else if (bpmnCanvasState() === 'error') {
-                    <div class="bpmn-canvas-state bpmn-canvas-state--error" role="alert">
-                      <strong>{{ t('wf.designer.canvasError') }}</strong>
-                      <small>{{ t('wf.designer.canvasErrorHelp') }}</small>
-                      <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="retryBpmnCanvas()">
-                        {{ t('crud.retry') }}
-                      </button>
-                    </div>
-                  }
+                  <div class="designer-canvas-stage">
+                    <div
+                      #bpmnCanvas
+                      class="bpmn-canvas"
+                      [class.bpmn-canvas--muted]="bpmnCanvasState() !== 'ready'"
+                      [attr.aria-label]="t('wf.designer.canvasTitle')"
+                    ></div>
+                    @if (bpmnCanvasState() === 'loading' || bpmnCanvasState() === 'idle') {
+                      <div class="bpmn-canvas-state" role="status">
+                        <div class="bpmn-canvas-state__surface">
+                          <span class="bpmn-canvas-state__spinner" aria-hidden="true"></span>
+                          <div>
+                            <strong>{{ t('wf.designer.canvasLoading') }}</strong>
+                            <small>{{ t('wf.designer.canvasLoadingHelp') }}</small>
+                          </div>
+                          <div class="bpmn-canvas-state__progress" aria-hidden="true"><span></span></div>
+                          <div class="bpmn-canvas-state__steps" aria-hidden="true">
+                            <span>{{ t('wf.designer.canvasPhaseRoute') }}</span>
+                            <span>{{ t('wf.designer.canvasPhaseTools') }}</span>
+                            <span>{{ t('wf.designer.canvasPhaseLayout') }}</span>
+                          </div>
+                          <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="retryBpmnCanvas()">
+                            <app-icon name="refresh" />{{ t('wf.designer.restartCanvas') }}
+                          </button>
+                        </div>
+                      </div>
+                    } @else if (bpmnCanvasState() === 'error') {
+                      <div class="bpmn-canvas-state bpmn-canvas-state--error" role="alert">
+                        <div class="bpmn-canvas-state__surface">
+                          <app-icon name="alert" />
+                          <div>
+                            <strong>{{ t('wf.designer.canvasError') }}</strong>
+                            <small>{{ t('wf.designer.canvasErrorHelp') }}</small>
+                          </div>
+                          <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="retryBpmnCanvas()">
+                            <app-icon name="refresh" />{{ t('crud.retry') }}
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
                 </div>
               }
             } @else {
@@ -1131,6 +1249,8 @@
                 type="button"
                 class="ds-btn ds-btn--primary"
                 [disabled]="designerSaving() || !canPublishWorkflowRoute() || designerReviewStatus() !== 'approved'"
+                [title]="designerPublishGateHelp()"
+                aria-describedby="designer-publish-gate"
                 (click)="publishDesigner()"
               >
                 {{ designerSaving() ? t('crud.saving') : t('wf.designer.publish') }}
@@ -1217,7 +1337,15 @@
           </aside>
         </div>
 
-        <div class="designer-lower-grid">
+        <details class="designer-evidence-disclosure">
+          <summary>
+            <span>
+              <strong>{{ t('wf.designer.evidenceDrawer') }}</strong>
+              <small>{{ t('wf.designer.evidenceDrawerHelp') }}</small>
+            </span>
+            <app-status-chip [kind]="designerTestRunsTotal() > 0 ? 'success' : 'warning'" [label]="designerTestRunsTotal().toString()" />
+          </summary>
+          <div class="designer-lower-grid">
           @if (designerSimulation(); as sim) {
             <section class="designer-evidence-card">
               <div class="designer-evidence-card__head">
@@ -1282,6 +1410,9 @@
                       <small>{{ t('wf.designer.pathLength') }}: {{ testRunPathLength(run) }} &middot; {{ t('wf.designer.isolated') }}</small>
                     </div>
                     <app-status-chip [kind]="testRunKind(run.status)" [label]="t('wf.designer.status.' + run.status)" />
+                    <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="inspectDesignerTestRun(run)">
+                      {{ t('wf.designer.viewTestRun') }}
+                    </button>
                     <button
                       type="button"
                       class="ds-btn ds-btn--ghost btn-sm"
@@ -1318,7 +1449,8 @@
               }
             </div>
           </section>
-        </div>
+          </div>
+        </details>
       </section>
     } @else if (tab() === 'tasks') {
       @if (tasks().length === 0) {

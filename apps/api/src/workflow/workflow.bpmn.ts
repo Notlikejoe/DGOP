@@ -255,6 +255,8 @@ export function templateToBpmnXml(template: WorkflowBpmnTemplate): string {
       transition.conditionJson,
       transition.isDefaultPath,
       transition.timeoutAfterSeconds,
+      transition.decision,
+      transition.isHappyPath,
     ));
     edgeDi.push({ id, from, to, label });
   }
@@ -468,13 +470,16 @@ export function parseBpmnXml(xml: string): WorkflowBpmnParseResult {
     for (const next of nextStages) {
       if (next.nodeId === nodeId) continue;
       transitionIndex++;
-      const decision = inferDecision(next.label, nextStages.length > 1);
       const explicitConnector = next.flow ? cleanString(attrFromAttrs(next.flow.attrs, 'connectorType')) : null;
+      const explicitDecision = next.flow ? cleanString(attrFromAttrs(next.flow.attrs, 'decision')) : null;
+      const labelDecision = inferDecision(next.label, nextStages.length > 1);
+      const decision = explicitDecision ?? decisionForConnector(explicitConnector) ?? labelDecision;
       const connectorType = normalizeConnectorType(
         explicitConnector ?? inferredGatewayConnector(stage, next.stage),
         decision,
       );
       const rawConditionJson = next.flow ? attrFromAttrs(next.flow.attrs, 'conditionJson') : null;
+      const explicitHappyPath = next.flow ? attrFromAttrs(next.flow.attrs, 'isHappyPath') : null;
       transitions.push({
         id: `${stage.code}->${next.stage.code}:${transitionIndex}`,
         fromStageId: stage.code,
@@ -487,7 +492,9 @@ export function parseBpmnXml(xml: string): WorkflowBpmnParseResult {
         conditionJson: parseJsonAttr(rawConditionJson),
         isDefaultPath: asBool(next.flow ? attrFromAttrs(next.flow.attrs, 'isDefaultPath') : null) || connectorType === 'default',
         timeoutAfterSeconds: boundedPositiveInt(next.flow ? attrFromAttrs(next.flow.attrs, 'timeoutAfterSeconds') : null),
-        isHappyPath: decision !== 'rejected',
+        isHappyPath: explicitHappyPath == null
+          ? decision !== 'rejected' && !['failure', 'return'].includes(connectorType)
+          : asBool(explicitHappyPath),
         sortOrder: transitionIndex,
         invalidConditionJson: hasInvalidJsonAttr(rawConditionJson),
       });
@@ -562,7 +569,7 @@ export function validateWorkflowRoute(
     if (nodeType === 'notification_task' && !hasStructuredRequirement(stage.notificationRulesJson)) {
       errors.push(`Notification stage ${stage.code} must define at least one notification rule.`);
     }
-    if (nodeType === 'timer_event' && !hasStructuredRequirement(stage.slaConfigJson)) {
+    if (nodeType === 'timer_event' && !hasTimerSchedule(stage.slaConfigJson)) {
       errors.push(`Timer stage ${stage.code} must define a duration, due date, timeout, or SLA rule.`);
     }
     if (nodeType === 'sub_workflow' && !hasSubWorkflowReference(stage.automationConfigJson)) {
@@ -825,6 +832,22 @@ function hasStructuredRequirement(value: unknown | null | undefined): boolean {
   return Boolean(String(value).trim());
 }
 
+function hasTimerSchedule(value: unknown | null | undefined): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const config = value as Record<string, unknown>;
+  for (const key of ['dueAt', 'dueDate', 'timeoutAt', 'slaExpiresAt']) {
+    if (typeof config[key] === 'string' && !Number.isNaN(new Date(config[key] as string).getTime())) return true;
+  }
+  for (const key of ['delaySeconds', 'duration', 'durationSeconds', 'durationMinutes', 'timeoutMinutes', 'durationHours', 'timeoutHours', 'dueDays']) {
+    const numeric = Number(config[key]);
+    if (config[key] != null && Number.isFinite(numeric) && numeric >= 0) return true;
+  }
+  for (const key of ['duration', 'timeout']) {
+    if (typeof config[key] === 'string' && /^P(?=\d|T\d)(?:\d+(?:\.\d+)?D)?(?:T(?:\d+(?:\.\d+)?H)?(?:\d+(?:\.\d+)?M)?(?:\d+(?:\.\d+)?S)?)?$/i.test(config[key] as string)) return true;
+  }
+  return false;
+}
+
 function requirementCount(value: unknown | null | undefined): number {
   if (!value) return 0;
   if (Array.isArray(value)) return value.length;
@@ -850,12 +873,16 @@ function sequenceFlow(
   conditionJson?: unknown | null,
   isDefaultPath?: boolean,
   timeoutAfterSeconds?: number | null,
+  decision?: string | null,
+  isHappyPath?: boolean,
 ): string {
   const conditionAttrs = [
     connectorType ? ` dgop:connectorType="${escapeXml(normalizeConnectorType(connectorType))}"` : '',
+    decision ? ` dgop:decision="${escapeXml(decision)}"` : '',
     conditionExpression ? ` dgop:conditionExpression="${escapeXml(conditionExpression)}"` : '',
     conditionJson ? ` dgop:conditionJson="${escapeXml(JSON.stringify(conditionJson))}"` : '',
     isDefaultPath ? ' dgop:isDefaultPath="true"' : '',
+    isHappyPath === false ? ' dgop:isHappyPath="false"' : '',
     timeoutAfterSeconds ? ` dgop:timeoutAfterSeconds="${Math.max(1, Math.round(timeoutAfterSeconds))}"` : '',
   ].join('');
   return `    <bpmn:sequenceFlow id="${id}" name="${escapeXml(label)}" sourceRef="${from}" targetRef="${to}"${conditionAttrs} />`;
@@ -1362,22 +1389,45 @@ function bpmnTagForStage(stage: WorkflowBpmnStage): string {
 function parseJsonAttr(value: unknown): unknown | null {
   const text = cleanString(value);
   if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
+  return parsePossiblyEscapedJson(text).value;
 }
 
 function hasInvalidJsonAttr(value: unknown): boolean {
   const text = cleanString(value);
   if (!text) return false;
-  try {
-    JSON.parse(text);
-    return false;
-  } catch {
-    return true;
+  return !parsePossiblyEscapedJson(text).valid;
+}
+
+function parsePossiblyEscapedJson(text: string): { valid: boolean; value: unknown | null } {
+  let candidate = text;
+  for (let pass = 0; pass < 5; pass += 1) {
+    try {
+      return { valid: true, value: JSON.parse(candidate) };
+    } catch {
+      const decoded = decodeXmlEntityLayer(candidate);
+      if (decoded === candidate) break;
+      candidate = decoded;
+    }
   }
+  return { valid: false, value: null };
+}
+
+function decodeXmlEntityLayer(value: string): string {
+  return value
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (match, code: string) => decodeXmlCodePoint(match, code, 10))
+    .replace(/&#x([0-9a-f]+);/gi, (match, code: string) => decodeXmlCodePoint(match, code, 16))
+    .replace(/&amp;/gi, '&');
+}
+
+function decodeXmlCodePoint(match: string, code: string, radix: number): string {
+  const value = Number.parseInt(code, radix);
+  return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+    ? String.fromCodePoint(value)
+    : match;
 }
 
 function hasExecutableCondition(transition: WorkflowBpmnTransition): boolean {
@@ -1443,9 +1493,18 @@ function inferredGatewayConnector(from: WorkflowBpmnStage, to: WorkflowBpmnStage
 
 function inferDecision(label: string, hasMultipleBranches: boolean): string | null {
   const text = label.toLowerCase();
-  if (/(reject|deny|decline|rework|revise|more|correction|no|fail|block)/.test(text)) return 'rejected';
-  if (/(approve|accept|complete|yes|pass|publish|close)/.test(text)) return 'approved';
+  if (/\b(reject(?:ed|ion)?|deny|denied|decline|declined|rework|revise|revision|correction|no|fail(?:ed|ure)?|block(?:ed)?)\b/.test(text)) return 'rejected';
+  if (/\b(approve(?:d|al)?|accept(?:ed|ance)?|complete(?:d)?|yes|pass(?:ed)?|publish(?:ed)?|close(?:d)?)\b/.test(text)) return 'approved';
   return hasMultipleBranches ? null : null;
+}
+
+function decisionForConnector(connectorType?: string | null): string | null {
+  if (!connectorType) return null;
+  const normalized = normalizeConnectorType(connectorType);
+  if (['success', 'approval'].includes(normalized)) return 'approved';
+  if (['failure', 'return'].includes(normalized)) return 'rejected';
+  if (normalized === 'default') return 'default';
+  return null;
 }
 
 function humanize(value: string): string {

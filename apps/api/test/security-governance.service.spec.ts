@@ -7,6 +7,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AccessDecision } from '@prisma/client';
 import { SecurityGovernanceService } from '../src/security-governance/security-governance.service';
 import {
+  accessGrantCoversAction,
   classificationRisk,
   evaluateAbacDecision,
   evaluateAccessDecision,
@@ -25,7 +26,7 @@ function sequenceDelegate() {
   return { upsert: async () => ({ value: ++value }) };
 }
 
-test('evaluateAccessDecision denies access when no role-data mapping exists', () => {
+test('evaluateAccessDecision denies access when no effective access grant exists', () => {
   const result = evaluateAccessDecision({
     hasMapping: false,
     requestedAction: 'read',
@@ -37,6 +38,13 @@ test('evaluateAccessDecision denies access when no role-data mapping exists', ()
     allowedClassificationRank: 3,
   });
   assert.strictEqual(result.decision, AccessDecision.deny);
+});
+
+test('access grants cover only operations in their normalized privilege class', () => {
+  assert.strictEqual(accessGrantCoversAction('read', ['query_read']), true);
+  assert.strictEqual(accessGrantCoversAction('export', ['export_data']), true);
+  assert.strictEqual(accessGrantCoversAction('export', ['query_read']), false);
+  assert.strictEqual(accessGrantCoversAction('delete', ['update']), false);
 });
 
 test('evaluateAccessDecision applies masking when personal data is not directly allowed', () => {
@@ -563,23 +571,18 @@ test('simulateDecision persists ABAC trace metadata for review-required decision
       },
       role: { findFirst: async () => ({ id: 'role-1', code: 'analyst', maxClassificationRank: 3 }) },
       user: { findUnique: async () => ({ id: 'user-1', email: 'admin@dgop.local' }) },
-      roleDataAccessMap: {
+      accessGrant: {
         findMany: async () => [
           {
-            id: 'map-1',
-            roleId: 'role-1',
-            domainId: 'domain-1',
-            classificationId: 'class-3',
-            maskingPolicyId: null,
-            personalDataAllowed: true,
-            approvalRequired: true,
-            role: { id: 'role-1', code: 'analyst', nameEn: 'Analyst', nameAr: 'Analyst', maxClassificationRank: 3 },
-            domain: { id: 'domain-1', code: 'FIN', nameEn: 'Finance', nameAr: 'Finance' },
-            classification: { id: 'class-3', code: 'restricted', nameEn: 'Restricted', nameAr: 'Restricted', rank: 3, color: '#f59e0b' },
-            maskingPolicy: null,
+            id: 'grant-1',
+            code: 'AGR-1',
+            version: 4,
+            permissionCode: 'dataset.export',
+            permissions: [{ permissionCode: 'dataset.export', permission: { action: 'export', riskLevel: 'high' } }],
           },
         ],
       },
+      maskingPolicy: { findMany: async () => [] },
       abacDecisionLog: {
         create: async (args: any) => {
           createdDecision = args.data;
@@ -624,6 +627,45 @@ test('simulateDecision persists ABAC trace metadata for review-required decision
   assert.ok(result.abac.obligations.includes('route_owner_security_review'));
   assert.ok(auditMetadata.ruleTrace.length > 0);
   assert.strictEqual(auditMetadata.risk, 'medium');
+  assert.strictEqual(auditMetadata.authorizationSource, 'access_grant');
+  assert.strictEqual(auditMetadata.accessGrantCode, 'AGR-1');
+  assert.strictEqual(result.abac.authorizationSource, 'access_grant');
+  assert.strictEqual(result.abac.accessGrant?.code, 'AGR-1');
+});
+
+test('simulateDecision denies an operation that the effective grant does not include', async () => {
+  let decision: AccessDecision | null = null;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findFirst: async () => ({ id: 'asset-1', domainId: null, classificationId: null, domain: null, classification: null }) },
+      role: { findFirst: async () => ({ id: 'role-1', code: 'analyst', maxClassificationRank: 3 }) },
+      user: { findUnique: async () => ({ id: 'user-1' }) },
+      accessGrant: {
+        findMany: async () => [{
+          id: 'grant-read', code: 'AGR-READ', version: 1, permissionCode: 'dataset.query_read',
+          permissions: [{ permissionCode: 'dataset.query_read', permission: { action: 'query_read', riskLevel: 'medium' } }],
+        }],
+      },
+      abacDecisionLog: {
+        create: async (args: any) => {
+          decision = args.data.decision;
+          return { id: 'decision-denied', ...args.data };
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.simulateDecision(
+    ['system_admin'],
+    { roleId: 'role-1', assetId: 'asset-1', requestedAction: 'export' },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(decision, AccessDecision.deny);
+  assert.strictEqual(result.abac.accessGrant, null);
+  assert.ok(result.abac.violations.includes('missing_effective_access_grant'));
 });
 
 test('createDlpIncident links new incidents to workflow cases', async () => {

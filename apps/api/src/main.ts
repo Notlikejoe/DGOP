@@ -101,9 +101,18 @@ async function bootstrap(): Promise<void> {
   // Serve the built Angular SPA (if present) from the same origin as the API.
   const webDir = join(__dirname, '..', '..', 'web', 'dist', 'web', 'browser');
   if (existsSync(webDir)) {
-    instance.use(express.static(webDir, { index: false }));
+    instance.use(express.static(webDir, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        const hashedAsset = /-[A-Za-z0-9_-]{8,}\.(?:css|js)$/.test(filePath);
+        res.setHeader('Cache-Control', hashedAsset
+          ? 'public, max-age=31536000, immutable'
+          : 'no-cache, max-age=0, must-revalidate');
+      },
+    }));
     // SPA fallback for any non-API GET route.
     instance.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
       res.sendFile(join(webDir, 'index.html'));
     });
     logger.log(`Serving web UI from ${webDir}`);

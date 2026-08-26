@@ -1203,6 +1203,7 @@ const AUTOMATED_ROUTE_NODE_TYPES = new Set([
   'receive_task',
   'notification_task',
   'sub_workflow',
+  'timer_event',
 ]);
 
 const ROUTING_ONLY_NODE_TYPES = new Set([
@@ -1214,7 +1215,6 @@ const ROUTING_ONLY_NODE_TYPES = new Set([
   'merge_gateway',
   'inclusive_gateway',
   'event_based_gateway',
-  'timer_event',
   'error_event',
 ]);
 
@@ -1241,6 +1241,7 @@ export function isAutomatedWorkflowStage(stage: { nodeType?: string | null }): b
 }
 
 export function isRoutingOnlyWorkflowStage(stage: { nodeType?: string | null; taskType?: string | null; kind?: string | null }): boolean {
+  if (isAutomatedWorkflowStage(stage)) return false;
   const nodeType = normalizeWorkflowNodeType(stage.nodeType);
   return ROUTING_ONLY_NODE_TYPES.has(nodeType) || stage.kind === 'gateway' || stage.taskType === 'routing';
 }

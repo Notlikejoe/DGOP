@@ -5,7 +5,9 @@
       <p class="page__subtitle">{{ t('training.subtitle') }}</p>
     </div>
     <div class="header-actions">
-      <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
+      <button type="button" class="ds-btn ds-btn--ghost" [disabled]="state() === 'loading'" (click)="load()">
+        {{ state() === 'error' ? t('crud.retry') : t('crud.refresh') }}
+      </button>
       @if (canAssign) {
         <button type="button" class="ds-btn ds-btn--ghost" [disabled]="syncing()" (click)="sync()">
           {{ t('training.sync') }}

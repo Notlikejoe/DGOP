@@ -187,6 +187,14 @@ if (
 ) {
   fail('Database seed must fail closed without explicit destructive and production acknowledgements.');
 }
+const personaSeedStart = seedText.indexOf('for (const p of people)');
+const personaSeedEnd = seedText.indexOf('const personByEmail', personaSeedStart);
+const personaSeedBlock = personaSeedStart >= 0 && personaSeedEnd > personaSeedStart
+  ? seedText.slice(personaSeedStart, personaSeedEnd)
+  : '';
+if (!personaSeedBlock || personaSeedBlock.includes('userRole.upsert') || !personaSeedBlock.includes('userRole.deleteMany')) {
+  fail('Seeded governance personas must remove legacy blanket roles and receive privileges only from sampleUserRoles.');
+}
 if (
   !localSeedText.includes("new Set(['localhost', '127.0.0.1', '::1', '[::1]'])") ||
   !localSeedText.includes("DGOP_ALLOW_DESTRUCTIVE_SEED: 'true'") ||

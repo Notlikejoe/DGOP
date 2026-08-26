@@ -172,6 +172,7 @@ export class WorkflowController {
   }
 
   @Get('templates/:id/designer/test-runs')
+  @Header('Cache-Control', 'no-store, max-age=0')
   @RequirePermissions('workflow_cases.view')
   designerTestRuns(
     @Param('id') id: string,
@@ -182,6 +183,7 @@ export class WorkflowController {
   }
 
   @Post('templates/:id/designer/test-runs')
+  @Header('Cache-Control', 'no-store, max-age=0')
   @RequirePermissions('workflow_cases.edit')
   executeDesignerTestRun(
     @Param('id') id: string,

@@ -158,11 +158,18 @@ export class EvidenceService {
    * Aggregates evidence per specification in a single query for the scoring engine.
    * Returns a map keyed by specId (specs with no evidence are simply absent).
    */
-  async rollupForSpecs(specIds: string[]): Promise<Map<string, SpecEvidenceRollup>> {
+  async rollupForSpecs(
+    specIds: string[],
+    options: { authoritativeOnly?: boolean } = { authoritativeOnly: true },
+  ): Promise<Map<string, SpecEvidenceRollup>> {
     const result = new Map<string, SpecEvidenceRollup>();
     if (specIds.length === 0) return result;
     const rows = await this.prisma.ndiEvidence.findMany({
-      where: { specId: { in: specIds }, deletedAt: null },
+      where: {
+        specId: { in: specIds },
+        deletedAt: null,
+        ...(options.authoritativeOnly === false ? {} : { provenance: 'operational' }),
+      },
       select: {
         specId: true,
         status: true,

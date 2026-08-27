@@ -13,6 +13,14 @@ import { ToastService } from '../../../shared/toast.service';
 interface Ref { id: string; code: string; nameEn: string; nameAr: string; }
 interface ClassificationRef extends Ref { rank: number; color: string; }
 interface RoleRef extends Ref { maxClassificationRank?: number | null; }
+interface PrincipalRef {
+  type: 'role' | 'group';
+  id: string;
+  label: string;
+  nameAr?: string | null;
+  source: string;
+  key?: string;
+}
 interface UserRef { id: string; email: string; displayName?: string | null; }
 interface AssetRef extends Ref { domain?: Ref | null; classification?: ClassificationRef | null; }
 
@@ -100,6 +108,7 @@ interface DecisionLog {
   reason: string;
   createdAt: string;
   role?: RoleRef | null;
+  principal?: { type: 'role' | 'group'; id: string; nameEn: string; nameAr?: string | null } | null;
   asset?: Ref | null;
   maskingPolicy?: MaskingPolicy | null;
 }
@@ -177,9 +186,9 @@ export class SecurityGovernancePage implements OnInit {
   protected readonly canDecide = this.auth.hasPermission('security_governance.edit');
   protected readonly canSimulate =
     this.auth.hasPermission('security_governance.create') &&
-    this.auth.hasPermission('roles.view') &&
+    this.auth.hasPermission('access_grants.view') &&
     this.auth.hasPermission('data_assets.view');
-  protected readonly simulatorRoles = signal<RoleRef[]>([]);
+  protected readonly simulatorPrincipals = signal<PrincipalRef[]>([]);
   protected readonly simulatorAssets = signal<AssetRef[]>([]);
   protected readonly simulatorResult = signal<SimulatedDecision | null>(null);
   protected campaignForm = {
@@ -196,7 +205,7 @@ export class SecurityGovernancePage implements OnInit {
     newExpiresAt: '',
   };
   protected simulatorForm = {
-    roleId: '',
+    principalKey: '',
     assetId: '',
     requestedAction: 'read',
     purpose: 'governance',
@@ -378,17 +387,21 @@ export class SecurityGovernancePage implements OnInit {
     if (!this.canSimulate || this.busy()) return;
     this.simulatorResult.set(null);
     this.simulatorOpen.set(true);
-    if (this.simulatorRoles().length && this.simulatorAssets().length) {
+    if (this.simulatorPrincipals().length && this.simulatorAssets().length) {
       this.ensureSimulatorDefaults();
       return;
     }
     this.simulatorLoading.set(true);
     forkJoin({
-      roles: this.http.get<RoleRef[]>('/api/roles'),
+      principals: this.http.get<PrincipalRef[]>('/api/access/principals'),
       assets: this.http.get<AssetRef[] | AssetPage>('/api/assets?page=1&pageSize=100'),
     }).subscribe({
       next: (result) => {
-        this.simulatorRoles.set(result.roles.filter((role) => role.code !== 'system_admin'));
+        this.simulatorPrincipals.set(
+          result.principals
+            .filter((principal) => principal.type !== 'role' || principal.id !== 'system_admin')
+            .map((principal) => ({ ...principal, key: `${principal.type}:${principal.id}` })),
+        );
         this.simulatorAssets.set(Array.isArray(result.assets) ? result.assets : result.assets.data);
         this.simulatorLoading.set(false);
         this.ensureSimulatorDefaults();
@@ -406,24 +419,26 @@ export class SecurityGovernancePage implements OnInit {
   }
 
   protected ensureSimulatorDefaults(): void {
-    const roles = this.simulatorRoles();
+    const principals = this.simulatorPrincipals();
     const assets = this.simulatorAssets();
     this.simulatorForm = {
       ...this.simulatorForm,
-      roleId: this.simulatorForm.roleId || roles[0]?.id || '',
+      principalKey: this.simulatorForm.principalKey || principals[0]?.key || '',
       assetId: this.simulatorForm.assetId || assets[0]?.id || '',
     };
   }
 
   protected submitSimulator(): void {
     if (!this.canSimulate || this.busy()) return;
-    if (!this.simulatorForm.roleId || !this.simulatorForm.assetId) {
+    const principal = this.simulatorPrincipals().find((item) => item.key === this.simulatorForm.principalKey);
+    if (!principal || !this.simulatorForm.assetId) {
       this.toast.error(this.t('sec.sim.required'));
       return;
     }
     this.busy.set(true);
     this.http.post<SimulatedDecision>('/api/security-governance/decision-log/simulate', {
-      roleId: this.simulatorForm.roleId,
+      principalType: principal.type,
+      principalId: principal.id,
       assetId: this.simulatorForm.assetId,
       requestedAction: this.simulatorForm.requestedAction,
       purpose: this.simulatorForm.purpose,
@@ -504,6 +519,15 @@ export class SecurityGovernancePage implements OnInit {
     if (!o) return '-';
     if (this.i18n.lang() === 'ar') return o.nameAr ?? o.fullNameAr ?? o.nameEn ?? o.fullNameEn ?? o.displayName ?? o.email ?? '-';
     return o.nameEn ?? o.fullNameEn ?? o.displayName ?? o.nameAr ?? o.fullNameAr ?? o.email ?? '-';
+  }
+
+  protected decisionPrincipal(decision: DecisionLog): string {
+    if (decision.principal) {
+      return this.i18n.lang() === 'ar' && decision.principal.nameAr
+        ? decision.principal.nameAr
+        : decision.principal.nameEn;
+    }
+    return this.name(decision.role);
   }
 
   protected targetName(item: AccessReviewItem): string {

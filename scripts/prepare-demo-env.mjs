@@ -2,9 +2,11 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const envPath = join(root, '.env');
+const localOnly = process.argv.includes('--local');
 
 const unsafeSecrets = new Set([
   '',
@@ -33,24 +35,9 @@ function randomPassword() {
   return `DGOP-${randomBytes(12).toString('base64url')}-2026!`;
 }
 
-function parseEnv(text) {
+function parseState(text) {
   const lines = text.split(/\r?\n/);
-  const values = new Map();
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    values.set(key, value);
-  }
+  const values = new Map(Object.entries(parseEnv(text)));
   return { lines, values };
 }
 
@@ -70,10 +57,22 @@ function secretIsUnsafe(value) {
 }
 
 function passwordIsUnsafe(value) {
-  return !value || value.length < 12 || unsafePasswords.has(value);
+  if (!value || value.length < 12 || unsafePasswords.has(value)) return true;
+  const compact = value.replace(/[\s._-]+/g, '');
+  return /^(?:admin(?:istrator)?|password|welcome|qwerty|letmein|dgop)(?:\d{4,}|[!@#$%^&*]+|\d+[!@#$%^&*]+)?$/i.test(compact)
+    || /(?:012345|123456|234567|345678|456789|987654)/.test(compact);
 }
 
-const state = parseEnv(existsSync(envPath) ? readFileSync(envPath, 'utf8') : '');
+const state = parseState(existsSync(envPath) ? readFileSync(envPath, 'utf8') : readFileSync(join(root, '.env.example'), 'utf8'));
+if (localOnly) {
+  const nodeEnv = process.env.NODE_ENV ?? state.values.get('NODE_ENV') ?? 'development';
+  const strict = process.env.DGOP_REQUIRE_STRICT_RUNTIME ?? state.values.get('DGOP_REQUIRE_STRICT_RUNTIME') ?? '';
+  if (nodeEnv !== 'development' || ['true', '1', 'yes', 'on'].includes(strict.toLowerCase())) {
+    throw new Error('local:prepare refuses to change a strict or non-development environment.');
+  }
+  setValue(state, 'NODE_ENV', 'development');
+  setValue(state, 'DGOP_BIND_HOST', '127.0.0.1');
+}
 const rotated = [];
 
 if (secretIsUnsafe(state.values.get('JWT_SECRET'))) {
@@ -89,12 +88,25 @@ if (
   rotated.push('DGOP_SEARCH_QUERY_KEY');
 }
 
-if (passwordIsUnsafe(state.values.get('SEED_ADMIN_PASSWORD'))) {
+if (
+  secretIsUnsafe(state.values.get('DGOP_BPMN_SIGNING_SECRET')) ||
+  state.values.get('DGOP_BPMN_SIGNING_SECRET') === state.values.get('JWT_SECRET') ||
+  state.values.get('DGOP_BPMN_SIGNING_SECRET') === state.values.get('DGOP_SEARCH_QUERY_KEY')
+) {
+  setValue(state, 'DGOP_BPMN_SIGNING_SECRET', randomSecret());
+  rotated.push('DGOP_BPMN_SIGNING_SECRET');
+}
+
+function shouldGeneratePassword(value) {
+  return localOnly ? !value || value.startsWith('replace-with') : passwordIsUnsafe(value);
+}
+
+if (shouldGeneratePassword(state.values.get('SEED_ADMIN_PASSWORD'))) {
   setValue(state, 'SEED_ADMIN_PASSWORD', randomPassword());
   rotated.push('SEED_ADMIN_PASSWORD');
 }
 
-if (passwordIsUnsafe(state.values.get('SEED_PERSON_PASSWORD'))) {
+if (shouldGeneratePassword(state.values.get('SEED_PERSON_PASSWORD'))) {
   setValue(state, 'SEED_PERSON_PASSWORD', randomPassword());
   rotated.push('SEED_PERSON_PASSWORD');
 }
@@ -113,6 +125,8 @@ if (!state.values.get('DGOP_SEED_RISK_SCENARIO')) setValue(state, 'DGOP_SEED_RIS
 
 writeFileSync(envPath, `${state.lines.join('\n').replace(/\n+$/u, '')}\n`);
 
-console.log('Local demo environment prepared in ignored .env.');
+console.log(`${localOnly ? 'Local development' : 'Strict demo'} environment prepared in ignored .env.`);
 console.log(`Rotated keys: ${rotated.length ? rotated.join(', ') : 'none'}.`);
-console.log('Run `npm run db:sync-demo-credentials` to apply demo passwords without reseeding, or `npm run db:seed:local` for a fresh dataset.');
+console.log(localOnly
+  ? 'Existing passwords are preserved. Configure DATABASE_URL, then run npm run local:setup. Login uses SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD from .env.'
+  : 'Demo preparation can change your login password. Use SEED_ADMIN_PASSWORD from .env and run npm run db:sync-demo-credentials. Do not use this command for ordinary local startup.');

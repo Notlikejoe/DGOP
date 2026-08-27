@@ -44,12 +44,17 @@ function isSafeSecret(value) {
 }
 
 function isSafePassword(value) {
+  const compact = value?.replace(/[\s._-]+/g, '') ?? '';
   return (
     !!value &&
     value.length >= 12 &&
     value !== 'Admin@12345' &&
+    value !== 'Admin12345@' &&
+    value !== 'admin123456@' &&
     value !== 'replace-with-local-demo-password' &&
-    value !== 'change-me'
+    value !== 'change-me' &&
+    !/^(?:admin(?:istrator)?|password|welcome|qwerty|letmein|dgop)(?:\d{4,}|[!@#$%^&*]+|\d+[!@#$%^&*]+)?$/i.test(compact) &&
+    !/(?:012345|123456|234567|345678|456789|987654)/.test(compact)
   );
 }
 
@@ -84,6 +89,10 @@ process.env.DGOP_TRUST_PROXY ??= 'loopback';
 requireEnv('DATABASE_URL');
 requireEnv('JWT_SECRET', isSafeSecret);
 requireEnv('DGOP_SEARCH_QUERY_KEY', (value) => isSafeSecret(value) && value !== process.env.JWT_SECRET);
+requireEnv(
+  'DGOP_BPMN_SIGNING_SECRET',
+  (value) => isSafeSecret(value) && value !== process.env.JWT_SECRET && value !== process.env.DGOP_SEARCH_QUERY_KEY,
+);
 requireEnv('CORS_ORIGINS', originsAreSafe);
 requireEnv('SEED_ADMIN_PASSWORD', isSafePassword);
 requireEnv('SEED_PERSON_PASSWORD', isSafePassword);

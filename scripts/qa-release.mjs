@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { dirname, join } from 'node:path';
@@ -40,6 +40,29 @@ function run(label, command, args, options = {}) {
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`${label} failed with code ${result.status}`);
+  }
+}
+
+function commandOutput(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd ?? root,
+    env: options.env,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with code ${result.status}`);
+  return result.stdout.trim();
+}
+
+function assertCleanCheckout(env) {
+  if (/^(?:1|true|yes)$/iu.test(env.DGOP_ALLOW_DIRTY_RELEASE ?? '')) {
+    console.warn('[qa:release] dirty-checkout guard explicitly bypassed for local verification');
+    return;
+  }
+  const changes = commandOutput(gitCmd, ['status', '--porcelain', '--untracked-files=all'], { env });
+  if (changes) {
+    throw new Error('Release checkout is not clean. Commit or stash every tracked and untracked change before release.');
   }
 }
 
@@ -108,9 +131,63 @@ async function assertDemoApiIsStopped(env) {
   );
 }
 
+async function waitForHealthyApi(port, child, timeoutMs = 90_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) throw new Error(`Release smoke API exited with code ${child.exitCode}`);
+    const health = await readHealth(port);
+    if (health?.status === 'ok' && health?.database?.status === 'up') return;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  throw new Error(`Release smoke API did not become healthy on :${port}`);
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null) return;
+  child.kill('SIGTERM');
+  await Promise.race([
+    new Promise((resolve) => child.once('exit', resolve)),
+    new Promise((resolve) => setTimeout(resolve, 5_000)),
+  ]);
+  if (child.exitCode === null) child.kill('SIGKILL');
+}
+
+async function runRuntimeSmoke(env) {
+  const port = Number(env.DGOP_RELEASE_SMOKE_PORT ?? 3105);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error('DGOP_RELEASE_SMOKE_PORT must be a valid non-privileged TCP port');
+  }
+  const origin = `http://localhost:${port}`;
+  const smokeEnv = {
+    ...env,
+    PORT: String(port),
+    NODE_ENV: 'production',
+    DGOP_REQUIRE_STRICT_RUNTIME: 'true',
+    HEALTH_INCLUDE_DETAILS: 'false',
+    PUBLIC_ORIGIN: origin,
+    CORS_ORIGINS: origin,
+    DGOP_TRUST_PROXY: 'false',
+    DGOP_UI_BASE_URL: origin,
+  };
+  const apiEntry = join(root, 'apps', 'api', 'dist', 'main.js');
+  const child = spawn(process.execPath, [apiEntry], {
+    cwd: root,
+    env: smokeEnv,
+    stdio: 'inherit',
+    shell: false,
+  });
+  try {
+    await waitForHealthyApi(port, child);
+    run('authenticated browser and runtime smoke', npmCmd, ['run', 'qa:ui'], { env: smokeEnv });
+  } finally {
+    await stopChild(child);
+  }
+}
+
 const env = loadRootEnv();
 
 await assertDemoApiIsStopped(env);
+assertCleanCheckout(env);
 
 run('static API and web QA', npmCmd, ['run', 'qa'], { env });
 run('API business/auth/workflow tests', npmCmd, ['--prefix', 'apps/api', 'run', 'test'], { env });
@@ -123,5 +200,6 @@ run('web high-severity dependency audit', npmCmd, ['--prefix', 'apps/web', 'audi
 run('Git whitespace check', gitCmd, ['diff', '--check'], { env });
 run('production build', npmCmd, ['run', 'build'], { env });
 assertBuiltIndexIsCspCompatible();
+await runRuntimeSmoke(env);
 
 console.log('\n[qa:release] all release gates passed');

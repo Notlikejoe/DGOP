@@ -81,7 +81,47 @@
     </section>
   }
 
-  <div class="awareness-layout">
+  <nav class="training-section-nav" [attr.aria-label]="t('training.sectionNav')">
+    <button
+      type="button"
+      [class.is-active]="activeSection() === 'training-overview'"
+      [attr.aria-current]="activeSection() === 'training-overview' ? 'location' : null"
+      aria-controls="training-overview"
+      (click)="scrollToSection('training-overview')"
+    >{{ t('nav.section.overview') }}</button>
+    <button
+      type="button"
+      [class.is-active]="activeSection() === 'training-certifications'"
+      [attr.aria-current]="activeSection() === 'training-certifications' ? 'location' : null"
+      aria-controls="training-certifications"
+      (click)="scrollToSection('training-certifications')"
+    >{{ t('training.certifications.title') }}</button>
+    @if (canManageCourses) {
+      <button
+        type="button"
+        [class.is-active]="activeSection() === 'training-catalog'"
+        [attr.aria-current]="activeSection() === 'training-catalog' ? 'location' : null"
+        aria-controls="training-catalog"
+        (click)="scrollToSection('training-catalog')"
+      >{{ t('training.catalog') }}</button>
+      <button
+        type="button"
+        [class.is-active]="activeSection() === 'training-requirements'"
+        [attr.aria-current]="activeSection() === 'training-requirements' ? 'location' : null"
+        aria-controls="training-requirements"
+        (click)="scrollToSection('training-requirements')"
+      >{{ t('training.requirements') }}</button>
+    }
+    <button
+      type="button"
+      [class.is-active]="activeSection() === 'training-records'"
+      [attr.aria-current]="activeSection() === 'training-records' ? 'location' : null"
+      aria-controls="training-records"
+      (click)="scrollToSection('training-records')"
+    >{{ t('training.assignments') }}</button>
+  </nav>
+
+  <div id="training-overview" class="awareness-layout training-anchor" tabindex="-1">
     <section class="ds-card awareness-path">
       <div class="section-head">
         <div>
@@ -118,7 +158,7 @@
       </div>
     </section>
 
-    <section class="ds-card credential-card">
+    <section id="training-certifications" class="ds-card credential-card training-anchor" tabindex="-1">
       <div class="section-head">
         <div>
           <h2>{{ t('training.certifications.title') }}</h2>
@@ -224,7 +264,7 @@
 
   @if (canManageCourses) {
     <div class="training-grid">
-      <section class="ds-card">
+      <section id="training-catalog" class="ds-card training-anchor" tabindex="-1">
         <div class="section-head">
           <div>
             <h2>{{ t('training.catalog') }}</h2>
@@ -284,7 +324,7 @@
         }
       </section>
 
-      <section class="ds-card">
+      <section id="training-requirements" class="ds-card training-anchor" tabindex="-1">
         <div class="section-head">
           <div>
             <h2>{{ t('training.requirements') }}</h2>
@@ -313,7 +353,7 @@
     </div>
   }
 
-  <section class="ds-card">
+  <section id="training-records" class="ds-card training-anchor" tabindex="-1">
     <div class="section-head">
       <div>
         <h2>{{ t('training.assignments') }}</h2>

@@ -1,6 +1,21 @@
 .page__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
+.bpmn-canvas :where(.djs-palette .entry[role='button']:focus-visible) {
+  outline: 3px solid var(--focus-ring, var(--command-accent));
+  outline-offset: -3px;
+  background: var(--command-active);
+}
+
+.bpmn-canvas :where(.djs-element.dgop-keyboard-element:focus) {
+  outline: none;
+}
+
+.bpmn-canvas :where(.djs-element.dgop-keyboard-element:focus .djs-visual > :first-child) {
+  stroke: var(--focus-ring, var(--command-accent)) !important;
+  stroke-width: 4px !important;
+}
+
 .tabs {
   display: flex;
   gap: 0.25rem;
@@ -958,15 +973,13 @@
   }
 
   .page .designer-client-layout--technical .designer-canvas-intelligence {
-    display: flex;
-    overflow-x: auto;
-    scrollbar-gutter: stable;
-    scroll-snap-type: x proximity;
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
   }
 
   .page .designer-client-layout--technical .designer-canvas-intelligence article {
-    flex: 0 0 min(76vw, 180px);
-    scroll-snap-align: start;
+    min-width: 0;
   }
 
   .page .designer-client-layout--technical .designer-canvas-shell,

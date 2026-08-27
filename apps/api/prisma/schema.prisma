@@ -435,6 +435,8 @@ model NdiEvidence {
   title         String
   descriptionEn String?
   status        NdiEvidenceStatus @default(draft)
+  /// `operational` evidence can satisfy readiness; seeded/demo proof remains visible but non-authoritative.
+  provenance    String            @default("operational")
   // Stored file metadata
   fileName      String
   originalName  String
@@ -462,6 +464,7 @@ model NdiEvidence {
 
   @@index([specId])
   @@index([status])
+  @@index([provenance, status])
   @@index([expiryDate])
   @@map("ndi_evidence")
 }
@@ -892,12 +895,12 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
-  id                      String                   @id @default(uuid())
+  id                      String                    @id @default(uuid())
   caseId                  String
   title                   String
   /// Task type: approval | review | information.
-  type                    String                   @default("review")
-  status                  TaskStatus               @default(pending)
+  type                    String                    @default("review")
+  status                  TaskStatus                @default(pending)
   assigneeUserId          String?
   assigneeRoleCode        String?
   dueDate                 DateTime?
@@ -909,10 +912,10 @@ model WorkflowTask {
   approvalGroupId         String?
   approvalMode            String?
   completedAt             DateTime?
-  case                    WorkflowCase             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case                    WorkflowCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
   templateStageId         String?
-  templateStage           WorkflowTemplateStage?   @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
-  assignee                User?                    @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  templateStage           WorkflowTemplateStage?    @relation(fields: [templateStageId], references: [id], onDelete: SetNull)
+  assignee                User?                     @relation(fields: [assigneeUserId], references: [id], onDelete: SetNull)
   events                  WorkflowEvent[]
   comments                WorkflowTaskComment[]
   attachments             WorkflowTaskAttachment[]
@@ -920,8 +923,8 @@ model WorkflowTask {
   executionAttempt        WorkflowExecutionAttempt?
   governanceNotifications GovernanceNotification[]
   governanceEscalations   GovernanceEscalation[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
 
   @@index([caseId])
   @@index([templateStageId])
@@ -3045,33 +3048,33 @@ model AccessReviewItem {
   asset            DataAsset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
   domain           DataDomain?          @relation(fields: [domainId], references: [id], onDelete: SetNull)
   classification   Classification?      @relation(fields: [classificationId], references: [id], onDelete: SetNull)
-  grant            AccessGrant?        @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  grant            AccessGrant?         @relation(fields: [grantId], references: [id], onDelete: SetNull)
 
+  @@unique([reviewId, grantId])
   @@index([reviewId])
   @@index([userId])
   @@index([roleId])
   @@index([decision])
   @@index([domainId])
   @@index([grantId])
-  @@unique([reviewId, grantId])
   @@map("access_review_items")
 }
 
 model AccessPermissionCatalog {
-  id          String    @id @default(uuid())
-  code        String    @unique
-  assetType   String    @map("asset_type")
-  action      String
-  nameEn      String
-  nameAr      String?
-  description String?
-  riskLevel   String    @default("standard") @map("risk_level")
-  version     Int       @default(1)
-  isActive    Boolean   @default(true)
-  deletedAt   DateTime?
-  createdBy   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id               String                  @id @default(uuid())
+  code             String                  @unique
+  assetType        String                  @map("asset_type")
+  action           String
+  nameEn           String
+  nameAr           String?
+  description      String?
+  riskLevel        String                  @default("standard") @map("risk_level")
+  version          Int                     @default(1)
+  isActive         Boolean                 @default(true)
+  deletedAt        DateTime?
+  createdBy        String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
   grantPermissions AccessGrantPermission[]
 
   @@unique([assetType, action, version])
@@ -3104,37 +3107,37 @@ model AccessPermissionProfile {
 }
 
 model AccessGrant {
-  id                String                   @id @default(uuid())
-  code              String                   @unique
-  assetId           String
-  principalType     String                   @default("user") @map("principal_type")
-  principalId       String                   @map("principal_id")
-  permissionCode    String                   @map("permission_code")
-  profileId         String?
-  status            String                   @default("requested")
-  startsAt          DateTime                 @default(now()) @map("starts_at")
-  expiresAt         DateTime?                @map("expires_at")
-  justification     String
-  version           Int                      @default(1)
-  ownerDecision     String                   @default("pending") @map("owner_decision")
-  ownerDecisionBy   String?                  @map("owner_decision_by")
-  ownerDecisionAt   DateTime?                @map("owner_decision_at")
-  enforcementStatus String                   @default("not_enforced") @map("enforcement_status")
-  workflowCaseId    String?
-  createdBy         String
-  updatedBy         String?
-  revokedAt         DateTime?
-  revokedBy         String?
-  revocationReason  String?
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
-  asset             DataAsset                @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  profile           AccessPermissionProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  workflowCase      WorkflowCase?            @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
-  reviewItems       AccessReviewItem[]
+  id                  String                     @id @default(uuid())
+  code                String                     @unique
+  assetId             String
+  principalType       String                     @default("user") @map("principal_type")
+  principalId         String                     @map("principal_id")
+  permissionCode      String                     @map("permission_code")
+  profileId           String?
+  status              String                     @default("requested")
+  startsAt            DateTime                   @default(now()) @map("starts_at")
+  expiresAt           DateTime?                  @map("expires_at")
+  justification       String
+  version             Int                        @default(1)
+  ownerDecision       String                     @default("pending") @map("owner_decision")
+  ownerDecisionBy     String?                    @map("owner_decision_by")
+  ownerDecisionAt     DateTime?                  @map("owner_decision_at")
+  enforcementStatus   String                     @default("not_enforced") @map("enforcement_status")
+  workflowCaseId      String?
+  createdBy           String
+  updatedBy           String?
+  revokedAt           DateTime?
+  revokedBy           String?
+  revocationReason    String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  asset               DataAsset                  @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  profile             AccessPermissionProfile?   @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  workflowCase        WorkflowCase?              @relation(fields: [workflowCaseId], references: [id], onDelete: SetNull)
+  reviewItems         AccessReviewItem[]
   enforcementAttempts AccessEnforcementAttempt[]
-  permissions       AccessGrantPermission[]
-  versions          AccessGrantVersion[]
+  permissions         AccessGrantPermission[]
+  versions            AccessGrantVersion[]
 
   @@index([assetId])
   @@index([principalType, principalId])
@@ -3181,17 +3184,17 @@ model AccessGrantPermission {
 
 /// Active role/group identities synchronized from the enterprise directory.
 model AccessPrincipalDirectory {
-  id           String    @id @default(uuid())
-  principalType String   @map("principal_type")
-  externalId   String    @map("external_id")
-  nameEn       String    @map("name_en")
-  nameAr       String?   @map("name_ar")
-  source       String    @default("local_registry")
-  isActive     Boolean   @default(true) @map("is_active")
-  lastSyncedAt DateTime? @map("last_synced_at")
-  deletedAt    DateTime? @map("deleted_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id            String    @id @default(uuid())
+  principalType String    @map("principal_type")
+  externalId    String    @map("external_id")
+  nameEn        String    @map("name_en")
+  nameAr        String?   @map("name_ar")
+  source        String    @default("local_registry")
+  isActive      Boolean   @default(true) @map("is_active")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@unique([principalType, externalId])
   @@index([principalType, isActive])
@@ -3200,25 +3203,25 @@ model AccessPrincipalDirectory {
 
 /// Append-only connector handoff ledger for external access enforcement.
 model AccessEnforcementAttempt {
-  id              String      @id @default(uuid())
-  grantId         String
-  idempotencyKey  String      @unique
-  operation       String
-  connectorCode   String
-  status          String      @default("queued")
-  attemptCount    Int         @default(0)
-  maxAttempts     Int         @default(3)
-  nextAttemptAt   DateTime    @default(now())
-  startedAt       DateTime?
-  completedAt     DateTime?
-  requestJson     Json?
-  responseJson    Json?
-  errorCode       String?
-  errorMessage    String?
-  createdBy       String
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  grant           AccessGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  id             String      @id @default(uuid())
+  grantId        String
+  idempotencyKey String      @unique
+  operation      String
+  connectorCode  String
+  status         String      @default("queued")
+  attemptCount   Int         @default(0)
+  maxAttempts    Int         @default(3)
+  nextAttemptAt  DateTime    @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  requestJson    Json?
+  responseJson   Json?
+  errorCode      String?
+  errorMessage   String?
+  createdBy      String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  grant          AccessGrant @relation(fields: [grantId], references: [id], onDelete: Restrict)
 
   @@index([grantId])
   @@index([status, nextAttemptAt])
@@ -3242,15 +3245,15 @@ enum PilotReleaseRehearsalStatus {
 }
 
 model PilotSignOff {
-  id                 String               @id @default(uuid())
-  releaseCode        String               @default("v6-production-pilot")
-  gateCode           String
-  decision           PilotSignOffDecision
-  exceptionSummary   String?
-  evidenceLinksJson  Json?
-  recordedBy         String
-  recordedAt         DateTime             @default(now())
-  createdAt          DateTime             @default(now())
+  id                String               @id @default(uuid())
+  releaseCode       String               @default("v6-production-pilot")
+  gateCode          String
+  decision          PilotSignOffDecision
+  exceptionSummary  String?
+  evidenceLinksJson Json?
+  recordedBy        String
+  recordedAt        DateTime             @default(now())
+  createdAt         DateTime             @default(now())
 
   @@index([releaseCode, gateCode, recordedAt])
   @@index([decision])
@@ -3258,19 +3261,19 @@ model PilotSignOff {
 }
 
 model PilotReleaseRehearsal {
-  id                  String                       @id @default(uuid())
-  releaseCode         String                       @default("v6-production-pilot")
+  id                  String                      @id @default(uuid())
+  releaseCode         String                      @default("v6-production-pilot")
   environment         String
-  status              PilotReleaseRehearsalStatus  @default(planned)
+  status              PilotReleaseRehearsalStatus @default(planned)
   deployedAt          DateTime
   verifiedAt          DateTime?
-  rollbackTested      Boolean                      @default(false)
+  rollbackTested      Boolean                     @default(false)
   rollbackCompletedAt DateTime?
   summary             String
   evidenceLinksJson   Json?
   recordedBy          String
-  recordedAt          DateTime                     @default(now())
-  createdAt           DateTime                     @default(now())
+  recordedAt          DateTime                    @default(now())
+  createdAt           DateTime                    @default(now())
 
   @@index([releaseCode, recordedAt])
   @@index([status])
@@ -3281,6 +3284,8 @@ model AbacDecisionLog {
   id               String          @id @default(uuid())
   actorUserId      String?
   roleId           String?
+  principalType    String          @default("role")
+  principalId      String
   assetId          String?
   domainId         String?
   classificationId String?
@@ -3298,6 +3303,7 @@ model AbacDecisionLog {
 
   @@index([actorUserId])
   @@index([roleId])
+  @@index([principalType, principalId])
   @@index([assetId])
   @@index([decision])
   @@index([createdAt])

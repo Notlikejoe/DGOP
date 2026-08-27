@@ -1,0 +1,62 @@
+name: DGOP release gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: dgop_ci_password
+          POSTGRES_DB: dgop_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dgop_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NODE_ENV: test
+      PORT: 3005
+      DATABASE_URL: postgresql://postgres:dgop_ci_password@127.0.0.1:5432/dgop_ci?schema=public
+      JWT_SECRET: ci-jwt-5ccb27acd6564e66b595ca80f03b9627
+      DGOP_SEARCH_QUERY_KEY: ci-search-3c0f53d4d7424eb89c0f59031d5a1b89
+      DGOP_BPMN_SIGNING_SECRET: ci-bpmn-13b3d49f2dc647c8adfd9f4e89cfe4dd
+      SEED_ADMIN_EMAIL: admin@dgop.local
+      SEED_ADMIN_PASSWORD: CI-Admin-f9X2pL7vQ4sN!
+      SEED_PERSON_PASSWORD: CI-Person-v8Q4mR2kT7wZ!
+      DGOP_WEBHOOK_TOKEN: ci-webhook-1a1ed98f024c44f7a855895144166a6b
+      DGOP_AUDIT_FAIL_CLOSED: true
+      CORS_ORIGINS: http://localhost:3105
+      PUBLIC_ORIGIN: http://localhost:3105
+      DGOP_ALLOW_DESTRUCTIVE_SEED: true
+      DGOP_ALLOW_PRODUCTION_SEED: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/api/package-lock.json
+            apps/web/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm ci --prefix apps/api
+          npm ci --prefix apps/web
+      - name: Install Chromium
+        run: npx --prefix apps/web playwright install --with-deps chromium
+      - name: Apply database migrations
+        run: npm run db:deploy
+      - name: Seed controlled CI data
+        run: npm run db:seed
+      - name: Run canonical release gate
+        run: npm run qa:release

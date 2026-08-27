@@ -94,6 +94,17 @@ test('effectiveStatus: approved with future expiry stays approved', async () => 
   assert.strictEqual((list[0] as any).effectiveStatus, 'approved');
 });
 
+test('rollupForSpecs: counts only operational evidence by default', async () => {
+  const queries: any[] = [];
+  const svc = makeService({ rows: [], onFindMany: (args) => queries.push(args.where) });
+
+  await svc.rollupForSpecs(['spec1']);
+  await svc.rollupForSpecs(['spec1'], { authoritativeOnly: false });
+
+  assert.strictEqual(queries[0].provenance, 'operational');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(queries[1], 'provenance'), false);
+});
+
 test('submit: draft -> submitted', async () => {
   let captured: any = null;
   const svc = makeService({

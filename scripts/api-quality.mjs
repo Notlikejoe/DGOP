@@ -817,6 +817,13 @@ if (
 ) {
   fail('Protected search queries must use a dedicated generated key that is validated separately from JWT signing.');
 }
+if (
+  !runtimeSafetyText.includes('DGOP_BPMN_SIGNING_SECRET must be distinct from JWT_SECRET and DGOP_SEARCH_QUERY_KEY') ||
+  !startDemoText.includes("'DGOP_BPMN_SIGNING_SECRET'") ||
+  !prepareDemoEnvText.includes("setValue(state, 'DGOP_BPMN_SIGNING_SECRET', randomSecret())")
+) {
+  fail('Published BPMN definitions must use a dedicated generated signing key that is distinct from other application secrets.');
+}
 if (!startDemoText.includes("requireEnv('SEED_PERSON_PASSWORD', isSafePassword)")) {
   fail('start:demo must require a rotated SEED_PERSON_PASSWORD before serving production-style demos.');
 }
@@ -826,6 +833,9 @@ if (!qaReleaseText.includes("['run', 'db:generate']") || !qaReleaseText.includes
 }
 if (!qaReleaseText.includes('assertDemoApiIsStopped') || !qaReleaseText.includes('/api/health')) {
   fail('qa:release must fail fast if the DGOP API is already running before Prisma client generation.');
+}
+if (!qaReleaseText.includes('assertCleanCheckout') || !qaReleaseText.includes("['run', 'qa:ui']")) {
+  fail('qa:release must require a clean checkout and run authenticated browser smoke against the production build.');
 }
 const dbScriptText = readFileSync(join(root, 'scripts', 'db.mjs'), 'utf8');
 if (

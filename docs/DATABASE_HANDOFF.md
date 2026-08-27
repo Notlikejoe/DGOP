@@ -4,6 +4,29 @@ This project uses PostgreSQL with Prisma as the schema and migration layer.
 The application reads database configuration from the root `.env`; use
 `.env.example` as the safe template and do not commit local credentials.
 
+## New Developer Quick Start
+
+Follow [the README local setup](../README.md#2-first-local-setup-after-cloning).
+Install dependencies and PostgreSQL, create an empty `dgop_dev` database, run
+`npm run local:prepare`, set your own `DATABASE_URL` in `.env`, then run:
+
+```bash
+npm run local:setup
+npm run build
+npm run start:local
+```
+
+Log in at `http://localhost:3005/login` with your `.env` values
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`. These are generated per machine and
+preserved on subsequent local setup/start commands. `npm run local:check` proves
+database/migration readiness, account status, password match and HTTP session.
+`npm run local:credentials` is an explicit, audited local admin password repair;
+it does not reseed or re-enable disabled users. Keep passwords out of Git.
+
+Pulls include schema, migrations and seed definitions, not a running PostgreSQL
+server, local secrets or private database rows. Never rerun the full seed to fix
+an existing login. `local:setup` only seeds a new schema or completely empty application tables.
+
 ## Current Local Database
 
 Observed local development database:
@@ -54,8 +77,8 @@ root:
 ```bash
 npm run install:all
 npm run db:generate
-npm run db:migrate
-npm run db:seed:local
+npm run local:prepare
+npm run local:setup
 npm run db:status
 ```
 
@@ -63,8 +86,10 @@ For production-like or shared environments, prefer:
 
 ```bash
 npm run db:deploy
-npm run db:seed:local
 ```
+
+Do not run the destructive local demo seed on a shared/production database.
+Provision production identities and data through the approved deployment process.
 
 ## Verified Local Snapshot
 

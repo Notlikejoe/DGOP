@@ -13,6 +13,8 @@ const UNSAFE_JWT_SECRETS = new Set([
 
 const UNSAFE_DEMO_PASSWORDS = new Set([
   'Admin@12345',
+  'Admin12345@',
+  'admin123456@',
   'admin',
   'password',
   'Password123',
@@ -20,6 +22,7 @@ const UNSAFE_DEMO_PASSWORDS = new Set([
   'changeme',
   'replace-with-local-demo-password',
 ]);
+const PREDICTABLE_PASSWORD_PATTERN = /^(?:admin(?:istrator)?|password|welcome|qwerty|letmein|dgop)(?:\d{4,}|[!@#$%^&*]+|\d+[!@#$%^&*]+)?$/i;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 
 type RuntimeEnv = Record<string, string | undefined>;
@@ -64,6 +67,16 @@ export function isProductionLikeRuntime(env: RuntimeEnv = process.env): boolean 
   return !['development', 'test'].includes(nodeEnv) || TRUE_VALUES.has((env.DGOP_REQUIRE_STRICT_RUNTIME ?? '').toLowerCase());
 }
 
+export function configuredListenHost(env: RuntimeEnv = process.env): string {
+  const strict = isProductionLikeRuntime(env);
+  const host = env.DGOP_BIND_HOST?.trim() || (strict ? '0.0.0.0' : '127.0.0.1');
+  if (!strict && !['127.0.0.1', '::1', 'localhost'].includes(host)) {
+    throw new Error('Development must bind to loopback. Use start:demo with strict safeguards for shared access.');
+  }
+  if (host !== 'localhost' && !isIP(host)) throw new Error('DGOP_BIND_HOST must be an IP address or localhost');
+  return host;
+}
+
 export function configuredCorsOrigins(env: RuntimeEnv = process.env): string[] {
   const origins = (env.CORS_ORIGINS ?? '')
     .split(',')
@@ -85,7 +98,9 @@ export function isUnsafeSearchQueryKey(secret?: string | null): boolean {
 
 export function isUnsafeDemoPassword(password?: string | null): boolean {
   const value = password?.trim();
-  return !value || value.length < 12 || UNSAFE_DEMO_PASSWORDS.has(value);
+  if (!value || value.length < 12 || UNSAFE_DEMO_PASSWORDS.has(value)) return true;
+  const compact = value.replace(/[\s._-]+/g, '');
+  return PREDICTABLE_PASSWORD_PATTERN.test(compact) || /(?:012345|123456|234567|345678|456789|987654)/.test(compact);
 }
 
 export function isUnsafeDefaultAdminCredential(
@@ -94,7 +109,7 @@ export function isUnsafeDefaultAdminCredential(
   env: RuntimeEnv = process.env,
 ): boolean {
   const configuredAdminEmail = (env.SEED_ADMIN_EMAIL ?? 'admin@dgop.local').toLowerCase();
-  return email.toLowerCase() === configuredAdminEmail && UNSAFE_DEMO_PASSWORDS.has(password);
+  return email.toLowerCase() === configuredAdminEmail && isUnsafeDemoPassword(password);
 }
 
 function isUnsafeStrictOrigin(origin: string): boolean {
@@ -132,6 +147,13 @@ export function collectRuntimeSafetyIssues(env: RuntimeEnv = process.env): strin
     issues.push('DGOP_SEARCH_QUERY_KEY must be configured with at least 32 random characters');
   } else if (env.DGOP_SEARCH_QUERY_KEY?.trim() === env.JWT_SECRET?.trim()) {
     issues.push('DGOP_SEARCH_QUERY_KEY must be distinct from JWT_SECRET');
+  }
+  if (isUnsafeSearchQueryKey(env.DGOP_BPMN_SIGNING_SECRET)) {
+    issues.push('DGOP_BPMN_SIGNING_SECRET must be configured with at least 32 random characters');
+  } else if (
+    [env.JWT_SECRET?.trim(), env.DGOP_SEARCH_QUERY_KEY?.trim()].includes(env.DGOP_BPMN_SIGNING_SECRET?.trim())
+  ) {
+    issues.push('DGOP_BPMN_SIGNING_SECRET must be distinct from JWT_SECRET and DGOP_SEARCH_QUERY_KEY');
   }
   if (origins.length === 0) {
     issues.push('CORS_ORIGINS or PUBLIC_ORIGIN must be configured');

@@ -247,6 +247,8 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private bpmnDirectionObserver: MutationObserver | null = null;
   private bpmnFitFrame: number | null = null;
   private bpmnFitRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private bpmnAccessibilityFrame: number | null = null;
+  private bpmnAccessibilityCleanups: Array<() => void> = [];
   private designerLoadRequestId = 0;
   private designerPreviewRequestId = 0;
   private designerTestRequestId = 0;
@@ -2104,10 +2106,149 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
       const eventBus = this.bpmnModeler.get?.('eventBus');
       eventBus?.on?.('selection.changed', (event: { newSelection?: any[] }) => {
         this.captureDesignerSelection(event.newSelection?.[0] ?? null);
+        this.scheduleBpmnAccessibility(this.bpmnModeler);
       });
-      eventBus?.on?.('commandStack.changed', () => this.syncDesignerHistory());
+      eventBus?.on?.('commandStack.changed', () => {
+        this.syncDesignerHistory();
+        this.scheduleBpmnAccessibility(this.bpmnModeler);
+      });
     }
     return this.bpmnModeler;
+  }
+
+  private scheduleBpmnAccessibility(modeler: any): void {
+    if (!modeler || typeof requestAnimationFrame === 'undefined') return;
+    if (this.bpmnAccessibilityFrame !== null) cancelAnimationFrame(this.bpmnAccessibilityFrame);
+    this.bpmnAccessibilityFrame = requestAnimationFrame(() => {
+      this.bpmnAccessibilityFrame = null;
+      if (modeler === this.bpmnModeler) this.enhanceBpmnAccessibility(modeler);
+    });
+  }
+
+  private enhanceBpmnAccessibility(modeler: any): void {
+    const container = this.bpmnCanvas?.nativeElement;
+    if (!container || modeler !== this.bpmnModeler) return;
+    this.cleanupBpmnAccessibility();
+
+    const bind = (element: Element, type: string, listener: EventListener): void => {
+      element.addEventListener(type, listener);
+      this.bpmnAccessibilityCleanups.push(() => element.removeEventListener(type, listener));
+    };
+
+    for (const entry of Array.from(container.querySelectorAll<HTMLElement>('.djs-palette .entry[data-action]'))) {
+      const label = entry.getAttribute('title')?.trim() || entry.dataset['action'] || this.t('wf.designer.keyboardAction');
+      entry.setAttribute('role', 'button');
+      entry.setAttribute('tabindex', '0');
+      entry.setAttribute('aria-label', label);
+      bind(entry, 'keydown', ((event: KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const action = entry.dataset['action'] ?? '';
+        if (!this.createBpmnShapeFromKeyboard(modeler, action, label)) entry.click();
+      }) as EventListener);
+    }
+
+    const canvas = modeler.get?.('canvas');
+    const registry = modeler.get?.('elementRegistry');
+    const selection = modeler.get?.('selection');
+    const selectedId = this.selectedDesignerElement()?.id;
+    const elements = (registry?.getAll?.() ?? [])
+      .filter((element: any) => element?.id && !element.labelTarget && element.type !== 'bpmn:Process' && element.type !== 'bpmn:Collaboration')
+      .sort((a: any, b: any) => ((a.y ?? 0) - (b.y ?? 0)) || ((a.x ?? 0) - (b.x ?? 0)));
+
+    const graphics = elements
+      .map((element: any) => ({ element, node: canvas?.getGraphics?.(element) as SVGElement | undefined }))
+      .filter((item: { element: any; node?: SVGElement }) => !!item.node);
+
+    graphics.forEach((item: { element: any; node?: SVGElement }, index: number) => {
+      const node = item.node!;
+      const type = String(item.element.businessObject?.$type ?? item.element.type ?? '').replace(/^bpmn:/, '');
+      const name = String(item.element.businessObject?.name ?? '').trim();
+      node.setAttribute('role', 'button');
+      node.setAttribute('tabindex', item.element.id === selectedId || (!selectedId && index === 0) ? '0' : '-1');
+      node.setAttribute('aria-label', name ? `${name}, ${type}` : type);
+      node.classList.add('dgop-keyboard-element');
+
+      bind(node, 'focus', (() => {
+        selection?.select?.(item.element);
+        this.captureDesignerSelection(item.element);
+      }) as EventListener);
+      bind(node, 'keydown', ((event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selection?.select?.(item.element);
+          this.captureDesignerSelection(item.element);
+          return;
+        }
+        const directions = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+        if (!directions.includes(event.key)) return;
+        event.preventDefault();
+        const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+        const targetIndex = event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? graphics.length - 1
+            : (index + (forward ? 1 : -1) + graphics.length) % graphics.length;
+        const target = graphics[targetIndex];
+        target?.node?.setAttribute('tabindex', '0');
+        node.setAttribute('tabindex', '-1');
+        target?.node?.focus();
+      }) as EventListener);
+    });
+  }
+
+  private createBpmnShapeFromKeyboard(modeler: any, action: string, label: string): boolean {
+    const definitions: Record<string, { type: string; isExpanded?: boolean; participant?: boolean }> = {
+      'create.start-event': { type: 'bpmn:StartEvent' },
+      'create.intermediate-event': { type: 'bpmn:IntermediateThrowEvent' },
+      'create.end-event': { type: 'bpmn:EndEvent' },
+      'create.exclusive-gateway': { type: 'bpmn:ExclusiveGateway' },
+      'create.task': { type: 'bpmn:Task' },
+      'create.subprocess-expanded': { type: 'bpmn:SubProcess', isExpanded: true },
+      'create.data-object': { type: 'bpmn:DataObjectReference' },
+      'create.data-store': { type: 'bpmn:DataStoreReference' },
+      'create.participant-expanded': { type: 'bpmn:Participant', participant: true },
+      'create.group': { type: 'bpmn:Group' },
+    };
+    const definition = definitions[action];
+    if (!definition || !this.canEditDesigner) return false;
+
+    const canvas = modeler.get?.('canvas');
+    const elementFactory = modeler.get?.('elementFactory');
+    const modeling = modeler.get?.('modeling');
+    const selection = modeler.get?.('selection');
+    const registry = modeler.get?.('elementRegistry');
+    const root = canvas?.getRootElement?.();
+    if (!canvas || !elementFactory || !modeling || !root) return false;
+
+    const peers = (registry?.getAll?.() ?? []).filter((element: any) =>
+      element?.parent?.id === root.id && !element.labelTarget && Number.isFinite(element.y) && Number.isFinite(element.height),
+    );
+    const maxY = peers.reduce((value: number, element: any) => Math.max(value, element.y + element.height), 0);
+    const viewbox = canvas.viewbox?.() ?? { x: 0, y: 0, width: 900, height: 600 };
+    const position = {
+      x: Number(viewbox.x ?? 0) + Math.max(260, Number(viewbox.width ?? 900) / 2),
+      y: Math.max(Number(viewbox.y ?? 0) + 180, maxY + 100),
+    };
+    const shape = definition.participant
+      ? elementFactory.createParticipantShape?.()
+      : elementFactory.createShape?.({ type: definition.type, isExpanded: definition.isExpanded });
+    if (!shape) return false;
+    const created = modeling.createShape?.(shape, position, root);
+    if (!created) return false;
+    if (created.businessObject && !created.businessObject.name) {
+      modeling.updateProperties?.(created, { name: label.replace(/^Create\s+/i, '') });
+    }
+    selection?.select?.(created);
+    canvas.scrollToElement?.(created);
+    this.captureDesignerSelection(created);
+    this.scheduleBpmnAccessibility(modeler);
+    return true;
+  }
+
+  private cleanupBpmnAccessibility(): void {
+    for (const cleanup of this.bpmnAccessibilityCleanups.splice(0)) cleanup();
   }
 
   private captureDesignerSelection(element: any | null): void {
@@ -2380,6 +2521,11 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   private destroyBpmnModeler(): void {
     this.bpmnRenderGeneration++;
     this.bpmnImporting = null;
+    this.cleanupBpmnAccessibility();
+    if (this.bpmnAccessibilityFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(this.bpmnAccessibilityFrame);
+      this.bpmnAccessibilityFrame = null;
+    }
     this.bpmnResizeObserver?.disconnect();
     this.bpmnResizeObserver = null;
     if (this.bpmnFitFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
@@ -2451,6 +2597,7 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
         this.bpmnCanvasState.set('ready');
         const canvas = modeler.get?.('canvas');
         if (canvas) this.fitDesignerCanvas(canvas);
+        this.scheduleBpmnAccessibility(modeler);
         this.selectedDesignerElement.set(null);
         this.syncDesignerHistory();
         const warnings = result?.warnings?.length ?? 0;

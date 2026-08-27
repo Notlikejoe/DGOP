@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Header, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +17,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Header('Cache-Control', 'no-store')
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const ip = req.ip ?? req.socket?.remoteAddress;
     const result = await this.auth.login(dto.email, dto.password, ip);
@@ -25,12 +26,14 @@ export class AuthController {
   }
 
   @Get('me')
+  @Header('Cache-Control', 'no-store')
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.id);
   }
 
   @Public()
   @Get('session')
+  @Header('Cache-Control', 'no-store')
   async session(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = readCookie(req, AUTH_COOKIE_NAME);
     const user = await this.auth.sessionFromToken(token);
@@ -41,6 +44,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Header('Cache-Control', 'no-store')
   logout(@CurrentUser() user: AuthUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     res.clearCookie(AUTH_COOKIE_NAME, clearAuthCookieOptions(req));
     return this.auth.logout(user);

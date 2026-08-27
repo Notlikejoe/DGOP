@@ -42,6 +42,7 @@
       <div class="ds-card kpi">
         <span class="kpi__label">{{ t('scoring.specsSatisfied') }}</span>
         <span class="kpi__value">{{ d.overall.satisfiedCount }} / {{ d.overall.specCount }}</span>
+        <span class="kpi__meta">{{ t('scoring.operationalEvidenceOnly') }}</span>
       </div>
       @for (g of gapTypes; track g) {
         @if (gapCount(g) > 0) {

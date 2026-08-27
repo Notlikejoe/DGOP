@@ -24,7 +24,7 @@ export class UsersService {
 
   findByEmailWithRoles(email: string) {
     return this.prisma.user.findUnique({
-      where: { email },
+      where: { email: email.trim().toLowerCase() },
       include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
     });
   }

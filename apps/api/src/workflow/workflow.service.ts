@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { existsSync, mkdirSync } from 'node:fs';
 import { unlink, writeFile } from 'node:fs/promises';
-import { createCipheriv, createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createCipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, relative, resolve } from 'node:path';
 import {
   ApprovalStatus,
@@ -3471,7 +3471,9 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   private verifyWorkflowSnapshotSignature(bpmnXml: string, designerJson: unknown, signature?: string | null): boolean {
     if (!signature) return false;
     const expected = this.workflowSnapshotSignature(bpmnXml, designerJson);
-    return expected === signature;
+    const expectedBuffer = Buffer.from(expected, 'hex');
+    const signatureBuffer = Buffer.from(signature, 'hex');
+    return expectedBuffer.length === signatureBuffer.length && timingSafeEqual(expectedBuffer, signatureBuffer);
   }
 
   private canonicalWorkflowSnapshot(bpmnXml: string, designerJson: unknown): string {
@@ -3479,7 +3481,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   }
 
   private workflowSigningSecret(): string {
-    const secret = process.env.DGOP_BPMN_SIGNING_SECRET || process.env.JWT_SECRET;
+    const secret = process.env.DGOP_BPMN_SIGNING_SECRET;
     if (secret?.trim()) return secret;
     if (process.env.NODE_ENV === 'production') {
       throw new BadRequestException('Workflow model signing secret is not configured');

@@ -36,7 +36,10 @@ function loadEnv() {
 
 function requireSafePassword(name) {
   const value = process.env[name]?.trim();
-  if (!value || value.length < 12 || ['Admin@12345', 'Admin12345@', 'change-me', 'password'].includes(value)) {
+  const compact = value?.replace(/[\s._-]+/g, '') ?? '';
+  const predictable = /^(?:admin(?:istrator)?|password|welcome|qwerty|letmein|dgop)(?:\d{4,}|[!@#$%^&*]+|\d+[!@#$%^&*]+)?$/i.test(compact)
+    || /(?:012345|123456|234567|345678|456789|987654)/.test(compact);
+  if (!value || value.length < 12 || ['Admin@12345', 'Admin12345@', 'admin123456@', 'change-me', 'password'].includes(value) || predictable) {
     throw new Error(`${name} must contain a non-default password of at least 12 characters.`);
   }
   return value;

@@ -1971,7 +1971,7 @@ async function main() {
   }
 
   // Seed the initial admin user. Use `npm run demo:prepare` to create a local value.
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@dgop.local';
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'admin@dgop.local').trim().toLowerCase();
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   if (!adminPassword) {
     throw new Error('SEED_ADMIN_PASSWORD must be set before seeding. Run `npm run demo:prepare` for local demo credentials.');
@@ -2503,6 +2503,7 @@ async function main() {
         title: `Approved UAT evidence for ${specsToOwn[i].code}`,
         descriptionEn: 'Seeded approved evidence used by the readiness and audit-pack engines for local demo/UAT validation.',
         status: 'approved' as any,
+        provenance: 'seeded_uat',
         fileName: `seed-${specsToOwn[i].code.replace(/[^A-Za-z0-9_-]/g, '-')}.txt`,
         originalName: `${specsToOwn[i].code}-approved-evidence.txt`,
         mimeType: 'text/plain',
@@ -3894,6 +3895,8 @@ async function main() {
     await prisma.abacDecisionLog.create({
       data: {
         roleId: dqRole.id,
+        principalType: 'role',
+        principalId: dqRole.code,
         assetId: patientAssetId,
         domainId: domainByCode.get('clinical') ?? null,
         classificationId: classificationByCode.get('restricted') ?? null,
@@ -3908,6 +3911,8 @@ async function main() {
     await prisma.abacDecisionLog.create({
       data: {
         roleId: securityRole.id,
+        principalType: 'role',
+        principalId: securityRole.code,
         assetId: financeAssetId,
         domainId: domainByCode.get('finance') ?? null,
         classificationId: classificationByCode.get('restricted') ?? null,

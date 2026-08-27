@@ -5,6 +5,8 @@ import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n.service';
 import { ThemeService } from '../../core/theme.service';
 import { ApiService, HealthResponse } from '../../core/api.service';
+import { timeout } from 'rxjs';
+import { loginErrorKey, loginReturnUrl } from './login.logic';
 
 @Component({
   selector: 'app-login',
@@ -37,7 +39,7 @@ export class Login implements OnInit {
   }
 
   private checkHealth(): void {
-    this.api.health().subscribe({
+    this.api.health().pipe(timeout(10_000)).subscribe({
       next: (health) => {
         this.health.set(health);
         this.healthState.set(
@@ -65,9 +67,15 @@ export class Login implements OnInit {
   protected environmentStatus(): string {
     if (this.healthState() === 'checking') return this.t('login.signalChecking');
     if (this.healthState() === 'unavailable') return this.t('login.signalUnknown');
-    return this.health()?.environment === 'development'
-      ? this.t('login.signalDevelopment')
-      : this.t('login.signalProduction');
+    const environment = this.health()?.environment?.trim().toLowerCase();
+    if (environment === 'development' || environment === 'dev') return this.t('login.signalDevelopment');
+    if (environment === 'test' || environment === 'testing') return this.t('login.signalTest');
+    if (environment === 'uat') return this.t('login.signalUat');
+    if (environment === 'preproduction' || environment === 'pre-production' || environment === 'preprod' || environment === 'staging') {
+      return this.t('login.signalPreproduction');
+    }
+    if (environment === 'production' || environment === 'prod') return this.t('login.signalProduction');
+    return this.t('login.signalUnknown');
   }
 
   protected async submit(): Promise<void> {
@@ -76,12 +84,18 @@ export class Login implements OnInit {
     this.loading.set(true);
     try {
       await this.auth.login(this.email().trim(), this.password());
-      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') ?? '/dashboard';
-      void this.router.navigateByUrl(returnUrl);
-    } catch {
-      this.error.set(this.t('login.invalid'));
+    } catch (error: unknown) {
+      this.error.set(this.t(loginErrorKey(error)));
+      this.checkHealth();
+      return;
     } finally {
       this.loading.set(false);
+    }
+    const returnUrl = loginReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
+    try {
+      if (!await this.router.navigateByUrl(returnUrl)) this.error.set(this.t('login.navigationFailed'));
+    } catch {
+      this.error.set(this.t('login.navigationFailed'));
     }
   }
 

@@ -14,6 +14,7 @@ import {
   assertSafeRuntimeConfig,
   boundedEnvInteger,
   configuredCorsOrigins,
+  configuredListenHost,
   configuredTrustProxy,
   isProductionLikeRuntime,
 } from './common/runtime-safety';
@@ -25,6 +26,7 @@ loadEnv({ path: join(__dirname, '..', '..', '..', '.env') });
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const logger = new Logger('Bootstrap');
+  const listenHost = configuredListenHost();
 
   app.setGlobalPrefix('api');
 
@@ -121,7 +123,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const port = boundedEnvInteger('PORT', 3005, 1, 65535);
-  await app.listen(port, '0.0.0.0');
+  await app.listen(port, listenHost);
   logger.log(`DGOP API listening on http://localhost:${port}/api`);
 }
 

@@ -11,9 +11,24 @@ import { CSRF_HEADER_NAME, CSRF_HEADER_VALUE, CsrfGuard } from '../src/auth/csrf
 import { JwtPayload } from '../src/auth/auth.types';
 import { authCookieOptions, readCookie } from '../src/auth/auth-cookie';
 import { jwtDurationMs, jwtDurationSeconds } from '../src/auth/auth-duration';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { LoginDto } from '../src/auth/dto/login.dto';
+import { UsersService } from '../src/users/users.service';
 
 const tests: { name: string; fn: () => Promise<void> | void }[] = [];
 const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name, fn });
+
+test('login normalizes email without changing the password', async () => {
+  const dto = plainToInstance(LoginDto, { email: ' ADMIN@DGOP.LOCAL ', password: ' Exact Password ' });
+  assert.strictEqual(dto.email, 'admin@dgop.local');
+  assert.strictEqual(dto.password, ' Exact Password ');
+  assert.strictEqual((await validate(dto)).length, 0);
+  let searchedEmail = '';
+  const users = new UsersService({ user: { findUnique: async (query: { where: { email: string } }) => { searchedEmail = query.where.email; return null; } } } as never, {} as never);
+  await users.findByEmailWithRoles(' ADMIN@DGOP.LOCAL ');
+  assert.strictEqual(searchedEmail, dto.email);
+});
 
 const userRow = async (password = 'Correct#123', tokenVersion = 3) => ({
   id: 'user-1',

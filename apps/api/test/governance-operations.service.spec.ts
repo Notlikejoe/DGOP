@@ -737,6 +737,10 @@ test('enterprise close-out exposes control crosswalk, production acceptance, and
   });
   assert.equal(acceptance.summary.items, PRODUCTION_ACCEPTANCE_DEFINITIONS.length);
   assert.equal(acceptance.environments.length, 6);
+  assert.equal(acceptance.status, 'blocked');
+  assert.equal(acceptance.summary.pilotGatesSigned, 0);
+  assert.equal(acceptance.pilotGates.every((gate) => gate.status === 'blocked'), true);
+  assert.equal(acceptance.environments.find((environment) => environment.name === 'UAT')?.status, 'blocked');
   assert.equal(acceptance.items.some((item) => item.family === 'performance' && item.status === 'watch'), true);
   assert.equal(acceptance.summary.acceptedDeferrals >= 5, true);
   assert.equal(

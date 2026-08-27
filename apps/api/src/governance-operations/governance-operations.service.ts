@@ -813,7 +813,9 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       this.prisma.roleDataAccessMap.count({ where: { isActive: true } }),
       this.prisma.abacDecisionLog.count(),
       this.prisma.maskingPolicy.count({ where: { deletedAt: null, isActive: true } }),
-      this.prisma.ndiEvidence.count({ where: { status: NdiEvidenceStatus.approved } }),
+      this.prisma.ndiEvidence.count({
+        where: { deletedAt: null, status: NdiEvidenceStatus.approved, provenance: 'operational' },
+      }),
       this.prisma.ndiAuditPack.count(),
       this.prisma.auditLog.count(),
       this.prisma.privacyDpia.count({ where: { deletedAt: null } }),
@@ -937,20 +939,33 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
 
     const pilotGates = PILOT_SIGN_OFF_GATES.map((gate) => {
       const latest = pilotEvidence.latestSignOffByGate.get(gate.code) ?? null;
-      const status: ProductionReadinessStatus = latest?.decision === PilotSignOffDecision.declined
+      const status: ProductionReadinessStatus = !latest
         ? 'blocked'
-        : latest?.decision === PilotSignOffDecision.approved
+        : latest.decision === PilotSignOffDecision.declined
+        ? 'blocked'
+        : latest.decision === PilotSignOffDecision.approved
           ? 'ready'
           : 'watch';
       return { ...gate, status, latestSignOff: latest };
     });
-    const rehearsalStatus: ProductionReadinessStatus = pilotEvidence.latestRehearsal?.status === PilotReleaseRehearsalStatus.failed
+    const rehearsalStatus: ProductionReadinessStatus = !pilotEvidence.latestRehearsal
       ? 'blocked'
-      : pilotEvidence.latestRehearsal?.status === PilotReleaseRehearsalStatus.passed &&
+      : pilotEvidence.latestRehearsal.status === PilotReleaseRehearsalStatus.failed
+      ? 'blocked'
+      : pilotEvidence.latestRehearsal.status === PilotReleaseRehearsalStatus.passed &&
           pilotEvidence.latestRehearsal.rollbackTested &&
           !!pilotEvidence.latestRehearsal.rollbackCompletedAt
         ? 'ready'
         : 'watch';
+
+    const pilotGateStatus = combineReadinessStatus(pilotGates.map((gate) => gate.status));
+    const acceptanceStatus = combineReadinessStatus(items.map((item) => item.status));
+    const environmentStatus = (name: string): ProductionReadinessStatus => {
+      if (name === 'DEV') return readiness.status === 'blocked' ? 'blocked' : 'ready';
+      if (name === 'TEST') return combineReadinessStatus([readiness.status, acceptanceStatus]);
+      if (name === 'DR') return rehearsalStatus;
+      return combineReadinessStatus([readiness.status, acceptanceStatus, pilotGateStatus, rehearsalStatus]);
+    };
 
     return {
       generatedAt: new Date().toISOString(),
@@ -970,7 +985,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       latestRehearsal: pilotEvidence.latestRehearsal,
       environments: ['DEV', 'TEST', 'UAT', 'PRE-PROD', 'PROD', 'DR'].map((name) => ({
         name,
-        status: name === 'DEV' || name === 'UAT' ? 'ready' : 'watch',
+        status: environmentStatus(name),
         entry: name === 'DEV' ? 'Local build, tests, seed data, and health check pass.' : 'Promote only after previous environment exit criteria pass.',
         exit: name === 'DR' ? 'Recovery runbook exercised and evidence captured.' : 'Smoke checks, access checks, workflow checks, and known issues updated.',
       })),
@@ -1436,8 +1451,10 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
           dueDate: { lt: now },
         },
       }),
-      this.prisma.ndiEvidence.count({ where: { deletedAt: null } }),
-      this.prisma.ndiEvidence.count({ where: { deletedAt: null, status: NdiEvidenceStatus.approved } }),
+      this.prisma.ndiEvidence.count({ where: { deletedAt: null, provenance: 'operational' } }),
+      this.prisma.ndiEvidence.count({
+        where: { deletedAt: null, status: NdiEvidenceStatus.approved, provenance: 'operational' },
+      }),
       this.prisma.ndiAuditPack.count(),
       this.prisma.ndiSpecification.count({ where: { deletedAt: null, isActive: true } }),
       this.prisma.dataAsset.count({ where: this.assetScopeWhere(scope) }),

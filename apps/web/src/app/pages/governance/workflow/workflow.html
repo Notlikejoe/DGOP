@@ -683,11 +683,14 @@
                     </div>
                   </div>
                   <div class="designer-canvas-stage">
+                    <p id="bpmn-keyboard-help" class="sr-only">{{ t('wf.designer.keyboardHelp') }}</p>
                     <div
                       #bpmnCanvas
                       class="bpmn-canvas"
                       [class.bpmn-canvas--muted]="bpmnCanvasState() !== 'ready'"
                       [attr.aria-label]="t('wf.designer.canvasTitle')"
+                      aria-describedby="bpmn-keyboard-help"
+                      role="region"
                     ></div>
                     @if (bpmnCanvasState() === 'loading' || bpmnCanvasState() === 'idle') {
                       <div class="bpmn-canvas-state" role="status">

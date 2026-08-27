@@ -4,6 +4,62 @@
   container-type: inline-size;
 }
 
+.training-section-nav {
+  position: sticky;
+  top: calc(var(--topbar-height) + 0.5rem);
+  z-index: 6;
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.4rem;
+  overflow-x: auto;
+  border: 1px solid var(--command-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--command-surface) 94%, transparent);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px);
+  scrollbar-width: thin;
+}
+
+.training-section-nav button {
+  appearance: none;
+  flex: 0 0 auto;
+  padding: 0.55rem 0.8rem;
+  color: var(--command-muted);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.training-section-nav button:hover,
+.training-section-nav button:focus-visible,
+.training-section-nav button.is-active {
+  color: var(--command-on);
+  background: var(--command-active);
+}
+
+.training-section-nav button.is-active {
+  box-shadow: inset 0 -2px 0 var(--command-accent);
+}
+
+.training-section-nav button:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--command-accent));
+  outline-offset: 1px;
+}
+
+.training-anchor {
+  scroll-margin-top: calc(var(--topbar-height) + 5rem);
+}
+
+.training-anchor:focus {
+  outline: none;
+}
+
 .training-summary {
   display: grid;
   grid-template-columns: minmax(250px, 0.8fr) minmax(360px, 1.35fr) minmax(220px, 0.7fr);
@@ -413,6 +469,10 @@
 }
 
 @container (max-width: 760px) {
+  .training-section-nav {
+    top: calc(var(--topbar-height) + 3.5rem);
+  }
+
   .training-summary,
   .training-summary__activity,
   .training-summary__outcomes,

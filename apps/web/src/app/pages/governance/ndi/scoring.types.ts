@@ -16,6 +16,7 @@ export interface DomainReadiness {
 }
 
 export interface ReadinessOverview {
+  scoringBasis: 'operational_evidence_only';
   overall: { score: number; maturity: string; specCount: number; satisfiedCount: number };
   domains: DomainReadiness[];
   gapTotals: Record<GapType, number>;

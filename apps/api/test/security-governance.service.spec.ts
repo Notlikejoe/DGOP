@@ -552,6 +552,34 @@ test('decisionLog scopes unlinked decisions by allowed domain', async () => {
   assert.ok(!text.includes('__no_visible_security_decisions__'));
 });
 
+test('decisionLog resolves identity-group names for auditor-readable history', async () => {
+  let groupWhere: any;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: { findMany: async () => [] },
+      abacDecisionLog: {
+        findMany: async () => [{
+          id: 'decision-group', principalType: 'group', principalId: 'GRP-ANALYTICS', role: null,
+        }],
+      },
+      accessPrincipalDirectory: {
+        findMany: async (args: any) => {
+          groupWhere = args.where;
+          return [{ externalId: 'GRP-ANALYTICS', nameEn: 'Analytics Group', nameAr: 'مجموعة التحليلات' }];
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const rows = await service.decisionLog(['system_admin']);
+
+  assert.deepStrictEqual(groupWhere.externalId.in, ['GRP-ANALYTICS']);
+  assert.strictEqual(rows[0].principal.nameEn, 'Analytics Group');
+  assert.strictEqual(rows[0].principal.type, 'group');
+});
+
 test('simulateDecision persists ABAC trace metadata for review-required decisions', async () => {
   let createdDecision: any;
   let auditMetadata: any;
@@ -666,6 +694,59 @@ test('simulateDecision denies an operation that the effective grant does not inc
   assert.strictEqual(decision, AccessDecision.deny);
   assert.strictEqual(result.abac.accessGrant, null);
   assert.ok(result.abac.violations.includes('missing_effective_access_grant'));
+});
+
+test('simulateDecision evaluates enforced identity-group grants and records the principal', async () => {
+  let grantWhere: any;
+  let createdDecision: any;
+  const service = new SecurityGovernanceService(
+    {
+      dataAsset: {
+        findFirst: async () => ({
+          id: 'asset-1', domainId: 'domain-1', classificationId: 'class-2', domain: null,
+          classification: { id: 'class-2', rank: 2 },
+        }),
+      },
+      user: { findUnique: async () => ({ id: 'user-1' }) },
+      accessPrincipalDirectory: {
+        findFirst: async () => ({
+          id: 'principal-1', principalType: 'group', externalId: 'GRP-ANALYTICS',
+          nameEn: 'Analytics Group', nameAr: null,
+        }),
+      },
+      accessGrant: {
+        findMany: async (args: any) => {
+          grantWhere = args.where;
+          return [{
+            id: 'grant-group', code: 'AGR-GROUP', version: 2, permissionCode: 'dataset.read',
+            permissions: [{ permissionCode: 'dataset.read', permission: { action: 'read', riskLevel: 'low' } }],
+          }];
+        },
+      },
+      abacDecisionLog: {
+        create: async (args: any) => {
+          createdDecision = args.data;
+          return { id: 'decision-group', ...args.data };
+        },
+      },
+    } as never,
+    { log: async () => undefined } as never,
+    { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+  );
+
+  const result = await service.simulateDecision(
+    ['system_admin'],
+    { principalType: 'group', principalId: 'GRP-ANALYTICS', assetId: 'asset-1', requestedAction: 'read' },
+    'admin@dgop.local',
+  );
+
+  assert.strictEqual(grantWhere.principalType, 'group');
+  assert.strictEqual(grantWhere.principalId, 'GRP-ANALYTICS');
+  assert.strictEqual(createdDecision.roleId, null);
+  assert.strictEqual(createdDecision.principalType, 'group');
+  assert.strictEqual(createdDecision.principalId, 'GRP-ANALYTICS');
+  assert.strictEqual(result.decision, AccessDecision.allow);
+  assert.strictEqual(result.principal.nameEn, 'Analytics Group');
 });
 
 test('createDlpIncident links new incidents to workflow cases', async () => {

@@ -115,7 +115,9 @@ export class CreateClassificationChangeRequestDto {
 }
 
 export class SimulateAccessDecisionDto {
-  @IsString() @IsNotEmpty() roleId!: string;
+  @IsOptional() @IsIn(['role', 'group']) principalType?: 'role' | 'group';
+  @IsOptional() @IsString() @IsNotEmpty() principalId?: string;
+  @IsOptional() @IsString() @IsNotEmpty() roleId?: string;
   @IsString() @IsNotEmpty() assetId!: string;
   @IsOptional() @IsIn(ABAC_ACTIONS) requestedAction?: (typeof ABAC_ACTIONS)[number];
   @IsOptional() @IsIn(ABAC_PURPOSES) purpose?: (typeof ABAC_PURPOSES)[number];

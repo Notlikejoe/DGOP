@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { forkJoin, of } from 'rxjs';
@@ -11,6 +12,12 @@ import { StatusChip, StatusKind } from '../../../shared/status-chip';
 interface Ref { id: string; code: string; nameEn: string; nameAr: string; }
 interface RoleRef extends Ref { isSystem?: boolean; }
 interface UserRef { id: string; email: string; displayName: string; }
+type TrainingSectionId =
+  | 'training-overview'
+  | 'training-certifications'
+  | 'training-catalog'
+  | 'training-requirements'
+  | 'training-records';
 
 interface TrainingSummary {
   courses: number;
@@ -157,6 +164,7 @@ export class TrainingPage implements OnInit {
   protected readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly document = inject(DOCUMENT);
 
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly summary = signal<TrainingSummary | null>(null);
@@ -174,6 +182,7 @@ export class TrainingPage implements OnInit {
 
   protected readonly search = signal('');
   protected readonly status = signal('');
+  protected readonly activeSection = signal<TrainingSectionId>('training-overview');
 
   protected readonly courseOpen = signal(false);
   protected readonly requirementOpen = signal(false);
@@ -224,6 +233,15 @@ export class TrainingPage implements OnInit {
   protected get canViewCommunity(): boolean { return this.auth.hasPermission('community_articles.view'); }
   protected get canViewExperts(): boolean { return this.auth.hasPermission('expert_profiles.view'); }
   protected get canViewMentorships(): boolean { return this.auth.hasPermission('mentorship_pairs.view'); }
+
+  protected scrollToSection(sectionId: TrainingSectionId): void {
+    const target = this.document.getElementById(sectionId);
+    if (!target) return;
+
+    this.activeSection.set(sectionId);
+    target.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'nearest' });
+    this.document.defaultView?.requestAnimationFrame(() => target.focus({ preventScroll: true }));
+  }
 
   protected load(): void {
     this.state.set('loading');

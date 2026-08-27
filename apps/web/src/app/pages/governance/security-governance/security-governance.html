@@ -284,7 +284,7 @@
           @for (decision of decisions(); track decision.id) {
             <article class="decision-row">
               <span class="badge-code">{{ decision.requestedAction }}</span>
-              <strong>{{ name(decision.role) }}</strong>
+              <strong>{{ decisionPrincipal(decision) }}</strong>
               <span>{{ name(decision.asset) }}</span>
               <app-status-chip [kind]="decisionKind(decision.decision)" [label]="t('sec.decision.' + decision.decision)" />
               <p>{{ decision.reason }}</p>
@@ -339,10 +339,12 @@
     } @else {
       <div class="simulator-grid">
         <label class="campaign-field">
-          <span>{{ t('sec.sim.role') }}</span>
-          <select [ngModel]="simulatorForm.roleId" (ngModelChange)="simulatorForm.roleId = $event">
-            @for (role of simulatorRoles(); track role.id) {
-              <option [ngValue]="role.id">{{ name(role) }} - {{ role.code }}</option>
+          <span>{{ t('sec.sim.principal') }}</span>
+          <select [ngModel]="simulatorForm.principalKey" (ngModelChange)="simulatorForm.principalKey = $event">
+            @for (principal of simulatorPrincipals(); track principal.key) {
+              <option [ngValue]="principal.key">
+                {{ principal.type === 'group' ? t('sec.sim.group') : t('sec.sim.role') }} - {{ i18n.lang() === 'ar' && principal.nameAr ? principal.nameAr : principal.label }}
+              </option>
             }
           </select>
         </label>

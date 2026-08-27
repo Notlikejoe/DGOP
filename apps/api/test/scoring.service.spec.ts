@@ -183,6 +183,7 @@ test('readiness: overall + per-domain scores and gap totals', async () => {
   const svc = makeService(specs, rollups, [domainA, domainB]);
   const r = await svc.readiness(adminUser);
 
+  assert.strictEqual(r.scoringBasis, 'operational_evidence_only');
   assert.strictEqual(r.overall.specCount, 3);
   assert.strictEqual(r.overall.satisfiedCount, 1);
   // s1 & s2 in DQ (equal weight) -> 50%; s3 in OD -> 0%

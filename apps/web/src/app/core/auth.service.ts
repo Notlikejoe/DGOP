@@ -1,10 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import { LoginResponse, UserProfile } from './auth.models';
 
 const LEGACY_TOKEN_KEY = 'dgop.token';
+export class SessionUnavailableError extends Error {}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -19,13 +20,17 @@ export class AuthService {
   }
 
   private clearToken(): void {
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    try {
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+    } catch {
+      // Legacy storage cleanup must not block HTTP-only cookie authentication.
+    }
   }
 
   /** Called at app startup: if the HTTP-only session cookie exists, hydrate the current user. */
   async bootstrap(): Promise<void> {
     try {
-      const user = await firstValueFrom(this.http.get<UserProfile | null>('/api/auth/session'));
+      const user = await firstValueFrom(this.http.get<UserProfile | null>('/api/auth/session').pipe(timeout(10_000)));
       this.currentUser.set(user);
     } catch {
       this.clearSession();
@@ -34,10 +39,12 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<void> {
     const res = await firstValueFrom(
-      this.http.post<LoginResponse>('/api/auth/login', { email, password }),
+      this.http.post<LoginResponse>('/api/auth/login', { email: email.trim().toLowerCase(), password }).pipe(timeout(15_000)),
     );
+    const user = await firstValueFrom(this.http.get<UserProfile | null>('/api/auth/session').pipe(timeout(10_000)));
+    if (!user?.isActive || user.id !== res.user.id) throw new SessionUnavailableError('The browser could not retain the login session.');
     this.clearToken();
-    this.currentUser.set(res.user);
+    this.currentUser.set(user);
   }
 
   async logout(): Promise<void> {

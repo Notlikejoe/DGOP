@@ -24,16 +24,34 @@ permissive trust settings are rejected.
 npm run install:all
 ```
 
-## 2. Database (already done for Sprint 0)
+## 2. First Local Setup After Cloning
 
-The `dgop_dev` database, schema, and seed data are created with:
+Install PostgreSQL and create a dedicated empty database (for example,
+`createdb -h 127.0.0.1 -p 5432 -U postgres dgop_dev`). Then:
 
 ```bash
-npm run db:generate   # generate Prisma client
-npm run db:migrate    # create/apply migrations on dgop_dev
-npm run demo:prepare  # create ignored local seed passwords/secrets when needed
-npm run db:seed:local # guarded loopback-only seed for local demo data
+npm run local:prepare
+# Set DATABASE_URL in the generated .env to your local PostgreSQL connection.
+npm run local:setup
+npm run build
+npm run start:local
+# open http://localhost:3005/login
 ```
+
+Sign in with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from your ignored root
+`.env`. Each developer gets their own generated password, not a shared hardcoded
+credential. `local:prepare` preserves existing local passwords.
+
+`local:setup` generates the Prisma client, deploys committed migrations, and seeds
+only for a **new schema or entirely empty application tables**. Existing records, roles and
+passwords are preserved. Stop the app before running setup, especially on Windows
+where a running API locks the Prisma client DLL. Setup does not install PostgreSQL
+or create the database itself. The `db:local:*` commands manage this machine's
+initialized cluster only; its binary data directory is intentionally not in Git.
+
+After pulling updates: stop the app, run `npm run install:all`,
+`npm run local:setup`, `npm run build`, then `npm run start:local`.
+Use `db:deploy`, not `db:migrate`, to apply another developer's committed migrations.
 
 ## 3. Run locally
 
@@ -44,27 +62,46 @@ npm run dev
 # open http://localhost:4205
 ```
 
-Production-style (API serves the built UI on a single port :3005):
+Built local app (API serves the UI on a single loopback port :3005):
 
 ```bash
 npm run build
-npm start
+npm run start:local
 # open http://localhost:3005
 ```
 
+`start:local` checks migration state, database connectivity, the administrator's
+active role and password, then verifies HTTP login and the session cookie before
+printing the ready URL. It never changes passwords. Run `npm run local:check` to
+diagnose an already running app. An existing repo-managed PostgreSQL cluster can
+be restarted automatically; otherwise start your configured PostgreSQL service.
+
+If the configured password and local database disagree, first check your password
+manager against `.env`. To intentionally reset only the existing active local
+administrator to `SEED_ADMIN_PASSWORD`, run `npm run local:credentials` after
+`npm run build:api`. The reset is audited, invalidates old sessions, and changes
+neither roles nor governance records. It refuses remote and strict environments.
+Disabled users or missing administrator roles require an authorized administrator.
+
 Client-demo mode uses production security posture, requires non-placeholder
-`JWT_SECRET`, `SEED_ADMIN_PASSWORD`, `SEED_PERSON_PASSWORD`, and
-`DGOP_WEBHOOK_TOKEN` values, and redacts detailed health metadata:
+`JWT_SECRET`, `DGOP_BPMN_SIGNING_SECRET`, `DGOP_SEARCH_QUERY_KEY`,
+`SEED_ADMIN_PASSWORD`, `SEED_PERSON_PASSWORD`, and `DGOP_WEBHOOK_TOKEN`
+values, and redacts detailed health metadata:
 
 ```bash
 npm run demo:prepare
-npm run db:seed:local
+npm run db:sync-demo-credentials
 npm run build
 npm run start:demo
 # open http://localhost:3005
 ```
 
 Health check: `GET http://localhost:3005/api/health`
+
+**Do not run `demo:prepare` for everyday local startup:** it rotates weak local
+passwords for shared demos. After preparing a strict demo, use the new password
+from `.env`; an old browser-saved password will no longer match. Local commands
+never disable production/demo safeguards. Development always binds to loopback.
 
 Workflow evidence files use controlled server storage. Upload with multipart
 field `file` to `POST /api/workflow/cases/:caseId/attachments`; optional body
@@ -104,6 +141,13 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | Command | Description |
 | --- | --- |
 | `npm run install:all` | Install API + web dependencies |
+| `npm run local:prepare` | Create local secrets in ignored .env; preserve existing local passwords |
+| `npm run local:setup` | Deploy migrations; seed only an entirely empty local database; verify admin |
+| `npm run start:local` | Start the built local app after database/login readiness checks |
+| `npm run local:check` | Check migrations, configured credentials, HTTP login and session |
+| `npm run local:credentials` | Explicit audited local admin password synchronization, without reseeding |
+| `npm run test:local` | Test local setup safeguards and readiness behavior |
+| `npm run test:local:integration` | Verify fresh setup, repeat setup, password repair and HTTP login in a disposable local database; requires PostgreSQL CREATE DATABASE permission and a stopped app |
 | `npm run dev` | Run API + Angular dev server together |
 | `npm run build` | Build web then api |
 | `npm start` | Run the API (serves built UI) on `PORT` |
@@ -116,7 +160,7 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 | `npm run qa:web` | Run static web UX/i18n/route/theme/RTL checks |
 | `npm run qa:ui` | Smoke-test login and key UI routes with Playwright against a running app |
 | `npm run qa` | Run API and web static quality checks together |
-| `npm run qa:release` | Run the full release gate: static QA, API tests, web tests, Prisma validation/status/client generation, dependency audits, whitespace checks, and build |
+| `npm run qa:release` | Require a clean checkout, run static/API/web/database/dependency/build gates, then exercise authenticated browser routes against the production build |
 | `npm run publish:external` | Build, run, and expose over HTTPS |
 | `npm run publish:external:dry-run` | Verify the external publish command path without starting a tunnel |
 
@@ -141,8 +185,8 @@ Detailed per-sprint QA packs are kept where deeper test stories were written:
 - [`QA/Sprint-22/`](QA/Sprint-22/README.md) - PDP privacy operations: legal bases, RoPA, DPIA gates, DSR queue, breach notifications, consent/retention records, workflow creation, and privacy workspace.
 - [`QA/Sprint-23/`](QA/Sprint-23/README.md) - data sharing governance: sharing requests, review decisions, agreements, renewal/usage monitoring, workflow creation, and exchange workspace.
 
-Local admin email for demo data: `admin@dgop.local`. Run `npm run demo:prepare`
-and `npm run db:sync-demo-credentials` for an existing local database, or
-`npm run db:seed:local` for a fresh dataset, then use the ignored local `.env` value
-`SEED_ADMIN_PASSWORD` for admin login. Seeded person demo accounts use the ignored
-local `.env` value `SEED_PERSON_PASSWORD`. Do not commit or share these passwords.
+Local admin email: `admin@dgop.local` unless changed in `.env`. Use the local setup
+instructions above and the ignored `SEED_ADMIN_PASSWORD` value for login. Seeded
+person accounts use `SEED_PERSON_PASSWORD`. Never commit passwords, `.env`, database
+dumps or the live PostgreSQL data directory. Migrations and seed definitions are
+the reproducible handoff, not a copy of your workstation's credentials.

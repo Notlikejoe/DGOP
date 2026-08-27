@@ -516,7 +516,7 @@ export class SecurityGovernanceService {
 
   async decisionLog(roleCodes: string[]) {
     const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
-    return this.prisma.abacDecisionLog.findMany({
+    const rows = await this.prisma.abacDecisionLog.findMany({
       where: this.assetDomainClassificationScope(scope, assetIds),
       include: {
         actorUser: { select: { id: true, email: true, displayName: true } },
@@ -528,6 +528,28 @@ export class SecurityGovernanceService {
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
+    });
+    const groupIds = [...new Set(
+      rows.filter((row) => row.principalType === 'group').map((row) => row.principalId),
+    )];
+    const groups = groupIds.length
+      ? await this.prisma.accessPrincipalDirectory.findMany({
+          where: { principalType: 'group', externalId: { in: groupIds } },
+          select: { externalId: true, nameEn: true, nameAr: true },
+        })
+      : [];
+    const groupById = new Map(groups.map((group) => [group.externalId, group]));
+    return rows.map((row) => {
+      const group = row.principalType === 'group' ? groupById.get(row.principalId) : null;
+      return {
+        ...row,
+        principal: {
+          type: row.principalType,
+          id: row.principalId,
+          nameEn: row.role?.nameEn ?? group?.nameEn ?? row.principalId,
+          nameAr: row.role?.nameAr ?? group?.nameAr ?? null,
+        },
+      };
     });
   }
 
@@ -932,7 +954,8 @@ export class SecurityGovernanceService {
 
   async simulateDecision(roleCodes: string[], dto: SimulateAccessDecisionDto, actorEmail: string) {
     await this.assertSecurityTarget(roleCodes, { assetId: dto.assetId });
-    const [asset, role, actorUser] = await Promise.all([
+    const principalType = dto.principalType ?? 'role';
+    const [asset, actorUser] = await Promise.all([
       this.prisma.dataAsset.findFirst({
         where: { id: dto.assetId, deletedAt: null },
         include: {
@@ -940,17 +963,36 @@ export class SecurityGovernanceService {
           classification: true,
         },
       }),
-      this.prisma.role.findFirst({ where: { id: dto.roleId, deletedAt: null, isActive: true } }),
       this.prisma.user.findUnique({ where: { email: actorEmail } }),
     ]);
     if (!asset) throw new NotFoundException('Data asset not found');
-    if (!role) throw new NotFoundException('Role not found');
+    const role = principalType === 'role'
+      ? await this.prisma.role.findFirst({
+          where: dto.roleId
+            ? { id: dto.roleId, deletedAt: null, isActive: true }
+            : { code: dto.principalId?.trim() || '__missing__', deletedAt: null, isActive: true },
+        })
+      : null;
+    if (principalType === 'role' && !role) throw new NotFoundException('Role not found');
+    const group = principalType === 'group'
+      ? await this.prisma.accessPrincipalDirectory.findFirst({
+          where: {
+            principalType: 'group',
+            externalId: dto.principalId?.trim() || '__missing__',
+            isActive: true,
+            deletedAt: null,
+          },
+        })
+      : null;
+    if (principalType === 'group' && !group) throw new NotFoundException('Identity group not found');
+    const principalId = role?.code ?? group?.externalId;
+    if (!principalId) throw new BadRequestException('A role or identity group principal is required');
     const now = new Date();
     const grants = await this.prisma.accessGrant.findMany({
       where: {
         assetId: asset.id,
-        principalType: 'role',
-        principalId: role.code,
+        principalType,
+        principalId,
         status: 'active',
         ownerDecision: 'approved',
         enforcementStatus: 'enforced',
@@ -1022,12 +1064,14 @@ export class SecurityGovernanceService {
       approvalRequired: matchingPermission?.riskLevel === 'high',
       hasMaskingPolicy: !!maskingPolicy,
       assetClassificationRank: asset.classification?.rank ?? null,
-      allowedClassificationRank: role.maxClassificationRank,
+      allowedClassificationRank: role?.maxClassificationRank ?? asset.classification?.rank ?? null,
     });
     const log = await this.prisma.abacDecisionLog.create({
       data: {
         actorUserId: actorUser?.id ?? null,
-        roleId: role.id,
+        roleId: role?.id ?? null,
+        principalType,
+        principalId,
         assetId: asset.id,
         domainId: asset.domainId,
         classificationId: asset.classificationId,
@@ -1058,6 +1102,8 @@ export class SecurityGovernanceService {
         ruleTrace: result.ruleTrace,
         hasBusinessJustification: !!dto.businessJustification?.trim(),
         approvalTicketId: dto.approvalTicketId ?? null,
+        principalType,
+        principalId,
         authorizationSource: 'access_grant',
         accessGrantId: authorization?.grant.id ?? null,
         accessGrantCode: authorization?.grant.code ?? null,
@@ -1067,6 +1113,12 @@ export class SecurityGovernanceService {
     });
     return {
       ...log,
+      principal: {
+        type: principalType,
+        id: principalId,
+        nameEn: role?.nameEn ?? group?.nameEn ?? principalId,
+        nameAr: role?.nameAr ?? group?.nameAr ?? null,
+      },
       abac: {
         risk: result.risk,
         purpose: result.purpose,

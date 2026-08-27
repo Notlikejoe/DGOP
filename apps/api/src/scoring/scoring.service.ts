@@ -28,6 +28,7 @@ export interface DomainReadiness {
 }
 
 export interface ReadinessOverview {
+  scoringBasis: 'operational_evidence_only';
   overall: {
     score: number;
     maturity: string;
@@ -231,6 +232,7 @@ export class ScoringService {
 
     const overallScore = readinessPct(allWeighted);
     return {
+      scoringBasis: 'operational_evidence_only',
       overall: {
         score: overallScore,
         maturity: maturityBand(overallScore),

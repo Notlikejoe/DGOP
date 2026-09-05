@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   ViewChild,
   computed,
@@ -9,13 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  NavigationEnd,
-  Router,
-  RouterLink,
-  RouterLinkActive,
-  RouterOutlet,
-} from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
@@ -23,6 +18,12 @@ import { I18nService } from '../core/i18n.service';
 import { ThemeService } from '../core/theme.service';
 import { CRUMB_MAP, NAV_SECTIONS, NavItem, NavSection } from './navigation';
 import { AppIcon } from '../shared/app-icon';
+
+const SIDEBAR_DEFAULT_WIDTH = 264;
+const SIDEBAR_MIN_WIDTH = 236;
+const SIDEBAR_MAX_WIDTH = 420;
+const SIDEBAR_KEYBOARD_STEP = 16;
+const SIDEBAR_WIDTH_STORAGE_KEY = 'dgop.sidebar.width';
 
 interface PagedResponse<T> {
   data: T[];
@@ -88,14 +89,20 @@ export class Shell implements OnDestroy {
   protected readonly menuOpen = signal(false);
   protected readonly mobileNavOpen = signal(false);
   protected readonly compactNav = signal(false);
+  protected readonly sidebarWidth = signal(this.readStoredSidebarWidth());
+  protected readonly sidebarResizing = signal(false);
   protected readonly openTasks = signal(0);
   protected readonly expandedSections = signal<Record<string, boolean>>({});
+  protected readonly navQuery = signal('');
   protected readonly searchQuery = signal('');
   protected readonly searchState = signal<'idle' | 'typing' | 'loading' | 'ok' | 'error'>('idle');
   protected readonly searchResponse = signal<GlobalSearchResponse | null>(null);
   protected readonly searchFocused = signal(false);
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private searchRequestId = 0;
+  private resizePointerId: number | null = null;
+  private resizeStartX = 0;
+  private resizeStartWidth = SIDEBAR_DEFAULT_WIDTH;
   private readonly compactQuery =
     typeof window === 'undefined' ? null : window.matchMedia('(max-width: 1120px)');
 
@@ -105,6 +112,36 @@ export class Shell implements OnDestroy {
       items: section.items.filter((item) => this.canSeeNavItem(item)),
     })).filter((section) => section.items.length > 0),
   );
+
+  protected readonly visibleSections = computed<NavSection[]>(() => {
+    const query = this.navQuery().trim().toLocaleLowerCase();
+    if (!query) return this.sections();
+    return this.sections()
+      .map((section) => {
+        const sectionMatches =
+          `${this.t(section.titleKey)} ${section.summaryKey ? this.t(section.summaryKey) : ''}`
+            .toLocaleLowerCase()
+            .includes(query);
+        const items = sectionMatches
+          ? section.items
+          : section.items.filter((item) =>
+              `${this.t(item.labelKey)} ${this.t(item.descriptionKey)}`
+                .toLocaleLowerCase()
+                .includes(query),
+            );
+        return { ...section, items };
+      })
+      .filter((section) => section.items.length > 0);
+  });
+
+  protected readonly visibleNavigationItemCount = computed(() =>
+    this.visibleSections().reduce((count, section) => count + section.items.length, 0),
+  );
+
+  protected readonly allWorkspaceSectionsOpen = computed(() => {
+    const workspaces = this.visibleSections().filter((section) => this.isWorkspaceSection(section));
+    return workspaces.length > 0 && workspaces.every((section) => this.isSectionOpen(section));
+  });
 
   protected readonly crumbKey = computed(() => {
     const u = this.url();
@@ -128,10 +165,11 @@ export class Shell implements OnDestroy {
 
   protected readonly sidebarHidden = computed(() => this.compactNav() && !this.mobileNavOpen());
   protected readonly canUseSearch = computed(() => this.auth.hasPermission('search.view'));
-  protected readonly searchPanelOpen = computed(() =>
-    this.canUseSearch() &&
-    this.searchQuery().trim().length >= 2 &&
-    (this.searchFocused() || this.searchState() === 'loading'),
+  protected readonly searchPanelOpen = computed(
+    () =>
+      this.canUseSearch() &&
+      this.searchQuery().trim().length >= 2 &&
+      (this.searchFocused() || this.searchState() === 'loading'),
   );
 
   constructor() {
@@ -159,6 +197,90 @@ export class Shell implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.stopSidebarResize();
+  }
+
+  protected startSidebarResize(event: PointerEvent): void {
+    if (this.compactNav() || event.button !== 0) return;
+    event.preventDefault();
+    this.resizePointerId = event.pointerId;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.sidebarWidth();
+    this.sidebarResizing.set(true);
+    (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+  }
+
+  @HostListener('window:pointermove', ['$event'])
+  protected continueSidebarResize(event: PointerEvent): void {
+    if (!this.sidebarResizing() || event.pointerId !== this.resizePointerId) return;
+    const direction = this.isRtl() ? -1 : 1;
+    const width = this.resizeStartWidth + (event.clientX - this.resizeStartX) * direction;
+    this.sidebarWidth.set(this.clampSidebarWidth(width));
+  }
+
+  @HostListener('window:pointerup', ['$event'])
+  @HostListener('window:pointercancel', ['$event'])
+  protected finishSidebarResize(event: PointerEvent): void {
+    if (event.pointerId !== this.resizePointerId) return;
+    this.stopSidebarResize();
+    this.persistSidebarWidth();
+  }
+
+  protected resizeSidebarWithKeyboard(event: KeyboardEvent): void {
+    let next: number | null = null;
+    const direction = this.isRtl() ? -1 : 1;
+    if (event.key === 'ArrowRight') {
+      next = this.sidebarWidth() + SIDEBAR_KEYBOARD_STEP * direction;
+    } else if (event.key === 'ArrowLeft') {
+      next = this.sidebarWidth() - SIDEBAR_KEYBOARD_STEP * direction;
+    } else if (event.key === 'Home') {
+      next = SIDEBAR_MIN_WIDTH;
+    } else if (event.key === 'End') {
+      next = SIDEBAR_MAX_WIDTH;
+    }
+    if (next === null) return;
+    event.preventDefault();
+    this.sidebarWidth.set(this.clampSidebarWidth(next));
+    this.persistSidebarWidth();
+  }
+
+  protected resetSidebarWidth(): void {
+    this.sidebarWidth.set(SIDEBAR_DEFAULT_WIDTH);
+    this.persistSidebarWidth();
+  }
+
+  private stopSidebarResize(): void {
+    this.sidebarResizing.set(false);
+    this.resizePointerId = null;
+  }
+
+  private readStoredSidebarWidth(): number {
+    if (typeof window === 'undefined') return SIDEBAR_DEFAULT_WIDTH;
+    try {
+      const stored = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+      return Number.isFinite(stored) && stored > 0
+        ? this.clampSidebarWidth(stored)
+        : SIDEBAR_DEFAULT_WIDTH;
+    } catch {
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+  }
+
+  private persistSidebarWidth(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(this.sidebarWidth()));
+    } catch {
+      // The layout still works when storage is unavailable.
+    }
+  }
+
+  private clampSidebarWidth(width: number): number {
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
+  }
+
+  private isRtl(): boolean {
+    return typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
   }
 
   /** Loads the count of the user's open workflow tasks for the inbox badge. */
@@ -205,6 +327,7 @@ export class Shell implements OnDestroy {
 
   protected isSectionOpen(section: NavSection): boolean {
     if (!this.isWorkspaceSection(section)) return true;
+    if (this.navQuery().trim()) return true;
     const explicit = this.expandedSections()[section.id];
     return explicit ?? this.isSectionActive(section);
   }
@@ -212,6 +335,19 @@ export class Shell implements OnDestroy {
   protected toggleSection(section: NavSection): void {
     const next = !this.isSectionOpen(section);
     this.expandedSections.update((sections) => ({ ...sections, [section.id]: next }));
+  }
+
+  protected clearNavigationSearch(): void {
+    this.navQuery.set('');
+  }
+
+  protected toggleAllNavigationSections(): void {
+    const open = !this.allWorkspaceSectionsOpen();
+    const next = { ...this.expandedSections() };
+    for (const section of this.sections()) {
+      if (this.isWorkspaceSection(section)) next[section.id] = open;
+    }
+    this.expandedSections.set(next);
   }
 
   protected closeMobileNav(): void {
@@ -285,13 +421,15 @@ export class Shell implements OnDestroy {
   }
 
   protected recordSearchClick(result: SearchResult): void {
-    this.http.post('/api/search/analytics/click', {
-      query: this.searchQuery(),
-      resultCount: this.searchResponse()?.total ?? 0,
-      selectedEntityType: result.entityType,
-      selectedEntityId: result.id,
-      source: 'shell_global_search',
-    }).subscribe({ error: () => {} });
+    this.http
+      .post('/api/search/analytics/click', {
+        query: this.searchQuery(),
+        resultCount: this.searchResponse()?.total ?? 0,
+        selectedEntityType: result.entityType,
+        selectedEntityId: result.id,
+        source: 'shell_global_search',
+      })
+      .subscribe({ error: () => {} });
     this.clearGlobalSearch();
   }
 

@@ -1,7 +1,27 @@
+:host {
+  --depth-edge: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  --depth-shadow: color-mix(in srgb, #0f172a 18%, transparent);
+  --depth-highlight: color-mix(in srgb, white 72%, transparent);
+  --windows-control: #eef0f2;
+  --windows-control-top: #fafbfc;
+  --windows-control-border: #8b969f;
+  --windows-control-edge: #66717b;
+  --windows-blue: #0f6cbd;
+  display: block;
+}
+
+:host-context([data-theme='dark']) {
+  --windows-control: #2b333b;
+  --windows-control-top: #38424b;
+  --windows-control-border: #73808a;
+  --windows-control-edge: #151b20;
+  --windows-blue: #4ba6e8;
+}
+
 .access-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .access-hero {
@@ -9,13 +29,18 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--primary) 11%, transparent), transparent 48%),
-    var(--command-surface);
-  border: 1px solid var(--command-border);
+    radial-gradient(circle at 88% 14%, rgba(20, 184, 166, 0.24), transparent 28%),
+    linear-gradient(125deg, #0f172a 0%, #172554 52%, #102a43 100%);
+  border: 3px solid #334155;
   border-radius: var(--radius-lg);
-  color: var(--command-on);
+  color: #f8fafc;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -2px 0 rgba(2, 6, 23, 0.4),
+    0 5px 0 #09111f,
+    0 13px 26px rgba(15, 23, 42, 0.28);
 }
 
 .access-hero__main {
@@ -27,18 +52,19 @@
 .access-hero__icon {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
-  color: var(--on-primary);
-  background: var(--primary);
+  color: #ecfeff;
+  background: linear-gradient(145deg, #0f766e, #14b8a6);
+  border: 2px solid rgba(153, 246, 228, 0.58);
   border-radius: var(--radius-md);
-  font-size: 1.35rem;
+  font-size: 1.1rem;
 }
 
 .access-hero__eyebrow {
   margin: 0 0 var(--space-1);
-  color: var(--command-muted);
+  color: #5eead4;
   font-size: var(--font-size-xs);
   font-weight: 800;
   text-transform: uppercase;
@@ -47,14 +73,31 @@
 
 .access-hero h1 {
   margin: 0;
-  font-size: clamp(1.75rem, 2vw, 2.4rem);
+  color: #ffffff;
+  font-size: clamp(1.45rem, 1.8vw, 2rem);
   line-height: 1.08;
 }
 
 .access-hero__copy {
   max-width: 68ch;
-  margin: var(--space-2) 0 0;
-  color: var(--command-muted);
+  margin: var(--space-1) 0 0;
+  color: #cbd5e1;
+}
+
+:host ::ng-deep .access-hero .p-button {
+  border-width: 2px;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.18);
+}
+
+:host ::ng-deep .access-hero .p-button.p-button-secondary {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(203, 213, 225, 0.62);
+}
+
+:host ::ng-deep .access-hero .p-button.p-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #f8fafc;
 }
 
 .access-hero__actions,
@@ -67,26 +110,101 @@
 .metric-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-2);
+  padding: 6px;
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+  border: 2px solid color-mix(in srgb, var(--border-strong) 70%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 4px 0 var(--depth-edge),
+    0 10px 20px var(--depth-shadow);
 }
 
 .metric-card {
+  --metric-accent: #2563eb;
+  --metric-soft: #eff6ff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-inline-start: 4px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  min-height: 68px;
+  padding: 10px 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      135deg,
+      var(--metric-soft),
+      color-mix(in srgb, var(--surface) 93%, var(--metric-accent))
+    ),
+    var(--surface);
+  border: 2px solid color-mix(in srgb, var(--metric-accent) 42%, var(--border));
+  border-radius: 14px;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 -1px 0 color-mix(in srgb, var(--metric-accent) 16%, transparent),
+    0 4px 0 color-mix(in srgb, var(--metric-accent) 36%, var(--border)),
+    0 9px 17px color-mix(in srgb, var(--metric-accent) 16%, transparent);
+  transition:
+    transform var(--motion-fast) var(--easing-standard),
+    border-color var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard);
 }
 
-.metric-card span,
+.metric-card:hover {
+  z-index: 1;
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--metric-accent) 38%, var(--border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 6px 0 color-mix(in srgb, var(--metric-accent) 40%, var(--border)),
+    0 14px 24px color-mix(in srgb, var(--metric-accent) 20%, transparent);
+}
+
+.metric-card::after {
+  position: absolute;
+  inset-block-start: -28px;
+  inset-inline-end: -22px;
+  width: 74px;
+  height: 74px;
+  background: color-mix(in srgb, var(--metric-accent) 8%, transparent);
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+}
+
+.metric-card__icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  color: white;
+  background: var(--metric-accent);
+  border: 1px solid color-mix(in srgb, white 24%, transparent);
+  border-radius: 11px;
+  box-shadow: 0 5px 12px color-mix(in srgb, var(--metric-accent) 22%, transparent);
+}
+
+.metric-card__icon app-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.metric-card__copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
 .metric-card small {
   display: block;
-  color: var(--on-surface-muted);
-}
-
-.metric-card span {
+  color: color-mix(in srgb, var(--on-surface) 72%, var(--metric-accent));
   font-size: var(--font-size-xs);
   font-weight: 850;
   text-transform: uppercase;
@@ -94,32 +212,36 @@
 }
 
 .metric-card strong {
-  display: block;
-  margin-top: var(--space-2);
-  color: var(--on-surface);
-  font-size: 2rem;
+  position: relative;
+  z-index: 1;
+  color: var(--metric-accent);
+  font-size: 1.55rem;
   line-height: 1;
 }
 
-.metric-card small {
-  margin-top: var(--space-2);
-  line-height: 1.35;
-}
-
 .metric-card--primary {
-  border-inline-start-color: var(--primary);
+  --metric-accent: #2563eb;
+  --metric-soft: #eff6ff;
 }
 
 .metric-card--success {
-  border-inline-start-color: var(--success);
+  --metric-accent: #059669;
+  --metric-soft: #ecfdf5;
 }
 
 .metric-card--warning {
-  border-inline-start-color: var(--warning);
+  --metric-accent: #d97706;
+  --metric-soft: #fff7ed;
 }
 
 .metric-card--muted {
-  border-inline-start-color: var(--border-strong);
+  --metric-accent: #64748b;
+  --metric-soft: #f1f5f9;
+}
+
+:host-context([data-theme='dark']) .metric-card {
+  --metric-soft: color-mix(in srgb, var(--metric-accent) 13%, var(--surface));
+  background: linear-gradient(135deg, var(--metric-soft), var(--surface));
 }
 
 .access-toolbar {
@@ -128,9 +250,13 @@
   gap: var(--space-3);
   align-items: end;
   padding: var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, color-mix(in srgb, white 4%, var(--surface)), var(--surface));
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 5px 0 var(--depth-edge),
+    0 12px 22px var(--depth-shadow);
 }
 
 .field {
@@ -194,6 +320,10 @@
   min-height: 42px;
 }
 
+.access-toolbar p-multiselect {
+  width: 100%;
+}
+
 .access-workspace {
   display: grid;
   grid-template-columns: minmax(340px, 0.92fr) minmax(360px, 1.08fr);
@@ -204,9 +334,12 @@
 .access-panel {
   min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 6px 0 var(--depth-edge),
+    0 14px 26px var(--depth-shadow);
 }
 
 .panel-head {
@@ -235,6 +368,38 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-3);
+}
+
+.user-table {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  overflow: hidden;
+}
+
+.user-table__row {
+  cursor: pointer;
+}
+
+.user-table__row--selected > td {
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+}
+
+.user-table__row--selected > td:first-child {
+  box-shadow: inset 4px 0 0 var(--primary);
+}
+
+:host-context([dir='rtl']) .user-table__row--selected > td:first-child {
+  box-shadow: inset -4px 0 0 var(--primary);
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.user-cell p-avatar {
+  flex: 0 0 auto;
 }
 
 .user-row {
@@ -272,7 +437,11 @@
   display: grid;
   place-items: center;
   color: var(--on-primary);
-  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--success)));
+  background: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in srgb, var(--primary) 70%, var(--success))
+  );
   border-radius: 50%;
   font-weight: 850;
 }
@@ -327,6 +496,334 @@
   font-size: 1rem;
 }
 
+:host ::ng-deep .detail-panel__avatar {
+  color: var(--on-primary);
+  background: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in srgb, var(--primary) 70%, var(--success))
+  );
+  font-weight: 850;
+}
+
+:host ::ng-deep .p-button {
+  white-space: nowrap;
+}
+
+:host ::ng-deep .access-page .p-button,
+:host ::ng-deep app-modal .p-button {
+  border-width: 1px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 48%, transparent),
+    0 3px 0 color-mix(in srgb, currentColor 28%, var(--border)),
+    0 7px 12px color-mix(in srgb, #0f172a 16%, transparent);
+  transition:
+    transform var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard),
+    filter var(--motion-fast) var(--easing-standard);
+}
+
+:host ::ng-deep .access-page .p-button:hover,
+:host ::ng-deep app-modal .p-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.03);
+}
+
+:host ::ng-deep .access-page .p-button:active,
+:host ::ng-deep app-modal .p-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #0f172a 16%, transparent),
+    0 1px 0 color-mix(in srgb, currentColor 22%, var(--border));
+}
+
+:host ::ng-deep .action-button {
+  --action-bg: #66717b;
+  --action-bg-top: #89939b;
+  --action-border: #53606a;
+  --action-edge: #35404a;
+  --action-text: #ffffff;
+  color: var(--action-text) !important;
+  background: linear-gradient(180deg, var(--action-bg-top), var(--action-bg)) !important;
+  border-color: var(--action-border) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 3px 0 var(--action-edge),
+    0 7px 12px rgba(15, 23, 42, 0.22) !important;
+}
+
+:host ::ng-deep .action-button:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, white 10%, var(--action-bg-top)),
+    color-mix(in srgb, white 6%, var(--action-bg))
+  ) !important;
+}
+
+:host ::ng-deep .action-button--refresh,
+:host ::ng-deep .action-button--edit {
+  --action-bg: #49677d;
+  --action-bg-top: #6f8899;
+  --action-border: #7f9aad;
+  --action-edge: #263b4a;
+}
+
+:host ::ng-deep .action-button--create,
+:host ::ng-deep .action-button--success {
+  --action-bg: #16825f;
+  --action-bg-top: #2ca77f;
+  --action-border: #58c49d;
+  --action-edge: #0b5139;
+}
+
+:host ::ng-deep .action-button--roles {
+  --action-bg: #6552a6;
+  --action-bg-top: #8875c5;
+  --action-border: #9b8bd1;
+  --action-edge: #403274;
+}
+
+:host ::ng-deep .action-button--reset {
+  --action-bg: #bd7209;
+  --action-bg-top: #dc9635;
+  --action-border: #efb45d;
+  --action-edge: #744205;
+}
+
+:host ::ng-deep .action-button--danger {
+  --action-bg: #b64141;
+  --action-bg-top: #d46464;
+  --action-border: #e28b8b;
+  --action-edge: #722626;
+}
+
+:host ::ng-deep .action-button--clear,
+:host ::ng-deep .action-button--cancel {
+  --action-bg: #d9dde1;
+  --action-bg-top: #f7f8f9;
+  --action-border: #929ca5;
+  --action-edge: #747f88;
+  --action-text: #24313b;
+}
+
+:host-context([data-theme='dark']) ::ng-deep .action-button--clear,
+:host-context([data-theme='dark']) ::ng-deep .action-button--cancel {
+  --action-bg: #414b54;
+  --action-bg-top: #5b6670;
+  --action-border: #73808a;
+  --action-edge: #20272d;
+  --action-text: #f8fafc;
+}
+
+:host ::ng-deep .access-page .p-inputtext,
+:host ::ng-deep .access-page .p-multiselect,
+:host ::ng-deep app-modal .p-inputtext,
+:host ::ng-deep app-modal .p-password-input {
+  color: var(--on-surface);
+  border: 2px solid var(--windows-control-border);
+  background: linear-gradient(180deg, var(--windows-control-top), var(--windows-control));
+  box-shadow:
+    inset 0 2px 5px color-mix(in srgb, #0f172a 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 62%, transparent),
+    0 2px 0 var(--windows-control-edge),
+    0 5px 9px color-mix(in srgb, #0f172a 14%, transparent);
+}
+
+:host ::ng-deep .access-page .p-inputtext:focus,
+:host ::ng-deep .access-page .p-multiselect.p-focus,
+:host ::ng-deep app-modal .p-inputtext:focus,
+:host ::ng-deep app-modal .p-password-input:focus {
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #0f172a 8%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--windows-blue) 22%, transparent),
+    0 3px 0 color-mix(in srgb, var(--windows-blue) 55%, var(--windows-control-edge)),
+    0 7px 13px color-mix(in srgb, var(--windows-blue) 18%, transparent);
+  border-color: var(--windows-blue);
+}
+
+:host ::ng-deep .windows-select .p-multiselect-label {
+  font-weight: 650;
+}
+
+:host ::ng-deep .windows-select .p-multiselect-dropdown {
+  width: 2.6rem;
+  color: var(--on-surface);
+  background: color-mix(in srgb, #64748b 14%, var(--windows-control));
+  border-inline-start: 1px solid var(--windows-control-border);
+  box-shadow: inset 1px 0 color-mix(in srgb, white 52%, transparent);
+}
+
+:host ::ng-deep .windows-select .p-chip {
+  color: #ffffff;
+  background: var(--windows-blue);
+  border: 1px solid color-mix(in srgb, white 28%, var(--windows-blue));
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.26),
+    0 2px 0 color-mix(in srgb, black 28%, var(--windows-blue));
+}
+
+:host ::ng-deep .windows-select-panel {
+  border: 2px solid var(--windows-control-border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow:
+    0 4px 0 var(--windows-control-edge),
+    0 14px 30px rgba(15, 23, 42, 0.3);
+}
+
+:host ::ng-deep .windows-select-panel .p-multiselect-option-selected {
+  color: #ffffff;
+  background: var(--windows-blue);
+}
+
+:host ::ng-deep .role-card input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--windows-blue);
+}
+
+:host ::ng-deep .p-toggleswitch .p-toggleswitch-slider {
+  background: #7b858e;
+  border: 1px solid #59636c;
+  box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.28);
+}
+
+:host ::ng-deep .p-toggleswitch.p-toggleswitch-checked .p-toggleswitch-slider {
+  background: var(--windows-blue);
+}
+
+:host ::ng-deep .access-page .p-avatar,
+:host ::ng-deep app-modal .p-avatar {
+  border: 2px solid color-mix(in srgb, white 72%, var(--border));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 72%, transparent),
+    0 3px 0 var(--depth-edge),
+    0 7px 12px var(--depth-shadow);
+}
+
+:host ::ng-deep .user-table thead > tr > th {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, white 7%, var(--surface-2)),
+    var(--surface-2)
+  );
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    inset 0 -2px 0 var(--depth-edge);
+}
+
+:host ::ng-deep .user-table tbody > tr > td {
+  background: linear-gradient(180deg, color-mix(in srgb, white 3%, var(--surface)), var(--surface));
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    inset 0 -1px 0 var(--border);
+  transition:
+    background var(--motion-fast) var(--easing-standard),
+    transform var(--motion-fast) var(--easing-standard);
+}
+
+:host ::ng-deep .user-table tbody > tr:hover > td {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 7%, var(--surface)),
+    var(--surface)
+  );
+}
+
+:host ::ng-deep .user-table tbody > tr.user-table__row--selected > td {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 13%, var(--surface)),
+    var(--surface)
+  );
+}
+
+:host ::ng-deep .user-table tbody > tr.user-table__row--selected > td:first-child {
+  box-shadow:
+    inset 4px 0 0 var(--primary),
+    inset 0 1px 0 var(--depth-highlight),
+    inset 0 -1px 0 var(--border);
+}
+
+:host-context([dir='rtl'])
+  ::ng-deep
+  .user-table
+  tbody
+  > tr.user-table__row--selected
+  > td:first-child {
+  box-shadow:
+    inset -4px 0 0 var(--primary),
+    inset 0 1px 0 var(--depth-highlight),
+    inset 0 -1px 0 var(--border);
+}
+
+:host ::ng-deep app-modal .modal {
+  border: 2px solid var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 8px 0 color-mix(in srgb, #0f172a 42%, var(--border)),
+    0 28px 70px color-mix(in srgb, #020617 42%, transparent);
+}
+
+:host ::ng-deep app-modal .modal__head {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, white 7%, var(--surface)),
+    var(--surface-2)
+  );
+  box-shadow: inset 0 -2px 0 var(--depth-edge);
+}
+
+:host ::ng-deep app-modal .modal__foot {
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: inset 0 2px 0 var(--depth-highlight);
+}
+
+:host ::ng-deep app-modal .modal__close {
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 3px 0 var(--depth-edge),
+    0 7px 12px var(--depth-shadow);
+}
+
+:host ::ng-deep app-modal.create-user-modal .modal__head {
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 88% 15%, rgba(45, 212, 191, 0.2), transparent 14rem),
+    linear-gradient(120deg, #0f172a 0%, #172554 58%, #103449 100%);
+  border-bottom: 2px solid #2dd4bf;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -3px 0 rgba(2, 6, 23, 0.48),
+    0 5px 12px rgba(15, 23, 42, 0.28);
+}
+
+:host ::ng-deep app-modal.create-user-modal .modal__title {
+  color: #ffffff;
+  font-weight: 850;
+}
+
+:host ::ng-deep app-modal.create-user-modal .modal__close {
+  color: #dffcf8;
+  background: linear-gradient(145deg, #175469, #0f766e);
+  border-color: rgba(153, 246, 228, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 3px 0 #06141f,
+    0 7px 12px rgba(2, 6, 23, 0.42);
+}
+
+:host ::ng-deep app-modal.create-user-modal .modal__close:hover {
+  color: #ffffff;
+  background: linear-gradient(145deg, #197087, #14b8a6);
+  border-color: #99f6e4;
+}
+
+:host ::ng-deep .p-password,
+:host ::ng-deep .p-password-input {
+  width: 100%;
+}
+
 .detail-panel__eyebrow,
 .section-label {
   margin: 0;
@@ -347,9 +844,13 @@
 .detail-stat {
   min-width: 0;
   padding: var(--space-3);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: linear-gradient(145deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 3px 0 var(--depth-edge),
+    0 7px 13px color-mix(in srgb, var(--depth-shadow) 65%, transparent);
 }
 
 .detail-stat span {
@@ -389,6 +890,10 @@
   border-radius: var(--radius-pill);
   font-size: var(--font-size-sm);
   font-weight: 750;
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 2px 0 color-mix(in srgb, var(--primary) 26%, var(--border)),
+    0 5px 9px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 .role-tag--warning {
@@ -408,6 +913,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   text-align: center;
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 4px 0 var(--depth-edge),
+    0 10px 18px var(--depth-shadow);
 }
 
 .empty-state app-icon {
@@ -432,10 +941,109 @@
   font-size: var(--font-size-sm);
 }
 
+.modal-summary + .modal-note,
+.modal-note + .role-picker {
+  margin-bottom: var(--space-3);
+}
+
 .form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.field--wide {
+  grid-column: 1 / -1;
+}
+
+.form input[pInputText] {
+  width: 100%;
+}
+
+.dialog-intro {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--on-surface-muted);
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--primary) 10%, transparent), transparent 62%),
+    var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 3px 0 color-mix(in srgb, var(--primary) 20%, var(--border)),
+    0 8px 14px var(--depth-shadow);
+}
+
+.dialog-intro p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.dialog-intro__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 12px;
+}
+
+.dialog-intro--warning {
+  color: var(--on-warning);
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--border));
+}
+
+.dialog-intro--warning .dialog-intro__icon {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+}
+
+.role-section {
+  padding-top: var(--space-1);
+}
+
+.status-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 3px 0 var(--depth-edge),
+    0 8px 14px var(--depth-shadow);
+}
+
+.status-toggle__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-toggle__copy small {
+  color: var(--on-surface-muted);
+}
+
+.dialog-footer {
+  display: flex;
+  gap: var(--space-2);
 }
 
 .field__checkbox {
@@ -453,6 +1061,9 @@
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #0f172a 8%, transparent),
+    0 1px 0 var(--depth-highlight);
 }
 
 .modal-note--warning {
@@ -463,26 +1074,47 @@
 
 .modal-summary {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-4);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
   align-items: center;
   margin-bottom: var(--space-4);
   padding: var(--space-3);
-  background: var(--surface-2);
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--primary) 10%, var(--surface)),
+    var(--surface-2)
+  );
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 4px 0 var(--depth-edge),
+    0 10px 18px var(--depth-shadow);
 }
 
-.modal-summary strong {
-  display: block;
-  font-size: 1.65rem;
-  line-height: 1;
+.modal-summary__user,
+.modal-summary__count {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.modal-summary span,
-.modal-summary p {
-  margin: 0;
+.modal-summary__user span,
+.modal-summary__count span {
   color: var(--on-surface-muted);
+}
+
+.modal-summary__count {
+  min-width: 88px;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 1px solid var(--border);
+  text-align: center;
+}
+
+.modal-summary__count strong {
+  color: var(--primary);
+  font-size: 1.6rem;
+  line-height: 1;
 }
 
 .role-picker {
@@ -507,12 +1139,25 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 3px 0 var(--depth-edge),
+    0 7px 12px color-mix(in srgb, var(--depth-shadow) 62%, transparent);
+  transition:
+    transform var(--motion-fast) var(--easing-standard),
+    box-shadow var(--motion-fast) var(--easing-standard),
+    border-color var(--motion-fast) var(--easing-standard);
 }
 
 .role-card:hover,
 .role-card--selected {
   border-color: color-mix(in srgb, var(--primary) 54%, var(--border));
   background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 var(--depth-highlight),
+    0 5px 0 color-mix(in srgb, var(--primary) 24%, var(--border)),
+    0 11px 18px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
 .role-card input {
@@ -550,10 +1195,6 @@
 }
 
 @media (max-width: 1100px) {
-  .metric-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .access-workspace {
     grid-template-columns: 1fr;
   }
@@ -573,10 +1214,37 @@
     grid-template-columns: 1fr;
   }
 
-  .metric-strip,
   .detail-grid,
-  .role-picker {
+  .role-picker,
+  .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field--wide {
+    grid-column: auto;
+  }
+
+  .metric-card {
+    gap: var(--space-2);
+    min-height: 58px;
+  }
+
+  .modal-summary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .modal-summary__count {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: center;
+    padding: var(--space-2) 0 0;
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
   }
 
   .user-row {
@@ -586,5 +1254,15 @@
   .user-row__status {
     grid-column: 2;
     justify-self: start;
+  }
+}
+
+@media (max-width: 460px) {
+  .metric-card__icon {
+    display: none;
+  }
+
+  .metric-card__copy {
+    gap: var(--space-1);
   }
 }

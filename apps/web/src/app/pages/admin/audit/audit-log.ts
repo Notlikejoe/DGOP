@@ -1,8 +1,22 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { I18nService } from '../../../core/i18n.service';
-import { Pager } from '../../../shared/pager';
+import { AppIcon } from '../../../shared/app-icon';
+import { AvatarModule } from 'primeng/avatar';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+import type { TablePageEvent } from 'primeng/types/table';
 
 interface AuditEntry {
   id: string;
@@ -24,8 +38,8 @@ interface Paged<T> {
 
 interface Filters {
   actor: string;
-  action: string;
-  entityType: string;
+  action: string[];
+  entityType: string[];
   from: string;
   to: string;
 }
@@ -33,7 +47,16 @@ interface Filters {
 @Component({
   selector: 'app-audit-log',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Pager],
+  imports: [
+    FormsModule,
+    AppIcon,
+    AvatarModule,
+    ButtonModule,
+    InputTextModule,
+    MultiSelectModule,
+    TableModule,
+    TagModule,
+  ],
   templateUrl: './audit-log.html',
   styleUrl: './audit-log.scss',
 })
@@ -53,26 +76,49 @@ export class AuditLogPage implements OnInit {
 
   protected readonly filters = signal<Filters>({
     actor: '',
-    action: '',
-    entityType: '',
+    action: [],
+    entityType: [],
     from: '',
     to: '',
   });
 
-  protected readonly activeFilterCount = computed(() =>
-    Object.values(this.filters()).filter((value) => !!value).length,
+  protected readonly activeFilterCount = computed(() => {
+    const filters = this.filters();
+    return (
+      Number(!!filters.actor) +
+      filters.action.length +
+      filters.entityType.length +
+      Number(!!filters.from) +
+      Number(!!filters.to)
+    );
+  });
+
+  protected readonly actionOptions = computed(() =>
+    this.actions().map((action) => ({ label: this.actionLabel(action), value: action })),
   );
 
+  protected readonly entityOptions = computed(() =>
+    this.entityTypes().map((entity) => ({ label: entity, value: entity })),
+  );
+
+  protected readonly metrics = computed(() => {
+    const entries = this.entries();
+    return {
+      total: this.total(),
+      actors: new Set(entries.map((entry) => entry.actor)).size,
+      actions: new Set(entries.map((entry) => entry.action)).size,
+      entities: new Set(entries.map((entry) => entry.entityType)).size,
+    };
+  });
+
   ngOnInit(): void {
-    this.http
-      .get<{ entityTypes: string[]; actions: string[] }>('/api/audit/facets')
-      .subscribe({
-        next: (f) => {
-          this.actions.set(f.actions);
-          this.entityTypes.set(f.entityTypes);
-        },
-        error: () => {},
-      });
+    this.http.get<{ entityTypes: string[]; actions: string[] }>('/api/audit/facets').subscribe({
+      next: (f) => {
+        this.actions.set(f.actions);
+        this.entityTypes.set(f.entityTypes);
+      },
+      error: () => {},
+    });
     this.load();
   }
 
@@ -83,8 +129,8 @@ export class AuditLogPage implements OnInit {
       .set('page', String(this.page()))
       .set('pageSize', String(this.pageSize()));
     if (f.actor) params = params.set('actor', f.actor);
-    if (f.action) params = params.set('action', f.action);
-    if (f.entityType) params = params.set('entityType', f.entityType);
+    for (const action of f.action) params = params.append('action', action);
+    for (const entityType of f.entityType) params = params.append('entityType', entityType);
     if (f.from) params = params.set('from', f.from);
     if (f.to) params = params.set('to', f.to);
     this.http.get<Paged<AuditEntry>>('/api/audit', { params }).subscribe({
@@ -106,7 +152,7 @@ export class AuditLogPage implements OnInit {
   }
 
   protected reset(): void {
-    this.filters.set({ actor: '', action: '', entityType: '', from: '', to: '' });
+    this.filters.set({ actor: '', action: [], entityType: [], from: '', to: '' });
     this.page.set(1);
     this.load();
   }
@@ -114,6 +160,35 @@ export class AuditLogPage implements OnInit {
   protected goToPage(p: number): void {
     this.page.set(p);
     this.load();
+  }
+
+  protected onTablePage(event: TablePageEvent): void {
+    const nextPage = Math.floor(event.first / event.rows) + 1;
+    if (nextPage === this.page() && event.rows === this.pageSize()) return;
+    this.pageSize.set(event.rows);
+    this.page.set(nextPage);
+    this.load();
+  }
+
+  protected actorInitials(actor: string): string {
+    return actor
+      .split(/[\s._@-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('');
+  }
+
+  protected metadataEntries(meta: Record<string, unknown> | null): Array<[string, string]> {
+    if (!meta) return [];
+    return Object.entries(meta).map(([key, value]) => [key, this.stringify(value)]);
+  }
+
+  protected actionSeverity(action: string): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
+    const tone = this.actionTone(action);
+    if (tone === 'warning') return 'warn';
+    if (tone === 'success' || tone === 'danger' || tone === 'info') return tone;
+    return 'secondary';
   }
 
   protected formatTime(iso: string): string {
@@ -141,16 +216,32 @@ export class AuditLogPage implements OnInit {
 
   protected actionTone(action: string): string {
     const normalized = action.toLowerCase();
-    if (normalized.includes('fail') || normalized.includes('error') || normalized.includes('delete')) {
+    if (
+      normalized.includes('fail') ||
+      normalized.includes('error') ||
+      normalized.includes('delete')
+    ) {
       return 'danger';
     }
-    if (normalized.includes('logout') || normalized.includes('revoke') || normalized.includes('archive')) {
+    if (
+      normalized.includes('logout') ||
+      normalized.includes('revoke') ||
+      normalized.includes('archive')
+    ) {
       return 'warning';
     }
-    if (normalized.includes('login') || normalized.includes('create') || normalized.includes('approve')) {
+    if (
+      normalized.includes('login') ||
+      normalized.includes('create') ||
+      normalized.includes('approve')
+    ) {
       return 'success';
     }
-    if (normalized.includes('update') || normalized.includes('assign') || normalized.includes('change')) {
+    if (
+      normalized.includes('update') ||
+      normalized.includes('assign') ||
+      normalized.includes('change')
+    ) {
       return 'info';
     }
     return 'muted';

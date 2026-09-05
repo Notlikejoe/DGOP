@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -8,6 +15,8 @@ import { AppIcon } from '../../../shared/app-icon';
 import { Modal } from '../../../shared/modal';
 import { StatusChip, StatusKind } from '../../../shared/status-chip';
 import { I18nService } from '../../../core/i18n.service';
+import { TableModule } from 'primeng/table';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 interface Paged<T> {
   data: T[];
@@ -99,14 +108,26 @@ interface AccessGrant {
   asset: AssetRef;
   profile?: ProfileRef | null;
   enforcementAttempts?: EnforcementAttempt[];
-  versions?: Array<{ id: string; version: number; changeReason?: string | null; changedBy: string; createdAt: string }>;
+  versions?: Array<{
+    id: string;
+    version: number;
+    changeReason?: string | null;
+    changedBy: string;
+    createdAt: string;
+  }>;
 }
 
 interface CsvValidation {
   totalRows: number;
   validRows: number;
   invalidRows: number;
-  rows: Array<{ row: number; action?: string; code?: string | null; valid: boolean; errors: string[] }>;
+  rows: Array<{
+    row: number;
+    action?: string;
+    code?: string | null;
+    valid: boolean;
+    errors: string[];
+  }>;
 }
 
 interface CsvCommitResult {
@@ -119,7 +140,13 @@ interface CsvCommitResult {
 
 interface AccessMatrix {
   assets: AssetRef[];
-  principals: Array<{ type: string; id: string; label: string; nameAr?: string | null; source?: string }>;
+  principals: Array<{
+    type: string;
+    id: string;
+    label: string;
+    nameAr?: string | null;
+    source?: string;
+  }>;
   permissions: PermissionRef[];
   cells: Array<{
     assetId: string;
@@ -146,7 +173,13 @@ interface AccessMatrix {
       code: string;
       permissionCode: string;
       permissionCodes: string[];
-      profile?: { id: string; code: string; nameEn: string; nameAr?: string | null; version: number } | null;
+      profile?: {
+        id: string;
+        code: string;
+        nameEn: string;
+        nameAr?: string | null;
+        version: number;
+      } | null;
       status: string;
       ownerDecision: string;
       enforcementStatus: string;
@@ -167,7 +200,14 @@ interface AccessMatrix {
     readCells: number;
     writeCells: number;
   };
-  constraints: { assetLimit: number; principalLimit: number; maximumAssets: number; maximumPrincipals: number; maximumGrants: number; note: string };
+  constraints: {
+    assetLimit: number;
+    principalLimit: number;
+    maximumAssets: number;
+    maximumPrincipals: number;
+    maximumGrants: number;
+    note: string;
+  };
 }
 
 type AccessMatrixCell = AccessMatrix['cells'][number];
@@ -241,7 +281,7 @@ interface AccessReport {
 @Component({
   selector: 'app-access-management',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, AppIcon, Modal, StatusChip],
+  imports: [FormsModule, RouterLink, AppIcon, Modal, StatusChip, TableModule, MultiSelectModule],
   templateUrl: './access-management.html',
   styleUrl: './access-management.scss',
 })
@@ -295,27 +335,69 @@ export class AccessManagementPage implements OnInit {
   protected readonly viewMode = signal<'register' | 'matrix' | 'effective' | 'reports'>(
     this.accessView(this.route.snapshot.queryParamMap.get('view')),
   );
-  protected readonly lifecycleResult = signal<{ scheduled: number; activated: number; expired: number; totalChanged: number } | null>(null);
+  protected readonly lifecycleResult = signal<{
+    scheduled: number;
+    activated: number;
+    expired: number;
+    totalChanged: number;
+  } | null>(null);
   protected readonly csvCommitReason = signal('');
-  protected readonly assetTypes = ['dataset', 'file', 'document_record', 'api_data_feed', 'bi_report_dashboard', 'ai_data_product'];
+  protected readonly assetTypes = [
+    'dataset',
+    'file',
+    'document_record',
+    'api_data_feed',
+    'bi_report_dashboard',
+    'ai_data_product',
+  ];
   protected readonly privilegeGroups = [
     { key: 'read', labelKey: 'access.privilege.read', descriptionKey: 'access.privilege.readHelp' },
-    { key: 'write', labelKey: 'access.privilege.write', descriptionKey: 'access.privilege.writeHelp' },
-    { key: 'execute', labelKey: 'access.privilege.execute', descriptionKey: 'access.privilege.executeHelp' },
-    { key: 'share_export', labelKey: 'access.privilege.share', descriptionKey: 'access.privilege.shareHelp' },
-    { key: 'administer', labelKey: 'access.privilege.admin', descriptionKey: 'access.privilege.adminHelp' },
+    {
+      key: 'write',
+      labelKey: 'access.privilege.write',
+      descriptionKey: 'access.privilege.writeHelp',
+    },
+    {
+      key: 'execute',
+      labelKey: 'access.privilege.execute',
+      descriptionKey: 'access.privilege.executeHelp',
+    },
+    {
+      key: 'share_export',
+      labelKey: 'access.privilege.share',
+      descriptionKey: 'access.privilege.shareHelp',
+    },
+    {
+      key: 'administer',
+      labelKey: 'access.privilege.admin',
+      descriptionKey: 'access.privilege.adminHelp',
+    },
   ] as const;
-  protected readonly matrixStatusOptions = ['requested', 'scheduled', 'active', 'expired', 'suspended', 'pending_revocation', 'revoked'];
-  protected readonly matrixEnforcementOptions = ['pending', 'enforced', 'failed', 'not_enforced', 'revoked'];
+  protected readonly matrixStatusOptions = [
+    'requested',
+    'scheduled',
+    'active',
+    'expired',
+    'suspended',
+    'pending_revocation',
+    'revoked',
+  ];
+  protected readonly matrixEnforcementOptions = [
+    'pending',
+    'enforced',
+    'failed',
+    'not_enforced',
+    'revoked',
+  ];
   protected matrixFilters = {
     assetSearch: '',
-    assetType: '',
-    principalType: '',
+    assetType: [] as string[],
+    principalType: [] as string[],
     principalSearch: '',
-    profileId: '',
-    permissionCode: '',
-    status: '',
-    enforcementStatus: '',
+    profileId: [] as string[],
+    permissionCode: [] as string[],
+    status: [] as string[],
+    enforcementStatus: [] as string[],
   };
 
   protected bulkForm = {
@@ -341,7 +423,14 @@ export class AccessManagementPage implements OnInit {
 
   protected readonly canCreate = this.auth.hasPermission('access_grants.create');
   protected readonly canEdit = this.auth.hasPermission('access_grants.edit');
-  protected readonly statusOptions = ['requested', 'scheduled', 'active', 'expired', 'rejected', 'revoked'];
+  protected readonly statusOptions = [
+    'requested',
+    'scheduled',
+    'active',
+    'expired',
+    'rejected',
+    'revoked',
+  ];
 
   protected selectedAsset(): AssetRef | null {
     return this.assets().find((asset) => asset.id === this.grantForm.assetId) ?? null;
@@ -349,7 +438,9 @@ export class AccessManagementPage implements OnInit {
 
   protected availablePermissions(): PermissionRef[] {
     const assetType = this.selectedAsset()?.assetType;
-    return assetType ? this.permissions().filter((permission) => permission.assetType === assetType) : [];
+    return assetType
+      ? this.permissions().filter((permission) => permission.assetType === assetType)
+      : [];
   }
 
   protected availableProfiles(): ProfileRef[] {
@@ -362,15 +453,53 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected matrixFilterProfiles(): ProfileRef[] {
-    return this.matrixFilters.assetType
-      ? this.profiles().filter((profile) => profile.assetType === this.matrixFilters.assetType)
+    return this.matrixFilters.assetType.length
+      ? this.profiles().filter((profile) =>
+          this.matrixFilters.assetType.includes(profile.assetType),
+        )
       : this.profiles();
   }
 
   protected matrixFilterPermissions(): PermissionRef[] {
-    return this.matrixFilters.assetType
-      ? this.permissions().filter((permission) => permission.assetType === this.matrixFilters.assetType)
+    return this.matrixFilters.assetType.length
+      ? this.permissions().filter((permission) =>
+          this.matrixFilters.assetType.includes(permission.assetType),
+        )
       : this.permissions();
+  }
+
+  protected matrixAssetTypeOptions() {
+    return this.assetTypes.map((value) => ({ label: this.label(value), value }));
+  }
+
+  protected matrixPrincipalTypeOptions() {
+    return ['role', 'group'].map((value) => ({ label: this.label(value), value }));
+  }
+
+  protected matrixProfileOptions() {
+    return this.matrixFilterProfiles().map((profile) => ({
+      label: `${this.profileName(profile)} · ${this.label(profile.assetType)}`,
+      value: profile.id,
+    }));
+  }
+
+  protected matrixPermissionOptions() {
+    return this.matrixFilterPermissions().map((permission) => ({
+      label: `${this.permissionName(permission)} · ${this.label(permission.assetType)}`,
+      value: permission.code,
+    }));
+  }
+
+  protected matrixStatusFilterOptions() {
+    return this.matrixStatusOptions.map((value) => ({ label: this.label(value), value }));
+  }
+
+  protected matrixEnforcementFilterOptions() {
+    return this.matrixEnforcementOptions.map((value) => ({ label: this.label(value), value }));
+  }
+
+  protected matrixMinWidth(principalCount: number): string {
+    return `${Math.max(64, 14 + principalCount * (this.matrixDensity() === 'compact' ? 10 : 13))}rem`;
   }
 
   protected selectedProfile(): ProfileRef | null {
@@ -398,7 +527,9 @@ export class AccessManagementPage implements OnInit {
   protected grantRecordReady(): boolean {
     if (!this.grantForm.justification.trim()) return false;
     if (!this.grantForm.startsAt || !this.grantForm.expiresAt) return true;
-    return new Date(this.grantForm.expiresAt).getTime() > new Date(this.grantForm.startsAt).getTime();
+    return (
+      new Date(this.grantForm.expiresAt).getTime() > new Date(this.grantForm.startsAt).getTime()
+    );
   }
 
   protected grantFormValid(): boolean {
@@ -408,21 +539,31 @@ export class AccessManagementPage implements OnInit {
   protected readonly bulkAssetTypes = computed(() => {
     const selectedAssetIds = new Set(this.selectedMatrixCells().map((cell) => cell.assetId));
     const matrixAssets = this.matrix()?.assets ?? this.assets();
-    return [...new Set(matrixAssets.filter((asset) => selectedAssetIds.has(asset.id)).map((asset) => asset.assetType))];
+    return [
+      ...new Set(
+        matrixAssets
+          .filter((asset) => selectedAssetIds.has(asset.id))
+          .map((asset) => asset.assetType),
+      ),
+    ];
   });
 
   protected readonly bulkAvailablePermissions = computed(() => {
     const types = this.bulkAssetTypes();
-    return types.length === 1 ? this.permissions().filter((permission) => permission.assetType === types[0]) : [];
+    return types.length === 1
+      ? this.permissions().filter((permission) => permission.assetType === types[0])
+      : [];
   });
 
   protected readonly bulkAvailableProfiles = computed(() => {
     const types = this.bulkAssetTypes();
-    return types.length === 1 ? this.profiles().filter((profile) => profile.assetType === types[0]) : [];
+    return types.length === 1
+      ? this.profiles().filter((profile) => profile.assetType === types[0])
+      : [];
   });
 
-  protected readonly bulkSelectedProfile = computed(() =>
-    this.profiles().find((profile) => profile.id === this.bulkForm.profileId) ?? null,
+  protected readonly bulkSelectedProfile = computed(
+    () => this.profiles().find((profile) => profile.id === this.bulkForm.profileId) ?? null,
   );
 
   protected readonly bulkSelectedPermissionCodes = computed(() => {
@@ -430,8 +571,9 @@ export class AccessManagementPage implements OnInit {
     return profile ? this.profilePermissionCodes(profile) : this.bulkForm.permissionCodes;
   });
 
-  protected readonly bulkSelectedHighRiskCount = computed(() =>
-    this.bulkSelectedPermissionCodes().filter((code) => this.permissionIsHighRisk(code)).length,
+  protected readonly bulkSelectedHighRiskCount = computed(
+    () =>
+      this.bulkSelectedPermissionCodes().filter((code) => this.permissionIsHighRisk(code)).length,
   );
 
   protected readonly metrics = computed(() => {
@@ -440,7 +582,8 @@ export class AccessManagementPage implements OnInit {
       total: this.total(),
       active: rows.filter((grant) => grant.status === 'active').length,
       ownerReview: rows.filter((grant) => grant.ownerDecision === 'pending').length,
-      attention: rows.filter((grant) => ['pending', 'failed'].includes(grant.enforcementStatus)).length,
+      attention: rows.filter((grant) => ['pending', 'failed'].includes(grant.enforcementStatus))
+        .length,
     };
   });
 
@@ -497,7 +640,7 @@ export class AccessManagementPage implements OnInit {
     this.selectedMatrixCells.set([]);
     this.selectedMatrixCell.set(null);
     this.matrixState.set('loading');
-    const params: Record<string, string> = {
+    const params: Record<string, string | string[]> = {
       assetPage: String(page),
       assetLimit: '25',
       principalLimit: '50',
@@ -505,12 +648,18 @@ export class AccessManagementPage implements OnInit {
       sortDirection: 'asc',
     };
     for (const [key, value] of Object.entries(this.matrixFilters)) {
-      if (value.trim()) params[key] = value.trim();
+      if (Array.isArray(value)) {
+        if (value.length) params[key] = value;
+      } else if (value.trim()) {
+        params[key] = value.trim();
+      }
     }
     this.http.get<AccessMatrix>('/api/access/grants/matrix', { params }).subscribe({
       next: (result) => {
         this.matrix.set(result);
-        const principalKeys = result.principals.map((principal) => `${principal.type}:${principal.id}`);
+        const principalKeys = result.principals.map(
+          (principal) => `${principal.type}:${principal.id}`,
+        );
         if (!principalKeys.includes(this.mobileMatrixPrincipalKey())) {
           this.mobileMatrixPrincipalKey.set(principalKeys[0] ?? '');
         }
@@ -530,32 +679,46 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected clearMatrixFilters(): void {
-    this.matrixFilters = { assetSearch: '', assetType: '', principalType: '', principalSearch: '', profileId: '', permissionCode: '', status: '', enforcementStatus: '' };
+    this.matrixFilters = {
+      assetSearch: '',
+      assetType: [],
+      principalType: [],
+      principalSearch: '',
+      profileId: [],
+      permissionCode: [],
+      status: [],
+      enforcementStatus: [],
+    };
     this.applyMatrixFilters();
   }
 
   protected changeMatrixPage(delta: number): void {
     const matrix = this.matrix();
     if (!matrix) return;
-    const next = Math.min(Math.max(matrix.summary.assetPage + delta, 1), matrix.summary.assetPageCount);
+    const next = Math.min(
+      Math.max(matrix.summary.assetPage + delta, 1),
+      matrix.summary.assetPageCount,
+    );
     if (next !== matrix.summary.assetPage) this.loadMatrix(next);
   }
 
   protected loadEffectiveAccess(page = this.effectiveAccessPage()): void {
     this.effectiveAccessState.set('loading');
-    this.http.get<EffectiveAccessResult>('/api/access/effective-access', {
-      params: { page: String(page), pageSize: String(this.effectiveAccessPageSize) },
-    }).subscribe({
-      next: (result) => {
-        this.effectiveAccess.set(result);
-        this.effectiveAccessPage.set(result.page);
-        this.effectiveAccessState.set('ready');
-      },
-      error: (error) => {
-        this.effectiveAccessState.set('error');
-        this.toast.errorFrom(error, this.t('access.toast.loadEffectiveError'));
-      },
-    });
+    this.http
+      .get<EffectiveAccessResult>('/api/access/effective-access', {
+        params: { page: String(page), pageSize: String(this.effectiveAccessPageSize) },
+      })
+      .subscribe({
+        next: (result) => {
+          this.effectiveAccess.set(result);
+          this.effectiveAccessPage.set(result.page);
+          this.effectiveAccessState.set('ready');
+        },
+        error: (error) => {
+          this.effectiveAccessState.set('error');
+          this.toast.errorFrom(error, this.t('access.toast.loadEffectiveError'));
+        },
+      });
   }
 
   protected effectiveAccessPageCount(result: EffectiveAccessResult): number {
@@ -595,7 +758,11 @@ export class AccessManagementPage implements OnInit {
     });
   }
 
-  protected openMatrixCell(asset: AssetRef, principal: AccessMatrixPrincipal, cell: AccessMatrixCell): void {
+  protected openMatrixCell(
+    asset: AssetRef,
+    principal: AccessMatrixPrincipal,
+    cell: AccessMatrixCell,
+  ): void {
     this.selectedMatrixCell.set({ asset, principal, cell });
     const grant = cell.grants[0];
     if (grant) this.select(grant);
@@ -645,7 +812,9 @@ export class AccessManagementPage implements OnInit {
       principalId: this.grantForm.principalId.trim(),
       permissionCodes: this.grantForm.profileId ? undefined : this.grantForm.permissionCodes,
       profileId: this.grantForm.profileId || null,
-      startsAt: this.grantForm.startsAt ? new Date(this.grantForm.startsAt).toISOString() : undefined,
+      startsAt: this.grantForm.startsAt
+        ? new Date(this.grantForm.startsAt).toISOString()
+        : undefined,
       expiresAt: this.grantForm.expiresAt ? new Date(this.grantForm.expiresAt).toISOString() : null,
       justification: this.grantForm.justification.trim(),
       changeReason: this.grantForm.changeReason.trim(),
@@ -659,7 +828,11 @@ export class AccessManagementPage implements OnInit {
         this.busy.set(false);
         this.createOpen.set(false);
         this.editing.set(null);
-        this.toast.success(this.format(editing ? 'access.toast.grantRevised' : 'access.toast.grantSaved', { code: grant.code }));
+        this.toast.success(
+          this.format(editing ? 'access.toast.grantRevised' : 'access.toast.grantSaved', {
+            code: grant.code,
+          }),
+        );
         this.load();
         this.select(grant);
       },
@@ -676,7 +849,9 @@ export class AccessManagementPage implements OnInit {
       assetId: grant.asset.id,
       principalType: grant.principalType === 'group' ? 'group' : 'role',
       principalId: grant.principalId,
-      permissionCodes: grant.permissions?.map((permission) => permission.permissionCode) ?? [grant.permissionCode],
+      permissionCodes: grant.permissions?.map((permission) => permission.permissionCode) ?? [
+        grant.permissionCode,
+      ],
       profileId: grant.profile?.id ?? '',
       startsAt: this.localDateTimeValue(new Date(grant.startsAt)),
       expiresAt: grant.expiresAt ? this.localDateTimeValue(new Date(grant.expiresAt)) : '',
@@ -695,7 +870,8 @@ export class AccessManagementPage implements OnInit {
   protected revokeGrant(): void {
     const grant = this.selected();
     if (!grant || this.busy() || !this.revokeReason().trim()) {
-      if (!this.revokeReason().trim()) this.toast.error(this.t('access.toast.revokeReasonRequired'));
+      if (!this.revokeReason().trim())
+        this.toast.error(this.t('access.toast.revokeReasonRequired'));
       return;
     }
     this.mutate(
@@ -709,13 +885,21 @@ export class AccessManagementPage implements OnInit {
   protected decide(decision: 'approved' | 'rejected'): void {
     const grant = this.selected();
     if (!grant || this.busy()) return;
-    this.mutate(`/api/access/grants/${grant.id}/decision`, { expectedVersion: grant.version, decision }, this.format('access.toast.decisionRecorded', { decision: this.label(decision) }));
+    this.mutate(
+      `/api/access/grants/${grant.id}/decision`,
+      { expectedVersion: grant.version, decision },
+      this.format('access.toast.decisionRecorded', { decision: this.label(decision) }),
+    );
   }
 
   protected dispatch(operation: 'grant' | 'verify' | 'revoke'): void {
     const grant = this.selected();
     if (!grant || this.busy()) return;
-    this.mutate(`/api/access/grants/${grant.id}/enforcement/dispatch`, { expectedVersion: grant.version, operation }, this.format('access.toast.handoffAdded', { operation: this.label(operation) }));
+    this.mutate(
+      `/api/access/grants/${grant.id}/enforcement/dispatch`,
+      { expectedVersion: grant.version, operation },
+      this.format('access.toast.handoffAdded', { operation: this.label(operation) }),
+    );
   }
 
   protected applyGrantRules(): void {
@@ -745,7 +929,11 @@ export class AccessManagementPage implements OnInit {
     }
     this.mutate(
       `/api/access/grants/${grant.id}/enforcement/manual-complete`,
-      { expectedVersion: grant.version, enforcementStatus: this.manualStatus(), evidenceReference: this.manualEvidence().trim() },
+      {
+        expectedVersion: grant.version,
+        enforcementStatus: this.manualStatus(),
+        evidenceReference: this.manualEvidence().trim(),
+      },
       this.t('access.toast.manualEvidenceAdded'),
       () => this.manualOpen.set(false),
     );
@@ -768,27 +956,29 @@ export class AccessManagementPage implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.http.post(`/api/access/enforcement/attempts/${attempt.id}/complete`, {
-      expectedVersion: grant.version,
-      status: this.connectorStatus(),
-      providerReference: this.connectorReference().trim(),
-      message: this.connectorMessage().trim() || null,
-      errorCode: this.connectorStatus() === 'failed' ? 'provider_failed' : null,
-    }).subscribe({
-      next: () => {
-        this.busy.set(false);
-        this.connectorOpen.set(false);
-        this.toast.success(this.t('access.toast.connectorRecorded'));
-        this.load();
-        this.select(grant);
-        this.loadMatrix();
-        this.loadEffectiveAccess();
-      },
-      error: (error) => {
-        this.busy.set(false);
-        this.toast.errorFrom(error, this.t('access.toast.connectorError'));
-      },
-    });
+    this.http
+      .post(`/api/access/enforcement/attempts/${attempt.id}/complete`, {
+        expectedVersion: grant.version,
+        status: this.connectorStatus(),
+        providerReference: this.connectorReference().trim(),
+        message: this.connectorMessage().trim() || null,
+        errorCode: this.connectorStatus() === 'failed' ? 'provider_failed' : null,
+      })
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          this.connectorOpen.set(false);
+          this.toast.success(this.t('access.toast.connectorRecorded'));
+          this.load();
+          this.select(grant);
+          this.loadMatrix();
+          this.loadEffectiveAccess();
+        },
+        error: (error) => {
+          this.busy.set(false);
+          this.toast.errorFrom(error, this.t('access.toast.connectorError'));
+        },
+      });
   }
 
   protected openCsv(): void {
@@ -807,16 +997,18 @@ export class AccessManagementPage implements OnInit {
   protected validateCsv(): void {
     if (!this.csvText().trim() || this.busy()) return;
     this.busy.set(true);
-    this.http.post<CsvValidation>('/api/access/grants/csv/validate', { csv: this.csvText() }).subscribe({
-      next: (result) => {
-        this.csvResult.set(result);
-        this.busy.set(false);
-      },
-      error: (error) => {
-        this.busy.set(false);
-        this.toast.errorFrom(error, this.t('access.toast.csvValidationError'));
-      },
-    });
+    this.http
+      .post<CsvValidation>('/api/access/grants/csv/validate', { csv: this.csvText() })
+      .subscribe({
+        next: (result) => {
+          this.csvResult.set(result);
+          this.busy.set(false);
+        },
+        error: (error) => {
+          this.busy.set(false);
+          this.toast.errorFrom(error, this.t('access.toast.csvValidationError'));
+        },
+      });
   }
 
   protected commitCsv(): void {
@@ -827,42 +1019,51 @@ export class AccessManagementPage implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.http.post<CsvCommitResult>('/api/access/grants/csv/commit', {
-      csv: this.csvText(),
-      changeReason: this.csvCommitReason().trim() || null,
-    }).subscribe({
-      next: (result) => {
-        this.busy.set(false);
-        this.csvOpen.set(false);
-        this.toast.success(this.format('access.toast.csvCommitted', { count: result.rowCount }));
-        this.load();
-        this.loadMatrix();
-        this.loadEffectiveAccess();
-      },
-      error: (error) => {
-        this.busy.set(false);
-        this.toast.errorFrom(error, this.t('access.toast.csvCommitError'));
-      },
-    });
+    this.http
+      .post<CsvCommitResult>('/api/access/grants/csv/commit', {
+        csv: this.csvText(),
+        changeReason: this.csvCommitReason().trim() || null,
+      })
+      .subscribe({
+        next: (result) => {
+          this.busy.set(false);
+          this.csvOpen.set(false);
+          this.toast.success(this.format('access.toast.csvCommitted', { count: result.rowCount }));
+          this.load();
+          this.loadMatrix();
+          this.loadEffectiveAccess();
+        },
+        error: (error) => {
+          this.busy.set(false);
+          this.toast.errorFrom(error, this.t('access.toast.csvCommitError'));
+        },
+      });
   }
 
   protected reconcileLifecycle(): void {
     if (!this.canEdit || this.busy()) return;
     this.busy.set(true);
-    this.http.post<{ scheduled: number; activated: number; expired: number; totalChanged: number }>('/api/access/grants/lifecycle/reconcile', {}).subscribe({
-      next: (result) => {
-        this.busy.set(false);
-        this.lifecycleResult.set(result);
-        this.toast.success(this.format('access.toast.lifecycleReconciled', { count: result.totalChanged }));
-        this.load();
-        this.loadMatrix();
-        this.loadEffectiveAccess();
-      },
-      error: (error) => {
-        this.busy.set(false);
-        this.toast.errorFrom(error, this.t('access.toast.lifecycleError'));
-      },
-    });
+    this.http
+      .post<{ scheduled: number; activated: number; expired: number; totalChanged: number }>(
+        '/api/access/grants/lifecycle/reconcile',
+        {},
+      )
+      .subscribe({
+        next: (result) => {
+          this.busy.set(false);
+          this.lifecycleResult.set(result);
+          this.toast.success(
+            this.format('access.toast.lifecycleReconciled', { count: result.totalChanged }),
+          );
+          this.load();
+          this.loadMatrix();
+          this.loadEffectiveAccess();
+        },
+        error: (error) => {
+          this.busy.set(false);
+          this.toast.errorFrom(error, this.t('access.toast.lifecycleError'));
+        },
+      });
   }
 
   protected exportCsv(): void {
@@ -880,9 +1081,26 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected kind(status?: string | null): StatusKind {
-    if (['active', 'current', 'approved', 'enforced', 'succeeded', 'resolved'].includes(status ?? '')) return 'success';
-    if (['requested', 'scheduled', 'pending', 'queued', 'running', 'retrying', 'external_unverified', 'no_active_members', 'missing_user'].includes(status ?? '')) return 'warning';
-    if (['failed', 'rejected', 'revoked', 'expired', 'declined'].includes(status ?? '')) return 'danger';
+    if (
+      ['active', 'current', 'approved', 'enforced', 'succeeded', 'resolved'].includes(status ?? '')
+    )
+      return 'success';
+    if (
+      [
+        'requested',
+        'scheduled',
+        'pending',
+        'queued',
+        'running',
+        'retrying',
+        'external_unverified',
+        'no_active_members',
+        'missing_user',
+      ].includes(status ?? '')
+    )
+      return 'warning';
+    if (['failed', 'rejected', 'revoked', 'expired', 'declined'].includes(status ?? ''))
+      return 'danger';
     return 'muted';
   }
 
@@ -896,22 +1114,46 @@ export class AccessManagementPage implements OnInit {
   protected date(value?: string | null): string {
     if (!value) return '-';
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? '-' : new Intl.DateTimeFormat(this.i18n.lang() === 'ar' ? 'ar-SA' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(parsed);
+    return Number.isNaN(parsed.getTime())
+      ? '-'
+      : new Intl.DateTimeFormat(this.i18n.lang() === 'ar' ? 'ar-SA' : 'en-GB', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(parsed);
   }
 
-  protected invalidCsvRows(): Array<{ row: number; action?: string; code?: string | null; valid: boolean; errors: string[] }> {
-    return this.csvResult()?.rows.filter((row) => !row.valid).slice(0, 8) ?? [];
+  protected invalidCsvRows(): Array<{
+    row: number;
+    action?: string;
+    code?: string | null;
+    valid: boolean;
+    errors: string[];
+  }> {
+    return (
+      this.csvResult()
+        ?.rows.filter((row) => !row.valid)
+        .slice(0, 8) ?? []
+    );
   }
 
   protected matrixCell(assetId: string, principalType: string, principalId: string) {
-    return this.matrix()?.cells.find((cell) => cell.assetId === assetId && cell.principalType === principalType && cell.principalId === principalId) ?? null;
+    return (
+      this.matrix()?.cells.find(
+        (cell) =>
+          cell.assetId === assetId &&
+          cell.principalType === principalType &&
+          cell.principalId === principalId,
+      ) ?? null
+    );
   }
 
   protected mobileMatrixPrincipal(matrix: AccessMatrix): AccessMatrixPrincipal | null {
     const key = this.mobileMatrixPrincipalKey();
-    return matrix.principals.find((principal) => `${principal.type}:${principal.id}` === key)
-      ?? matrix.principals[0]
-      ?? null;
+    return (
+      matrix.principals.find((principal) => `${principal.type}:${principal.id}` === key) ??
+      matrix.principals[0] ??
+      null
+    );
   }
 
   protected cellLabel(assetId: string, principalType: string, principalId: string): string {
@@ -919,9 +1161,17 @@ export class AccessManagementPage implements OnInit {
     return cell ? this.matrixCellValue(cell) : this.t('access.matrix.noAccess');
   }
 
-  protected matrixCellFocused(assetId: string, principalType: string, principalId: string): boolean {
+  protected matrixCellFocused(
+    assetId: string,
+    principalType: string,
+    principalId: string,
+  ): boolean {
     const context = this.selectedMatrixCell();
-    return context?.asset.id === assetId && context.principal.type === principalType && context.principal.id === principalId;
+    return (
+      context?.asset.id === assetId &&
+      context.principal.type === principalType &&
+      context.principal.id === principalId
+    );
   }
 
   protected permissionAction(code: string): string {
@@ -938,14 +1188,18 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected profileOptionLabel(profile: ProfileRef): string {
-    const actions = [...new Set(this.profilePermissionCodes(profile).map((code) => this.permissionAction(code)))];
+    const actions = [
+      ...new Set(this.profilePermissionCodes(profile).map((code) => this.permissionAction(code))),
+    ];
     const visible = actions.slice(0, 4).join(' / ');
     const remainder = actions.length > 4 ? ` +${actions.length - 4} ${this.t('access.more')}` : '';
     return `${this.profileName(profile)} | ${visible}${remainder}`;
   }
 
   protected permissionIsHighRisk(code: string): boolean {
-    return this.permissions().some((permission) => permission.code === code && permission.riskLevel === 'high');
+    return this.permissions().some(
+      (permission) => permission.code === code && permission.riskLevel === 'high',
+    );
   }
 
   protected permissionsInGroup(permissions: PermissionRef[], group: string): PermissionRef[] {
@@ -1003,7 +1257,10 @@ export class AccessManagementPage implements OnInit {
       .filter(Boolean);
     if (localizedProfiles.length) return [...new Set(localizedProfiles)].join(' + ');
 
-    const normalized = cell.displayValue.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    const normalized = cell.displayValue
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
     if (normalized === 'custom' || cell.permissions.length) return this.t('access.value.custom');
     return this.label(normalized || cell.accessState);
   }
@@ -1026,20 +1283,38 @@ export class AccessManagementPage implements OnInit {
     return this.profiles().filter((profile) => profile.assetType === assetType);
   }
 
-  private permissionClass(action: string): 'read' | 'write' | 'execute' | 'share_export' | 'administer' {
+  private permissionClass(
+    action: string,
+  ): 'read' | 'write' | 'execute' | 'share_export' | 'administer' {
     const normalized = action.toLowerCase();
-    if (/(share|reshare|export|download_payload|bulk_consume)/.test(normalized)) return 'share_export';
+    if (/(share|reshare|export|download_payload|bulk_consume)/.test(normalized))
+      return 'share_export';
     if (/(delete|manage_|configure_|operate_)/.test(normalized)) return 'administer';
     if (/(execute|invoke|consume|subscribe)/.test(normalized)) return 'execute';
-    if (/(insert|update|edit|upload|create_|submit|publish|build|contribute)/.test(normalized)) return 'write';
+    if (/(insert|update|edit|upload|create_|submit|publish|build|contribute)/.test(normalized))
+      return 'write';
     return 'read';
   }
 
-  protected matrixCellSelected(assetId: string, principalType: string, principalId: string): boolean {
-    return this.selectedMatrixCells().some((cell) => cell.assetId === assetId && cell.principalType === principalType && cell.principalId === principalId);
+  protected matrixCellSelected(
+    assetId: string,
+    principalType: string,
+    principalId: string,
+  ): boolean {
+    return this.selectedMatrixCells().some(
+      (cell) =>
+        cell.assetId === assetId &&
+        cell.principalType === principalType &&
+        cell.principalId === principalId,
+    );
   }
 
-  protected toggleMatrixCell(assetId: string, principalType: string, principalId: string, selected: boolean): void {
+  protected toggleMatrixCell(
+    assetId: string,
+    principalType: string,
+    principalId: string,
+    selected: boolean,
+  ): void {
     if (selected) {
       const selectedType = this.bulkAssetTypes()[0];
       const candidateType = this.assets().find((asset) => asset.id === assetId)?.assetType;
@@ -1049,8 +1324,14 @@ export class AccessManagementPage implements OnInit {
       }
     }
     const key = `${assetId}:${principalType}:${principalId}`;
-    const values = new Map(this.selectedMatrixCells().map((cell) => [`${cell.assetId}:${cell.principalType}:${cell.principalId}`, cell]));
-    if (selected) values.set(key, { assetId, principalType: principalType as 'role' | 'group', principalId });
+    const values = new Map(
+      this.selectedMatrixCells().map((cell) => [
+        `${cell.assetId}:${cell.principalType}:${cell.principalId}`,
+        cell,
+      ]),
+    );
+    if (selected)
+      values.set(key, { assetId, principalType: principalType as 'role' | 'group', principalId });
     else values.delete(key);
     this.selectedMatrixCells.set([...values.values()]);
   }
@@ -1059,11 +1340,19 @@ export class AccessManagementPage implements OnInit {
     const matrix = this.matrix();
     if (!matrix) return;
     const firstAssetType = matrix.assets[0]?.assetType;
-    const sameTypeAssetIds = new Set(matrix.assets.filter((asset) => asset.assetType === firstAssetType).map((asset) => asset.id));
-    this.selectedMatrixCells.set(matrix.cells
-      .filter((cell) => cell.grantCount === 0 && sameTypeAssetIds.has(cell.assetId))
-      .slice(0, 500)
-      .map((cell) => ({ assetId: cell.assetId, principalType: cell.principalType as 'role' | 'group', principalId: cell.principalId })));
+    const sameTypeAssetIds = new Set(
+      matrix.assets.filter((asset) => asset.assetType === firstAssetType).map((asset) => asset.id),
+    );
+    this.selectedMatrixCells.set(
+      matrix.cells
+        .filter((cell) => cell.grantCount === 0 && sameTypeAssetIds.has(cell.assetId))
+        .slice(0, 500)
+        .map((cell) => ({
+          assetId: cell.assetId,
+          principalType: cell.principalType as 'role' | 'group',
+          principalId: cell.principalId,
+        })),
+    );
   }
 
   protected openBulkGrant(): void {
@@ -1106,33 +1395,38 @@ export class AccessManagementPage implements OnInit {
       return;
     }
     this.busy.set(true);
-    this.http.post<{ grantCount: number }>('/api/access/grants/bulk', {
-      cells: this.selectedMatrixCells(),
-      profileId: this.bulkForm.profileId || null,
-      permissionCodes: this.bulkForm.profileId ? undefined : this.bulkForm.permissionCodes,
-      startsAt: this.bulkForm.startsAt ? new Date(this.bulkForm.startsAt).toISOString() : undefined,
-      expiresAt: this.bulkForm.expiresAt ? new Date(this.bulkForm.expiresAt).toISOString() : null,
-      justification: this.bulkForm.justification.trim(),
-      changeReason: this.bulkForm.changeReason.trim(),
-    }).subscribe({
-      next: (result) => {
-        this.busy.set(false);
-        this.bulkOpen.set(false);
-        this.selectedMatrixCells.set([]);
-        this.toast.success(this.format('access.toast.bulkCreated', { count: result.grantCount }));
-        this.load();
-        this.loadMatrix();
-      },
-      error: (error) => {
-        this.busy.set(false);
-        this.toast.errorFrom(error, this.t('access.toast.matrixCommitError'));
-      },
-    });
+    this.http
+      .post<{ grantCount: number }>('/api/access/grants/bulk', {
+        cells: this.selectedMatrixCells(),
+        profileId: this.bulkForm.profileId || null,
+        permissionCodes: this.bulkForm.profileId ? undefined : this.bulkForm.permissionCodes,
+        startsAt: this.bulkForm.startsAt
+          ? new Date(this.bulkForm.startsAt).toISOString()
+          : undefined,
+        expiresAt: this.bulkForm.expiresAt ? new Date(this.bulkForm.expiresAt).toISOString() : null,
+        justification: this.bulkForm.justification.trim(),
+        changeReason: this.bulkForm.changeReason.trim(),
+      })
+      .subscribe({
+        next: (result) => {
+          this.busy.set(false);
+          this.bulkOpen.set(false);
+          this.selectedMatrixCells.set([]);
+          this.toast.success(this.format('access.toast.bulkCreated', { count: result.grantCount }));
+          this.load();
+          this.loadMatrix();
+        },
+        error: (error) => {
+          this.busy.set(false);
+          this.toast.errorFrom(error, this.t('access.toast.matrixCommitError'));
+        },
+      });
   }
 
   protected setPrincipalType(type: 'role' | 'group'): void {
     this.grantForm.principalType = type;
-    this.grantForm.principalId = this.principals().find((principal) => principal.type === type)?.id ?? '';
+    this.grantForm.principalId =
+      this.principals().find((principal) => principal.type === type)?.id ?? '';
   }
 
   protected setProfile(profileId: string): void {
@@ -1152,16 +1446,19 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected grantPermissionLabel(grant: AccessGrant): string {
-    const codes = grant.permissions?.map((permission) => permission.permissionCode).filter(Boolean) ?? [];
+    const codes =
+      grant.permissions?.map((permission) => permission.permissionCode).filter(Boolean) ?? [];
     const values = codes.length ? codes : [grant.permissionCode];
     return values.slice(0, 2).join(', ') + (values.length > 2 ? ` +${values.length - 2}` : '');
   }
 
   private loadReferences(): void {
-    this.http.get<Paged<AssetRef>>('/api/assets', { params: { page: '1', pageSize: '200' } }).subscribe({
-      next: (result) => this.assets.set(result.data),
-      error: () => this.assets.set([]),
-    });
+    this.http
+      .get<Paged<AssetRef>>('/api/assets', { params: { page: '1', pageSize: '200' } })
+      .subscribe({
+        next: (result) => this.assets.set(result.data),
+        error: () => this.assets.set([]),
+      });
     this.http.get<PermissionRef[]>('/api/access/permission-catalog').subscribe({
       next: (result) => this.permissions.set(result),
       error: () => this.permissions.set([]),

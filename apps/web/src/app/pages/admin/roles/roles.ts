@@ -16,6 +16,7 @@ import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip } from '../../../shared/status-chip';
 import { AppIcon } from '../../../shared/app-icon';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 interface RoleListItem {
   id: string;
@@ -79,8 +80,8 @@ interface PermissionGroup {
 
 type Mode = 'none' | 'create' | 'edit' | 'perms' | 'scope';
 type State = 'loading' | 'ok' | 'error';
-type RoleTypeFilter = 'all' | 'system' | 'custom';
-type RoleStatusFilter = 'all' | 'active' | 'inactive';
+type RoleTypeFilter = 'system' | 'custom';
+type RoleStatusFilter = 'active' | 'inactive';
 
 const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
 const RES_ORDER = [
@@ -122,7 +123,7 @@ const RESOURCE_GROUPS = [
 @Component({
   selector: 'app-roles',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Modal, StatusChip, AppIcon],
+  imports: [FormsModule, Modal, StatusChip, AppIcon, MultiSelectModule],
   templateUrl: './roles.html',
   styleUrl: './roles.scss',
 })
@@ -141,8 +142,8 @@ export class RolesPage implements OnInit {
   protected readonly classifications = signal<Classification[]>([]);
 
   protected readonly roleSearch = signal('');
-  protected readonly typeFilter = signal<RoleTypeFilter>('all');
-  protected readonly roleStatusFilter = signal<RoleStatusFilter>('all');
+  protected readonly typeFilters = signal<RoleTypeFilter[]>([]);
+  protected readonly roleStatusFilters = signal<RoleStatusFilter[]>([]);
   protected readonly selectedRoleId = signal<string | null>(null);
   protected readonly selectedPreview = signal<ScopePreview | null>(null);
 
@@ -173,8 +174,8 @@ export class RolesPage implements OnInit {
 
   protected readonly filteredRoles = computed(() => {
     const query = this.roleSearch().trim().toLowerCase();
-    const type = this.typeFilter();
-    const status = this.roleStatusFilter();
+    const types = this.typeFilters();
+    const statuses = this.roleStatusFilters();
 
     return this.roles().filter((role) => {
       const matchesQuery =
@@ -182,14 +183,9 @@ export class RolesPage implements OnInit {
         role.code.toLowerCase().includes(query) ||
         role.nameEn.toLowerCase().includes(query) ||
         role.nameAr.toLowerCase().includes(query);
-      const matchesType =
-        type === 'all' ||
-        (type === 'system' && role.isSystem) ||
-        (type === 'custom' && !role.isSystem);
+      const matchesType = !types.length || types.includes(role.isSystem ? 'system' : 'custom');
       const matchesStatus =
-        status === 'all' ||
-        (status === 'active' && role.isActive) ||
-        (status === 'inactive' && !role.isActive);
+        !statuses.length || statuses.includes(role.isActive ? 'active' : 'inactive');
       return matchesQuery && matchesType && matchesStatus;
     });
   });
@@ -207,9 +203,7 @@ export class RolesPage implements OnInit {
       set.add(permission.action);
       byRes.set(permission.resource, set);
     }
-    const ordered = [...byRes.keys()].sort(
-      (a, b) => idx(a) - idx(b) || a.localeCompare(b),
-    );
+    const ordered = [...byRes.keys()].sort((a, b) => idx(a) - idx(b) || a.localeCompare(b));
     return ordered.map((resource) => ({ resource, actions: byRes.get(resource)! }));
     function idx(resource: string): number {
       const i = RES_ORDER.indexOf(resource);
@@ -259,7 +253,7 @@ export class RolesPage implements OnInit {
         const nextSelected =
           selectedId && result.roles.some((role) => role.id === selectedId)
             ? selectedId
-            : result.roles[0]?.id ?? null;
+            : (result.roles[0]?.id ?? null);
         this.selectedRoleId.set(nextSelected);
         if (nextSelected) this.refreshSelectedPreview(nextSelected);
         else this.selectedPreview.set(null);
@@ -277,6 +271,20 @@ export class RolesPage implements OnInit {
     return this.i18n.t(key);
   }
 
+  protected roleTypeOptions() {
+    return [
+      { label: this.t('roles.system'), value: 'system' as const },
+      { label: this.t('roles.custom'), value: 'custom' as const },
+    ];
+  }
+
+  protected roleStatusOptions() {
+    return [
+      { label: this.t('crud.active'), value: 'active' as const },
+      { label: this.t('crud.inactive'), value: 'inactive' as const },
+    ];
+  }
+
   protected isSysAdmin(role: { code: string }): boolean {
     return role.code === 'system_admin';
   }
@@ -288,8 +296,8 @@ export class RolesPage implements OnInit {
 
   protected clearFilters(): void {
     this.roleSearch.set('');
-    this.typeFilter.set('all');
-    this.roleStatusFilter.set('all');
+    this.typeFilters.set([]);
+    this.roleStatusFilters.set([]);
   }
 
   protected roleDescription(role: RoleListItem): string {
@@ -334,7 +342,10 @@ export class RolesPage implements OnInit {
   }
 
   protected resourceSomeSelected(resource: string, actions: Set<string>): boolean {
-    return !this.resourceAllSelected(resource, actions) && this.resourceSelectedCount(resource, actions) > 0;
+    return (
+      !this.resourceAllSelected(resource, actions) &&
+      this.resourceSelectedCount(resource, actions) > 0
+    );
   }
 
   protected selectedScopeCount(kind: 'org' | 'dom'): number {

@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsDateString,
   IsIn,
@@ -13,57 +14,117 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+} from "class-validator";
+import { Transform, Type } from "class-transformer";
 
-export const ACCESS_GRANT_PRINCIPAL_TYPES = ['role', 'group'] as const;
-export const ACCESS_GRANT_LEGACY_PRINCIPAL_TYPES = ['user', 'role', 'group', 'service_account'] as const;
-export const ACCESS_GRANT_OWNER_DECISIONS = ['approved', 'rejected'] as const;
-export const ACCESS_GRANT_ENFORCEMENT_STATUSES = ['pending', 'enforced', 'failed', 'not_enforced', 'revoked'] as const;
-export const ACCESS_ASSET_TYPES = ['dataset', 'file', 'document_record', 'api_data_feed', 'bi_report_dashboard', 'ai_data_product'] as const;
+const queryArray = ({ value }: { value: unknown }) =>
+  value == null || value === ""
+    ? undefined
+    : Array.isArray(value)
+      ? value
+      : [value];
+
+export const ACCESS_GRANT_PRINCIPAL_TYPES = ["role", "group"] as const;
+export const ACCESS_GRANT_LEGACY_PRINCIPAL_TYPES = [
+  "user",
+  "role",
+  "group",
+  "service_account",
+] as const;
+export const ACCESS_GRANT_OWNER_DECISIONS = ["approved", "rejected"] as const;
+export const ACCESS_GRANT_ENFORCEMENT_STATUSES = [
+  "pending",
+  "enforced",
+  "failed",
+  "not_enforced",
+  "revoked",
+] as const;
+export const ACCESS_ASSET_TYPES = [
+  "dataset",
+  "file",
+  "document_record",
+  "api_data_feed",
+  "bi_report_dashboard",
+  "ai_data_product",
+] as const;
 
 export class ListAccessGrantsDto {
-  @IsOptional() @IsUUID('4') assetId?: string;
+  @IsOptional() @IsUUID("4") assetId?: string;
   @IsOptional() @IsString() principalId?: string;
   @IsOptional() @IsString() status?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  pageSize?: number;
 }
 
 export class CreateAccessGrantDto {
-  @IsUUID('4') assetId!: string;
+  @IsUUID("4") assetId!: string;
   @IsIn(ACCESS_GRANT_PRINCIPAL_TYPES) principalType!: string;
   @IsString() @IsNotEmpty() @MaxLength(160) principalId!: string;
-  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(120) permissionCode?: string;
-  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsString({ each: true }) @MaxLength(120, { each: true }) permissionCodes?: string[];
-  @IsOptional() @IsUUID('4') profileId?: string | null;
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  permissionCode?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  permissionCodes?: string[];
+  @IsOptional() @IsUUID("4") profileId?: string | null;
   @IsOptional() @IsDateString() startsAt?: string;
   @IsOptional() @IsDateString() expiresAt?: string | null;
   @IsString() @IsNotEmpty() @MaxLength(1200) justification!: string;
-  @IsOptional() @IsUUID('4') workflowCaseId?: string | null;
+  @IsOptional() @IsUUID("4") workflowCaseId?: string | null;
 }
 
 export class UpdateAccessGrantDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
-  @IsOptional() @IsUUID('4') profileId?: string | null;
-  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsString({ each: true }) @MaxLength(120, { each: true }) permissionCodes?: string[];
+  @IsOptional() @IsUUID("4") profileId?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  permissionCodes?: string[];
   @IsOptional() @IsDateString() startsAt?: string;
   @IsOptional() @IsDateString() expiresAt?: string | null;
-  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(1200) justification?: string;
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(1200)
+  justification?: string;
   @IsString() @IsNotEmpty() @MaxLength(1200) changeReason!: string;
 }
 
 export class BulkAccessGrantCellDto {
-  @IsUUID('4') assetId!: string;
+  @IsUUID("4") assetId!: string;
   @IsIn(ACCESS_GRANT_PRINCIPAL_TYPES) principalType!: string;
   @IsString() @IsNotEmpty() @MaxLength(160) principalId!: string;
 }
 
 export class BulkCreateAccessGrantDto {
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => BulkAccessGrantCellDto)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => BulkAccessGrantCellDto)
   cells!: BulkAccessGrantCellDto[];
-  @IsOptional() @IsUUID('4') profileId?: string | null;
-  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsString({ each: true }) @MaxLength(120, { each: true }) permissionCodes?: string[];
+  @IsOptional() @IsUUID("4") profileId?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  permissionCodes?: string[];
   @IsOptional() @IsDateString() startsAt?: string;
   @IsOptional() @IsDateString() expiresAt?: string | null;
   @IsString() @IsNotEmpty() @MaxLength(1200) justification!: string;
@@ -98,34 +159,83 @@ export class CommitAccessGrantImportDto {
 
 export class AccessMatrixQueryDto {
   @IsOptional() @IsString() @MaxLength(160) assetSearch?: string;
-  @IsOptional() @IsIn(ACCESS_ASSET_TYPES) assetType?: string;
-  @IsOptional() @IsUUID('4') domainId?: string;
-  @IsOptional() @IsUUID('4') classificationId?: string;
-  @IsOptional() @IsUUID('4') systemId?: string;
-  @IsOptional() @IsIn(['role', 'group']) principalType?: string;
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(ACCESS_ASSET_TYPES, { each: true })
+  assetType?: string[];
+  @IsOptional() @IsUUID("4") domainId?: string;
+  @IsOptional() @IsUUID("4") classificationId?: string;
+  @IsOptional() @IsUUID("4") systemId?: string;
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(["role", "group"], { each: true })
+  principalType?: string[];
   @IsOptional() @IsString() @MaxLength(160) principalSearch?: string;
-  @IsOptional() @IsUUID('4') profileId?: string;
-  @IsOptional() @IsString() @MaxLength(120) permissionCode?: string;
-  @IsOptional() @IsString() @MaxLength(80) status?: string;
-  @IsOptional() @IsIn(ACCESS_GRANT_ENFORCEMENT_STATUSES) enforcementStatus?: string;
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID("4", { each: true })
+  profileId?: string[];
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(120, { each: true })
+  permissionCode?: string[];
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  status?: string[];
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(ACCESS_GRANT_ENFORCEMENT_STATUSES, { each: true })
+  enforcementStatus?: string[];
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) assetPage?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(500) assetLimit?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) principalLimit?: number;
-  @IsOptional() @IsIn(['code', 'name', 'asset_type', 'status']) sortBy?: string;
-  @IsOptional() @IsIn(['asc', 'desc']) sortDirection?: 'asc' | 'desc';
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  assetLimit?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  principalLimit?: number;
+  @IsOptional() @IsIn(["code", "name", "asset_type", "status"]) sortBy?: string;
+  @IsOptional() @IsIn(["asc", "desc"]) sortDirection?: "asc" | "desc";
 }
 
 export class ListEffectiveAccessDto {
-  @IsOptional() @IsUUID('4') assetId?: string;
+  @IsOptional() @IsUUID("4") assetId?: string;
   @IsOptional() @IsString() principalId?: string;
-  @IsOptional() @IsIn(ACCESS_GRANT_LEGACY_PRINCIPAL_TYPES) principalType?: string;
+  @IsOptional()
+  @IsIn(ACCESS_GRANT_LEGACY_PRINCIPAL_TYPES)
+  principalType?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  pageSize?: number;
 }
 
 export class DispatchAccessEnforcementDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
-  @IsIn(['grant', 'update', 'revoke', 'verify']) operation!: string;
+  @IsIn(["grant", "update", "revoke", "verify"]) operation!: string;
   @IsOptional() @IsString() @MaxLength(120) connectorCode?: string;
 }
 
@@ -136,14 +246,14 @@ export class ApplyAccessGrantRulesDto {
 
 export class CompleteManualAccessEnforcementDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
-  @IsIn(['enforced', 'failed', 'not_enforced']) enforcementStatus!: string;
+  @IsIn(["enforced", "failed", "not_enforced"]) enforcementStatus!: string;
   @IsString() @IsNotEmpty() @MaxLength(500) evidenceReference!: string;
   @IsOptional() @IsString() @MaxLength(1200) comment?: string | null;
 }
 
 export class CompleteAccessEnforcementAttemptDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
-  @IsIn(['succeeded', 'failed']) status!: 'succeeded' | 'failed';
+  @IsIn(["succeeded", "failed"]) status!: "succeeded" | "failed";
   @IsString() @IsNotEmpty() @MaxLength(500) providerReference!: string;
   @IsOptional() @IsString() @MaxLength(120) errorCode?: string | null;
   @IsOptional() @IsString() @MaxLength(1200) message?: string | null;

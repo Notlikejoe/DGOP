@@ -26,24 +26,38 @@
 
   <div class="metric-strip" aria-label="Role governance summary">
     <article class="metric-card metric-card--primary">
-      <span>{{ t('roles.metric.total') }}</span>
-      <strong>{{ metrics().total }}</strong>
-      <small>{{ t('roles.metric.totalHint') }}</small>
+      <span class="metric-card__icon"><app-icon name="keyRound" /></span>
+      <span class="metric-card__copy"
+        ><span>{{ t('roles.metric.total') }}</span
+        ><strong>{{ metrics().total }}</strong
+        ><small>{{ t('roles.metric.totalHint') }}</small></span
+      >
     </article>
     <article class="metric-card metric-card--warning">
-      <span>{{ t('roles.metric.system') }}</span>
-      <strong>{{ metrics().system }}</strong>
-      <small>{{ t('roles.metric.systemHint') }}</small>
+      <span class="metric-card__icon"><app-icon name="lock" /></span>
+      <span class="metric-card__copy"
+        ><span>{{ t('roles.metric.system') }}</span
+        ><strong>{{ metrics().system }}</strong
+        ><small>{{ t('roles.metric.systemHint') }}</small></span
+      >
     </article>
     <article class="metric-card metric-card--success">
-      <span>{{ t('roles.metric.custom') }}</span>
-      <strong>{{ metrics().custom }}</strong>
-      <small>{{ t('roles.metric.customHint') }}</small>
+      <span class="metric-card__icon"><app-icon name="shield" /></span>
+      <span class="metric-card__copy"
+        ><span>{{ t('roles.metric.custom') }}</span
+        ><strong>{{ metrics().custom }}</strong
+        ><small>{{ t('roles.metric.customHint') }}</small></span
+      >
     </article>
-    <article class="metric-card metric-card--muted">
-      <span>{{ t('roles.metric.assignedUsers') }}</span>
-      <strong>{{ metrics().assignedUsers }}</strong>
-      <small>{{ t('roles.metric.permissionGrants') }}: {{ metrics().permissionGrants }}</small>
+    <article class="metric-card metric-card--danger">
+      <span class="metric-card__icon"><app-icon name="users" /></span>
+      <span class="metric-card__copy"
+        ><span>{{ t('roles.metric.assignedUsers') }}</span
+        ><strong>{{ metrics().assignedUsers }}</strong
+        ><small
+          >{{ t('roles.metric.permissionGrants') }}: {{ metrics().permissionGrants }}</small
+        ></span
+      >
     </article>
   </div>
 
@@ -56,7 +70,9 @@
     <div class="empty-state empty-state--error">
       <app-icon name="alert" />
       <p>{{ t('crud.loadError') }}</p>
-      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">
+        {{ t('crud.retry') }}
+      </button>
     </div>
   } @else {
     <section class="access-toolbar" [attr.aria-label]="t('roles.filter.title')">
@@ -74,21 +90,39 @@
       </label>
       <label class="field">
         <span class="field__label">{{ t('roles.filter.type') }}</span>
-        <select class="field__input" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($any($event))">
-          <option value="all">{{ t('roles.filter.allTypes') }}</option>
-          <option value="system">{{ t('roles.system') }}</option>
-          <option value="custom">{{ t('roles.custom') }}</option>
-        </select>
+        <p-multiselect
+          class="windows-select"
+          panelStyleClass="windows-select-panel"
+          [options]="roleTypeOptions()"
+          optionLabel="label"
+          optionValue="value"
+          [placeholder]="t('roles.filter.allTypes')"
+          [showClear]="true"
+          [maxSelectedLabels]="2"
+          [ngModel]="typeFilters()"
+          (ngModelChange)="typeFilters.set($event || [])"
+        />
       </label>
       <label class="field">
         <span class="field__label">{{ t('roles.filter.status') }}</span>
-        <select class="field__input" [ngModel]="roleStatusFilter()" (ngModelChange)="roleStatusFilter.set($any($event))">
-          <option value="all">{{ t('roles.filter.allStatuses') }}</option>
-          <option value="active">{{ t('crud.active') }}</option>
-          <option value="inactive">{{ t('crud.inactive') }}</option>
-        </select>
+        <p-multiselect
+          class="windows-select"
+          panelStyleClass="windows-select-panel"
+          [options]="roleStatusOptions()"
+          optionLabel="label"
+          optionValue="value"
+          [placeholder]="t('roles.filter.allStatuses')"
+          [showClear]="true"
+          [maxSelectedLabels]="2"
+          [ngModel]="roleStatusFilters()"
+          (ngModelChange)="roleStatusFilters.set($event || [])"
+        />
       </label>
-      <button type="button" class="ds-btn ds-btn--ghost access-toolbar__clear" (click)="clearFilters()">
+      <button
+        type="button"
+        class="ds-btn ds-btn--ghost access-toolbar__clear"
+        (click)="clearFilters()"
+      >
         <app-icon name="filter" />
         {{ t('roles.filter.clear') }}
       </button>
@@ -193,11 +227,19 @@
             <div class="section-label">{{ t('roles.effectiveScope') }}</div>
             <span class="scope-chip">
               {{ t('roles.scope.previewOrg') }}:
-              {{ previewOrgCount(selectedPreview()) === 'all' ? t('roles.scope.previewAll') : previewOrgCount(selectedPreview()) }}
+              {{
+                previewOrgCount(selectedPreview()) === 'all'
+                  ? t('roles.scope.previewAll')
+                  : previewOrgCount(selectedPreview())
+              }}
             </span>
             <span class="scope-chip">
               {{ t('roles.scope.previewDomains') }}:
-              {{ previewDomCount(selectedPreview()) === 'all' ? t('roles.scope.previewAll') : previewDomCount(selectedPreview()) }}
+              {{
+                previewDomCount(selectedPreview()) === 'all'
+                  ? t('roles.scope.previewAll')
+                  : previewDomCount(selectedPreview())
+              }}
             </span>
             <span class="scope-chip">
               {{ t('roles.scope.previewClass') }}: {{ previewClass(selectedPreview()) }}
@@ -240,7 +282,10 @@
 </section>
 
 @if (mode() === 'create' || mode() === 'edit') {
-  <app-modal [title]="mode() === 'create' ? t('roles.newTitle') : t('roles.editTitle')" (close)="close()">
+  <app-modal
+    [title]="mode() === 'create' ? t('roles.newTitle') : t('roles.editTitle')"
+    (close)="close()"
+  >
     <form class="form" (ngSubmit)="saveDetails()">
       <p class="modal-note">{{ t('roles.detailsHint') }}</p>
       @if (mode() === 'create') {
@@ -260,10 +305,20 @@
       </label>
       <label class="field">
         <span class="field__label">{{ t('crud.description') }}</span>
-        <textarea class="field__input" rows="3" name="description" [(ngModel)]="form.description"></textarea>
+        <textarea
+          class="field__input"
+          rows="3"
+          name="description"
+          [(ngModel)]="form.description"
+        ></textarea>
       </label>
       <label class="field field--inline">
-        <input type="checkbox" class="field__checkbox" name="isActive" [(ngModel)]="form.isActive" />
+        <input
+          type="checkbox"
+          class="field__checkbox"
+          name="isActive"
+          [(ngModel)]="form.isActive"
+        />
         <span class="field__label">{{ t('crud.active') }}</span>
       </label>
       @if (formError()) {
@@ -271,8 +326,15 @@
       }
     </form>
     <div footer>
-      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
-      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveDetails()">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">
+        {{ t('crud.cancel') }}
+      </button>
+      <button
+        type="button"
+        class="ds-btn ds-btn--primary"
+        [disabled]="saving()"
+        (click)="saveDetails()"
+      >
         {{ saving() ? t('crud.saving') : t('crud.save') }}
       </button>
     </div>
@@ -281,7 +343,11 @@
 
 @if (mode() === 'perms') {
   @if (active(); as role) {
-    <app-modal size="lg" [title]="t('roles.permissions.builderTitle') + ' - ' + name(role)" (close)="close()">
+    <app-modal
+      size="lg"
+      [title]="t('roles.permissions.builderTitle') + ' - ' + name(role)"
+      (close)="close()"
+    >
       @if (isSysAdmin(role)) {
         <p class="note">
           <app-icon name="lock" />
@@ -304,32 +370,54 @@
                 @for (row of group.rows; track row.resource) {
                   <article
                     class="permission-resource"
-                    [class.permission-resource--selected]="resourceAllSelected(row.resource, row.actions)"
-                    [class.permission-resource--partial]="resourceSomeSelected(row.resource, row.actions)"
+                    [class.permission-resource--selected]="
+                      resourceAllSelected(row.resource, row.actions)
+                    "
+                    [class.permission-resource--partial]="
+                      resourceSomeSelected(row.resource, row.actions)
+                    "
                   >
                     <header class="permission-resource__head">
                       <div>
                         <strong>{{ t('res.' + row.resource) }}</strong>
-                        <span>{{ resourceSelectedCount(row.resource, row.actions) }} / {{ row.actions.size }} {{ t('roles.permissions.actionsSelected') }}</span>
+                        <span
+                          >{{ resourceSelectedCount(row.resource, row.actions) }} /
+                          {{ row.actions.size }} {{ t('roles.permissions.actionsSelected') }}</span
+                        >
                       </div>
-                      <button type="button" class="link-btn" (click)="toggleResourceAll(row.resource, row.actions)">
-                        {{ resourceAllSelected(row.resource, row.actions) ? t('roles.permissions.clearResource') : t('roles.permissions.selectResource') }}
+                      <button
+                        type="button"
+                        class="link-btn"
+                        (click)="toggleResourceAll(row.resource, row.actions)"
+                      >
+                        {{
+                          resourceAllSelected(row.resource, row.actions)
+                            ? t('roles.permissions.clearResource')
+                            : t('roles.permissions.selectResource')
+                        }}
                       </button>
                     </header>
                     <div class="action-toggles">
                       @for (action of actions; track action) {
                         @if (row.actions.has(action)) {
-                          <label class="action-toggle" [class.action-toggle--selected]="hasPerm(row.resource, action)">
+                          <label
+                            class="action-toggle"
+                            [class.action-toggle--selected]="hasPerm(row.resource, action)"
+                          >
                             <input
                               type="checkbox"
                               [checked]="hasPerm(row.resource, action)"
                               (change)="togglePerm(row.resource, action)"
-                              [attr.aria-label]="t('res.' + row.resource) + ' ' + t('act.' + action)"
+                              [attr.aria-label]="
+                                t('res.' + row.resource) + ' ' + t('act.' + action)
+                              "
                             />
                             <span>{{ t('act.' + action) }}</span>
                           </label>
                         } @else {
-                          <span class="action-toggle action-toggle--disabled">{{ t('act.' + action) }}</span>
+                          <span class="action-toggle action-toggle--disabled">{{
+                            t('act.' + action)
+                          }}</span>
                         }
                       }
                     </div>
@@ -341,9 +429,16 @@
         </div>
       }
       <div footer>
-        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">
+          {{ t('crud.cancel') }}
+        </button>
         @if (!isSysAdmin(role)) {
-          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="savePerms()">
+          <button
+            type="button"
+            class="ds-btn ds-btn--primary"
+            [disabled]="saving()"
+            (click)="savePerms()"
+          >
             {{ saving() ? t('crud.saving') : t('crud.save') }}
           </button>
         }
@@ -354,7 +449,11 @@
 
 @if (mode() === 'scope') {
   @if (active(); as role) {
-    <app-modal size="lg" [title]="t('roles.scope.builderTitle') + ' - ' + name(role)" (close)="close()">
+    <app-modal
+      size="lg"
+      [title]="t('roles.scope.builderTitle') + ' - ' + name(role)"
+      (close)="close()"
+    >
       @if (isSysAdmin(role)) {
         <p class="note">
           <app-icon name="lock" />
@@ -374,12 +473,22 @@
                 @for (org of orgUnits(); track org.id) {
                   <div class="scope-item">
                     <label class="field field--inline">
-                      <input type="checkbox" class="field__checkbox" [checked]="orgChecked(org.id)" (change)="toggleScope('org', org.id)" />
+                      <input
+                        type="checkbox"
+                        class="field__checkbox"
+                        [checked]="orgChecked(org.id)"
+                        (change)="toggleScope('org', org.id)"
+                      />
                       <span>{{ name(org) }}</span>
                     </label>
                     @if (orgChecked(org.id)) {
                       <label class="field field--inline scope-sub">
-                        <input type="checkbox" class="field__checkbox" [checked]="descChecked('org', org.id)" (change)="toggleDesc('org', org.id)" />
+                        <input
+                          type="checkbox"
+                          class="field__checkbox"
+                          [checked]="descChecked('org', org.id)"
+                          (change)="toggleDesc('org', org.id)"
+                        />
                         <span>{{ t('roles.scope.includeDescendants') }}</span>
                       </label>
                     }
@@ -397,12 +506,22 @@
                 @for (domain of domains(); track domain.id) {
                   <div class="scope-item">
                     <label class="field field--inline">
-                      <input type="checkbox" class="field__checkbox" [checked]="domChecked(domain.id)" (change)="toggleScope('dom', domain.id)" />
+                      <input
+                        type="checkbox"
+                        class="field__checkbox"
+                        [checked]="domChecked(domain.id)"
+                        (change)="toggleScope('dom', domain.id)"
+                      />
                       <span>{{ name(domain) }}</span>
                     </label>
                     @if (domChecked(domain.id)) {
                       <label class="field field--inline scope-sub">
-                        <input type="checkbox" class="field__checkbox" [checked]="descChecked('dom', domain.id)" (change)="toggleDesc('dom', domain.id)" />
+                        <input
+                          type="checkbox"
+                          class="field__checkbox"
+                          [checked]="descChecked('dom', domain.id)"
+                          (change)="toggleDesc('dom', domain.id)"
+                        />
                         <span>{{ t('roles.scope.includeDescendants') }}</span>
                       </label>
                     }
@@ -415,7 +534,11 @@
           <aside class="effective-scope">
             <label class="field">
               <span class="field__label">{{ t('roles.scope.maxClass') }}</span>
-              <select class="field__input" [value]="maxClass() ?? ''" (change)="onMaxClassChange($any($event.target).value)">
+              <select
+                class="field__input"
+                [value]="maxClass() ?? ''"
+                (change)="onMaxClassChange($any($event.target).value)"
+              >
                 <option value="">{{ t('roles.scope.unrestricted') }}</option>
                 @for (classification of classifications(); track classification.id) {
                   <option [value]="classification.rank">{{ name(classification) }}</option>
@@ -428,22 +551,35 @@
                 <span class="preview__label">{{ t('roles.scope.preview') }}</span>
                 <span class="preview__chip">
                   {{ t('roles.scope.previewOrg') }}:
-                  {{ previewOrgCount() === 'all' ? t('roles.scope.previewAll') : previewOrgCount() }}
+                  {{
+                    previewOrgCount() === 'all' ? t('roles.scope.previewAll') : previewOrgCount()
+                  }}
                 </span>
                 <span class="preview__chip">
                   {{ t('roles.scope.previewDomains') }}:
-                  {{ previewDomCount() === 'all' ? t('roles.scope.previewAll') : previewDomCount() }}
+                  {{
+                    previewDomCount() === 'all' ? t('roles.scope.previewAll') : previewDomCount()
+                  }}
                 </span>
-                <span class="preview__chip">{{ t('roles.scope.previewClass') }}: {{ previewClass() }}</span>
+                <span class="preview__chip"
+                  >{{ t('roles.scope.previewClass') }}: {{ previewClass() }}</span
+                >
               </div>
             }
           </aside>
         </div>
       }
       <div footer>
-        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">{{ t('crud.cancel') }}</button>
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="close()">
+          {{ t('crud.cancel') }}
+        </button>
         @if (!isSysAdmin(role)) {
-          <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="saveScope()">
+          <button
+            type="button"
+            class="ds-btn ds-btn--primary"
+            [disabled]="saving()"
+            (click)="saveScope()"
+          >
             {{ saving() ? t('crud.saving') : t('crud.save') }}
           </button>
         }

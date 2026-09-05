@@ -1,4 +1,8 @@
-<div class="shell">
+<div
+  class="shell"
+  [class.shell--resizing]="sidebarResizing()"
+  [style.--sidebar-width]="sidebarWidth() + 'px'"
+>
   <aside
     #sidebar
     class="shell__sidebar"
@@ -15,13 +19,57 @@
         <span class="brand__name">{{ t('app.shortTitle') }}</span>
         <span class="brand__sub">{{ t('app.title') }}</span>
       </div>
-      <button type="button" class="sidebar-close" (click)="closeMobileNav()" [attr.aria-label]="t('nav.closeMenu')">
+      <button
+        type="button"
+        class="sidebar-close"
+        (click)="closeMobileNav()"
+        [attr.aria-label]="t('nav.closeMenu')"
+      >
         <app-icon name="x" />
       </button>
     </div>
 
+    <div class="nav-commandbar">
+      <label class="nav-search">
+        <span class="sr-only">{{ t('nav.search') }}</span>
+        <app-icon name="search" />
+        <input
+          type="search"
+          [value]="navQuery()"
+          (input)="navQuery.set($any($event.target).value)"
+          (keydown.escape)="clearNavigationSearch()"
+          [placeholder]="t('nav.searchPlaceholder')"
+          autocomplete="off"
+        />
+        @if (navQuery()) {
+          <button
+            type="button"
+            (click)="clearNavigationSearch()"
+            [attr.aria-label]="t('nav.clearSearch')"
+          >
+            <app-icon name="x" />
+          </button>
+        }
+      </label>
+      <button
+        type="button"
+        class="nav-sections-toggle"
+        (click)="toggleAllNavigationSections()"
+        [attr.aria-label]="allWorkspaceSectionsOpen() ? t('nav.collapseAll') : t('nav.expandAll')"
+        [attr.title]="allWorkspaceSectionsOpen() ? t('nav.collapseAll') : t('nav.expandAll')"
+      >
+        <span aria-hidden="true">{{ allWorkspaceSectionsOpen() ? '−' : '+' }}</span>
+      </button>
+    </div>
+
+    @if (navQuery()) {
+      <div class="nav-search-status" role="status">
+        <strong>{{ visibleNavigationItemCount() }}</strong> {{ t('nav.matches') }}
+      </div>
+    }
+
     <nav class="nav" [attr.aria-label]="t('nav.primary')">
-      @for (section of sections(); track section.id) {
+      @for (section of visibleSections(); track section.id) {
         @if (isWorkspaceSection(section)) {
           <section
             class="nav-workspace"
@@ -44,7 +92,9 @@
                   <span class="nav-workspace__title">{{ t(section.titleKey) }}</span>
                   <span class="nav-workspace__copy">{{ t(section.summaryKey!) }}</span>
                 </span>
-                <span class="nav-workspace__count">{{ section.items.length }} {{ t('nav.tools') }}</span>
+                <span class="nav-workspace__count"
+                  >{{ section.items.length }} {{ t('nav.tools') }}</span
+                >
               </a>
               <button
                 type="button"
@@ -76,7 +126,11 @@
                         </span>
                         <span>{{ t(item.labelKey) }}</span>
                         @if (item.badge && openTasks() > 0) {
-                          <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+                          <span
+                            class="nav__badge"
+                            [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')"
+                            >{{ openTasks() }}</span
+                          >
                         }
                       </a>
                     }
@@ -88,27 +142,71 @@
         } @else {
           <span class="nav__section">{{ t(section.titleKey) }}</span>
           @for (item of section.items; track item.link) {
-            <a class="nav__item" [routerLink]="item.link" routerLinkActive="nav__item--active" (click)="closeMobileNav()">
+            <a
+              class="nav__item"
+              [routerLink]="item.link"
+              routerLinkActive="nav__item--active"
+              (click)="closeMobileNav()"
+            >
               <span class="nav__icon" aria-hidden="true">
                 <app-icon [name]="item.iconName" />
               </span>
               <span>{{ t(item.labelKey) }}</span>
               @if (item.badge && openTasks() > 0) {
-                <span class="nav__badge" [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')">{{ openTasks() }}</span>
+                <span
+                  class="nav__badge"
+                  [attr.aria-label]="openTasks() + ' ' + t('nav.openTasks')"
+                  >{{ openTasks() }}</span
+                >
               }
             </a>
           }
         }
+      } @empty {
+        <div class="nav-empty">
+          <app-icon name="search" />
+          <strong>{{ t('nav.noMatches') }}</strong>
+          <button type="button" (click)="clearNavigationSearch()">
+            {{ t('nav.clearSearch') }}
+          </button>
+        </div>
       }
     </nav>
   </aside>
+  <div
+    class="sidebar-resizer"
+    role="separator"
+    aria-orientation="vertical"
+    [attr.aria-label]="t('nav.resizeMenu')"
+    [attr.aria-valuemin]="236"
+    [attr.aria-valuemax]="420"
+    [attr.aria-valuenow]="sidebarWidth()"
+    [attr.aria-valuetext]="sidebarWidth() + ' px'"
+    [attr.aria-hidden]="compactNav() ? 'true' : null"
+    [attr.tabindex]="compactNav() ? -1 : 0"
+    [attr.title]="t('nav.resizeHint')"
+    (pointerdown)="startSidebarResize($event)"
+    (keydown)="resizeSidebarWithKeyboard($event)"
+    (dblclick)="resetSidebarWidth()"
+  ></div>
   @if (mobileNavOpen()) {
-    <button type="button" class="shell__scrim" (click)="closeMobileNav()" [attr.aria-label]="t('nav.closeMenu')"></button>
+    <button
+      type="button"
+      class="shell__scrim"
+      (click)="closeMobileNav()"
+      [attr.aria-label]="t('nav.closeMenu')"
+    ></button>
   }
 
   <div class="shell__main">
     <header class="topbar">
-      <button #navToggle type="button" class="topbar__nav-toggle" (click)="openMobileNav()" [attr.aria-label]="t('nav.openMenu')">
+      <button
+        #navToggle
+        type="button"
+        class="topbar__nav-toggle"
+        (click)="openMobileNav()"
+        [attr.aria-label]="t('nav.openMenu')"
+      >
         <app-icon name="menu" />
       </button>
       <nav class="crumbs" [attr.aria-label]="t('nav.breadcrumb')">
@@ -133,7 +231,12 @@
               autocomplete="off"
             />
             @if (searchQuery()) {
-              <button type="button" class="topbar-search__clear" (click)="clearGlobalSearch()" [attr.aria-label]="t('crud.clear')">
+              <button
+                type="button"
+                class="topbar-search__clear"
+                (click)="clearGlobalSearch()"
+                [attr.aria-label]="t('crud.clear')"
+              >
                 <app-icon name="x" />
               </button>
             }
@@ -161,7 +264,10 @@
                         <div class="topbar-search__facet">
                           <span>{{ searchFacetLabel(facet.key) }}</span>
                           @for (value of facet.values.slice(0, 4); track value.value) {
-                            <button type="button" (click)="applySearchFacet(facet.key, value.value)">
+                            <button
+                              type="button"
+                              (click)="applySearchFacet(facet.key, value.value)"
+                            >
                               {{ value.value }} <small>{{ value.count }}</small>
                             </button>
                           }
@@ -187,7 +293,12 @@
                         <span class="topbar-search__text">
                           <b>{{ result.title }}</b>
                           @if (result.subtitle || result.detail) {
-                            <small>{{ result.subtitle }} @if (result.detail) { &middot; {{ result.detail }} }</small>
+                            <small
+                              >{{ result.subtitle }}
+                              @if (result.detail) {
+                                &middot; {{ result.detail }}
+                              }
+                            </small>
                           }
                         </span>
                         @if (result.status) {
@@ -216,7 +327,11 @@
           type="button"
           class="ds-btn ds-btn--ghost"
           (click)="theme.toggle()"
-          [attr.aria-label]="t('action.theme') + ': ' + (theme.theme() === 'dark' ? t('theme.light') : t('theme.dark'))"
+          [attr.aria-label]="
+            t('action.theme') +
+            ': ' +
+            (theme.theme() === 'dark' ? t('theme.light') : t('theme.dark'))
+          "
         >
           {{ theme.theme() === 'dark' ? t('theme.light') : t('theme.dark') }}
         </button>

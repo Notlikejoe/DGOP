@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+apps/web/src/app/core/primeui-license.local.ts
 
 node_modules/
 dist/

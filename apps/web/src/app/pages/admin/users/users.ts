@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -11,6 +18,14 @@ import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip } from '../../../shared/status-chip';
 import { AppIcon } from '../../../shared/app-icon';
+import { AvatarModule } from 'primeng/avatar';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { PasswordModule } from 'primeng/password';
+import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 
 interface RoleOption {
   id: string;
@@ -23,12 +38,26 @@ const USER_PASSWORD_MIN_LENGTH = 12;
 
 type State = 'loading' | 'ok' | 'error';
 type Mode = 'none' | 'create' | 'edit' | 'roles' | 'reset';
-type StatusFilter = 'all' | 'active' | 'inactive';
+type StatusFilter = 'active' | 'inactive';
 
 @Component({
   selector: 'app-users',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusChip, DatePipe, FormsModule, Modal, AppIcon],
+  imports: [
+    StatusChip,
+    DatePipe,
+    FormsModule,
+    Modal,
+    AppIcon,
+    AvatarModule,
+    ButtonModule,
+    InputTextModule,
+    MultiSelectModule,
+    PasswordModule,
+    TableModule,
+    TagModule,
+    ToggleSwitchModule,
+  ],
   templateUrl: './users.html',
   styleUrl: './users.scss',
 })
@@ -43,8 +72,8 @@ export class UsersPage implements OnInit {
   protected readonly users = signal<AdminUser[]>([]);
   protected readonly roleOptions = signal<RoleOption[]>([]);
   protected readonly search = signal('');
-  protected readonly statusFilter = signal<StatusFilter>('all');
-  protected readonly roleFilter = signal('all');
+  protected readonly statusFilter = signal<StatusFilter[]>([]);
+  protected readonly roleFilter = signal<string[]>([]);
   protected readonly selectedUserId = signal<string | null>(null);
 
   protected readonly mode = signal<Mode>('none');
@@ -66,6 +95,15 @@ export class UsersPage implements OnInit {
     };
   });
 
+  protected readonly statusOptions = computed(() => [
+    { label: this.t('users.active'), value: 'active' as StatusFilter },
+    { label: this.t('users.inactive'), value: 'inactive' as StatusFilter },
+  ]);
+
+  protected readonly roleFilterOptions = computed(() =>
+    this.roleOptions().map((role) => ({ label: this.name(role), value: role.code })),
+  );
+
   protected readonly filteredUsers = computed(() => {
     const query = this.search().trim().toLowerCase();
     const status = this.statusFilter();
@@ -76,12 +114,10 @@ export class UsersPage implements OnInit {
         !query ||
         user.displayName.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query);
-      const matchesStatus =
-        status === 'all' ||
-        (status === 'active' && user.isActive) ||
-        (status === 'inactive' && !user.isActive);
+      const userStatus: StatusFilter = user.isActive ? 'active' : 'inactive';
+      const matchesStatus = status.length === 0 || status.includes(userStatus);
       const matchesRole =
-        role === 'all' || user.roles.some((userRole) => userRole.code === role);
+        role.length === 0 || user.roles.some((userRole) => role.includes(userRole.code));
 
       return matchesQuery && matchesStatus && matchesRole;
     });
@@ -118,7 +154,10 @@ export class UsersPage implements OnInit {
 
   protected roleNames(user: AdminUser): string {
     const ar = this.i18n.lang() === 'ar';
-    return user.roles.map((role) => (ar ? role.nameAr : role.nameEn)).join(', ') || this.t('users.noRoles');
+    return (
+      user.roles.map((role) => (ar ? role.nameAr : role.nameEn)).join(', ') ||
+      this.t('users.noRoles')
+    );
   }
 
   protected name(option: { nameEn: string; nameAr: string }): string {
@@ -135,8 +174,8 @@ export class UsersPage implements OnInit {
 
   protected clearFilters(): void {
     this.search.set('');
-    this.statusFilter.set('all');
-    this.roleFilter.set('all');
+    this.statusFilter.set([]);
+    this.roleFilter.set([]);
   }
 
   protected initials(user: AdminUser): string {

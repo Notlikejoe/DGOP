@@ -35,9 +35,7 @@
                 "output": "bpmn-assets"
               }
             ],
-            "styles": [
-              "src/styles.scss"
-            ]
+            "styles": ["src/styles.scss"]
           },
           "configurations": {
             "production": {
@@ -54,8 +52,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "36kB",
-                  "maximumError": "40kB"
+                  "maximumWarning": "42kB",
+                  "maximumError": "45kB"
                 }
               ],
               "outputHashing": "all"
@@ -72,6 +70,9 @@
           "builder": "@angular/build:dev-server",
           "options": {
             "proxyConfig": "proxy.conf.json",
+            "host": "127.0.0.1",
+            "allowedHosts": ["localhost", "127.0.0.1"],
+            "prebundle": false,
             "port": 4205
           },
           "configurations": {

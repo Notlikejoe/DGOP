@@ -70,6 +70,33 @@ npm run start:local
 # open http://localhost:3005
 ```
 
+### PrimeNG-ready frontend
+
+The web app is aligned to Angular 22.1 and includes PrimeNG 22, Angular CDK,
+`@primeuix/themes`, and the tree-shakable `@primeicons/angular` icon package.
+The shared defaults live in `apps/web/src/app/core/primeng.config.ts` and use the
+Aura preset, DGOP's existing `[data-theme='dark']` selector, an isolated CSS
+layer, and overlay z-indexes that sit above the application shell.
+
+PrimeNG 22 requires a free Community or Commercial PrimeUI license. Keep the key
+in the ignored `apps/web/src/app/core/primeui-license.local.ts` file. The app
+merges the local key into the shared provider configuration:
+
+```ts
+import { providePrimeNG } from 'primeng/config';
+import { dgopPrimeNgConfig } from './core/primeng.config';
+import { primeUiLicense } from './core/primeui-license.local';
+
+providePrimeNG({ ...dgopPrimeNgConfig, license: primeUiLicense });
+```
+
+Import every component or SVG icon directly in the standalone component that
+uses it so unused PrimeNG code remains tree-shakable. Prefer theme design-token
+customization over global `.p-*` CSS overrides. The Users & Roles page is the
+initial PrimeNG pilot, using PrimeNG buttons, inputs, selects, avatars, tags,
+and table while preserving DGOP's permissions, API contracts, bilingual labels,
+and custom application shell.
+
 `start:local` checks migration state, database connectivity, the administrator's
 active role and password, then verifies HTTP login and the session cookie before
 printing the ready URL. It never changes passwords. Run `npm run local:check` to
@@ -138,31 +165,31 @@ Share that URL so anyone can access the app from anywhere. The URL changes every
 
 ## Project scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run install:all` | Install API + web dependencies |
-| `npm run local:prepare` | Create local secrets in ignored .env; preserve existing local passwords |
-| `npm run local:setup` | Deploy migrations; seed only an entirely empty local database; verify admin |
-| `npm run start:local` | Start the built local app after database/login readiness checks |
-| `npm run local:check` | Check migrations, configured credentials, HTTP login and session |
-| `npm run local:credentials` | Explicit audited local admin password synchronization, without reseeding |
-| `npm run test:local` | Test local setup safeguards and readiness behavior |
-| `npm run test:local:integration` | Verify fresh setup, repeat setup, password repair and HTTP login in a disposable local database; requires PostgreSQL CREATE DATABASE permission and a stopped app |
-| `npm run dev` | Run API + Angular dev server together |
-| `npm run build` | Build web then api |
-| `npm start` | Run the API (serves built UI) on `PORT` |
-| `npm run demo:prepare` | Rotate ignored local `.env` demo secrets before shared demos |
-| `npm run start:demo` | Run the built API/UI with production demo safeguards |
-| `npm run db:status` | Check Prisma migration status using the root `.env` |
-| `npm run db:migrate` | Apply Prisma migrations to `dgop_dev` |
-| `npm run db:seed:local` | Seed local lookup/demo data after loopback verification |
-| `npm run qa:api` | Run static API authorization and seed-safety checks |
-| `npm run qa:web` | Run static web UX/i18n/route/theme/RTL checks |
-| `npm run qa:ui` | Smoke-test login and key UI routes with Playwright against a running app |
-| `npm run qa` | Run API and web static quality checks together |
-| `npm run qa:release` | Require a clean checkout, run static/API/web/database/dependency/build gates, then exercise authenticated browser routes against the production build |
-| `npm run publish:external` | Build, run, and expose over HTTPS |
-| `npm run publish:external:dry-run` | Verify the external publish command path without starting a tunnel |
+| Command                            | Description                                                                                                                                                       |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run install:all`              | Install API + web dependencies                                                                                                                                    |
+| `npm run local:prepare`            | Create local secrets in ignored .env; preserve existing local passwords                                                                                           |
+| `npm run local:setup`              | Deploy migrations; seed only an entirely empty local database; verify admin                                                                                       |
+| `npm run start:local`              | Start the built local app after database/login readiness checks                                                                                                   |
+| `npm run local:check`              | Check migrations, configured credentials, HTTP login and session                                                                                                  |
+| `npm run local:credentials`        | Explicit audited local admin password synchronization, without reseeding                                                                                          |
+| `npm run test:local`               | Test local setup safeguards and readiness behavior                                                                                                                |
+| `npm run test:local:integration`   | Verify fresh setup, repeat setup, password repair and HTTP login in a disposable local database; requires PostgreSQL CREATE DATABASE permission and a stopped app |
+| `npm run dev`                      | Run API + Angular dev server together                                                                                                                             |
+| `npm run build`                    | Build web then api                                                                                                                                                |
+| `npm start`                        | Run the API (serves built UI) on `PORT`                                                                                                                           |
+| `npm run demo:prepare`             | Rotate ignored local `.env` demo secrets before shared demos                                                                                                      |
+| `npm run start:demo`               | Run the built API/UI with production demo safeguards                                                                                                              |
+| `npm run db:status`                | Check Prisma migration status using the root `.env`                                                                                                               |
+| `npm run db:migrate`               | Apply Prisma migrations to `dgop_dev`                                                                                                                             |
+| `npm run db:seed:local`            | Seed local lookup/demo data after loopback verification                                                                                                           |
+| `npm run qa:api`                   | Run static API authorization and seed-safety checks                                                                                                               |
+| `npm run qa:web`                   | Run static web UX/i18n/route/theme/RTL checks                                                                                                                     |
+| `npm run qa:ui`                    | Smoke-test login and key UI routes with Playwright against a running app                                                                                          |
+| `npm run qa`                       | Run API and web static quality checks together                                                                                                                    |
+| `npm run qa:release`               | Require a clean checkout, run static/API/web/database/dependency/build gates, then exercise authenticated browser routes against the production build             |
+| `npm run publish:external`         | Build, run, and expose over HTTPS                                                                                                                                 |
+| `npm run publish:external:dry-run` | Verify the external publish command path without starting a tunnel                                                                                                |
 
 `npm run qa:ui` expects the API and web app to be running. It uses Playwright from
 `apps/web/node_modules`, `NODE_PATH`, `DGOP_PLAYWRIGHT_NODE_MODULES`, or the local

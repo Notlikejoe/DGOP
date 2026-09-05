@@ -1,18 +1,18 @@
-import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const webDir = join(root, 'apps', 'web');
-const cliPath = join(webDir, 'node_modules', '@angular', 'cli', 'bin', 'ng.js');
+const webDir = join(root, "apps", "web");
+const cliPath = join(webDir, "node_modules", "@angular", "cli", "bin", "ng.js");
 
 const commandMap = {
-  build: ['build'],
-  start: ['serve'],
-  test: ['test'],
-  watch: ['build', '--watch', '--configuration', 'development'],
+  build: ["build"],
+  start: ["serve"],
+  test: ["test"],
+  watch: ["build", "--watch", "--configuration", "development"],
 };
 
 function parseVersion(value) {
@@ -28,37 +28,52 @@ function parseVersion(value) {
 function satisfiesAngular(version) {
   if (!version) return false;
   if (version.major >= 26) return true;
-  if (version.major === 24) return version.minor > 15 || (version.minor === 15 && version.patch >= 0);
-  if (version.major === 22) return version.minor > 22 || (version.minor === 22 && version.patch >= 3);
+  if (version.major === 24)
+    return version.minor > 15 || (version.minor === 15 && version.patch >= 0);
+  if (version.major === 22)
+    return version.minor > 22 || (version.minor === 22 && version.patch >= 3);
   return false;
 }
 
 function scanBundledNode() {
   const codexRuntime = join(
     homedir(),
-    '.cache',
-    'codex-runtimes',
-    'codex-primary-runtime',
-    'dependencies',
-    'node',
-    'bin',
-    process.platform === 'win32' ? 'node.exe' : 'node',
+    ".cache",
+    "codex-runtimes",
+    "codex-primary-runtime",
+    "dependencies",
+    "node",
+    "bin",
+    process.platform === "win32" ? "node.exe" : "node",
   );
   if (existsSync(codexRuntime)) {
-    const result = spawnSync(codexRuntime, ['-v'], { encoding: 'utf8' });
-    if (result.status === 0 && satisfiesAngular(parseVersion(result.stdout.trim()))) return codexRuntime;
+    const result = spawnSync(codexRuntime, ["-v"], { encoding: "utf8" });
+    if (
+      result.status === 0 &&
+      satisfiesAngular(parseVersion(result.stdout.trim()))
+    )
+      return codexRuntime;
   }
 
-  const rootDir = join(tmpdir(), 'dgop-node-runtime');
+  const rootDir = join(tmpdir(), "dgop-node-runtime");
   if (!existsSync(rootDir)) return null;
   const candidates = readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('node-v'))
-    .map((entry) => join(rootDir, entry.name, process.platform === 'win32' ? 'node.exe' : 'bin/node'))
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith("node-v"))
+    .map((entry) =>
+      join(
+        rootDir,
+        entry.name,
+        process.platform === "win32" ? "node.exe" : "bin/node",
+      ),
+    )
     .filter((path) => existsSync(path));
 
   for (const candidate of candidates) {
-    const result = spawnSync(candidate, ['-v'], { encoding: 'utf8' });
-    if (result.status === 0 && satisfiesAngular(parseVersion(result.stdout.trim()))) {
+    const result = spawnSync(candidate, ["-v"], { encoding: "utf8" });
+    if (
+      result.status === 0 &&
+      satisfiesAngular(parseVersion(result.stdout.trim()))
+    ) {
       return candidate;
     }
   }
@@ -72,32 +87,81 @@ function resolveNode() {
   return scanBundledNode();
 }
 
-const [command = 'build', ...extraArgs] = process.argv.slice(2);
+const [command = "build", ...extraArgs] = process.argv.slice(2);
 const ngArgs = commandMap[command];
 if (!ngArgs) {
-  console.error(`Unknown web command "${command}". Use build, start, test, or watch.`);
+  console.error(
+    `Unknown web command "${command}". Use build, start, test, or watch.`,
+  );
   process.exit(1);
 }
 
 if (!existsSync(cliPath)) {
-  console.error('Angular CLI is not installed. Run npm run install:all first.');
+  console.error("Angular CLI is not installed. Run npm run install:all first.");
   process.exit(1);
 }
 
 const node = resolveNode();
 if (!node) {
   console.error(
-    'Angular 22 requires Node.js 22.22.3+, 24.15.0+, or 26+. Set DGOP_NODE_EXE to a compatible node.exe or upgrade Node.js.',
+    "Angular 22 requires Node.js 22.22.3+, 24.15.0+, or 26+. Set DGOP_NODE_EXE to a compatible node.exe or upgrade Node.js.",
   );
   process.exit(1);
 }
 
-const result = spawnSync(node, [cliPath, ...ngArgs, ...extraArgs], {
-  cwd: webDir,
-  env: process.env,
-  stdio: 'inherit',
-  shell: false,
-});
+if (command === "start") {
+  const proxy = spawn(
+    node,
+    [join(root, "scripts", "loopback-proxy.mjs"), "4205"],
+    {
+      cwd: root,
+      env: process.env,
+      stdio: "inherit",
+      shell: false,
+    },
+  );
+  const angular = spawn(node, [cliPath, ...ngArgs, ...extraArgs], {
+    cwd: webDir,
+    env: process.env,
+    stdio: "inherit",
+    shell: false,
+  });
 
-if (result.error) console.error(result.error.message);
-process.exit(result.status ?? 1);
+  let stopping = false;
+  function stop(exitCode = 0) {
+    if (stopping) return;
+    stopping = true;
+    if (!angular.killed) angular.kill();
+    if (!proxy.killed) proxy.kill();
+    process.exit(exitCode);
+  }
+
+  proxy.on("error", (error) => {
+    console.error(error.message);
+    stop(1);
+  });
+  proxy.on("exit", (code) => {
+    if (!stopping && code !== 0) stop(code ?? 1);
+  });
+  angular.on("error", (error) => {
+    console.error(error.message);
+    stop(1);
+  });
+  angular.on("exit", (code) => stop(code ?? 1));
+  process.on("SIGINT", () => stop(0));
+  process.on("SIGTERM", () => stop(0));
+  process.on("exit", () => {
+    if (!angular.killed) angular.kill();
+    if (!proxy.killed) proxy.kill();
+  });
+} else {
+  const result = spawnSync(node, [cliPath, ...ngArgs, ...extraArgs], {
+    cwd: webDir,
+    env: process.env,
+    stdio: "inherit",
+    shell: false,
+  });
+
+  if (result.error) console.error(result.error.message);
+  process.exit(result.status ?? 1);
+}

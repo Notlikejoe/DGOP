@@ -1,13 +1,27 @@
-import { createHash } from 'node:crypto';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ApprovalStatus, AssignmentTargetType, Prisma, WorkflowDelegationStatus } from '@prisma/client';
-import { AuditService } from '../audit/audit.service';
-import { AuthUser } from '../auth/auth.types';
-import { parsePageParams, toPaged } from '../common/pagination';
-import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
-import { PrismaService } from '../prisma/prisma.service';
-import { ScopeService, EffectiveScope } from './scope.service';
-import { OwnerDelegateValidationService } from './owner-delegate-validation.service';
+import { createHash } from "node:crypto";
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  ApprovalStatus,
+  AssignmentTargetType,
+  Prisma,
+  WorkflowDelegationStatus,
+} from "@prisma/client";
+import { AuditService } from "../audit/audit.service";
+import { AuthUser } from "../auth/auth.types";
+import { parsePageParams, toPaged } from "../common/pagination";
+import {
+  formatBusinessSequence,
+  nextAvailableBusinessCode,
+} from "../common/business-sequence";
+import { PrismaService } from "../prisma/prisma.service";
+import { ScopeService, EffectiveScope } from "./scope.service";
+import { OwnerDelegateValidationService } from "./owner-delegate-validation.service";
 import {
   AccessMatrixQueryDto,
   BulkCreateAccessGrantDto,
@@ -24,19 +38,19 @@ import {
   UpdateAccessGrantEnforcementDto,
   UpdateAccessGrantDto,
   ValidateAccessGrantImportDto,
-} from './access.dto';
+} from "./access.dto";
 
-const ADMIN_ROLES = ['system_admin', 'dmo_admin'];
+const ADMIN_ROLES = ["system_admin", "dmo_admin"];
 const ACCESS_GRANT_DEFAULT_PAGE_SIZE = 50;
-const ACTIVE_GRANT_STATUSES = new Set(['requested', 'active']);
-const TERMINAL_GRANT_STATUSES = ['expired', 'rejected', 'revoked'] as const;
+const ACTIVE_GRANT_STATUSES = new Set(["requested", "active"]);
+const TERMINAL_GRANT_STATUSES = ["expired", "rejected", "revoked"] as const;
 const DEFAULT_ACCESS_IMPORT_ROW_LIMIT = 10_000;
 const ACCESS_MATRIX_MAX_ASSETS = 100;
 const ACCESS_MATRIX_MAX_PRINCIPALS = 50;
 const ACCESS_MATRIX_MAX_GRANTS = 10_000;
 const EFFECTIVE_ACCESS_BATCH_SIZE = 500;
 
-type ImportAction = 'create' | 'update' | 'revoke';
+type ImportAction = "create" | "update" | "revoke";
 type ImportPlanRow = {
   row: number;
   action: ImportAction | string;
@@ -44,7 +58,14 @@ type ImportPlanRow = {
   valid: boolean;
   errors: string[];
   values: Record<string, string>;
-  existing?: { id: string; code: string; version: number; status: string; ownerDecision: string; assetId: string } | null;
+  existing?: {
+    id: string;
+    code: string;
+    version: number;
+    status: string;
+    ownerDecision: string;
+    assetId: string;
+  } | null;
   create?: {
     assetId: string;
     principalType: string;
@@ -59,57 +80,107 @@ type ImportPlanRow = {
   profileId?: string | null;
 };
 
-type ExistingImportGrant = { id: string; code: string; version: number; status: string; ownerDecision: string; assetId: string };
+type ExistingImportGrant = {
+  id: string;
+  code: string;
+  version: number;
+  status: string;
+  ownerDecision: string;
+  assetId: string;
+};
 type VisibleImportAsset = { id: string; code: string; assetType: string };
 
 function csvCell(value: unknown): string {
-  const text = value == null ? '' : String(value);
+  const text = value == null ? "" : String(value);
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function parseCsv(content: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
-  let cell = '';
+  let cell = "";
   let quoted = false;
   for (let index = 0; index < content.length; index++) {
     const char = content[index];
     if (quoted) {
-      if (char === '"' && content[index + 1] === '"') { cell += '"'; index++; }
-      else if (char === '"') quoted = false;
+      if (char === '"' && content[index + 1] === '"') {
+        cell += '"';
+        index++;
+      } else if (char === '"') quoted = false;
       else cell += char;
       continue;
     }
-    if (char === '"') { quoted = true; continue; }
-    if (char === ',') { row.push(cell.trim()); cell = ''; continue; }
-    if (char === '\n') { row.push(cell.trim()); rows.push(row); row = []; cell = ''; continue; }
-    if (char !== '\r') cell += char;
+    if (char === '"') {
+      quoted = true;
+      continue;
+    }
+    if (char === ",") {
+      row.push(cell.trim());
+      cell = "";
+      continue;
+    }
+    if (char === "\n") {
+      row.push(cell.trim());
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    if (char !== "\r") cell += char;
   }
-  if (quoted) throw new BadRequestException('CSV contains an unterminated quoted value');
-  if (cell.length || row.length) { row.push(cell.trim()); rows.push(row); }
+  if (quoted)
+    throw new BadRequestException("CSV contains an unterminated quoted value");
+  if (cell.length || row.length) {
+    row.push(cell.trim());
+    rows.push(row);
+  }
   return rows.filter((candidate) => candidate.some(Boolean));
 }
 
 const grantInclude = {
-  asset: { select: { id: true, code: true, nameEn: true, nameAr: true, assetType: true, domainId: true, orgUnitId: true, classificationId: true } },
-  profile: { select: { id: true, code: true, nameEn: true, assetType: true, version: true, permissionCodesJson: true } },
+  asset: {
+    select: {
+      id: true,
+      code: true,
+      nameEn: true,
+      nameAr: true,
+      assetType: true,
+      domainId: true,
+      orgUnitId: true,
+      classificationId: true,
+    },
+  },
+  profile: {
+    select: {
+      id: true,
+      code: true,
+      nameEn: true,
+      assetType: true,
+      version: true,
+      permissionCodesJson: true,
+    },
+  },
   workflowCase: { select: { id: true, code: true, title: true, status: true } },
   permissions: {
     select: {
       permissionCode: true,
       source: true,
-      permission: { select: { nameEn: true, nameAr: true, riskLevel: true, action: true } },
+      permission: {
+        select: { nameEn: true, nameAr: true, riskLevel: true, action: true },
+      },
     },
-    orderBy: { permissionCode: 'asc' as const },
+    orderBy: { permissionCode: "asc" as const },
   },
 };
 
-type AccessGrantWithInclude = Prisma.AccessGrantGetPayload<{ include: typeof grantInclude }>;
+type AccessGrantWithInclude = Prisma.AccessGrantGetPayload<{
+  include: typeof grantInclude;
+}>;
 type EffectiveAccessRow = {
   grantId: string;
   grantCode: string;
   grantVersion: number;
-  asset: AccessGrantWithInclude['asset'];
+  asset: AccessGrantWithInclude["asset"];
   principalType: string;
   principalId: string;
   permissionCode: string;
@@ -133,11 +204,11 @@ type EffectiveAccessRow = {
 const grantDetailInclude = {
   ...grantInclude,
   enforcementAttempts: {
-    orderBy: [{ createdAt: 'desc' as const }],
+    orderBy: [{ createdAt: "desc" as const }],
     take: 25,
   },
   versions: {
-    orderBy: [{ version: 'desc' as const }],
+    orderBy: [{ version: "desc" as const }],
     take: 25,
   },
 };
@@ -158,7 +229,7 @@ export class AccessGrantsService {
         isActive: true,
         ...(assetType ? { assetType } : {}),
       },
-      orderBy: [{ assetType: 'asc' }, { action: 'asc' }, { version: 'desc' }],
+      orderBy: [{ assetType: "asc" }, { action: "asc" }, { version: "desc" }],
     });
   }
 
@@ -169,36 +240,57 @@ export class AccessGrantsService {
         isActive: true,
         ...(assetType ? { assetType } : {}),
       },
-      orderBy: [{ assetType: 'asc' }, { code: 'asc' }, { version: 'desc' }],
+      orderBy: [{ assetType: "asc" }, { code: "asc" }, { version: "desc" }],
     });
   }
 
   async listPrincipals(principalType?: string | null) {
     const type = principalType?.trim().toLowerCase();
     if (type && !ACCESS_GRANT_PRINCIPAL_TYPES.includes(type as never)) {
-      throw new BadRequestException('Principal type must be role or group');
+      throw new BadRequestException("Principal type must be role or group");
     }
     const [roles, groups] = await Promise.all([
-      !type || type === 'role'
+      !type || type === "role"
         ? this.prisma.role.findMany({
             where: { isActive: true, deletedAt: null },
             select: { code: true, nameEn: true, nameAr: true },
-            orderBy: { nameEn: 'asc' },
+            orderBy: { nameEn: "asc" },
             take: 500,
           })
         : Promise.resolve([]),
-      !type || type === 'group'
+      !type || type === "group"
         ? this.prisma.accessPrincipalDirectory.findMany({
-            where: { principalType: 'group', isActive: true, deletedAt: null },
-            select: { externalId: true, nameEn: true, nameAr: true, source: true, lastSyncedAt: true },
-            orderBy: { nameEn: 'asc' },
+            where: { principalType: "group", isActive: true, deletedAt: null },
+            select: {
+              externalId: true,
+              nameEn: true,
+              nameAr: true,
+              source: true,
+              lastSyncedAt: true,
+            },
+            orderBy: { nameEn: "asc" },
             take: 500,
           })
         : Promise.resolve([]),
     ]);
     return [
-      ...roles.map((role) => ({ type: 'role', id: role.code, label: role.nameEn, nameAr: role.nameAr, source: 'dgop_role_registry', active: true })),
-      ...groups.map((group) => ({ type: 'group', id: group.externalId, label: group.nameEn, nameAr: group.nameAr, source: group.source, active: true, lastSyncedAt: group.lastSyncedAt })),
+      ...roles.map((role) => ({
+        type: "role",
+        id: role.code,
+        label: role.nameEn,
+        nameAr: role.nameAr,
+        source: "dgop_role_registry",
+        active: true,
+      })),
+      ...groups.map((group) => ({
+        type: "group",
+        id: group.externalId,
+        label: group.nameEn,
+        nameAr: group.nameAr,
+        source: group.source,
+        active: true,
+        lastSyncedAt: group.lastSyncedAt,
+      })),
     ];
   }
 
@@ -209,12 +301,15 @@ export class AccessGrantsService {
     if (filters.assetId) where.assetId = filters.assetId;
     if (filters.principalId) where.principalId = filters.principalId;
     if (filters.status) where.status = filters.status;
-    const page = parsePageParams(filters.page ?? 1, filters.pageSize ?? ACCESS_GRANT_DEFAULT_PAGE_SIZE)!;
+    const page = parsePageParams(
+      filters.page ?? 1,
+      filters.pageSize ?? ACCESS_GRANT_DEFAULT_PAGE_SIZE,
+    )!;
     const [rows, total] = await Promise.all([
       this.prisma.accessGrant.findMany({
         where,
         include: grantInclude,
-        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
         skip: page.skip,
         take: page.take,
       }),
@@ -224,40 +319,70 @@ export class AccessGrantsService {
   }
 
   async accessMatrix(user: AuthUser, query: AccessMatrixQueryDto) {
-    const assetLimit = Math.min(Math.max(query.assetLimit ?? ACCESS_MATRIX_MAX_ASSETS, 1), ACCESS_MATRIX_MAX_ASSETS);
+    const assetLimit = Math.min(
+      Math.max(query.assetLimit ?? ACCESS_MATRIX_MAX_ASSETS, 1),
+      ACCESS_MATRIX_MAX_ASSETS,
+    );
     const assetPage = Math.max(query.assetPage ?? 1, 1);
-    const principalLimit = Math.min(Math.max(query.principalLimit ?? ACCESS_MATRIX_MAX_PRINCIPALS, 1), ACCESS_MATRIX_MAX_PRINCIPALS);
-    const principalTypes = query.principalType ? [query.principalType] : ['role', 'group'];
+    const principalLimit = Math.min(
+      Math.max(query.principalLimit ?? ACCESS_MATRIX_MAX_PRINCIPALS, 1),
+      ACCESS_MATRIX_MAX_PRINCIPALS,
+    );
+    const principalTypes = query.principalType?.length
+      ? query.principalType
+      : ["role", "group"];
     const grantFilter: Prisma.AccessGrantWhereInput = {
       principalType: { in: principalTypes },
-      ...(query.profileId ? { profileId: query.profileId } : {}),
-      ...(query.permissionCode ? { permissions: { some: { permissionCode: query.permissionCode } } } : {}),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.enforcementStatus ? { enforcementStatus: query.enforcementStatus } : {}),
+      ...(query.profileId?.length
+        ? { profileId: { in: query.profileId } }
+        : {}),
+      ...(query.permissionCode?.length
+        ? {
+            permissions: {
+              some: { permissionCode: { in: query.permissionCode } },
+            },
+          }
+        : {}),
+      ...(query.status?.length ? { status: { in: query.status } } : {}),
+      ...(query.enforcementStatus?.length
+        ? { enforcementStatus: { in: query.enforcementStatus } }
+        : {}),
     };
-    const hasGrantFilter = Boolean(query.profileId || query.permissionCode || query.status || query.enforcementStatus);
+    const hasGrantFilter = Boolean(
+      query.profileId?.length ||
+      query.permissionCode?.length ||
+      query.status?.length ||
+      query.enforcementStatus?.length,
+    );
     const assetSearch = query.assetSearch?.trim();
     const assetWhere: Prisma.DataAssetWhereInput = {
       ...(await this.assetVisibilityWhereForUser(user)),
-      ...(query.assetType ? { assetType: query.assetType } : {}),
+      ...(query.assetType?.length
+        ? { assetType: { in: query.assetType } }
+        : {}),
       ...(query.domainId ? { domainId: query.domainId } : {}),
-      ...(query.classificationId ? { classificationId: query.classificationId } : {}),
+      ...(query.classificationId
+        ? { classificationId: query.classificationId }
+        : {}),
       ...(query.systemId ? { systemId: query.systemId } : {}),
-      ...(assetSearch ? {
-        OR: [
-          { code: { contains: assetSearch, mode: 'insensitive' } },
-          { nameEn: { contains: assetSearch, mode: 'insensitive' } },
-          { nameAr: { contains: assetSearch, mode: 'insensitive' } },
-        ],
-      } : {}),
+      ...(assetSearch
+        ? {
+            OR: [
+              { code: { contains: assetSearch, mode: "insensitive" } },
+              { nameEn: { contains: assetSearch, mode: "insensitive" } },
+              { nameAr: { contains: assetSearch, mode: "insensitive" } },
+            ],
+          }
+        : {}),
       ...(hasGrantFilter ? { accessGrants: { some: grantFilter } } : {}),
     };
-    const direction = query.sortDirection ?? 'asc';
-    const assetOrderBy: Prisma.DataAssetOrderByWithRelationInput = query.sortBy === 'name'
-      ? { nameEn: direction }
-      : query.sortBy === 'asset_type'
-        ? { assetType: direction }
-        : { code: direction };
+    const direction = query.sortDirection ?? "asc";
+    const assetOrderBy: Prisma.DataAssetOrderByWithRelationInput =
+      query.sortBy === "name"
+        ? { nameEn: direction }
+        : query.sortBy === "asset_type"
+          ? { assetType: direction }
+          : { code: direction };
     const [assets, totalAssets] = await Promise.all([
       this.prisma.dataAsset.findMany({
         where: assetWhere,
@@ -271,11 +396,17 @@ export class AccessGrantsService {
           lifecycleStatus: true,
           ownerStatus: true,
           ownerName: true,
-          domain: { select: { id: true, code: true, nameEn: true, nameAr: true } },
-          classification: { select: { id: true, code: true, nameEn: true, nameAr: true } },
-          system: { select: { id: true, code: true, nameEn: true, nameAr: true } },
+          domain: {
+            select: { id: true, code: true, nameEn: true, nameAr: true },
+          },
+          classification: {
+            select: { id: true, code: true, nameEn: true, nameAr: true },
+          },
+          system: {
+            select: { id: true, code: true, nameEn: true, nameAr: true },
+          },
         },
-        orderBy: [assetOrderBy, { id: 'asc' }],
+        orderBy: [assetOrderBy, { id: "asc" }],
         skip: (assetPage - 1) * assetLimit,
         take: assetLimit,
       }),
@@ -283,74 +414,156 @@ export class AccessGrantsService {
     ]);
     const assetIds = assets.map((asset) => asset.id);
     const principalSearch = query.principalSearch?.trim();
-    const [roles, groups, referencedPrincipals, permissions] = await Promise.all([
-      principalTypes.includes('role')
-        ? this.prisma.role.findMany({
-            where: {
-              isActive: true,
-              deletedAt: null,
-              ...(principalSearch ? {
-                OR: [
-                  { code: { contains: principalSearch, mode: 'insensitive' } },
-                  { nameEn: { contains: principalSearch, mode: 'insensitive' } },
-                  { nameAr: { contains: principalSearch, mode: 'insensitive' } },
-                ],
-              } : {}),
-            },
-            select: { code: true, nameEn: true, nameAr: true },
-            orderBy: [{ code: 'asc' }],
-            take: principalLimit,
-          })
-        : Promise.resolve([]),
-      principalTypes.includes('group')
-        ? this.prisma.accessPrincipalDirectory.findMany({
-            where: {
-              principalType: 'group',
-              isActive: true,
-              deletedAt: null,
-              ...(principalSearch ? {
-                OR: [
-                  { externalId: { contains: principalSearch, mode: 'insensitive' } },
-                  { nameEn: { contains: principalSearch, mode: 'insensitive' } },
-                  { nameAr: { contains: principalSearch, mode: 'insensitive' } },
-                ],
-              } : {}),
-            },
-            select: { externalId: true, nameEn: true, nameAr: true, source: true },
-            orderBy: [{ externalId: 'asc' }],
-            take: principalLimit,
-          })
-        : Promise.resolve([]),
-      assetIds.length
-        ? this.prisma.accessGrant.findMany({
-            where: {
-              assetId: { in: assetIds },
-              ...grantFilter,
-              ...(principalSearch ? { principalId: { contains: principalSearch, mode: 'insensitive' } } : {}),
-            },
-            select: {
-              principalType: true,
-              principalId: true,
-            },
-            distinct: ['principalType', 'principalId'],
-            orderBy: [{ principalType: 'asc' }, { principalId: 'asc' }],
-            take: principalLimit,
-          })
-        : Promise.resolve([]),
-      this.prisma.accessPermissionCatalog.findMany({
-        where: { isActive: true, deletedAt: null, ...(query.assetType ? { assetType: query.assetType } : {}) },
-        select: { code: true, assetType: true, action: true, nameEn: true, nameAr: true, description: true, riskLevel: true },
-        orderBy: [{ assetType: 'asc' }, { action: 'asc' }],
-        take: 1_000,
-      }),
-    ]);
+    const [roles, groups, referencedPrincipals, permissions] =
+      await Promise.all([
+        principalTypes.includes("role")
+          ? this.prisma.role.findMany({
+              where: {
+                isActive: true,
+                deletedAt: null,
+                ...(principalSearch
+                  ? {
+                      OR: [
+                        {
+                          code: {
+                            contains: principalSearch,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          nameEn: {
+                            contains: principalSearch,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          nameAr: {
+                            contains: principalSearch,
+                            mode: "insensitive",
+                          },
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+              select: { code: true, nameEn: true, nameAr: true },
+              orderBy: [{ code: "asc" }],
+              take: principalLimit,
+            })
+          : Promise.resolve([]),
+        principalTypes.includes("group")
+          ? this.prisma.accessPrincipalDirectory.findMany({
+              where: {
+                principalType: "group",
+                isActive: true,
+                deletedAt: null,
+                ...(principalSearch
+                  ? {
+                      OR: [
+                        {
+                          externalId: {
+                            contains: principalSearch,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          nameEn: {
+                            contains: principalSearch,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          nameAr: {
+                            contains: principalSearch,
+                            mode: "insensitive",
+                          },
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+              select: {
+                externalId: true,
+                nameEn: true,
+                nameAr: true,
+                source: true,
+              },
+              orderBy: [{ externalId: "asc" }],
+              take: principalLimit,
+            })
+          : Promise.resolve([]),
+        assetIds.length
+          ? this.prisma.accessGrant.findMany({
+              where: {
+                assetId: { in: assetIds },
+                ...grantFilter,
+                ...(principalSearch
+                  ? {
+                      principalId: {
+                        contains: principalSearch,
+                        mode: "insensitive",
+                      },
+                    }
+                  : {}),
+              },
+              select: {
+                principalType: true,
+                principalId: true,
+              },
+              distinct: ["principalType", "principalId"],
+              orderBy: [{ principalType: "asc" }, { principalId: "asc" }],
+              take: principalLimit,
+            })
+          : Promise.resolve([]),
+        this.prisma.accessPermissionCatalog.findMany({
+          where: {
+            isActive: true,
+            deletedAt: null,
+            ...(query.assetType?.length
+              ? { assetType: { in: query.assetType } }
+              : {}),
+          },
+          select: {
+            code: true,
+            assetType: true,
+            action: true,
+            nameEn: true,
+            nameAr: true,
+            description: true,
+            riskLevel: true,
+          },
+          orderBy: [{ assetType: "asc" }, { action: "asc" }],
+          take: 1_000,
+        }),
+      ]);
 
-    const principalMap = new Map<string, { type: string; id: string; label: string; nameAr?: string | null; source: string }>();
+    const principalMap = new Map<
+      string,
+      {
+        type: string;
+        id: string;
+        label: string;
+        nameAr?: string | null;
+        source: string;
+      }
+    >();
     for (const role of roles) {
-      principalMap.set(`role:${role.code}`, { type: 'role', id: role.code, label: role.nameEn, nameAr: role.nameAr, source: 'dgop_role_registry' });
+      principalMap.set(`role:${role.code}`, {
+        type: "role",
+        id: role.code,
+        label: role.nameEn,
+        nameAr: role.nameAr,
+        source: "dgop_role_registry",
+      });
     }
     for (const group of groups) {
-      principalMap.set(`group:${group.externalId}`, { type: 'group', id: group.externalId, label: group.nameEn, nameAr: group.nameAr, source: group.source });
+      principalMap.set(`group:${group.externalId}`, {
+        type: "group",
+        id: group.externalId,
+        label: group.nameEn,
+        nameAr: group.nameAr,
+        source: group.source,
+      });
     }
     for (const principal of referencedPrincipals) {
       const key = `${principal.principalType}:${principal.principalId}`;
@@ -359,31 +572,45 @@ export class AccessGrantsService {
           type: principal.principalType,
           id: principal.principalId,
           label: principal.principalId,
-          source: 'grant_reference',
+          source: "grant_reference",
         });
       }
     }
     const referencedPrincipalKeys = new Set(
-      referencedPrincipals.map((principal) => `${principal.principalType}:${principal.principalId}`),
+      referencedPrincipals.map(
+        (principal) => `${principal.principalType}:${principal.principalId}`,
+      ),
     );
     const principals = [...principalMap.values()]
       .sort((left, right) => {
-        const leftReferenced = referencedPrincipalKeys.has(`${left.type}:${left.id}`);
-        const rightReferenced = referencedPrincipalKeys.has(`${right.type}:${right.id}`);
+        const leftReferenced = referencedPrincipalKeys.has(
+          `${left.type}:${left.id}`,
+        );
+        const rightReferenced = referencedPrincipalKeys.has(
+          `${right.type}:${right.id}`,
+        );
         if (leftReferenced !== rightReferenced) return leftReferenced ? -1 : 1;
-        return `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`);
+        return `${left.type}:${left.id}`.localeCompare(
+          `${right.type}:${right.id}`,
+        );
       })
       .slice(0, principalLimit);
-    const principalKeys = new Set(principals.map((principal) => `${principal.type}:${principal.id}`));
-    const principalWhere = principals.map((principal) => ({ principalType: principal.type, principalId: principal.id }));
+    const principalKeys = new Set(
+      principals.map((principal) => `${principal.type}:${principal.id}`),
+    );
+    const principalWhere = principals.map((principal) => ({
+      principalType: principal.type,
+      principalId: principal.id,
+    }));
     const matrixGrantWhere: Prisma.AccessGrantWhereInput = {
       assetId: { in: assetIds },
       ...grantFilter,
       OR: principalWhere,
     };
-    const matrixGrantCount = assetIds.length && principalWhere.length
-      ? await this.prisma.accessGrant.count({ where: matrixGrantWhere })
-      : 0;
+    const matrixGrantCount =
+      assetIds.length && principalWhere.length
+        ? await this.prisma.accessGrant.count({ where: matrixGrantWhere })
+        : 0;
     if (matrixGrantCount > ACCESS_MATRIX_MAX_GRANTS) {
       throw new BadRequestException(
         `Matrix selection contains ${matrixGrantCount} grants; narrow the asset or principal filters below ${ACCESS_MATRIX_MAX_GRANTS}`,
@@ -399,11 +626,26 @@ export class AccessGrantsService {
             principalType: true,
             principalId: true,
             permissionCode: true,
-            profile: { select: { id: true, code: true, nameEn: true, nameAr: true, version: true } },
+            profile: {
+              select: {
+                id: true,
+                code: true,
+                nameEn: true,
+                nameAr: true,
+                version: true,
+              },
+            },
             permissions: {
               select: {
                 permissionCode: true,
-                permission: { select: { action: true, nameEn: true, nameAr: true, riskLevel: true } },
+                permission: {
+                  select: {
+                    action: true,
+                    nameEn: true,
+                    nameAr: true,
+                    riskLevel: true,
+                  },
+                },
               },
             },
             status: true,
@@ -414,11 +656,11 @@ export class AccessGrantsService {
             updatedAt: true,
             reviewItems: {
               select: { decision: true, reviewedAt: true, reviewer: true },
-              orderBy: { updatedAt: 'desc' },
+              orderBy: { updatedAt: "desc" },
               take: 1,
             },
           },
-          orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+          orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
           take: ACCESS_MATRIX_MAX_GRANTS,
         })
       : [];
@@ -433,51 +675,95 @@ export class AccessGrantsService {
     }
     const cells = assets.flatMap((asset) =>
       principals.map((principal) => {
-        const rows = cellMap.get(`${asset.id}:${principal.type}:${principal.id}`) ?? [];
-        const liveRows = rows.filter((grant) => !TERMINAL_GRANT_STATUSES.includes(grant.status as never));
+        const rows =
+          cellMap.get(`${asset.id}:${principal.type}:${principal.id}`) ?? [];
+        const liveRows = rows.filter(
+          (grant) => !TERMINAL_GRANT_STATUSES.includes(grant.status as never),
+        );
         const visibleRows = liveRows.length ? liveRows : rows.slice(0, 1);
-        const enforced = visibleRows.filter((grant) => grant.enforcementStatus === 'enforced').length;
-        const permissionRows = visibleRows.flatMap((grant) => grant.permissions);
-        const permissionCodes = [...new Set(permissionRows.map((permission) => permission.permissionCode))];
-        const highRiskPermissions = [...new Set(permissionRows
-          .filter((permission) => permission.permission.riskLevel === 'high')
-          .map((permission) => permission.permissionCode))];
-        const riskLevels = new Set(permissionRows.map((permission) => permission.permission.riskLevel));
-        const profileRows = visibleRows.map((grant) => grant.profile).filter((profile) => profile !== null);
-        const profileNames = [...new Set(profileRows.map((profile) => profile.nameEn))];
+        const enforced = visibleRows.filter(
+          (grant) => grant.enforcementStatus === "enforced",
+        ).length;
+        const permissionRows = visibleRows.flatMap(
+          (grant) => grant.permissions,
+        );
+        const permissionCodes = [
+          ...new Set(
+            permissionRows.map((permission) => permission.permissionCode),
+          ),
+        ];
+        const highRiskPermissions = [
+          ...new Set(
+            permissionRows
+              .filter(
+                (permission) => permission.permission.riskLevel === "high",
+              )
+              .map((permission) => permission.permissionCode),
+          ),
+        ];
+        const riskLevels = new Set(
+          permissionRows.map((permission) => permission.permission.riskLevel),
+        );
+        const profileRows = visibleRows
+          .map((grant) => grant.profile)
+          .filter((profile) => profile !== null);
+        const profileNames = [
+          ...new Set(profileRows.map((profile) => profile.nameEn)),
+        ];
         const hasCustom = visibleRows.some((grant) => !grant.profile);
         const displayValue = !visibleRows.length
-          ? 'No Access'
+          ? "No Access"
           : profileNames.length === 1 && !hasCustom
             ? profileNames[0]
             : hasCustom && profileNames.length === 0
-              ? 'Custom'
-              : 'Mixed';
+              ? "Custom"
+              : "Mixed";
         const now = Date.now();
-        const expiresSoon = visibleRows.some((grant) => grant.expiresAt && grant.expiresAt.getTime() > now && grant.expiresAt.getTime() <= now + 30 * 86_400_000);
+        const expiresSoon = visibleRows.some(
+          (grant) =>
+            grant.expiresAt &&
+            grant.expiresAt.getTime() > now &&
+            grant.expiresAt.getTime() <= now + 30 * 86_400_000,
+        );
         const accessState = !visibleRows.length
-          ? 'no_access'
-          : visibleRows.some((grant) => grant.status === 'revocation_failed')
-            ? 'revocation_failed'
-            : visibleRows.some((grant) => grant.enforcementStatus === 'failed')
-              ? 'enforcement_failed'
-              : visibleRows.some((grant) => grant.status === 'pending_revocation')
-                ? 'pending_revocation'
-                : visibleRows.some((grant) => grant.ownerDecision === 'pending' || grant.status === 'requested')
-                  ? 'under_review'
-                  : visibleRows.some((grant) => grant.enforcementStatus === 'pending')
-                    ? 'pending_enforcement'
-                    : visibleRows.some((grant) => grant.status === 'scheduled')
-                      ? 'scheduled'
+          ? "no_access"
+          : visibleRows.some((grant) => grant.status === "revocation_failed")
+            ? "revocation_failed"
+            : visibleRows.some((grant) => grant.enforcementStatus === "failed")
+              ? "enforcement_failed"
+              : visibleRows.some(
+                    (grant) => grant.status === "pending_revocation",
+                  )
+                ? "pending_revocation"
+                : visibleRows.some(
+                      (grant) =>
+                        grant.ownerDecision === "pending" ||
+                        grant.status === "requested",
+                    )
+                  ? "under_review"
+                  : visibleRows.some(
+                        (grant) => grant.enforcementStatus === "pending",
+                      )
+                    ? "pending_enforcement"
+                    : visibleRows.some((grant) => grant.status === "scheduled")
+                      ? "scheduled"
                       : expiresSoon
-                        ? 'expiring'
-                        : visibleRows[0]?.status ?? 'active';
-        const lastReviewedAt = visibleRows.reduce<Date | null>((latest, grant) => {
-          const reviewedAt = grant.reviewItems[0]?.reviewedAt ?? null;
-          return reviewedAt && (!latest || reviewedAt > latest) ? reviewedAt : latest;
-        }, null);
-        const lastModifiedAt = visibleRows.reduce<Date | null>((latest, grant) =>
-          !latest || grant.updatedAt > latest ? grant.updatedAt : latest, null);
+                        ? "expiring"
+                        : (visibleRows[0]?.status ?? "active");
+        const lastReviewedAt = visibleRows.reduce<Date | null>(
+          (latest, grant) => {
+            const reviewedAt = grant.reviewItems[0]?.reviewedAt ?? null;
+            return reviewedAt && (!latest || reviewedAt > latest)
+              ? reviewedAt
+              : latest;
+          },
+          null,
+        );
+        const lastModifiedAt = visibleRows.reduce<Date | null>(
+          (latest, grant) =>
+            !latest || grant.updatedAt > latest ? grant.updatedAt : latest,
+          null,
+        );
         return {
           assetId: asset.id,
           principalType: principal.type,
@@ -488,20 +774,45 @@ export class AccessGrantsService {
           accessState,
           profileNames,
           permissions: permissionCodes,
-          privilegeClasses: [...new Set(permissionRows.map((permission) => this.permissionClass(permission.permission.action)))],
-          riskLevel: highRiskPermissions.length ? 'high' : riskLevels.has('medium') ? 'medium' : riskLevels.has('low') ? 'low' : 'none',
+          privilegeClasses: [
+            ...new Set(
+              permissionRows.map((permission) =>
+                this.permissionClass(permission.permission.action),
+              ),
+            ),
+          ],
+          riskLevel: highRiskPermissions.length
+            ? "high"
+            : riskLevels.has("medium")
+              ? "medium"
+              : riskLevels.has("low")
+                ? "low"
+                : "none",
           highRiskPermissions,
           statuses: [...new Set(visibleRows.map((grant) => grant.status))],
-          ownerDecisions: [...new Set(visibleRows.map((grant) => grant.ownerDecision))],
-          enforcementStatuses: [...new Set(visibleRows.map((grant) => grant.enforcementStatus))],
-          reviewStatus: visibleRows.some((grant) => grant.reviewItems[0]?.decision === 'pending')
-            ? 'under_review'
+          ownerDecisions: [
+            ...new Set(visibleRows.map((grant) => grant.ownerDecision)),
+          ],
+          enforcementStatuses: [
+            ...new Set(visibleRows.map((grant) => grant.enforcementStatus)),
+          ],
+          reviewStatus: visibleRows.some(
+            (grant) => grant.reviewItems[0]?.decision === "pending",
+          )
+            ? "under_review"
             : visibleRows.some((grant) => grant.reviewItems.length)
-              ? 'reviewed'
-              : 'not_reviewed',
+              ? "reviewed"
+              : "not_reviewed",
           lastReviewedAt,
           lastModifiedAt,
-          attention: ['under_review', 'pending_enforcement', 'enforcement_failed', 'pending_revocation', 'revocation_failed', 'expiring'].includes(accessState),
+          attention: [
+            "under_review",
+            "pending_enforcement",
+            "enforcement_failed",
+            "pending_revocation",
+            "revocation_failed",
+            "expiring",
+          ].includes(accessState),
           grants: visibleRows.map((grant) => ({
             id: grant.id,
             code: grant.code,
@@ -531,9 +842,13 @@ export class AccessGrantsService {
         principalCount: principals.length,
         grantedCells: cells.filter((cell) => cell.grantCount > 0).length,
         attentionCells: cells.filter((cell) => cell.attention).length,
-        highRiskCells: cells.filter((cell) => cell.riskLevel === 'high').length,
-        readCells: cells.filter((cell) => cell.privilegeClasses.includes('read')).length,
-        writeCells: cells.filter((cell) => cell.privilegeClasses.includes('write')).length,
+        highRiskCells: cells.filter((cell) => cell.riskLevel === "high").length,
+        readCells: cells.filter((cell) =>
+          cell.privilegeClasses.includes("read"),
+        ).length,
+        writeCells: cells.filter((cell) =>
+          cell.privilegeClasses.includes("write"),
+        ).length,
       },
       constraints: {
         assetLimit,
@@ -541,18 +856,21 @@ export class AccessGrantsService {
         maximumAssets: ACCESS_MATRIX_MAX_ASSETS,
         maximumPrincipals: ACCESS_MATRIX_MAX_PRINCIPALS,
         maximumGrants: ACCESS_MATRIX_MAX_GRANTS,
-        note: 'Matrix cells are derived from the governed authorization record. Oversized selections must be narrowed; No Access is the default state.',
+        note: "Matrix cells are derived from the governed authorization record. Oversized selections must be narrowed; No Access is the default state.",
       },
     };
   }
 
   async listEffectiveAccess(user: AuthUser, filters: ListEffectiveAccessDto) {
     const now = new Date();
-    const page = parsePageParams(filters.page ?? 1, filters.pageSize ?? ACCESS_GRANT_DEFAULT_PAGE_SIZE)!;
+    const page = parsePageParams(
+      filters.page ?? 1,
+      filters.pageSize ?? ACCESS_GRANT_DEFAULT_PAGE_SIZE,
+    )!;
     const where: Prisma.AccessGrantWhereInput = {
       asset: await this.assetVisibilityWhereForUser(user),
-      ownerDecision: 'approved',
-      status: { in: ['active', 'scheduled', 'expired', 'revoked'] },
+      ownerDecision: "approved",
+      status: { in: ["active", "scheduled", "expired", "revoked"] },
     };
     if (filters.assetId) where.assetId = filters.assetId;
     if (filters.principalId) where.principalId = filters.principalId;
@@ -573,19 +891,31 @@ export class AccessGrantsService {
         where,
         include: grantInclude,
         orderBy: [
-          { assetId: 'asc' },
-          { principalType: 'asc' },
-          { principalId: 'asc' },
-          { permissionCode: 'asc' },
-          { id: 'asc' },
+          { assetId: "asc" },
+          { principalType: "asc" },
+          { principalId: "asc" },
+          { permissionCode: "asc" },
+          { id: "asc" },
         ],
         skip: sourceOffset,
         take: EFFECTIVE_ACCESS_BATCH_SIZE,
       });
       if (!grants.length) break;
 
-      const userIds = [...new Set(grants.filter((grant) => grant.principalType === 'user').map((grant) => grant.principalId))];
-      const roleCodes = [...new Set(grants.filter((grant) => grant.principalType === 'role').map((grant) => grant.principalId))];
+      const userIds = [
+        ...new Set(
+          grants
+            .filter((grant) => grant.principalType === "user")
+            .map((grant) => grant.principalId),
+        ),
+      ];
+      const roleCodes = [
+        ...new Set(
+          grants
+            .filter((grant) => grant.principalType === "role")
+            .map((grant) => grant.principalId),
+        ),
+      ];
       const [users, roleMemberships] = await Promise.all([
         userIds.length
           ? this.prisma.user.findMany({
@@ -595,27 +925,42 @@ export class AccessGrantsService {
           : Promise.resolve([]),
         roleCodes.length
           ? this.prisma.userRole.findMany({
-              where: { role: { code: { in: roleCodes }, isActive: true, deletedAt: null }, user: { isActive: true } },
+              where: {
+                role: {
+                  code: { in: roleCodes },
+                  isActive: true,
+                  deletedAt: null,
+                },
+                user: { isActive: true },
+              },
               select: {
                 userId: true,
                 user: { select: { id: true, email: true, displayName: true } },
                 role: { select: { id: true, code: true, nameEn: true } },
               },
-              orderBy: [{ roleId: 'asc' }, { userId: 'asc' }],
+              orderBy: [{ roleId: "asc" }, { userId: "asc" }],
             })
           : Promise.resolve([]),
       ]);
       const userById = new Map(users.map((row) => [row.id, row] as const));
       const membershipsByRoleCode = new Map<string, typeof roleMemberships>();
       for (const membership of roleMemberships) {
-        const memberships = membershipsByRoleCode.get(membership.role.code) ?? [];
+        const memberships =
+          membershipsByRoleCode.get(membership.role.code) ?? [];
         memberships.push(membership);
         membershipsByRoleCode.set(membership.role.code, memberships);
       }
 
       for (const grant of grants) {
-        const lifecycleState = this.effectiveAccessLifecycle(grant.startsAt, grant.expiresAt, grant.status, now);
-        const enforcementGap = grant.enforcementStatus !== 'enforced' && lifecycleState === 'current';
+        const lifecycleState = this.effectiveAccessLifecycle(
+          grant.startsAt,
+          grant.expiresAt,
+          grant.status,
+          now,
+        );
+        const enforcementGap =
+          grant.enforcementStatus !== "enforced" &&
+          lifecycleState === "current";
         const base = {
           grantId: grant.id,
           grantCode: grant.code,
@@ -633,60 +978,80 @@ export class AccessGrantsService {
           lifecycleState,
           enforcementGap,
         };
-        const expandedRows: EffectiveAccessRow[] = grant.principalType === 'user'
-          ? [{
-              ...base,
-              subjectType: 'user',
-              subjectId: grant.principalId,
-              subjectLabel: userById.get(grant.principalId)?.displayName || userById.get(grant.principalId)?.email || grant.principalId,
-              expansionStatus: userById.has(grant.principalId) ? 'resolved' : 'missing_user',
-              source: 'direct_grant',
-            }]
-          : grant.principalType === 'role'
-            ? (membershipsByRoleCode.get(grant.principalId)?.length
-                ? membershipsByRoleCode.get(grant.principalId)!.map((membership) => ({
+        const expandedRows: EffectiveAccessRow[] =
+          grant.principalType === "user"
+            ? [
+                {
+                  ...base,
+                  subjectType: "user",
+                  subjectId: grant.principalId,
+                  subjectLabel:
+                    userById.get(grant.principalId)?.displayName ||
+                    userById.get(grant.principalId)?.email ||
+                    grant.principalId,
+                  expansionStatus: userById.has(grant.principalId)
+                    ? "resolved"
+                    : "missing_user",
+                  source: "direct_grant",
+                },
+              ]
+            : grant.principalType === "role"
+              ? membershipsByRoleCode.get(grant.principalId)?.length
+                ? membershipsByRoleCode
+                    .get(grant.principalId)!
+                    .map((membership) => ({
+                      ...base,
+                      subjectType: "user",
+                      subjectId: membership.userId,
+                      subjectLabel:
+                        membership.user.displayName || membership.user.email,
+                      expandedFromRoleCode: membership.role.code,
+                      expandedFromRoleName: membership.role.nameEn,
+                      expansionStatus: "resolved",
+                      source: "role_membership",
+                    }))
+                : [
+                    {
+                      ...base,
+                      subjectType: "role",
+                      subjectId: grant.principalId,
+                      subjectLabel: grant.principalId,
+                      expansionStatus: "no_active_members",
+                      source: "role_grant",
+                    },
+                  ]
+              : [
+                  {
                     ...base,
-                    subjectType: 'user',
-                    subjectId: membership.userId,
-                    subjectLabel: membership.user.displayName || membership.user.email,
-                    expandedFromRoleCode: membership.role.code,
-                    expandedFromRoleName: membership.role.nameEn,
-                    expansionStatus: 'resolved',
-                    source: 'role_membership',
-                  }))
-                : [{
-                    ...base,
-                    subjectType: 'role',
+                    subjectType: grant.principalType,
                     subjectId: grant.principalId,
                     subjectLabel: grant.principalId,
-                    expansionStatus: 'no_active_members',
-                    source: 'role_grant',
-                  }])
-            : [{
-                ...base,
-                subjectType: grant.principalType,
-                subjectId: grant.principalId,
-                subjectLabel: grant.principalId,
-                expansionStatus: 'external_unverified',
-                source: 'external_principal',
-              }];
+                    expansionStatus: "external_unverified",
+                    source: "external_principal",
+                  },
+                ];
 
         for (const row of expandedRows) {
           const rowNumber = summary.totalEffectiveRows;
           if (rowNumber >= page.skip && data.length < page.take) data.push(row);
           summary.totalEffectiveRows++;
-          if (row.lifecycleState === 'current') summary.current++;
-          if (row.lifecycleState === 'scheduled') summary.scheduled++;
-          if (row.lifecycleState === 'expired') summary.expired++;
-          if (row.lifecycleState === 'revoked') summary.revoked++;
+          if (row.lifecycleState === "current") summary.current++;
+          if (row.lifecycleState === "scheduled") summary.scheduled++;
+          if (row.lifecycleState === "expired") summary.expired++;
+          if (row.lifecycleState === "revoked") summary.revoked++;
           if (row.enforcementGap) summary.enforcementGaps++;
-          if (row.expansionStatus === 'external_unverified') summary.externalUnverified++;
+          if (row.expansionStatus === "external_unverified")
+            summary.externalUnverified++;
         }
       }
       sourceOffset += grants.length;
       if (grants.length < EFFECTIVE_ACCESS_BATCH_SIZE) break;
     }
-    return { ...toPaged(data, summary.totalEffectiveRows, page), summary, processedGrantCount: sourceOffset };
+    return {
+      ...toPaged(data, summary.totalEffectiveRows, page),
+      summary,
+      processedGrantCount: sourceOffset,
+    };
   }
 
   async accessManagementReport(user: AuthUser) {
@@ -704,45 +1069,84 @@ export class AccessGrantsService {
         expiresAt: true,
         createdAt: true,
         asset: { select: { assetType: true } },
-        permissions: { select: { permission: { select: { riskLevel: true } } } },
+        permissions: {
+          select: { permission: { select: { riskLevel: true } } },
+        },
         _count: { select: { reviewItems: true, enforcementAttempts: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 10_000,
     });
-    const group = (values: string[]) => Object.entries(values.reduce<Record<string, number>>((result, value) => {
-      result[value] = (result[value] ?? 0) + 1;
-      return result;
-    }, {})).map(([code, count]) => ({ code, count })).sort((left, right) => right.count - left.count || left.code.localeCompare(right.code));
-    const highRisk = grants.filter((grant) => grant.permissions.some((permission) => permission.permission.riskLevel === 'high'));
-    const expiring = grants.filter((grant) => grant.expiresAt && grant.expiresAt > now && grant.expiresAt <= inThirtyDays);
-    const enforcementFailures = grants.filter((grant) => grant.enforcementStatus === 'failed' || grant.status === 'revocation_failed');
-    const active = grants.filter((grant) => ['active', 'scheduled', 'expiring'].includes(grant.status));
+    const group = (values: string[]) =>
+      Object.entries(
+        values.reduce<Record<string, number>>((result, value) => {
+          result[value] = (result[value] ?? 0) + 1;
+          return result;
+        }, {}),
+      )
+        .map(([code, count]) => ({ code, count }))
+        .sort(
+          (left, right) =>
+            right.count - left.count || left.code.localeCompare(right.code),
+        );
+    const highRisk = grants.filter((grant) =>
+      grant.permissions.some(
+        (permission) => permission.permission.riskLevel === "high",
+      ),
+    );
+    const expiring = grants.filter(
+      (grant) =>
+        grant.expiresAt &&
+        grant.expiresAt > now &&
+        grant.expiresAt <= inThirtyDays,
+    );
+    const enforcementFailures = grants.filter(
+      (grant) =>
+        grant.enforcementStatus === "failed" ||
+        grant.status === "revocation_failed",
+    );
+    const active = grants.filter((grant) =>
+      ["active", "scheduled", "expiring"].includes(grant.status),
+    );
     return {
       generatedAt: now,
       truncated: grants.length === 10_000,
       summary: {
         totalGrants: grants.length,
         activeGrants: active.length,
-        pendingOwnerDecision: grants.filter((grant) => grant.ownerDecision === 'pending').length,
-        pendingEnforcement: grants.filter((grant) => grant.enforcementStatus === 'pending').length,
+        pendingOwnerDecision: grants.filter(
+          (grant) => grant.ownerDecision === "pending",
+        ).length,
+        pendingEnforcement: grants.filter(
+          (grant) => grant.enforcementStatus === "pending",
+        ).length,
         enforcementFailures: enforcementFailures.length,
         expiringWithin30Days: expiring.length,
         highRiskGrants: highRisk.length,
         grantsWithoutExpiry: active.filter((grant) => !grant.expiresAt).length,
-        reviewedGrants: grants.filter((grant) => grant._count.reviewItems > 0).length,
-        connectorAttempts: grants.reduce((total, grant) => total + grant._count.enforcementAttempts, 0),
+        reviewedGrants: grants.filter((grant) => grant._count.reviewItems > 0)
+          .length,
+        connectorAttempts: grants.reduce(
+          (total, grant) => total + grant._count.enforcementAttempts,
+          0,
+        ),
       },
       byAssetType: group(grants.map((grant) => grant.asset.assetType)),
       byStatus: group(grants.map((grant) => grant.status)),
       byPrincipalType: group(grants.map((grant) => grant.principalType)),
-      byEnforcementStatus: group(grants.map((grant) => grant.enforcementStatus)),
+      byEnforcementStatus: group(
+        grants.map((grant) => grant.enforcementStatus),
+      ),
       attention: {
         enforcementFailures: enforcementFailures.length,
-        pendingRevocation: grants.filter((grant) => ['pending_revocation', 'revocation_failed'].includes(grant.status)).length,
+        pendingRevocation: grants.filter((grant) =>
+          ["pending_revocation", "revocation_failed"].includes(grant.status),
+        ).length,
         expiringWithin30Days: expiring.length,
-        highRiskWithoutExpiry: highRisk.filter((grant) => !grant.expiresAt).length,
-        neverReviewed: grants.filter((grant) => grant._count.reviewItems === 0).length,
+        highRiskWithoutExpiry: highRisk.filter((grant) => !grant.expiresAt)
+          .length,
+        neverReviewed: grants.filter((grant) => grant._count.reviewItems === 0)
+          .length,
       },
     };
   }
@@ -752,7 +1156,7 @@ export class AccessGrantsService {
       where: { id, asset: await this.assetVisibilityWhereForUser(user) },
       include: grantDetailInclude,
     });
-    if (!grant) throw new NotFoundException('access grant not found');
+    if (!grant) throw new NotFoundException("access grant not found");
     return grant;
   }
 
@@ -760,20 +1164,36 @@ export class AccessGrantsService {
     const asset = await this.assertAssetVisible(user.roles, dto.assetId);
     await this.assertOwnerAuthority(user, asset.id);
     await this.assertPrincipalExists(dto.principalType, dto.principalId);
-    const requestedPermissionCodes = [...new Set([
-      ...(dto.permissionCodes ?? []),
-      ...(dto.permissionCode ? [dto.permissionCode] : []),
-    ].map((code) => code.trim()).filter(Boolean))];
-    const profile = dto.profileId ? await this.assertProfile(dto.profileId, asset.assetType) : null;
-    const permissionCodes = profile ? this.permissionCodes(profile.permissionCodesJson) : requestedPermissionCodes;
+    const requestedPermissionCodes = [
+      ...new Set(
+        [
+          ...(dto.permissionCodes ?? []),
+          ...(dto.permissionCode ? [dto.permissionCode] : []),
+        ]
+          .map((code) => code.trim())
+          .filter(Boolean),
+      ),
+    ];
+    const profile = dto.profileId
+      ? await this.assertProfile(dto.profileId, asset.assetType)
+      : null;
+    const permissionCodes = profile
+      ? this.permissionCodes(profile.permissionCodesJson)
+      : requestedPermissionCodes;
     if (!permissionCodes.length) {
-      throw new BadRequestException('Select a standard profile or at least one custom permission');
+      throw new BadRequestException(
+        "Select a standard profile or at least one custom permission",
+      );
     }
-    const permissions = await this.assertPermissionsForAssetType(permissionCodes, asset.assetType);
+    const permissions = await this.assertPermissionsForAssetType(
+      permissionCodes,
+      asset.assetType,
+    );
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : new Date();
     const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
     this.assertGrantDates(startsAt, expiresAt);
-    if (dto.workflowCaseId) await this.assertWorkflowCaseVisible(user.roles, dto.workflowCaseId);
+    if (dto.workflowCaseId)
+      await this.assertWorkflowCaseVisible(user.roles, dto.workflowCaseId);
     const duplicate = await this.prisma.accessGrant.findFirst({
       where: {
         assetId: asset.id,
@@ -784,7 +1204,9 @@ export class AccessGrantsService {
       select: { code: true },
     });
     if (duplicate) {
-      throw new BadRequestException(`An active assignment already exists for this asset and principal (${duplicate.code})`);
+      throw new BadRequestException(
+        `An active assignment already exists for this asset and principal (${duplicate.code})`,
+      );
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -805,7 +1227,7 @@ export class AccessGrantsService {
           permissions: {
             create: permissionCodes.map((permissionCode) => ({
               permissionCode,
-              source: profile ? 'profile' : 'custom',
+              source: profile ? "profile" : "custom",
             })),
           },
         },
@@ -814,15 +1236,17 @@ export class AccessGrantsService {
       await this.audit.log(
         {
           actor: user.email,
-          action: 'access_grant.requested',
-          entityType: 'access_grant',
+          action: "access_grant.requested",
+          entityType: "access_grant",
           entityId: grant.id,
           metadata: {
             code: grant.code,
             assetId: grant.assetId,
             assetType: asset.assetType,
             permissionCodes,
-            highRiskPermissions: permissions.filter((permission) => permission.riskLevel === 'high').map((permission) => permission.code),
+            highRiskPermissions: permissions
+              .filter((permission) => permission.riskLevel === "high")
+              .map((permission) => permission.code),
             profileId: grant.profileId,
             principalType: grant.principalType,
             principalId: grant.principalId,
@@ -835,7 +1259,7 @@ export class AccessGrantsService {
           grantId: grant.id,
           version: grant.version,
           snapshotJson: this.grantSnapshot(grant, permissionCodes),
-          changeReason: 'Initial governed access request',
+          changeReason: "Initial governed access request",
           changedBy: user.email,
         },
       });
@@ -845,10 +1269,14 @@ export class AccessGrantsService {
   }
 
   async createBulkGrants(dto: BulkCreateAccessGrantDto, user: AuthUser) {
-    const uniqueCells = [...new Map(dto.cells.map((cell) => [
-      `${cell.assetId}:${cell.principalType}:${cell.principalId}`,
-      { ...cell, principalId: cell.principalId.trim() },
-    ])).values()];
+    const uniqueCells = [
+      ...new Map(
+        dto.cells.map((cell) => [
+          `${cell.assetId}:${cell.principalType}:${cell.principalId}`,
+          { ...cell, principalId: cell.principalId.trim() },
+        ]),
+      ).values(),
+    ];
     const writeVisibility = await this.assetWriteVisibilityWhere(user);
     const assetIds = [...new Set(uniqueCells.map((cell) => cell.assetId))];
     const assets = await this.prisma.dataAsset.findMany({
@@ -856,24 +1284,52 @@ export class AccessGrantsService {
       select: { id: true, code: true, assetType: true },
     });
     if (assets.length !== assetIds.length) {
-      throw new ForbiddenException('One or more selected assets are outside your active owner or delegate authority');
+      throw new ForbiddenException(
+        "One or more selected assets are outside your active owner or delegate authority",
+      );
     }
-    const assetById = new Map(assets.map((asset) => [asset.id, asset] as const));
-    for (const principal of [...new Map(uniqueCells.map((cell) => [`${cell.principalType}:${cell.principalId}`, cell])).values()]) {
-      await this.assertPrincipalExists(principal.principalType, principal.principalId);
+    const assetById = new Map(
+      assets.map((asset) => [asset.id, asset] as const),
+    );
+    for (const principal of [
+      ...new Map(
+        uniqueCells.map((cell) => [
+          `${cell.principalType}:${cell.principalId}`,
+          cell,
+        ]),
+      ).values(),
+    ]) {
+      await this.assertPrincipalExists(
+        principal.principalType,
+        principal.principalId,
+      );
     }
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : new Date();
     const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
     this.assertGrantDates(startsAt, expiresAt);
-    const requestedCodes = [...new Set((dto.permissionCodes ?? []).map((code) => code.trim()).filter(Boolean))];
+    const requestedCodes = [
+      ...new Set(
+        (dto.permissionCodes ?? []).map((code) => code.trim()).filter(Boolean),
+      ),
+    ];
     const assetTypes = [...new Set(assets.map((asset) => asset.assetType))];
     if (dto.profileId && assetTypes.length > 1) {
-      throw new BadRequestException('A standard profile can only be applied to selected assets of the same type');
+      throw new BadRequestException(
+        "A standard profile can only be applied to selected assets of the same type",
+      );
     }
-    const profile = dto.profileId ? await this.assertProfile(dto.profileId, assetTypes[0]) : null;
-    const permissionCodes = profile ? this.permissionCodes(profile.permissionCodesJson) : requestedCodes;
-    if (!permissionCodes.length) throw new BadRequestException('Select a standard profile or at least one custom permission');
-    for (const assetType of assetTypes) await this.assertPermissionsForAssetType(permissionCodes, assetType);
+    const profile = dto.profileId
+      ? await this.assertProfile(dto.profileId, assetTypes[0])
+      : null;
+    const permissionCodes = profile
+      ? this.permissionCodes(profile.permissionCodesJson)
+      : requestedCodes;
+    if (!permissionCodes.length)
+      throw new BadRequestException(
+        "Select a standard profile or at least one custom permission",
+      );
+    for (const assetType of assetTypes)
+      await this.assertPermissionsForAssetType(permissionCodes, assetType);
 
     const existing = await this.prisma.accessGrant.findMany({
       where: {
@@ -885,11 +1341,18 @@ export class AccessGrantsService {
           principalId: cell.principalId,
         })),
       },
-      select: { code: true, assetId: true, principalType: true, principalId: true },
+      select: {
+        code: true,
+        assetId: true,
+        principalType: true,
+        principalId: true,
+      },
       take: 501,
     });
     if (existing.length) {
-      throw new BadRequestException(`Bulk change conflicts with ${existing.length} active assignment(s), including ${existing[0].code}`);
+      throw new BadRequestException(
+        `Bulk change conflicts with ${existing.length} active assignment(s), including ${existing[0].code}`,
+      );
     }
 
     const grants = await this.prisma.$transaction(async (tx) => {
@@ -910,7 +1373,10 @@ export class AccessGrantsService {
             createdBy: user.email,
             updatedBy: user.email,
             permissions: {
-              create: permissionCodes.map((permissionCode) => ({ permissionCode, source: profile ? 'profile' : 'custom' })),
+              create: permissionCodes.map((permissionCode) => ({
+                permissionCode,
+                source: profile ? "profile" : "custom",
+              })),
             },
           },
           include: grantInclude,
@@ -924,21 +1390,24 @@ export class AccessGrantsService {
             changedBy: user.email,
           },
         });
-        await this.audit.log({
-          actor: user.email,
-          action: 'access_grant.bulk_requested',
-          entityType: 'access_grant',
-          entityId: grant.id,
-          metadata: {
-            code: grant.code,
-            assetId: asset.id,
-            assetCode: asset.code,
-            principalType: cell.principalType,
-            principalId: cell.principalId,
-            permissionCodes,
-            changeReason: dto.changeReason.trim(),
+        await this.audit.log(
+          {
+            actor: user.email,
+            action: "access_grant.bulk_requested",
+            entityType: "access_grant",
+            entityId: grant.id,
+            metadata: {
+              code: grant.code,
+              assetId: asset.id,
+              assetCode: asset.code,
+              principalType: cell.principalType,
+              principalId: cell.principalId,
+              permissionCodes,
+              changeReason: dto.changeReason.trim(),
+            },
           },
-        }, tx);
+          tx,
+        );
         created.push(grant);
       }
       return created;
@@ -947,7 +1416,9 @@ export class AccessGrantsService {
       committed: true,
       grantCount: grants.length,
       assetCount: assetIds.length,
-      principalCount: new Set(uniqueCells.map((cell) => `${cell.principalType}:${cell.principalId}`)).size,
+      principalCount: new Set(
+        uniqueCells.map((cell) => `${cell.principalType}:${cell.principalId}`),
+      ).size,
       permissionCodes,
       grants,
     };
@@ -957,54 +1428,74 @@ export class AccessGrantsService {
     const existing = await this.getGrant(id, user);
     await this.assertOwnerAuthority(user, existing.assetId);
     if (TERMINAL_GRANT_STATUSES.includes(existing.status as never)) {
-      throw new BadRequestException('Expired, rejected, or revoked grants cannot be modified; create a new assignment');
+      throw new BadRequestException(
+        "Expired, rejected, or revoked grants cannot be modified; create a new assignment",
+      );
     }
     if (existing.version !== dto.expectedVersion) {
-      throw new BadRequestException(`Stale grant version: expected ${dto.expectedVersion}, current ${existing.version}`);
+      throw new BadRequestException(
+        `Stale grant version: expected ${dto.expectedVersion}, current ${existing.version}`,
+      );
     }
     const startsAt = dto.startsAt ? new Date(dto.startsAt) : existing.startsAt;
-    const expiresAt = dto.expiresAt === undefined
-      ? existing.expiresAt
-      : dto.expiresAt
-        ? new Date(dto.expiresAt)
-        : null;
+    const expiresAt =
+      dto.expiresAt === undefined
+        ? existing.expiresAt
+        : dto.expiresAt
+          ? new Date(dto.expiresAt)
+          : null;
     this.assertGrantDates(startsAt, expiresAt);
     const requestedCodes = dto.permissionCodes
-      ? [...new Set(dto.permissionCodes.map((code) => code.trim()).filter(Boolean))]
+      ? [
+          ...new Set(
+            dto.permissionCodes.map((code) => code.trim()).filter(Boolean),
+          ),
+        ]
       : null;
     const profile = dto.profileId
       ? await this.assertProfile(dto.profileId, existing.asset.assetType)
       : null;
     const permissionCodes = profile
       ? this.permissionCodes(profile.permissionCodesJson)
-      : requestedCodes ?? this.grantPermissionCodes(existing);
-    if (!permissionCodes.length) throw new BadRequestException('At least one permission is required');
-    const permissions = await this.assertPermissionsForAssetType(permissionCodes, existing.asset.assetType);
+      : (requestedCodes ?? this.grantPermissionCodes(existing));
+    if (!permissionCodes.length)
+      throw new BadRequestException("At least one permission is required");
+    const permissions = await this.assertPermissionsForAssetType(
+      permissionCodes,
+      existing.asset.assetType,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const claimed = await tx.accessGrant.updateMany({
         where: { id, version: dto.expectedVersion },
         data: { updatedBy: user.email },
       });
-      if (claimed.count !== 1) throw new BadRequestException('Grant changed before the update could be committed');
+      if (claimed.count !== 1)
+        throw new BadRequestException(
+          "Grant changed before the update could be committed",
+        );
       const grant = await tx.accessGrant.update({
         where: { id },
         data: {
           permissionCode: permissionCodes[0],
-          profileId: dto.profileId === undefined ? existing.profileId : dto.profileId,
+          profileId:
+            dto.profileId === undefined ? existing.profileId : dto.profileId,
           startsAt,
           expiresAt,
           justification: dto.justification?.trim() || existing.justification,
-          ownerDecision: 'pending',
+          ownerDecision: "pending",
           ownerDecisionBy: null,
           ownerDecisionAt: null,
-          status: 'requested',
-          enforcementStatus: 'not_enforced',
+          status: "requested",
+          enforcementStatus: "not_enforced",
           updatedBy: user.email,
           version: { increment: 1 },
           permissions: {
             deleteMany: {},
-            create: permissionCodes.map((permissionCode) => ({ permissionCode, source: profile ? 'profile' : 'custom' })),
+            create: permissionCodes.map((permissionCode) => ({
+              permissionCode,
+              source: profile ? "profile" : "custom",
+            })),
           },
         },
         include: grantInclude,
@@ -1018,19 +1509,24 @@ export class AccessGrantsService {
           changedBy: user.email,
         },
       });
-      await this.audit.log({
-        actor: user.email,
-        action: 'access_grant.modified',
-        entityType: 'access_grant',
-        entityId: grant.id,
-        metadata: {
-          previousVersion: existing.version,
-          newVersion: grant.version,
-          permissionCodes,
-          highRiskPermissions: permissions.filter((permission) => permission.riskLevel === 'high').map((permission) => permission.code),
-          changeReason: dto.changeReason.trim(),
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: "access_grant.modified",
+          entityType: "access_grant",
+          entityId: grant.id,
+          metadata: {
+            previousVersion: existing.version,
+            newVersion: grant.version,
+            permissionCodes,
+            highRiskPermissions: permissions
+              .filter((permission) => permission.riskLevel === "high")
+              .map((permission) => permission.code),
+            changeReason: dto.changeReason.trim(),
+          },
         },
-      }, tx);
+        tx,
+      );
       return grant;
     });
   }
@@ -1038,30 +1534,35 @@ export class AccessGrantsService {
   async decideGrant(id: string, dto: DecideAccessGrantDto, user: AuthUser) {
     const existing = await this.getGrant(id, user);
     if (!ACTIVE_GRANT_STATUSES.has(existing.status)) {
-      throw new BadRequestException('Only requested or active grants can receive an owner decision');
+      throw new BadRequestException(
+        "Only requested or active grants can receive an owner decision",
+      );
     }
     const isAdmin = user.roles.some((role) => ADMIN_ROLES.includes(role));
     if (!isAdmin) {
-      const validation = await this.ownerDelegate.validateActiveOwnerOrDelegate({
-        assetId: existing.assetId,
-        actorUserId: user.id,
-        actorEmail: user.email,
-      });
+      const validation = await this.ownerDelegate.validateActiveOwnerOrDelegate(
+        {
+          assetId: existing.assetId,
+          actorUserId: user.id,
+          actorEmail: user.email,
+        },
+      );
       if (!validation.allowed) throw new ForbiddenException(validation.reason);
     }
-    const approved = dto.decision === 'approved';
+    const approved = dto.decision === "approved";
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.claimGrantVersion(tx, id, dto.expectedVersion);
       const now = new Date();
-      const approvedStatus = approved && existing.startsAt > now ? 'scheduled' : 'active';
+      const approvedStatus =
+        approved && existing.startsAt > now ? "scheduled" : "active";
       const grant = await tx.accessGrant.update({
         where: { id },
         data: {
           ownerDecision: dto.decision,
           ownerDecisionBy: user.email,
           ownerDecisionAt: new Date(),
-          status: approved ? approvedStatus : 'rejected',
-          enforcementStatus: approved ? 'pending' : 'not_enforced',
+          status: approved ? approvedStatus : "rejected",
+          enforcementStatus: approved ? "pending" : "not_enforced",
           updatedBy: user.email,
           version: { increment: 1 },
         },
@@ -1071,7 +1572,7 @@ export class AccessGrantsService {
         {
           actor: user.email,
           action: `access_grant.owner_${dto.decision}`,
-          entityType: 'access_grant',
+          entityType: "access_grant",
           entityId: id,
           metadata: {
             previousStatus: existing.status,
@@ -1088,22 +1589,40 @@ export class AccessGrantsService {
     return updated;
   }
 
-  async updateEnforcement(id: string, dto: UpdateAccessGrantEnforcementDto, user: AuthUser) {
+  async updateEnforcement(
+    id: string,
+    dto: UpdateAccessGrantEnforcementDto,
+    user: AuthUser,
+  ) {
     const existing = await this.getGrant(id, user);
-    if (existing.ownerDecision !== 'approved') {
-      throw new BadRequestException('Only owner-approved grants can be enforcement-updated');
+    if (existing.ownerDecision !== "approved") {
+      throw new BadRequestException(
+        "Only owner-approved grants can be enforcement-updated",
+      );
     }
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.claimGrantVersion(tx, id, dto.expectedVersion);
-      const revocationOutcome = ['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(existing.status);
+      const revocationOutcome = [
+        "pending_revocation",
+        "revocation_failed",
+        "expired",
+        "suspended",
+      ].includes(existing.status);
       const grant = await tx.accessGrant.update({
         where: { id },
         data: {
-          enforcementStatus: revocationOutcome && dto.enforcementStatus === 'enforced' ? 'revoked' : dto.enforcementStatus,
-          ...(revocationOutcome && dto.enforcementStatus === 'enforced'
-            ? { status: 'revoked', revokedAt: new Date(), revokedBy: user.email }
-            : revocationOutcome && dto.enforcementStatus === 'failed'
-              ? { status: 'revocation_failed' }
+          enforcementStatus:
+            revocationOutcome && dto.enforcementStatus === "enforced"
+              ? "revoked"
+              : dto.enforcementStatus,
+          ...(revocationOutcome && dto.enforcementStatus === "enforced"
+            ? {
+                status: "revoked",
+                revokedAt: new Date(),
+                revokedBy: user.email,
+              }
+            : revocationOutcome && dto.enforcementStatus === "failed"
+              ? { status: "revocation_failed" }
               : {}),
           updatedBy: user.email,
           version: { increment: 1 },
@@ -1113,8 +1632,8 @@ export class AccessGrantsService {
       await this.audit.log(
         {
           actor: user.email,
-          action: 'access_grant.enforcement_update',
-          entityType: 'access_grant',
+          action: "access_grant.enforcement_update",
+          entityType: "access_grant",
           entityId: id,
           metadata: {
             previousEnforcementStatus: existing.enforcementStatus,
@@ -1132,14 +1651,15 @@ export class AccessGrantsService {
   async revokeGrant(id: string, dto: RevokeAccessGrantDto, user: AuthUser) {
     const existing = await this.getGrant(id, user);
     await this.assertOwnerAuthority(user, existing.assetId);
-    if (['pending_revocation', 'revoked'].includes(existing.status)) return existing;
+    if (["pending_revocation", "revoked"].includes(existing.status))
+      return existing;
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.claimGrantVersion(tx, id, dto.expectedVersion);
       const grant = await tx.accessGrant.update({
         where: { id },
         data: {
-          status: 'pending_revocation',
-          enforcementStatus: 'pending',
+          status: "pending_revocation",
+          enforcementStatus: "pending",
           revokedAt: null,
           revokedBy: user.email,
           revocationReason: dto.reason.trim(),
@@ -1151,8 +1671,8 @@ export class AccessGrantsService {
       await this.audit.log(
         {
           actor: user.email,
-          action: 'access_grant.revoked',
-          entityType: 'access_grant',
+          action: "access_grant.revoked",
+          entityType: "access_grant",
           entityId: id,
           metadata: {
             previousStatus: existing.status,
@@ -1168,32 +1688,82 @@ export class AccessGrantsService {
   }
 
   accessGrantCsvTemplate() {
-    return 'action,code,expectedVersion,assetId,principalType,principalId,permissionCode,profileId,startsAt,expiresAt,justification\ncreate,,,<asset-uuid>,role,data_owner,dataset.read,,2026-08-17T00:00:00.000Z,,Business justification\nupdate,AGR-00001,1,,,,,,,,\nrevoke,AGR-00001,1,,,,,,,,';
+    return "action,code,expectedVersion,assetId,principalType,principalId,permissionCode,profileId,startsAt,expiresAt,justification\ncreate,,,<asset-uuid>,role,data_owner,dataset.read,,2026-08-17T00:00:00.000Z,,Business justification\nupdate,AGR-00001,1,,,,,,,,\nrevoke,AGR-00001,1,,,,,,,,";
   }
 
-  async exportGrantsCsv(user: AuthUser, filters: ListAccessGrantsDto): Promise<{ fileName: string; csv: string; rowCount: number }> {
-    const where: Prisma.AccessGrantWhereInput = { asset: await this.assetVisibilityWhereForUser(user) };
+  async exportGrantsCsv(
+    user: AuthUser,
+    filters: ListAccessGrantsDto,
+  ): Promise<{ fileName: string; csv: string; rowCount: number }> {
+    const where: Prisma.AccessGrantWhereInput = {
+      asset: await this.assetVisibilityWhereForUser(user),
+    };
     if (filters.assetId) where.assetId = filters.assetId;
     if (filters.principalId) where.principalId = filters.principalId;
     if (filters.status) where.status = filters.status;
     const grants = await this.prisma.accessGrant.findMany({
       where,
       include: grantInclude,
-      orderBy: [{ code: 'asc' }],
+      orderBy: [{ code: "asc" }],
       take: 10_000,
     });
-    const headers = ['action', 'code', 'expectedVersion', 'assetId', 'assetCode', 'principalType', 'principalId', 'permissionCode', 'profileId', 'startsAt', 'expiresAt', 'status', 'ownerDecision', 'enforcementStatus', 'justification'];
-    const lines = grants.map((grant) => [
-      'update', grant.code, grant.version, grant.assetId, grant.asset.code, grant.principalType, grant.principalId,
-      this.grantPermissionCodes(grant).join('|'), grant.profileId ?? '', grant.startsAt.toISOString(), grant.expiresAt?.toISOString() ?? '',
-      grant.status, grant.ownerDecision, grant.enforcementStatus, grant.justification,
-    ].map(csvCell).join(','));
-    return { fileName: `access-grants-${new Date().toISOString().slice(0, 10)}.csv`, csv: [headers.join(','), ...lines].join('\n'), rowCount: grants.length };
+    const headers = [
+      "action",
+      "code",
+      "expectedVersion",
+      "assetId",
+      "assetCode",
+      "principalType",
+      "principalId",
+      "permissionCode",
+      "profileId",
+      "startsAt",
+      "expiresAt",
+      "status",
+      "ownerDecision",
+      "enforcementStatus",
+      "justification",
+    ];
+    const lines = grants.map((grant) =>
+      [
+        "update",
+        grant.code,
+        grant.version,
+        grant.assetId,
+        grant.asset.code,
+        grant.principalType,
+        grant.principalId,
+        this.grantPermissionCodes(grant).join("|"),
+        grant.profileId ?? "",
+        grant.startsAt.toISOString(),
+        grant.expiresAt?.toISOString() ?? "",
+        grant.status,
+        grant.ownerDecision,
+        grant.enforcementStatus,
+        grant.justification,
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+    return {
+      fileName: `access-grants-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv: [headers.join(","), ...lines].join("\n"),
+      rowCount: grants.length,
+    };
   }
 
   async validateGrantImport(dto: ValidateAccessGrantImportDto, user: AuthUser) {
     const outcomes = await this.buildGrantImportPlan(dto.csv, user);
-    await this.audit.log({ actor: user.email, action: 'access_grant.import_validate', entityType: 'access_grant_import', metadata: { rows: outcomes.length, valid: outcomes.filter((row) => row.valid).length, invalid: outcomes.filter((row) => !row.valid).length } });
+    await this.audit.log({
+      actor: user.email,
+      action: "access_grant.import_validate",
+      entityType: "access_grant_import",
+      metadata: {
+        rows: outcomes.length,
+        valid: outcomes.filter((row) => row.valid).length,
+        invalid: outcomes.filter((row) => !row.valid).length,
+      },
+    });
     return this.importPlanResponse(outcomes, true);
   }
 
@@ -1201,14 +1771,23 @@ export class AccessGrantsService {
     const plan = await this.buildGrantImportPlan(dto.csv, user);
     const invalid = plan.filter((row) => !row.valid);
     if (invalid.length) {
-      throw new BadRequestException(`CSV contains ${invalid.length} invalid row(s); validate and correct the change set before committing`);
+      throw new BadRequestException(
+        `CSV contains ${invalid.length} invalid row(s); validate and correct the change set before committing`,
+      );
     }
-    if (!plan.length) throw new BadRequestException('CSV contains no data rows to commit');
+    if (!plan.length)
+      throw new BadRequestException("CSV contains no data rows to commit");
     const committed = await this.prisma.$transaction(async (tx) => {
-      const results: Array<{ row: number; action: ImportAction; code: string; id: string; version: number }> = [];
+      const results: Array<{
+        row: number;
+        action: ImportAction;
+        code: string;
+        id: string;
+        version: number;
+      }> = [];
       for (const row of plan) {
         const action = row.action as ImportAction;
-        if (action === 'create' && row.create) {
+        if (action === "create" && row.create) {
           const grant = await tx.accessGrant.create({
             data: {
               code: await this.nextGrantCode(tx),
@@ -1217,13 +1796,18 @@ export class AccessGrantsService {
               principalId: row.create.principalId,
               permissionCode: row.create.permissionCode,
               profileId: row.create.profileId,
-              status: 'requested',
+              status: "requested",
               startsAt: row.create.startsAt,
               expiresAt: row.create.expiresAt,
               justification: row.create.justification,
               createdBy: user.email,
               updatedBy: user.email,
-              permissions: { create: { permissionCode: row.create.permissionCode, source: row.create.profileId ? 'profile' : 'custom' } },
+              permissions: {
+                create: {
+                  permissionCode: row.create.permissionCode,
+                  source: row.create.profileId ? "profile" : "custom",
+                },
+              },
             },
             include: grantInclude,
           });
@@ -1231,38 +1815,65 @@ export class AccessGrantsService {
             data: {
               grantId: grant.id,
               version: grant.version,
-              snapshotJson: this.grantSnapshot(grant, [row.create.permissionCode]),
-              changeReason: dto.changeReason?.trim() || 'Governed CSV change set',
+              snapshotJson: this.grantSnapshot(grant, [
+                row.create.permissionCode,
+              ]),
+              changeReason:
+                dto.changeReason?.trim() || "Governed CSV change set",
               changedBy: user.email,
             },
           });
-          await this.audit.log({
-            actor: user.email,
-            action: 'access_grant.import_create',
-            entityType: 'access_grant',
-            entityId: grant.id,
-            metadata: { row: row.row, code: grant.code, permissionCodes: [row.create.permissionCode], changeReason: dto.changeReason?.trim() || null },
-          }, tx);
-          results.push({ row: row.row, action, code: grant.code, id: grant.id, version: grant.version });
+          await this.audit.log(
+            {
+              actor: user.email,
+              action: "access_grant.import_create",
+              entityType: "access_grant",
+              entityId: grant.id,
+              metadata: {
+                row: row.row,
+                code: grant.code,
+                permissionCodes: [row.create.permissionCode],
+                changeReason: dto.changeReason?.trim() || null,
+              },
+            },
+            tx,
+          );
+          results.push({
+            row: row.row,
+            action,
+            code: grant.code,
+            id: grant.id,
+            version: grant.version,
+          });
           continue;
         }
-        if (action === 'update' && row.existing) {
-          const expectedVersion = Number(row.values['expectedVersion']);
+        if (action === "update" && row.existing) {
+          const expectedVersion = Number(row.values["expectedVersion"]);
           const updated = await tx.accessGrant.updateMany({
             where: { id: row.existing.id, version: expectedVersion },
             data: { ...(row.update ?? {}), updatedBy: user.email },
           });
-          if (updated.count !== 1) throw new BadRequestException(`Row ${row.row} was stale at commit time`);
+          if (updated.count !== 1)
+            throw new BadRequestException(
+              `Row ${row.row} was stale at commit time`,
+            );
           const grant = await tx.accessGrant.update({
             where: { id: row.existing.id },
             data: {
-              ...(row.profileId ? { profile: { connect: { id: row.profileId } } } : {}),
-              ...(row.values['permissionCode'] ? {
-                permissions: {
-                  deleteMany: {},
-                  create: { permissionCode: row.values['permissionCode'], source: row.profileId ? 'profile' : 'custom' },
-                },
-              } : {}),
+              ...(row.profileId
+                ? { profile: { connect: { id: row.profileId } } }
+                : {}),
+              ...(row.values["permissionCode"]
+                ? {
+                    permissions: {
+                      deleteMany: {},
+                      create: {
+                        permissionCode: row.values["permissionCode"],
+                        source: row.profileId ? "profile" : "custom",
+                      },
+                    },
+                  }
+                : {}),
               updatedBy: user.email,
               version: { increment: 1 },
             },
@@ -1274,35 +1885,58 @@ export class AccessGrantsService {
               grantId: grant.id,
               version: grant.version,
               snapshotJson: this.grantSnapshot(grant, permissionCodes),
-              changeReason: dto.changeReason?.trim() || 'Governed CSV change set update',
+              changeReason:
+                dto.changeReason?.trim() || "Governed CSV change set update",
               changedBy: user.email,
             },
           });
-          await this.audit.log({
-            actor: user.email,
-            action: 'access_grant.import_update',
-            entityType: 'access_grant',
-            entityId: grant.id,
-            metadata: { row: row.row, code: grant.code, expectedVersion, newVersion: grant.version, permissionCodes, changeReason: dto.changeReason?.trim() || null },
-          }, tx);
-          results.push({ row: row.row, action, code: grant.code, id: grant.id, version: grant.version });
+          await this.audit.log(
+            {
+              actor: user.email,
+              action: "access_grant.import_update",
+              entityType: "access_grant",
+              entityId: grant.id,
+              metadata: {
+                row: row.row,
+                code: grant.code,
+                expectedVersion,
+                newVersion: grant.version,
+                permissionCodes,
+                changeReason: dto.changeReason?.trim() || null,
+              },
+            },
+            tx,
+          );
+          results.push({
+            row: row.row,
+            action,
+            code: grant.code,
+            id: grant.id,
+            version: grant.version,
+          });
           continue;
         }
-        if (action === 'revoke' && row.existing) {
-          const expectedVersion = Number(row.values['expectedVersion']);
+        if (action === "revoke" && row.existing) {
+          const expectedVersion = Number(row.values["expectedVersion"]);
           const updated = await tx.accessGrant.updateMany({
             where: { id: row.existing.id, version: expectedVersion },
             data: {
-              status: 'pending_revocation',
-              enforcementStatus: 'pending',
+              status: "pending_revocation",
+              enforcementStatus: "pending",
               revokedAt: null,
               revokedBy: user.email,
-              revocationReason: row.values['justification'] || dto.changeReason?.trim() || 'Revoked through governed CSV change set',
+              revocationReason:
+                row.values["justification"] ||
+                dto.changeReason?.trim() ||
+                "Revoked through governed CSV change set",
               updatedBy: user.email,
               version: { increment: 1 },
             },
           });
-          if (updated.count !== 1) throw new BadRequestException(`Row ${row.row} was stale at commit time`);
+          if (updated.count !== 1)
+            throw new BadRequestException(
+              `Row ${row.row} was stale at commit time`,
+            );
           const grant = await tx.accessGrant.findUniqueOrThrow({
             where: { id: row.existing.id },
             include: grantInclude,
@@ -1313,30 +1947,52 @@ export class AccessGrantsService {
               grantId: grant.id,
               version: grant.version,
               snapshotJson: this.grantSnapshot(grant, permissionCodes),
-              changeReason: row.values['justification'] || dto.changeReason?.trim() || 'Governed CSV revocation',
+              changeReason:
+                row.values["justification"] ||
+                dto.changeReason?.trim() ||
+                "Governed CSV revocation",
               changedBy: user.email,
             },
           });
-          await this.audit.log({
-            actor: user.email,
-            action: 'access_grant.import_revoke',
-            entityType: 'access_grant',
-            entityId: grant.id,
-            metadata: { row: row.row, code: grant.code, expectedVersion, newVersion: grant.version, permissionCodes, changeReason: row.values['justification'] || dto.changeReason?.trim() || null },
-          }, tx);
-          results.push({ row: row.row, action, code: grant.code, id: grant.id, version: grant.version });
+          await this.audit.log(
+            {
+              actor: user.email,
+              action: "access_grant.import_revoke",
+              entityType: "access_grant",
+              entityId: grant.id,
+              metadata: {
+                row: row.row,
+                code: grant.code,
+                expectedVersion,
+                newVersion: grant.version,
+                permissionCodes,
+                changeReason:
+                  row.values["justification"] ||
+                  dto.changeReason?.trim() ||
+                  null,
+              },
+            },
+            tx,
+          );
+          results.push({
+            row: row.row,
+            action,
+            code: grant.code,
+            id: grant.id,
+            version: grant.version,
+          });
         }
       }
       await this.audit.log(
         {
           actor: user.email,
-          action: 'access_grant.import_commit',
-          entityType: 'access_grant_import',
+          action: "access_grant.import_commit",
+          entityType: "access_grant_import",
           metadata: {
             rows: results.length,
-            creates: results.filter((row) => row.action === 'create').length,
-            updates: results.filter((row) => row.action === 'update').length,
-            revokes: results.filter((row) => row.action === 'revoke').length,
+            creates: results.filter((row) => row.action === "create").length,
+            updates: results.filter((row) => row.action === "update").length,
+            revokes: results.filter((row) => row.action === "revoke").length,
             reason: dto.changeReason?.trim() || null,
           },
         },
@@ -1347,9 +2003,9 @@ export class AccessGrantsService {
     return {
       committed: true,
       rowCount: committed.length,
-      creates: committed.filter((row) => row.action === 'create').length,
-      updates: committed.filter((row) => row.action === 'update').length,
-      revokes: committed.filter((row) => row.action === 'revoke').length,
+      creates: committed.filter((row) => row.action === "create").length,
+      updates: committed.filter((row) => row.action === "update").length,
+      revokes: committed.filter((row) => row.action === "revoke").length,
       rows: committed,
     };
   }
@@ -1357,74 +2013,112 @@ export class AccessGrantsService {
   async reconcileGrantLifecycle(user: AuthUser) {
     const now = new Date();
     const visibleAssetWhere = await this.assetVisibilityWhereForUser(user);
-    const [scheduled, activated, expired] = await this.prisma.$transaction(async (tx) => {
-      const scheduledResult = await tx.accessGrant.updateMany({
-        where: {
-          ownerDecision: 'approved',
-          status: 'active',
-          startsAt: { gt: now },
-          asset: visibleAssetWhere,
-        },
-        data: { status: 'scheduled', enforcementStatus: 'pending', updatedBy: user.email, version: { increment: 1 } },
-      });
-      const activatedResult = await tx.accessGrant.updateMany({
-        where: {
-          ownerDecision: 'approved',
-          status: { in: ['scheduled', 'requested'] },
-          startsAt: { lte: now },
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          asset: visibleAssetWhere,
-        },
-        data: { status: 'active', enforcementStatus: 'pending', updatedBy: user.email, version: { increment: 1 } },
-      });
-      const expiredResult = await tx.accessGrant.updateMany({
-        where: {
-          status: { in: ['requested', 'scheduled', 'active'] },
-          expiresAt: { lte: now },
-          asset: visibleAssetWhere,
-        },
-        data: {
-          status: 'expired',
-          enforcementStatus: 'pending',
-          revokedAt: null,
-          revokedBy: 'system:lifecycle_reconcile',
-          revocationReason: 'Grant expired automatically at the end of its approved access window',
-          updatedBy: user.email,
-          version: { increment: 1 },
-        },
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: 'access_grant.lifecycle_reconcile',
-          entityType: 'access_grant',
-          metadata: {
-            scheduled: scheduledResult.count,
-            activated: activatedResult.count,
-            expired: expiredResult.count,
-            reconciledAt: now.toISOString(),
+    const [scheduled, activated, expired] = await this.prisma.$transaction(
+      async (tx) => {
+        const scheduledResult = await tx.accessGrant.updateMany({
+          where: {
+            ownerDecision: "approved",
+            status: "active",
+            startsAt: { gt: now },
+            asset: visibleAssetWhere,
           },
-        },
-        tx,
-      );
-      return [scheduledResult.count, activatedResult.count, expiredResult.count] as const;
-    });
-    return { reconciledAt: now, scheduled, activated, expired, totalChanged: scheduled + activated + expired };
+          data: {
+            status: "scheduled",
+            enforcementStatus: "pending",
+            updatedBy: user.email,
+            version: { increment: 1 },
+          },
+        });
+        const activatedResult = await tx.accessGrant.updateMany({
+          where: {
+            ownerDecision: "approved",
+            status: { in: ["scheduled", "requested"] },
+            startsAt: { lte: now },
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            asset: visibleAssetWhere,
+          },
+          data: {
+            status: "active",
+            enforcementStatus: "pending",
+            updatedBy: user.email,
+            version: { increment: 1 },
+          },
+        });
+        const expiredResult = await tx.accessGrant.updateMany({
+          where: {
+            status: { in: ["requested", "scheduled", "active"] },
+            expiresAt: { lte: now },
+            asset: visibleAssetWhere,
+          },
+          data: {
+            status: "expired",
+            enforcementStatus: "pending",
+            revokedAt: null,
+            revokedBy: "system:lifecycle_reconcile",
+            revocationReason:
+              "Grant expired automatically at the end of its approved access window",
+            updatedBy: user.email,
+            version: { increment: 1 },
+          },
+        });
+        await this.audit.log(
+          {
+            actor: user.email,
+            action: "access_grant.lifecycle_reconcile",
+            entityType: "access_grant",
+            metadata: {
+              scheduled: scheduledResult.count,
+              activated: activatedResult.count,
+              expired: expiredResult.count,
+              reconciledAt: now.toISOString(),
+            },
+          },
+          tx,
+        );
+        return [
+          scheduledResult.count,
+          activatedResult.count,
+          expiredResult.count,
+        ] as const;
+      },
+    );
+    return {
+      reconciledAt: now,
+      scheduled,
+      activated,
+      expired,
+      totalChanged: scheduled + activated + expired,
+    };
   }
 
-  async dispatchEnforcement(id: string, dto: DispatchAccessEnforcementDto, user: AuthUser) {
+  async dispatchEnforcement(
+    id: string,
+    dto: DispatchAccessEnforcementDto,
+    user: AuthUser,
+  ) {
     const grant = await this.getGrant(id, user);
-    if (grant.ownerDecision !== 'approved' || grant.status !== 'active') {
-      throw new BadRequestException('Only active owner-approved grants can be dispatched for enforcement');
+    if (grant.ownerDecision !== "approved" || grant.status !== "active") {
+      throw new BadRequestException(
+        "Only active owner-approved grants can be dispatched for enforcement",
+      );
     }
-    if (grant.version !== dto.expectedVersion) throw new ConflictException('Grant changed before enforcement could be dispatched');
+    if (grant.version !== dto.expectedVersion)
+      throw new ConflictException(
+        "Grant changed before enforcement could be dispatched",
+      );
     const inFlight = await this.prisma.accessEnforcementAttempt.findFirst({
-      where: { grantId: grant.id, operation: dto.operation, status: { in: ['queued', 'running', 'retrying'] } },
-      orderBy: { createdAt: 'desc' },
+      where: {
+        grantId: grant.id,
+        operation: dto.operation,
+        status: { in: ["queued", "running", "retrying"] },
+      },
+      orderBy: { createdAt: "desc" },
     });
     if (inFlight) return { attempt: inFlight, deduplicated: true };
     const idempotencyKey = `access-enforcement:${grant.id}:v${grant.version}:${dto.operation}`;
-    const existing = await this.prisma.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+    const existing = await this.prisma.accessEnforcementAttempt.findUnique({
+      where: { idempotencyKey },
+    });
     if (existing) return { attempt: existing, deduplicated: true };
     const attempt = await this.prisma.$transaction(async (tx) => {
       await this.claimGrantVersion(tx, id, dto.expectedVersion);
@@ -1433,16 +2127,56 @@ export class AccessGrantsService {
           grantId: grant.id,
           idempotencyKey,
           operation: dto.operation,
-          connectorCode: dto.connectorCode?.trim() || 'pilot_contract',
-          requestJson: { grantCode: grant.code, grantVersion: grant.version, assetId: grant.assetId, principalType: grant.principalType, principalId: grant.principalId, permissionCodes: this.grantPermissionCodes(grant) } as Prisma.InputJsonValue,
+          connectorCode: dto.connectorCode?.trim() || "pilot_contract",
+          requestJson: {
+            grantCode: grant.code,
+            grantVersion: grant.version,
+            assetId: grant.assetId,
+            principalType: grant.principalType,
+            principalId: grant.principalId,
+            permissionCodes: this.grantPermissionCodes(grant),
+          } as Prisma.InputJsonValue,
           createdBy: user.email,
         },
       });
-      await tx.accessGrant.update({ where: { id }, data: { enforcementStatus: 'pending', ...(dto.operation === 'revoke' ? { status: 'pending_revocation' } : {}), updatedBy: user.email, version: { increment: 1 } } });
-      await this.audit.log({ actor: user.email, action: 'access_grant.enforcement_dispatch', entityType: 'access_enforcement_attempt', entityId: created.id, metadata: { grantId: grant.id, operation: dto.operation, connectorCode: created.connectorCode } }, tx);
+      await tx.accessGrant.update({
+        where: { id },
+        data: {
+          enforcementStatus: "pending",
+          ...(dto.operation === "revoke"
+            ? { status: "pending_revocation" }
+            : {}),
+          updatedBy: user.email,
+          version: { increment: 1 },
+        },
+      });
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: "access_grant.enforcement_dispatch",
+          entityType: "access_enforcement_attempt",
+          entityId: created.id,
+          metadata: {
+            grantId: grant.id,
+            operation: dto.operation,
+            connectorCode: created.connectorCode,
+          },
+        },
+        tx,
+      );
       return created;
     });
-    return { attempt, deduplicated: false, contract: { delivery: 'at_least_once', idempotencyKey, retry: 'bounded exponential backoff', callback: 'provider must return the idempotency key and terminal status' } };
+    return {
+      attempt,
+      deduplicated: false,
+      contract: {
+        delivery: "at_least_once",
+        idempotencyKey,
+        retry: "bounded exponential backoff",
+        callback:
+          "provider must return the idempotency key and terminal status",
+      },
+    };
   }
 
   async applyGrantRules(
@@ -1451,20 +2185,36 @@ export class AccessGrantsService {
     user: AuthUser,
   ) {
     const grant = await this.getGrant(id, user);
-    const revocation = ['pending_revocation', 'revocation_failed'].includes(grant.status);
-    const operation = revocation ? 'revoke_rules' : 'apply_rules';
+    const revocation = ["pending_revocation", "revocation_failed"].includes(
+      grant.status,
+    );
+    const operation = revocation ? "revoke_rules" : "apply_rules";
     const idempotencyKey = `access-enforcement:dgop-policy:${operation}:${id}:v${dto.expectedVersion}`;
-    const previousAttempt = await this.prisma.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
-    if (previousAttempt) return { attempt: previousAttempt, deduplicated: true };
+    const previousAttempt =
+      await this.prisma.accessEnforcementAttempt.findUnique({
+        where: { idempotencyKey },
+      });
+    if (previousAttempt)
+      return { attempt: previousAttempt, deduplicated: true };
 
     if (grant.version !== dto.expectedVersion) {
-      throw new ConflictException('Grant changed before its access rules could be applied');
+      throw new ConflictException(
+        "Grant changed before its access rules could be applied",
+      );
     }
-    if (!revocation && (grant.ownerDecision !== 'approved' || grant.status !== 'active')) {
-      throw new BadRequestException('Policy activation requires an active owner-approved grant; revocation requires a pending-revocation grant');
+    if (
+      !revocation &&
+      (grant.ownerDecision !== "approved" || grant.status !== "active")
+    ) {
+      throw new BadRequestException(
+        "Policy activation requires an active owner-approved grant; revocation requires a pending-revocation grant",
+      );
     }
     const permissionCodes = this.grantPermissionCodes(grant);
-    if (!permissionCodes.length) throw new BadRequestException('The grant has no permission rules to apply');
+    if (!permissionCodes.length)
+      throw new BadRequestException(
+        "The grant has no permission rules to apply",
+      );
 
     const completedAt = new Date();
     const attempt = await this.prisma.$transaction(async (tx) => {
@@ -1474,8 +2224,8 @@ export class AccessGrantsService {
           grantId: grant.id,
           idempotencyKey,
           operation,
-          connectorCode: 'dgop_policy_store',
-          status: 'succeeded',
+          connectorCode: "dgop_policy_store",
+          status: "succeeded",
           attemptCount: 1,
           maxAttempts: 1,
           startedAt: completedAt,
@@ -1490,7 +2240,7 @@ export class AccessGrantsService {
             permissionCodes,
           } as Prisma.InputJsonValue,
           responseJson: {
-            policyStore: 'dgop',
+            policyStore: "dgop",
             ...(revocation
               ? { removedPermissionCount: permissionCodes.length }
               : { appliedPermissionCount: permissionCodes.length }),
@@ -1504,27 +2254,33 @@ export class AccessGrantsService {
         where: { id: grant.id },
         data: revocation
           ? {
-              status: 'revoked',
-              enforcementStatus: 'revoked',
+              status: "revoked",
+              enforcementStatus: "revoked",
               revokedAt: completedAt,
               revokedBy: user.email,
               updatedBy: user.email,
               version: { increment: 1 },
             }
-          : { enforcementStatus: 'enforced', updatedBy: user.email, version: { increment: 1 } },
+          : {
+              enforcementStatus: "enforced",
+              updatedBy: user.email,
+              version: { increment: 1 },
+            },
       });
       await this.audit.log(
         {
           actor: user.email,
-          action: revocation ? 'access_grant.rules_revoked' : 'access_grant.rules_applied',
-          entityType: 'access_enforcement_attempt',
+          action: revocation
+            ? "access_grant.rules_revoked"
+            : "access_grant.rules_applied",
+          entityType: "access_enforcement_attempt",
           entityId: created.id,
           metadata: {
             grantId: grant.id,
             grantCode: grant.code,
             profileId: grant.profileId,
             permissionCodes,
-            policyStore: 'dgop',
+            policyStore: "dgop",
             operation,
           },
         },
@@ -1535,19 +2291,32 @@ export class AccessGrantsService {
     return { attempt, deduplicated: false };
   }
 
-  async completeManualEnforcement(id: string, dto: CompleteManualAccessEnforcementDto, user: AuthUser) {
+  async completeManualEnforcement(
+    id: string,
+    dto: CompleteManualAccessEnforcementDto,
+    user: AuthUser,
+  ) {
     const grant = await this.getGrant(id, user);
-    if (grant.version !== dto.expectedVersion) throw new ConflictException('Grant changed before manual enforcement could be completed');
-    if (grant.ownerDecision !== 'approved' || grant.status !== 'active') {
-      throw new BadRequestException('Only active owner-approved grants can receive manual provisioning evidence');
+    if (grant.version !== dto.expectedVersion)
+      throw new ConflictException(
+        "Grant changed before manual enforcement could be completed",
+      );
+    if (grant.ownerDecision !== "approved" || grant.status !== "active") {
+      throw new BadRequestException(
+        "Only active owner-approved grants can receive manual provisioning evidence",
+      );
     }
     const evidenceReference = dto.evidenceReference.trim();
-    const evidenceFingerprint = createHash('sha256')
-      .update(`${grant.id}:${grant.version}:${dto.enforcementStatus}:${evidenceReference}`)
-      .digest('hex')
+    const evidenceFingerprint = createHash("sha256")
+      .update(
+        `${grant.id}:${grant.version}:${dto.enforcementStatus}:${evidenceReference}`,
+      )
+      .digest("hex")
       .slice(0, 24);
     const idempotencyKey = `access-enforcement:manual:${grant.id}:v${grant.version}:${evidenceFingerprint}`;
-    const existing = await this.prisma.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+    const existing = await this.prisma.accessEnforcementAttempt.findUnique({
+      where: { idempotencyKey },
+    });
     if (existing) return { attempt: existing, deduplicated: true };
 
     const completedAt = new Date();
@@ -1557,9 +2326,9 @@ export class AccessGrantsService {
         data: {
           grantId: grant.id,
           idempotencyKey,
-          operation: 'manual_provision',
-          connectorCode: 'manual_provisioning',
-          status: dto.enforcementStatus === 'enforced' ? 'succeeded' : 'failed',
+          operation: "manual_provision",
+          connectorCode: "manual_provisioning",
+          status: dto.enforcementStatus === "enforced" ? "succeeded" : "failed",
           attemptCount: 1,
           maxAttempts: 1,
           startedAt: completedAt,
@@ -1581,12 +2350,29 @@ export class AccessGrantsService {
       await tx.accessGrant.update({
         where: { id: grant.id },
         data: {
-          enforcementStatus: ['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(grant.status) && dto.enforcementStatus === 'enforced' ? 'revoked' : dto.enforcementStatus,
-          ...(['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(grant.status)
-            ? dto.enforcementStatus === 'enforced'
-              ? { status: 'revoked', revokedAt: completedAt, revokedBy: user.email }
-              : dto.enforcementStatus === 'failed'
-                ? { status: 'revocation_failed' }
+          enforcementStatus:
+            [
+              "pending_revocation",
+              "revocation_failed",
+              "expired",
+              "suspended",
+            ].includes(grant.status) && dto.enforcementStatus === "enforced"
+              ? "revoked"
+              : dto.enforcementStatus,
+          ...([
+            "pending_revocation",
+            "revocation_failed",
+            "expired",
+            "suspended",
+          ].includes(grant.status)
+            ? dto.enforcementStatus === "enforced"
+              ? {
+                  status: "revoked",
+                  revokedAt: completedAt,
+                  revokedBy: user.email,
+                }
+              : dto.enforcementStatus === "failed"
+                ? { status: "revocation_failed" }
                 : {}
             : {}),
           updatedBy: user.email,
@@ -1596,8 +2382,8 @@ export class AccessGrantsService {
       await this.audit.log(
         {
           actor: user.email,
-          action: 'access_grant.enforcement_manual_complete',
-          entityType: 'access_enforcement_attempt',
+          action: "access_grant.enforcement_manual_complete",
+          entityType: "access_enforcement_attempt",
           entityId: created.id,
           metadata: {
             grantId: grant.id,
@@ -1613,31 +2399,53 @@ export class AccessGrantsService {
     return { attempt, deduplicated: false };
   }
 
-  async completeEnforcementAttempt(attemptId: string, dto: CompleteAccessEnforcementAttemptDto, user: AuthUser) {
+  async completeEnforcementAttempt(
+    attemptId: string,
+    dto: CompleteAccessEnforcementAttemptDto,
+    user: AuthUser,
+  ) {
     const attempt = await this.prisma.accessEnforcementAttempt.findUnique({
       where: { id: attemptId },
       include: { grant: { include: grantInclude } },
     });
-    if (!attempt) throw new NotFoundException('Access enforcement attempt not found');
+    if (!attempt)
+      throw new NotFoundException("Access enforcement attempt not found");
     await this.assertAssetVisible(user.roles, attempt.grant.assetId);
-    if (['succeeded', 'failed'].includes(attempt.status)) {
+    if (["succeeded", "failed"].includes(attempt.status)) {
       return { attempt, deduplicated: true };
     }
     if (attempt.grant.version !== dto.expectedVersion) {
-      throw new ConflictException('Grant changed before the enforcement result could be recorded');
+      throw new ConflictException(
+        "Grant changed before the enforcement result could be recorded",
+      );
     }
     const completedAt = new Date();
-    const success = dto.status === 'succeeded';
-    const revocation = attempt.operation === 'revoke' || ['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(attempt.grant.status);
+    const success = dto.status === "succeeded";
+    const revocation =
+      attempt.operation === "revoke" ||
+      [
+        "pending_revocation",
+        "revocation_failed",
+        "expired",
+        "suspended",
+      ].includes(attempt.grant.status);
     const result = await this.prisma.$transaction(async (tx) => {
       await this.claimGrantVersion(tx, attempt.grantId, dto.expectedVersion);
       const claimed = await tx.accessEnforcementAttempt.updateMany({
-        where: { id: attemptId, status: { in: ['queued', 'running', 'retrying'] } },
+        where: {
+          id: attemptId,
+          status: { in: ["queued", "running", "retrying"] },
+        },
         data: {
           status: dto.status,
           completedAt,
-          errorCode: success ? null : dto.errorCode?.trim() || 'provider_failed',
-          errorMessage: success ? null : dto.message?.trim() || 'The provider reported enforcement failure',
+          errorCode: success
+            ? null
+            : dto.errorCode?.trim() || "provider_failed",
+          errorMessage: success
+            ? null
+            : dto.message?.trim() ||
+              "The provider reported enforcement failure",
           responseJson: {
             providerReference: dto.providerReference.trim(),
             message: dto.message?.trim() || null,
@@ -1645,60 +2453,132 @@ export class AccessGrantsService {
           },
         },
       });
-      if (claimed.count !== 1) throw new BadRequestException('Enforcement attempt changed before completion could be recorded');
+      if (claimed.count !== 1)
+        throw new BadRequestException(
+          "Enforcement attempt changed before completion could be recorded",
+        );
       const grant = await tx.accessGrant.update({
         where: { id: attempt.grantId },
         data: success
           ? revocation
-            ? { status: 'revoked', enforcementStatus: 'revoked', revokedAt: completedAt, revokedBy: user.email, updatedBy: user.email, version: { increment: 1 } }
-            : { enforcementStatus: 'enforced', updatedBy: user.email, version: { increment: 1 } }
+            ? {
+                status: "revoked",
+                enforcementStatus: "revoked",
+                revokedAt: completedAt,
+                revokedBy: user.email,
+                updatedBy: user.email,
+                version: { increment: 1 },
+              }
+            : {
+                enforcementStatus: "enforced",
+                updatedBy: user.email,
+                version: { increment: 1 },
+              }
           : revocation
-            ? { status: 'revocation_failed', enforcementStatus: 'failed', updatedBy: user.email, version: { increment: 1 } }
-            : { enforcementStatus: 'failed', updatedBy: user.email, version: { increment: 1 } },
+            ? {
+                status: "revocation_failed",
+                enforcementStatus: "failed",
+                updatedBy: user.email,
+                version: { increment: 1 },
+              }
+            : {
+                enforcementStatus: "failed",
+                updatedBy: user.email,
+                version: { increment: 1 },
+              },
         include: grantInclude,
       });
-      await this.audit.log({
-        actor: user.email,
-        action: success ? 'access_grant.enforcement_succeeded' : 'access_grant.enforcement_failed',
-        entityType: 'access_enforcement_attempt',
-        entityId: attemptId,
-        metadata: {
-          grantId: grant.id,
-          grantCode: grant.code,
-          operation: attempt.operation,
-          connectorCode: attempt.connectorCode,
-          providerReference: dto.providerReference.trim(),
-          errorCode: success ? null : dto.errorCode?.trim() || 'provider_failed',
+      await this.audit.log(
+        {
+          actor: user.email,
+          action: success
+            ? "access_grant.enforcement_succeeded"
+            : "access_grant.enforcement_failed",
+          entityType: "access_enforcement_attempt",
+          entityId: attemptId,
+          metadata: {
+            grantId: grant.id,
+            grantCode: grant.code,
+            operation: attempt.operation,
+            connectorCode: attempt.connectorCode,
+            providerReference: dto.providerReference.trim(),
+            errorCode: success
+              ? null
+              : dto.errorCode?.trim() || "provider_failed",
+          },
         },
-      }, tx);
+        tx,
+      );
       return {
-        attempt: await tx.accessEnforcementAttempt.findUniqueOrThrow({ where: { id: attemptId } }),
+        attempt: await tx.accessEnforcementAttempt.findUniqueOrThrow({
+          where: { id: attemptId },
+        }),
         grant,
       };
     });
     return { ...result, deduplicated: false };
   }
 
-  private async buildGrantImportPlan(csv: string, user: AuthUser): Promise<ImportPlanRow[]> {
+  private async buildGrantImportPlan(
+    csv: string,
+    user: AuthUser,
+  ): Promise<ImportPlanRow[]> {
     const rows = parseCsv(csv);
-    if (rows.length < 2) throw new BadRequestException('CSV must contain a header and at least one data row');
+    if (rows.length < 2)
+      throw new BadRequestException(
+        "CSV must contain a header and at least one data row",
+      );
     const headers = rows[0].map((header) => header.trim());
-    const required = ['action', 'code', 'expectedVersion', 'assetId', 'principalType', 'principalId', 'permissionCode', 'profileId', 'startsAt', 'expiresAt', 'justification'];
+    const required = [
+      "action",
+      "code",
+      "expectedVersion",
+      "assetId",
+      "principalType",
+      "principalId",
+      "permissionCode",
+      "profileId",
+      "startsAt",
+      "expiresAt",
+      "justification",
+    ];
     const missing = required.filter((header) => !headers.includes(header));
-    if (missing.length) throw new BadRequestException(`CSV is missing required columns: ${missing.join(', ')}`);
+    if (missing.length)
+      throw new BadRequestException(
+        `CSV is missing required columns: ${missing.join(", ")}`,
+      );
     const rowLimit = this.accessImportRowLimit();
-    if (rows.length - 1 > rowLimit) throw new BadRequestException(`CSV exceeds the configured ${rowLimit.toLocaleString('en')}-row change-set limit`);
+    if (rows.length - 1 > rowLimit)
+      throw new BadRequestException(
+        `CSV exceeds the configured ${rowLimit.toLocaleString("en")}-row change-set limit`,
+      );
 
-    const index = new Map(headers.map((header, position) => [header, position]));
-    const valueAt = (row: string[], key: string) => row[index.get(key) ?? -1]?.trim() ?? '';
+    const index = new Map(
+      headers.map((header, position) => [header, position]),
+    );
+    const valueAt = (row: string[], key: string) =>
+      row[index.get(key) ?? -1]?.trim() ?? "";
     const dataRows = rows.slice(1);
-    const codes = [...new Set(dataRows.map((row) => valueAt(row, 'code')).filter(Boolean))];
-    const assetIds = [...new Set(dataRows.map((row) => valueAt(row, 'assetId')).filter(Boolean))];
+    const codes = [
+      ...new Set(dataRows.map((row) => valueAt(row, "code")).filter(Boolean)),
+    ];
+    const assetIds = [
+      ...new Set(
+        dataRows.map((row) => valueAt(row, "assetId")).filter(Boolean),
+      ),
+    ];
     const visibilityWhere = await this.assetWriteVisibilityWhere(user);
     const grantPromise: Promise<ExistingImportGrant[]> = codes.length
       ? this.prisma.accessGrant.findMany({
           where: { code: { in: codes }, asset: visibilityWhere },
-          select: { id: true, code: true, version: true, status: true, ownerDecision: true, assetId: true },
+          select: {
+            id: true,
+            code: true,
+            version: true,
+            status: true,
+            ownerDecision: true,
+            assetId: true,
+          },
         })
       : Promise.resolve([]);
     const assetPromise: Promise<VisibleImportAsset[]> = assetIds.length
@@ -1708,119 +2588,215 @@ export class AccessGrantsService {
         })
       : Promise.resolve([]);
     const [grants, assets] = await Promise.all([grantPromise, assetPromise]);
-    const grantByCode = new Map<string, ExistingImportGrant>(grants.map((grant) => [grant.code, grant] as const));
-    const assetById = new Map<string, VisibleImportAsset>(assets.map((asset) => [asset.id, asset] as const));
+    const grantByCode = new Map<string, ExistingImportGrant>(
+      grants.map((grant) => [grant.code, grant] as const),
+    );
+    const assetById = new Map<string, VisibleImportAsset>(
+      assets.map((asset) => [asset.id, asset] as const),
+    );
     const plan: ImportPlanRow[] = [];
 
     for (const [offset, row] of dataRows.entries()) {
-      const values = Object.fromEntries(headers.map((header) => [header, valueAt(row, header)]));
-      const action = values['action'].toLowerCase();
-      const code = values['code'] || null;
+      const values = Object.fromEntries(
+        headers.map((header) => [header, valueAt(row, header)]),
+      );
+      const action = values["action"].toLowerCase();
+      const code = values["code"] || null;
       const errors: string[] = [];
-      const result: ImportPlanRow = { row: offset + 2, action, code, valid: false, errors, values };
+      const result: ImportPlanRow = {
+        row: offset + 2,
+        action,
+        code,
+        valid: false,
+        errors,
+        values,
+      };
 
-      if (!['create', 'update', 'revoke'].includes(action)) {
-        errors.push('action must be create, update, or revoke');
+      if (!["create", "update", "revoke"].includes(action)) {
+        errors.push("action must be create, update, or revoke");
       }
 
-      if (action === 'create') {
-        for (const key of ['assetId', 'principalType', 'principalId', 'permissionCode', 'justification']) {
+      if (action === "create") {
+        for (const key of [
+          "assetId",
+          "principalType",
+          "principalId",
+          "permissionCode",
+          "justification",
+        ]) {
           if (!values[key]) errors.push(`${key} is required for create`);
         }
-        if (values['principalType'] && !ACCESS_GRANT_PRINCIPAL_TYPES.includes(values['principalType'] as never)) {
-          errors.push('principalType is invalid');
+        if (
+          values["principalType"] &&
+          !ACCESS_GRANT_PRINCIPAL_TYPES.includes(
+            values["principalType"] as never,
+          )
+        ) {
+          errors.push("principalType is invalid");
         }
-        const asset = values['assetId'] ? assetById.get(values['assetId']) : null;
-        if (values['assetId'] && !asset) errors.push('assetId is not visible or does not exist');
-        const startsAt = values['startsAt'] ? new Date(values['startsAt']) : new Date();
-        const expiresAt = values['expiresAt'] ? new Date(values['expiresAt']) : null;
+        const asset = values["assetId"]
+          ? assetById.get(values["assetId"])
+          : null;
+        if (values["assetId"] && !asset)
+          errors.push("assetId is not visible or does not exist");
+        const startsAt = values["startsAt"]
+          ? new Date(values["startsAt"])
+          : new Date();
+        const expiresAt = values["expiresAt"]
+          ? new Date(values["expiresAt"])
+          : null;
         try {
           this.assertGrantDates(startsAt, expiresAt);
         } catch (error) {
-          errors.push(error instanceof BadRequestException ? String(error.message) : 'access grant dates are invalid');
+          errors.push(
+            error instanceof BadRequestException
+              ? String(error.message)
+              : "access grant dates are invalid",
+          );
         }
-        if (asset && values['permissionCode']) {
+        if (asset && values["permissionCode"]) {
           try {
-            await this.assertPermissionForAssetType(values['permissionCode'], asset.assetType);
+            await this.assertPermissionForAssetType(
+              values["permissionCode"],
+              asset.assetType,
+            );
           } catch (error) {
-            errors.push(error instanceof BadRequestException ? String(error.message) : 'permission is invalid for this asset type');
+            errors.push(
+              error instanceof BadRequestException
+                ? String(error.message)
+                : "permission is invalid for this asset type",
+            );
           }
         }
-        if (asset && values['profileId'] && values['permissionCode']) {
+        if (asset && values["profileId"] && values["permissionCode"]) {
           try {
-            await this.assertProfilePermission(values['profileId'], asset.assetType, values['permissionCode']);
+            await this.assertProfilePermission(
+              values["profileId"],
+              asset.assetType,
+              values["permissionCode"],
+            );
           } catch (error) {
-            errors.push(error instanceof BadRequestException ? String(error.message) : 'permission profile is invalid');
+            errors.push(
+              error instanceof BadRequestException
+                ? String(error.message)
+                : "permission profile is invalid",
+            );
           }
         }
-        if (values['principalType'] && values['principalId']) {
+        if (values["principalType"] && values["principalId"]) {
           try {
-            await this.assertPrincipalExists(values['principalType'], values['principalId']);
+            await this.assertPrincipalExists(
+              values["principalType"],
+              values["principalId"],
+            );
           } catch (error) {
-            errors.push(error instanceof BadRequestException ? String(error.message) : 'principal is invalid');
+            errors.push(
+              error instanceof BadRequestException
+                ? String(error.message)
+                : "principal is invalid",
+            );
           }
         }
         if (!errors.length && asset) {
           result.create = {
             assetId: asset.id,
-            principalType: values['principalType'],
-            principalId: values['principalId'],
-            permissionCode: values['permissionCode'],
-            profileId: values['profileId'] || null,
+            principalType: values["principalType"],
+            principalId: values["principalId"],
+            permissionCode: values["permissionCode"],
+            profileId: values["profileId"] || null,
             startsAt,
             expiresAt,
-            justification: values['justification'].trim(),
+            justification: values["justification"].trim(),
           };
         }
       }
 
-      if (action === 'update' || action === 'revoke') {
+      if (action === "update" || action === "revoke") {
         const grant = code ? grantByCode.get(code) : null;
-        if (!code || !grant) errors.push('code is not visible or does not exist');
-        const expectedVersion = Number(values['expectedVersion']);
-        if (!Number.isInteger(expectedVersion) || expectedVersion < 1) errors.push('expectedVersion must be a positive integer');
-        else if (grant && grant.version !== expectedVersion) errors.push(`stale version: expected ${expectedVersion}, current ${grant.version}`);
-        if (grant?.status === 'revoked') errors.push('revoked grants cannot be updated by CSV');
-        if (action === 'update' && grant) {
+        if (!code || !grant)
+          errors.push("code is not visible or does not exist");
+        const expectedVersion = Number(values["expectedVersion"]);
+        if (!Number.isInteger(expectedVersion) || expectedVersion < 1)
+          errors.push("expectedVersion must be a positive integer");
+        else if (grant && grant.version !== expectedVersion)
+          errors.push(
+            `stale version: expected ${expectedVersion}, current ${grant.version}`,
+          );
+        if (grant?.status === "revoked")
+          errors.push("revoked grants cannot be updated by CSV");
+        if (action === "update" && grant) {
           const update: Prisma.AccessGrantUpdateManyMutationInput = {};
-          if (values['permissionCode']) {
+          if (values["permissionCode"]) {
             const asset = await this.prisma.dataAsset.findFirst({
               where: { id: grant.assetId, ...visibilityWhere },
               select: { assetType: true },
             });
-            if (!asset) errors.push('grant asset is not visible');
+            if (!asset) errors.push("grant asset is not visible");
             else {
               try {
-                await this.assertPermissionForAssetType(values['permissionCode'], asset.assetType);
-                update.permissionCode = values['permissionCode'];
+                await this.assertPermissionForAssetType(
+                  values["permissionCode"],
+                  asset.assetType,
+                );
+                update.permissionCode = values["permissionCode"];
               } catch (error) {
-                errors.push(error instanceof BadRequestException ? String(error.message) : 'permission is invalid for this asset type');
+                errors.push(
+                  error instanceof BadRequestException
+                    ? String(error.message)
+                    : "permission is invalid for this asset type",
+                );
               }
-              if (values['profileId']) {
+              if (values["profileId"]) {
                 try {
-                  await this.assertProfilePermission(values['profileId'], asset.assetType, values['permissionCode']);
-                  result.profileId = values['profileId'];
+                  await this.assertProfilePermission(
+                    values["profileId"],
+                    asset.assetType,
+                    values["permissionCode"],
+                  );
+                  result.profileId = values["profileId"];
                 } catch (error) {
-                  errors.push(error instanceof BadRequestException ? String(error.message) : 'permission profile is invalid');
+                  errors.push(
+                    error instanceof BadRequestException
+                      ? String(error.message)
+                      : "permission profile is invalid",
+                  );
                 }
               }
             }
           }
-          if (headers.includes('startsAt') && values['startsAt']) update.startsAt = new Date(values['startsAt']);
-          if (headers.includes('expiresAt')) update.expiresAt = values['expiresAt'] ? new Date(values['expiresAt']) : null;
-          if (headers.includes('justification') && values['justification']) update.justification = values['justification'].trim();
+          if (headers.includes("startsAt") && values["startsAt"])
+            update.startsAt = new Date(values["startsAt"]);
+          if (headers.includes("expiresAt"))
+            update.expiresAt = values["expiresAt"]
+              ? new Date(values["expiresAt"])
+              : null;
+          if (headers.includes("justification") && values["justification"])
+            update.justification = values["justification"].trim();
           try {
-            const startsAt = update.startsAt instanceof Date ? update.startsAt : undefined;
-            const expiresAt = update.expiresAt instanceof Date || update.expiresAt === null ? update.expiresAt : undefined;
+            const startsAt =
+              update.startsAt instanceof Date ? update.startsAt : undefined;
+            const expiresAt =
+              update.expiresAt instanceof Date || update.expiresAt === null
+                ? update.expiresAt
+                : undefined;
             if (startsAt || expiresAt !== undefined) {
               const existing = await this.prisma.accessGrant.findUnique({
                 where: { id: grant.id },
                 select: { startsAt: true, expiresAt: true },
               });
-              this.assertGrantDates(startsAt ?? existing?.startsAt ?? new Date(), expiresAt === undefined ? existing?.expiresAt ?? null : expiresAt);
+              this.assertGrantDates(
+                startsAt ?? existing?.startsAt ?? new Date(),
+                expiresAt === undefined
+                  ? (existing?.expiresAt ?? null)
+                  : expiresAt,
+              );
             }
           } catch (error) {
-            errors.push(error instanceof BadRequestException ? String(error.message) : 'access grant dates are invalid');
+            errors.push(
+              error instanceof BadRequestException
+                ? String(error.message)
+                : "access grant dates are invalid",
+            );
           }
           result.update = update;
         }
@@ -1848,22 +2824,32 @@ export class AccessGrantsService {
     };
   }
 
-  private async assetVisibilityWhere(roleCodes: string[]): Promise<Prisma.DataAssetWhereInput> {
+  private async assetVisibilityWhere(
+    roleCodes: string[],
+  ): Promise<Prisma.DataAssetWhereInput> {
     const scope = await this.scope.resolve(roleCodes);
     return {
       AND: [{ deletedAt: null }, this.assetScopeWhere(scope)],
     };
   }
 
-  private async assetVisibilityWhereForUser(user: AuthUser): Promise<Prisma.DataAssetWhereInput> {
+  private async assetVisibilityWhereForUser(
+    user: AuthUser,
+  ): Promise<Prisma.DataAssetWhereInput> {
     const scoped = await this.assetVisibilityWhere(user.roles);
-    const broadReadRoles = new Set([...ADMIN_ROLES, 'auditor']);
-    if (!user.roles.includes('data_owner') || user.roles.some((role) => broadReadRoles.has(role))) return scoped;
+    const broadReadRoles = new Set([...ADMIN_ROLES, "auditor"]);
+    if (
+      !user.roles.includes("data_owner") ||
+      user.roles.some((role) => broadReadRoles.has(role))
+    )
+      return scoped;
     const ownedAssetIds = await this.ownedOrDelegatedAssetIds(user);
     return { AND: [scoped, { id: { in: ownedAssetIds } }] };
   }
 
-  private async assetWriteVisibilityWhere(user: AuthUser): Promise<Prisma.DataAssetWhereInput> {
+  private async assetWriteVisibilityWhere(
+    user: AuthUser,
+  ): Promise<Prisma.DataAssetWhereInput> {
     const scoped = await this.assetVisibilityWhere(user.roles);
     if (user.roles.some((role) => ADMIN_ROLES.includes(role))) return scoped;
     const ownedAssetIds = await this.ownedOrDelegatedAssetIds(user);
@@ -1876,25 +2862,38 @@ export class AccessGrantsService {
       where: {
         isActive: true,
         deletedAt: null,
-        OR: [{ userId: user.id }, { email: { equals: user.email, mode: 'insensitive' } }],
+        OR: [
+          { userId: user.id },
+          { email: { equals: user.email, mode: "insensitive" } },
+        ],
       },
       select: { id: true },
     });
     const delegations = await this.prisma.workflowDelegation.findMany({
       where: {
         delegateUserId: user.id,
-        roleCode: 'data_owner',
+        roleCode: "data_owner",
         status: WorkflowDelegationStatus.active,
         startsAt: { lte: now },
         expiresAt: { gt: now },
       },
       select: { assetId: true, delegatorUserId: true },
     });
-    const delegatorUserIds = [...new Set(delegations.filter((row) => !row.assetId).map((row) => row.delegatorUserId))];
+    const delegatorUserIds = [
+      ...new Set(
+        delegations
+          .filter((row) => !row.assetId)
+          .map((row) => row.delegatorUserId),
+      ),
+    ];
     const ownerPersonIds = person ? [person.id] : [];
     if (delegatorUserIds.length) {
       const delegatorPeople = await this.prisma.person.findMany({
-        where: { userId: { in: delegatorUserIds }, isActive: true, deletedAt: null },
+        where: {
+          userId: { in: delegatorUserIds },
+          isActive: true,
+          deletedAt: null,
+        },
         select: { id: true },
       });
       ownerPersonIds.push(...delegatorPeople.map((row) => row.id));
@@ -1904,7 +2903,7 @@ export class AccessGrantsService {
           where: {
             targetType: AssignmentTargetType.asset,
             personId: { in: ownerPersonIds },
-            roleType: { code: 'data_owner', isActive: true, deletedAt: null },
+            roleType: { code: "data_owner", isActive: true, deletedAt: null },
             approvalStatus: ApprovalStatus.approved,
             isActive: true,
             deletedAt: null,
@@ -1914,16 +2913,20 @@ export class AccessGrantsService {
           select: { targetId: true },
         })
       : [];
-    return [...new Set([
-      ...assignments.map((assignment) => assignment.targetId),
-      ...delegations.map((delegation) => delegation.assetId).filter((assetId): assetId is string => Boolean(assetId)),
-    ])];
+    return [
+      ...new Set([
+        ...assignments.map((assignment) => assignment.targetId),
+        ...delegations
+          .map((delegation) => delegation.assetId)
+          .filter((assetId): assetId is string => Boolean(assetId)),
+      ]),
+    ];
   }
 
   private assetScopeWhere(scope: EffectiveScope): Prisma.DataAssetWhereInput {
     const where: Prisma.DataAssetWhereInput = {};
-    if (scope.orgUnits !== 'all') where.orgUnitId = { in: scope.orgUnits };
-    if (scope.domains !== 'all') where.domainId = { in: scope.domains };
+    if (scope.orgUnits !== "all") where.orgUnitId = { in: scope.orgUnits };
+    if (scope.domains !== "all") where.domainId = { in: scope.domains };
     if (scope.maxClassRank != null) {
       where.OR = [
         { classificationId: null },
@@ -1938,74 +2941,129 @@ export class AccessGrantsService {
       where: { id: assetId, ...(await this.assetVisibilityWhere(roleCodes)) },
       select: { id: true, assetType: true, code: true },
     });
-    if (!asset) throw new NotFoundException('data asset not found');
+    if (!asset) throw new NotFoundException("data asset not found");
     return asset;
   }
 
-  private async assertWorkflowCaseVisible(roleCodes: string[], workflowCaseId: string) {
+  private async assertWorkflowCaseVisible(
+    roleCodes: string[],
+    workflowCaseId: string,
+  ) {
     const wfCase = await this.prisma.workflowCase.findUnique({
       where: { id: workflowCaseId },
       select: { id: true, assetId: true },
     });
-    if (!wfCase) throw new NotFoundException('workflow case not found');
-    if (wfCase.assetId) await this.assertAssetVisible(roleCodes, wfCase.assetId);
+    if (!wfCase) throw new NotFoundException("workflow case not found");
+    if (wfCase.assetId)
+      await this.assertAssetVisible(roleCodes, wfCase.assetId);
   }
 
-  private async assertPermissionForAssetType(permissionCode: string, assetType: string) {
+  private async assertPermissionForAssetType(
+    permissionCode: string,
+    assetType: string,
+  ) {
     const permission = await this.prisma.accessPermissionCatalog.findFirst({
-      where: { code: permissionCode, assetType, isActive: true, deletedAt: null },
+      where: {
+        code: permissionCode,
+        assetType,
+        isActive: true,
+        deletedAt: null,
+      },
     });
     if (!permission) {
-      throw new BadRequestException(`Permission ${permissionCode} is not supported for asset type ${assetType}`);
+      throw new BadRequestException(
+        `Permission ${permissionCode} is not supported for asset type ${assetType}`,
+      );
     }
     return permission;
   }
 
-  private async assertProfilePermission(profileId: string, assetType: string, permissionCode: string) {
+  private async assertProfilePermission(
+    profileId: string,
+    assetType: string,
+    permissionCode: string,
+  ) {
     const profile = await this.prisma.accessPermissionProfile.findFirst({
       where: { id: profileId, assetType, isActive: true, deletedAt: null },
     });
-    if (!profile) throw new BadRequestException('Permission profile is not active for this asset type');
+    if (!profile)
+      throw new BadRequestException(
+        "Permission profile is not active for this asset type",
+      );
     const permissionCodes = this.permissionCodes(profile.permissionCodesJson);
     if (!permissionCodes.includes(permissionCode)) {
-      throw new BadRequestException('Permission profile does not include the requested permission');
+      throw new BadRequestException(
+        "Permission profile does not include the requested permission",
+      );
     }
     return profile;
   }
 
-  private async assertPrincipalExists(principalType: string, principalId: string): Promise<void> {
-    if (principalType === 'user') {
-      const user = await this.prisma.user.findFirst({ where: { id: principalId, isActive: true }, select: { id: true } });
-      if (!user) throw new BadRequestException('Access grant user principal is not active');
+  private async assertPrincipalExists(
+    principalType: string,
+    principalId: string,
+  ): Promise<void> {
+    if (principalType === "user") {
+      const user = await this.prisma.user.findFirst({
+        where: { id: principalId, isActive: true },
+        select: { id: true },
+      });
+      if (!user)
+        throw new BadRequestException(
+          "Access grant user principal is not active",
+        );
     }
-    if (principalType === 'role') {
+    if (principalType === "role") {
       const role = await this.prisma.role.findFirst({
         where: { code: principalId, isActive: true, deletedAt: null },
         select: { id: true },
       });
-      if (!role) throw new BadRequestException('Access grant role principal is not active');
+      if (!role)
+        throw new BadRequestException(
+          "Access grant role principal is not active",
+        );
       return;
     }
-    if (principalType === 'group') {
+    if (principalType === "group") {
       const group = await this.prisma.accessPrincipalDirectory.findFirst({
-        where: { principalType: 'group', externalId: principalId, isActive: true, deletedAt: null },
+        where: {
+          principalType: "group",
+          externalId: principalId,
+          isActive: true,
+          deletedAt: null,
+        },
         select: { id: true },
       });
-      if (!group) throw new BadRequestException('Access grant group principal is not active in the directory registry');
+      if (!group)
+        throw new BadRequestException(
+          "Access grant group principal is not active in the directory registry",
+        );
       return;
     }
-    throw new BadRequestException('New access grants support role and group principals only');
+    throw new BadRequestException(
+      "New access grants support role and group principals only",
+    );
   }
 
-  private async assertPermissionsForAssetType(permissionCodes: string[], assetType: string) {
+  private async assertPermissionsForAssetType(
+    permissionCodes: string[],
+    assetType: string,
+  ) {
     const permissions = await this.prisma.accessPermissionCatalog.findMany({
-      where: { code: { in: permissionCodes }, assetType, isActive: true, deletedAt: null },
-      orderBy: { code: 'asc' },
+      where: {
+        code: { in: permissionCodes },
+        assetType,
+        isActive: true,
+        deletedAt: null,
+      },
+      orderBy: { code: "asc" },
     });
     const found = new Set(permissions.map((permission) => permission.code));
     const unsupported = permissionCodes.filter((code) => !found.has(code));
     if (unsupported.length) {
-      throw new BadRequestException(`Permissions are not supported for asset type ${assetType}: ${unsupported.join(', ')}`);
+      throw new BadRequestException(
+        `Permissions are not supported for asset type ${assetType}: ${unsupported.join(", ")}`,
+      );
     }
     return permissions;
   }
@@ -2014,12 +3072,21 @@ export class AccessGrantsService {
     const profile = await this.prisma.accessPermissionProfile.findFirst({
       where: { id: profileId, assetType, isActive: true, deletedAt: null },
     });
-    if (!profile) throw new BadRequestException('Permission profile is not active for this asset type');
-    await this.assertPermissionsForAssetType(this.permissionCodes(profile.permissionCodesJson), assetType);
+    if (!profile)
+      throw new BadRequestException(
+        "Permission profile is not active for this asset type",
+      );
+    await this.assertPermissionsForAssetType(
+      this.permissionCodes(profile.permissionCodesJson),
+      assetType,
+    );
     return profile;
   }
 
-  private async assertOwnerAuthority(user: AuthUser, assetId: string): Promise<void> {
+  private async assertOwnerAuthority(
+    user: AuthUser,
+    assetId: string,
+  ): Promise<void> {
     if (user.roles.some((role) => ADMIN_ROLES.includes(role))) return;
     const validation = await this.ownerDelegate.validateActiveOwnerOrDelegate({
       assetId,
@@ -2030,29 +3097,51 @@ export class AccessGrantsService {
   }
 
   private accessImportRowLimit(): number {
-    const configured = Number(process.env['ACCESS_GRANT_IMPORT_MAX_ROWS'] ?? DEFAULT_ACCESS_IMPORT_ROW_LIMIT);
-    if (!Number.isInteger(configured) || configured < 100 || configured > 100_000) {
+    const configured = Number(
+      process.env["ACCESS_GRANT_IMPORT_MAX_ROWS"] ??
+        DEFAULT_ACCESS_IMPORT_ROW_LIMIT,
+    );
+    if (
+      !Number.isInteger(configured) ||
+      configured < 100 ||
+      configured > 100_000
+    ) {
       return DEFAULT_ACCESS_IMPORT_ROW_LIMIT;
     }
     return configured;
   }
 
-  private permissionClass(action: string): 'read' | 'write' | 'execute' | 'share_export' | 'administer' {
+  private permissionClass(
+    action: string,
+  ): "read" | "write" | "execute" | "share_export" | "administer" {
     const normalized = action.toLowerCase();
-    if (/(share|reshare|export|download_payload|bulk_consume)/.test(normalized)) return 'share_export';
-    if (/(delete|manage_|configure_|operate_)/.test(normalized)) return 'administer';
-    if (/(execute|invoke|consume|subscribe)/.test(normalized)) return 'execute';
-    if (/(insert|update|edit|upload|create_|submit|publish|build|contribute)/.test(normalized)) return 'write';
-    return 'read';
+    if (/(share|reshare|export|download_payload|bulk_consume)/.test(normalized))
+      return "share_export";
+    if (/(delete|manage_|configure_|operate_)/.test(normalized))
+      return "administer";
+    if (/(execute|invoke|consume|subscribe)/.test(normalized)) return "execute";
+    if (
+      /(insert|update|edit|upload|create_|submit|publish|build|contribute)/.test(
+        normalized,
+      )
+    )
+      return "write";
+    return "read";
   }
 
   private permissionCodes(value: Prisma.JsonValue): string[] {
     return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
   }
 
-  private grantPermissionCodes(grant: { permissionCode: string; permissions?: Array<{ permissionCode: string }> }): string[] {
-    const normalized = grant.permissions?.map((row) => row.permissionCode).filter(Boolean) ?? [];
-    return [...new Set(normalized.length ? normalized : [grant.permissionCode])];
+  private grantPermissionCodes(grant: {
+    permissionCode: string;
+    permissions?: Array<{ permissionCode: string }>;
+  }): string[] {
+    const normalized =
+      grant.permissions?.map((row) => row.permissionCode).filter(Boolean) ?? [];
+    return [
+      ...new Set(normalized.length ? normalized : [grant.permissionCode]),
+    ];
   }
 
   private async claimGrantVersion(
@@ -2065,7 +3154,9 @@ export class AccessGrantsService {
       data: { version: expectedVersion },
     });
     if (claimed.count !== 1) {
-      throw new ConflictException('Grant changed before the operation could be committed');
+      throw new ConflictException(
+        "Grant changed before the operation could be committed",
+      );
     }
   }
 
@@ -2102,28 +3193,45 @@ export class AccessGrantsService {
   }
 
   private assertGrantDates(startsAt: Date, expiresAt: Date | null): void {
-    if (Number.isNaN(startsAt.getTime())) throw new BadRequestException('Access grant start date is invalid');
-    if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new BadRequestException('Access grant expiry date is invalid');
+    if (Number.isNaN(startsAt.getTime()))
+      throw new BadRequestException("Access grant start date is invalid");
+    if (expiresAt && Number.isNaN(expiresAt.getTime()))
+      throw new BadRequestException("Access grant expiry date is invalid");
     if (expiresAt && expiresAt <= startsAt) {
-      throw new BadRequestException('Access grant expiry date must be after the start date');
+      throw new BadRequestException(
+        "Access grant expiry date must be after the start date",
+      );
     }
   }
 
-  private effectiveAccessLifecycle(startsAt: Date, expiresAt: Date | null, status: string, now: Date): string {
-    if (status === 'revoked') return 'revoked';
-    if (status === 'pending_revocation' || status === 'revocation_failed') return 'revocation_pending';
-    if (status === 'suspended') return 'suspended';
-    if (status === 'expired' || (expiresAt && expiresAt <= now)) return 'expired';
-    if (startsAt > now || status === 'scheduled') return 'scheduled';
-    return 'current';
+  private effectiveAccessLifecycle(
+    startsAt: Date,
+    expiresAt: Date | null,
+    status: string,
+    now: Date,
+  ): string {
+    if (status === "revoked") return "revoked";
+    if (status === "pending_revocation" || status === "revocation_failed")
+      return "revocation_pending";
+    if (status === "suspended") return "suspended";
+    if (status === "expired" || (expiresAt && expiresAt <= now))
+      return "expired";
+    if (startsAt > now || status === "scheduled") return "scheduled";
+    return "current";
   }
 
-  private async nextGrantCode(client: Prisma.TransactionClient): Promise<string> {
+  private async nextGrantCode(
+    client: Prisma.TransactionClient,
+  ): Promise<string> {
     return nextAvailableBusinessCode(
       client,
-      'access_grant',
+      "access_grant",
       (value) => `AGR-${formatBusinessSequence(value, 5)}`,
-      async (code) => !(await client.accessGrant.findUnique({ where: { code }, select: { id: true } })),
+      async (code) =>
+        !(await client.accessGrant.findUnique({
+          where: { code },
+          select: { id: true },
+        })),
     );
   }
 }

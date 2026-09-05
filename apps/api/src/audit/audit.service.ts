@@ -1,9 +1,18 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
-import { parsePageParams, toPaged, type Paged } from '../common/pagination';
-import { isProductionLikeRuntime } from '../common/runtime-safety';
-import { hashAuditEntry, sanitizeAuditMetadata, verifyAuditHashChain } from './audit.logic';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { parsePageParams, toPaged, type Paged } from "../common/pagination";
+import { isProductionLikeRuntime } from "../common/runtime-safety";
+import {
+  hashAuditEntry,
+  sanitizeAuditMetadata,
+  verifyAuditHashChain,
+} from "./audit.logic";
 
 export interface AuditEntry {
   actor: string;
@@ -15,18 +24,18 @@ export interface AuditEntry {
 
 export interface AuditFilters {
   actor?: string;
-  action?: string;
-  entityType?: string;
+  action?: string | string[];
+  entityType?: string | string[];
   from?: string;
   to?: string;
 }
 
 type AuditWriter = PrismaService | Prisma.TransactionClient;
-const LEGACY_BASELINE_ACTION = 'audit_chain.legacy_baseline.accepted';
+const LEGACY_BASELINE_ACTION = "audit_chain.legacy_baseline.accepted";
 // A single transaction-scoped PostgreSQL advisory lock keeps the global hash
 // chain linear even when unrelated governance operations commit concurrently.
 const AUDIT_CHAIN_LOCK_KEY = 1_832_705_417;
-const FALSE_VALUES = new Set(['0', 'false', 'no', 'off']);
+const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
 
 function auditFailClosed(): boolean {
   const configured = process.env.DGOP_AUDIT_FAIL_CLOSED?.trim().toLowerCase();
@@ -35,6 +44,11 @@ function auditFailClosed(): boolean {
 }
 const AUDIT_CHAIN_PAGE_SIZE = 1000;
 const AUDIT_CHAIN_MAX_LIMIT = 5000;
+
+function filterValues(value?: string | string[]): string[] {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return [...new Set(values.map((item) => item.trim()).filter(Boolean))];
+}
 
 const auditChainSelect = {
   id: true,
@@ -51,15 +65,18 @@ const auditChainSelect = {
 
 @Injectable()
 export class AuditService {
-  private readonly logger = new Logger('Audit');
+  private readonly logger = new Logger("Audit");
 
   constructor(private readonly prisma: PrismaService) {}
 
-  private async writeLocked(entry: AuditEntry, client: AuditWriter): Promise<void> {
+  private async writeLocked(
+    entry: AuditEntry,
+    client: AuditWriter,
+  ): Promise<void> {
     await client.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY}) IS NULL AS "locked"`;
     const metadata = sanitizeAuditMetadata(entry.metadata ?? null);
     const previous = await client.auditLog.findFirst({
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { entryHash: true },
     });
     const createdAt = new Date();
@@ -95,9 +112,14 @@ export class AuditService {
       if (client) await this.writeLocked(entry, client);
       else await this.prisma.$transaction((tx) => this.writeLocked(entry, tx));
     } catch (err) {
-      this.logger.error(`Failed to write audit log for ${entry.action}`, err as Error);
+      this.logger.error(
+        `Failed to write audit log for ${entry.action}`,
+        err as Error,
+      );
       if (auditFailClosed()) {
-        throw new InternalServerErrorException('Audit trail could not be recorded');
+        throw new InternalServerErrorException(
+          "Audit trail could not be recorded",
+        );
       }
     }
   }
@@ -106,14 +128,14 @@ export class AuditService {
   async facets(): Promise<{ entityTypes: string[]; actions: string[] }> {
     const [types, actions] = await Promise.all([
       this.prisma.auditLog.findMany({
-        distinct: ['entityType'],
+        distinct: ["entityType"],
         select: { entityType: true },
-        orderBy: { entityType: 'asc' },
+        orderBy: { entityType: "asc" },
       }),
       this.prisma.auditLog.findMany({
-        distinct: ['action'],
+        distinct: ["action"],
         select: { action: true },
-        orderBy: { action: 'asc' },
+        orderBy: { action: "asc" },
       }),
     ]);
     return {
@@ -129,9 +151,14 @@ export class AuditService {
     pageSize?: string | number,
   ): Promise<Paged<unknown>> {
     const and: Record<string, unknown>[] = [];
-    if (filters.actor) and.push({ actor: { contains: filters.actor.trim(), mode: 'insensitive' } });
-    if (filters.action) and.push({ action: filters.action });
-    if (filters.entityType) and.push({ entityType: filters.entityType });
+    if (filters.actor)
+      and.push({
+        actor: { contains: filters.actor.trim(), mode: "insensitive" },
+      });
+    const actions = filterValues(filters.action);
+    const entityTypes = filterValues(filters.entityType);
+    if (actions.length) and.push({ action: { in: actions } });
+    if (entityTypes.length) and.push({ entityType: { in: entityTypes } });
     const createdAt: Record<string, Date> = {};
     if (filters.from) {
       const d = new Date(filters.from);
@@ -149,7 +176,7 @@ export class AuditService {
     const [rows, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip: params.skip,
         take: params.take,
       }),
@@ -159,24 +186,29 @@ export class AuditService {
   }
 
   async verifyChain(limit?: string | number) {
-    const parsed = limit === undefined || limit === null || String(limit).trim() === ''
-      ? null
-      : Number(limit);
-    const takeLimit = parsed === null
-      ? null
-      : Number.isFinite(parsed)
-        ? Math.min(Math.max(parsed, 1), AUDIT_CHAIN_MAX_LIMIT)
-        : AUDIT_CHAIN_PAGE_SIZE;
+    const parsed =
+      limit === undefined || limit === null || String(limit).trim() === ""
+        ? null
+        : Number(limit);
+    const takeLimit =
+      parsed === null
+        ? null
+        : Number.isFinite(parsed)
+          ? Math.min(Math.max(parsed, 1), AUDIT_CHAIN_MAX_LIMIT)
+          : AUDIT_CHAIN_PAGE_SIZE;
     const totalRows = await this.prisma.auditLog.count();
-    const rows: Prisma.AuditLogGetPayload<{ select: typeof auditChainSelect }>[] = [];
+    const rows: Prisma.AuditLogGetPayload<{
+      select: typeof auditChainSelect;
+    }>[] = [];
     let cursorId: string | undefined;
     while (takeLimit === null || rows.length < takeLimit) {
-      const take = takeLimit === null
-        ? AUDIT_CHAIN_PAGE_SIZE
-        : Math.min(AUDIT_CHAIN_PAGE_SIZE, takeLimit - rows.length);
+      const take =
+        takeLimit === null
+          ? AUDIT_CHAIN_PAGE_SIZE
+          : Math.min(AUDIT_CHAIN_PAGE_SIZE, takeLimit - rows.length);
       if (take <= 0) break;
       const page = await this.prisma.auditLog.findMany({
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
         take,
         select: auditChainSelect,
@@ -198,7 +230,7 @@ export class AuditService {
     const row = await this.prisma.auditLog.findFirst({
       where: {
         action: LEGACY_BASELINE_ACTION,
-        entityType: 'audit_chain',
+        entityType: "audit_chain",
         entryHash: { not: null },
       },
       select: { id: true },
@@ -209,10 +241,14 @@ export class AuditService {
   async acceptLegacyBaseline(actor: string, limit?: string | number) {
     const chain = await this.verifyChain(limit);
     if (!chain.valid) {
-      throw new BadRequestException('Audit chain must verify cleanly before accepting a legacy baseline');
+      throw new BadRequestException(
+        "Audit chain must verify cleanly before accepting a legacy baseline",
+      );
     }
     if (chain.truncated) {
-      throw new BadRequestException('Full audit chain verification is required before accepting a legacy baseline');
+      throw new BadRequestException(
+        "Full audit chain verification is required before accepting a legacy baseline",
+      );
     }
     if (chain.legacyRows === 0) {
       return { ...chain, accepted: false, alreadyAccepted: false };
@@ -223,7 +259,7 @@ export class AuditService {
       await this.log({
         actor,
         action: LEGACY_BASELINE_ACTION,
-        entityType: 'audit_chain',
+        entityType: "audit_chain",
         metadata: {
           legacyRows: chain.legacyRows,
           checkedRows: chain.checked,
@@ -233,7 +269,9 @@ export class AuditService {
       });
       const recorded = await this.legacyBaselineAccepted();
       if (!recorded) {
-        throw new InternalServerErrorException('Could not record legacy audit baseline acceptance');
+        throw new InternalServerErrorException(
+          "Could not record legacy audit baseline acceptance",
+        );
       }
     }
     return { ...chain, accepted: true, alreadyAccepted };

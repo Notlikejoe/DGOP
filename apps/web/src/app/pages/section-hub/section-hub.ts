@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n.service';
+import { AppIcon, AppIconName } from '../../shared/app-icon';
 import {
   HUB_CONFIGS,
   HubConfig,
@@ -20,6 +21,7 @@ interface HubMetric {
   value: string;
   hintKey: string;
   tone: 'success' | 'warning' | 'danger' | 'info';
+  icon: AppIconName;
 }
 
 interface QueueItem {
@@ -28,12 +30,13 @@ interface QueueItem {
   actionKey: string;
   link: string;
   tone: 'success' | 'warning' | 'danger' | 'info';
+  icon: AppIconName;
 }
 
 @Component({
   selector: 'app-section-hub',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, AppIcon],
   templateUrl: './section-hub.html',
   styleUrl: './section-hub.scss',
 })
@@ -74,6 +77,11 @@ export class SectionHubPage {
 
   protected readonly toolCount = computed(() => this.items().length);
   protected readonly groupCount = computed(() => this.groups().length);
+  protected readonly hubIcon = computed<AppIconName>(() => {
+    if (this.config().id === 'governance') return 'shield';
+    if (this.config().id === 'accessManagement') return 'keyRound';
+    return 'settings';
+  });
 
   protected readonly metrics = computed<HubMetric[]>(() => {
     if (this.config().id === 'governance') {
@@ -83,52 +91,93 @@ export class SectionHubPage {
           value: '91%',
           hintKey: 'console.metric.governanceHealthHint',
           tone: 'success',
+          icon: 'gauge',
         },
         {
           labelKey: 'console.metric.openAlerts',
           value: '7',
           hintKey: 'console.metric.openAlertsHint',
           tone: 'warning',
+          icon: 'alert',
         },
         {
           labelKey: 'console.metric.privacyRisk',
           value: '1',
           hintKey: 'console.metric.privacyRiskHint',
           tone: 'danger',
+          icon: 'shield',
         },
         {
           labelKey: 'console.metric.auditReady',
           value: '84%',
           hintKey: 'console.metric.auditReadyHint',
           tone: 'warning',
+          icon: 'scrollText',
+        },
+      ];
+    }
+
+    if (this.config().id === 'accessManagement') {
+      return [
+        {
+          labelKey: 'console.metric.accessCoverage',
+          value: '98%',
+          hintKey: 'console.metric.accessCoverageHint',
+          tone: 'success',
+          icon: 'userCheck',
+        },
+        {
+          labelKey: 'console.metric.pendingAccess',
+          value: '3',
+          hintKey: 'console.metric.pendingAccessHint',
+          tone: 'warning',
+          icon: 'keyRound',
+        },
+        {
+          labelKey: 'console.metric.accessTools',
+          value: String(this.toolCount()),
+          hintKey: 'console.metric.accessToolsHint',
+          tone: 'info',
+          icon: 'shield',
+        },
+        {
+          labelKey: 'console.metric.auditTrail',
+          value: '100%',
+          hintKey: 'console.metric.auditTrailHint',
+          tone: 'success',
+          icon: 'scrollText',
         },
       ];
     }
 
     return [
       {
-        labelKey: 'console.metric.accessCoverage',
-        value: '98%',
-        hintKey: 'console.metric.accessCoverageHint',
+        labelKey: 'console.metric.directoryCoverage',
+        value: '92%',
+        hintKey: 'console.metric.directoryCoverageHint',
         tone: 'success',
+        icon: 'users',
       },
       {
-        labelKey: 'console.metric.pendingAccess',
-        value: '3',
-        hintKey: 'console.metric.pendingAccessHint',
+        labelKey: 'console.metric.structureGaps',
+        value: '2',
+        hintKey: 'console.metric.structureGapsHint',
         tone: 'warning',
+        icon: 'building',
       },
       {
         labelKey: 'console.metric.referenceSets',
         value: String(this.toolCount()),
         hintKey: 'console.metric.referenceSetsHint',
         tone: 'info',
+        icon: 'database',
       },
       {
         labelKey: 'console.metric.auditTrail',
         value: '100%',
         hintKey: 'console.metric.auditTrailHint',
         tone: 'success',
+        icon: 'scrollText',
       },
     ];
   });
@@ -142,6 +191,7 @@ export class SectionHubPage {
           actionKey: 'console.queue.assignOwnerAction',
           link: '/governance/exception-queue',
           tone: 'warning',
+          icon: 'alert',
         },
         {
           titleKey: 'console.queue.reviewEvidence',
@@ -149,24 +199,48 @@ export class SectionHubPage {
           actionKey: 'console.queue.reviewEvidenceAction',
           link: '/governance/ndi/gaps',
           tone: 'danger',
+          icon: 'fileCheck',
+        },
+      ];
+    }
+
+    if (this.config().id === 'accessManagement') {
+      return [
+        {
+          titleKey: 'console.queue.reviewAccess',
+          metaKey: 'console.queue.reviewAccessMeta',
+          actionKey: 'console.queue.reviewAccessAction',
+          link: '/admin/users',
+          tone: 'warning',
+          icon: 'keyRound',
+        },
+        {
+          titleKey: 'console.queue.inspectAudit',
+          metaKey: 'console.queue.inspectAuditMeta',
+          actionKey: 'console.queue.inspectAuditAction',
+          link: '/admin/audit',
+          tone: 'info',
+          icon: 'scrollText',
         },
       ];
     }
 
     return [
       {
-        titleKey: 'console.queue.reviewAccess',
-        metaKey: 'console.queue.reviewAccessMeta',
-        actionKey: 'console.queue.reviewAccessAction',
-        link: '/admin/users',
-        tone: 'warning',
-      },
-      {
         titleKey: 'console.queue.completeDirectory',
         metaKey: 'console.queue.completeDirectoryMeta',
         actionKey: 'console.queue.completeDirectoryAction',
         link: '/admin/people',
         tone: 'info',
+        icon: 'users',
+      },
+      {
+        titleKey: 'console.queue.reviewIntegrations',
+        metaKey: 'console.queue.reviewIntegrationsMeta',
+        actionKey: 'console.queue.reviewIntegrationsAction',
+        link: '/admin/integrations',
+        tone: 'warning',
+        icon: 'plug',
       },
     ];
   });

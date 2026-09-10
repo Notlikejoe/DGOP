@@ -35,7 +35,7 @@
                 "output": "bpmn-assets"
               }
             ],
-            "styles": ["src/styles.scss"]
+            "styles": ["src/styles.scss", "src/admin-modern.scss", "src/governance-modern.scss"]
           },
           "configurations": {
             "production": {

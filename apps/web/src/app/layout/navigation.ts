@@ -7,7 +7,7 @@ export type NavSectionId =
   | 'accessManagement'
   | 'administration';
 
-export type HubId = 'governance' | 'administration';
+export type HubId = 'governance' | 'accessManagement' | 'administration';
 
 export interface NavItem {
   labelKey: string;
@@ -296,6 +296,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     id: 'accessManagement',
     titleKey: 'nav.section.accessManagement',
+    summaryKey: 'nav.section.accessManagement.summary',
+    homeLink: '/access-management',
+    icon: 'AC',
+    iconName: 'keyRound',
     items: [
       {
         labelKey: 'nav.accessGrants',
@@ -335,6 +339,7 @@ export const NAV_SECTIONS: NavSection[] = [
         link: '/admin/audit',
         permission: 'audit.view',
         groupKey: 'hub.group.access',
+        featured: true,
       },
     ],
   },
@@ -466,8 +471,21 @@ export const HUB_CONFIGS: HubConfig[] = [
     ],
   },
   {
+    id: 'accessManagement',
+    sectionIds: ['accessManagement'],
+    eyebrowKey: 'hub.access.eyebrow',
+    titleKey: 'hub.access.title',
+    subtitleKey: 'hub.access.subtitle',
+    checklistTitleKey: 'hub.access.checklistTitle',
+    checklistKeys: [
+      'hub.access.check.roles',
+      'hub.access.check.grants',
+      'hub.access.check.audit',
+    ],
+  },
+  {
     id: 'administration',
-    sectionIds: ['accessManagement', 'administration'],
+    sectionIds: ['administration'],
     eyebrowKey: 'hub.admin.eyebrow',
     titleKey: 'hub.admin.title',
     subtitleKey: 'hub.admin.subtitle',
@@ -485,6 +503,7 @@ export const CRUMB_MAP: Record<string, string> = {
   '/about': 'nav.about',
   '/governance-map': 'nav.designSystem',
   '/design-system': 'nav.designSystem',
+  '/access-management': 'nav.section.accessManagement',
   '/assets': 'nav.dataAssets',
   '/governance/ownership': 'nav.ownership',
   '/governance/assignment-rules': 'nav.assignmentRules',

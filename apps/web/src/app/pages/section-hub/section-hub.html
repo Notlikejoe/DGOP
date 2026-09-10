@@ -1,5 +1,14 @@
-<section class="workspace">
+<section
+  class="workspace foundation-modern"
+  [class.workspace--governance]="config().id === 'governance'"
+  [class.workspace--access]="config().id === 'accessManagement'"
+  [class.workspace--administration]="config().id === 'administration'"
+>
   <header class="workspace-hero">
+    <span class="workspace-hero__mark" aria-hidden="true">
+      <app-icon [name]="hubIcon()" />
+    </span>
+
     <div class="workspace-hero__copy">
       <p class="workspace-hero__eyebrow">{{ t(config().eyebrowKey) }}</p>
       <h1>{{ t(config().titleKey) }}</h1>
@@ -27,9 +36,14 @@
     <section class="console-metrics" [attr.aria-label]="t('console.metrics')">
       @for (metric of metrics(); track metric.labelKey) {
         <article class="console-metric" [class]="'console-metric console-metric--' + metric.tone">
-          <span>{{ t(metric.labelKey) }}</span>
-          <strong>{{ metric.value }}</strong>
-          <small>{{ t(metric.hintKey) }}</small>
+          <span class="console-metric__icon" aria-hidden="true">
+            <app-icon [name]="metric.icon" />
+          </span>
+          <span class="console-metric__copy">
+            <span>{{ t(metric.labelKey) }}</span>
+            <strong>{{ metric.value }}</strong>
+            <small>{{ t(metric.hintKey) }}</small>
+          </span>
         </article>
       }
     </section>
@@ -53,14 +67,14 @@
               </header>
 
               <div class="tool-tree__root">
-                <span aria-hidden="true">{{ group.items[0].icon }}</span>
+                <span aria-hidden="true"><app-icon [name]="group.items[0].iconName" /></span>
                 <strong>{{ t(group.key + '.title') }}</strong>
               </div>
 
               <div class="tool-tree__leaves">
                 @for (item of group.items; track item.link) {
                   <a class="tool-node" [routerLink]="item.link">
-                    <span class="tool-node__icon" aria-hidden="true">{{ item.icon }}</span>
+                    <span class="tool-node__icon" aria-hidden="true"><app-icon [name]="item.iconName" /></span>
                     <span class="tool-node__text">
                       <strong>{{ t(item.labelKey) }}</strong>
                       <small>{{ t(item.descriptionKey) }}</small>
@@ -85,8 +99,11 @@
           <div class="console-actions">
             @for (item of featuredItems(); track item.link) {
               <a class="console-action" [routerLink]="item.link">
-                <span>{{ t(item.labelKey) }}</span>
-                <small>{{ t(item.descriptionKey) }}</small>
+                <span class="console-action__icon" aria-hidden="true"><app-icon [name]="item.iconName" /></span>
+                <span class="console-action__copy">
+                  <span>{{ t(item.labelKey) }}</span>
+                  <small>{{ t(item.descriptionKey) }}</small>
+                </span>
               </a>
             }
           </div>
@@ -103,6 +120,7 @@
           <div class="review-queue">
             @for (item of queue(); track item.titleKey) {
               <a class="review-item" [class]="'review-item review-item--' + item.tone" [routerLink]="item.link">
+                <span class="review-item__icon" aria-hidden="true"><app-icon [name]="item.icon" /></span>
                 <span>
                   <strong>{{ t(item.titleKey) }}</strong>
                   <small>{{ t(item.metaKey) }}</small>
@@ -126,7 +144,7 @@
       <ul class="workspace-checklist">
         @for (check of config().checklistKeys; track check) {
           <li>
-            <span class="workspace-checklist__mark" aria-hidden="true"></span>
+            <span class="workspace-checklist__mark" aria-hidden="true"><app-icon name="check" /></span>
             <span>{{ t(check) }}</span>
           </li>
         }

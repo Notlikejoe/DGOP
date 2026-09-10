@@ -329,3 +329,130 @@
     justify-content: flex-start;
   }
 }
+
+/* Prime-inspired platform brief treatment shared with the modern workspaces. */
+.about-page.foundation-modern { gap: var(--space-4); }
+
+.about-page.foundation-modern .about-hero {
+  grid-template-columns: 48px minmax(0, 1fr) minmax(280px, 380px);
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 88% 14%, rgba(45, 212, 191, 0.25), transparent 29%),
+    linear-gradient(125deg, #0f172a 0%, #172554 52%, #102a43 100%);
+  border: 3px solid #334155;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -2px 0 rgba(2, 6, 23, 0.62), 0 5px 0 #09111f, 0 14px 28px rgba(15, 23, 42, 0.24);
+}
+
+.about-page.foundation-modern .about-hero::before { display: none; }
+
+.about-hero__mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: #ecfeff;
+  background: linear-gradient(145deg, #2dd4bf, #0f766e);
+  border: 2px solid rgba(153, 246, 228, 0.74);
+  border-radius: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 4px 0 #073f3c, 0 9px 18px rgba(0, 0, 0, 0.25);
+  font-size: 1.25rem;
+}
+
+.about-page.foundation-modern .about-hero h1 {
+  margin-bottom: var(--space-2);
+  color: #fff;
+  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.42);
+}
+
+.about-page.foundation-modern .about-hero__eyebrow { color: #5eead4; letter-spacing: 0.1em; }
+.about-page.foundation-modern .about-hero__copy > p { color: #cbd5e1; }
+
+.about-page.foundation-modern .alignment-chips span,
+.about-page.foundation-modern .integration-tools span {
+  min-height: 34px;
+  color: #172033;
+  background: linear-gradient(180deg, #fff, #cbd5e1);
+  border: 2px solid #94a3b8;
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 #fff, 0 2px 0 #64748b;
+}
+
+.about-page.foundation-modern .about-hero__statement {
+  color: #fff;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    rgba(15, 23, 42, 0.36);
+  background-size: 42px 42px;
+  border: 2px solid rgba(148, 163, 184, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 3px 0 rgba(2, 6, 23, 0.7);
+}
+
+.about-page.foundation-modern .about-hero__statement strong { color: #fff; }
+.about-page.foundation-modern .about-hero__statement p { color: #cbd5e1; }
+
+.about-page.foundation-modern .about-panel,
+.about-page.foundation-modern .integration-panel {
+  padding: var(--space-4);
+  background: linear-gradient(145deg, var(--command-surface), color-mix(in srgb, var(--command-surface-2) 88%, #e2e8f0));
+  border: 2px solid #aeb9c7;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 72%, transparent), 0 4px 0 #7c8999, 0 11px 22px rgba(15, 23, 42, 0.14);
+}
+
+.about-page.foundation-modern .about-panel__head {
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--command-border);
+}
+
+.about-page.foundation-modern .principle-card,
+.about-page.foundation-modern .tower-card,
+.about-page.foundation-modern .flow-step {
+  border-width: 2px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, var(--command-surface), color-mix(in srgb, var(--card-tone, var(--primary)) 9%, var(--command-surface-2)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent), 0 3px 0 color-mix(in srgb, var(--card-tone, var(--primary)) 38%, #64748b), 0 7px 14px rgba(15, 23, 42, 0.1);
+}
+
+.about-page.foundation-modern .flow-step {
+  --card-tone: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--command-border));
+}
+
+.about-page.foundation-modern .flow-step > span {
+  color: #fff;
+  background: linear-gradient(145deg, #2dd4bf, #0f766e);
+  border: 1px solid #5eead4;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 3px 0 #064e3b;
+}
+
+.about-page.foundation-modern .integration-panel {
+  background:
+    radial-gradient(circle at 90% 20%, rgba(45, 212, 191, 0.18), transparent 28%),
+    linear-gradient(125deg, color-mix(in srgb, var(--command-surface) 92%, #0f172a), color-mix(in srgb, var(--command-surface-2) 84%, #164e63));
+}
+
+.about-page.foundation-modern .quick-links a {
+  border: 2px solid #aeb9c7;
+  background: linear-gradient(145deg, var(--command-surface), color-mix(in srgb, var(--command-surface-2) 88%, #dbeafe));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 72%, transparent), 0 3px 0 #7c8999, 0 8px 16px rgba(15, 23, 42, 0.12);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.about-page.foundation-modern .quick-links a:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 72%, transparent), 0 5px 0 #526174, 0 12px 20px rgba(15, 23, 42, 0.16);
+}
+
+@media (max-width: 1180px) {
+  .about-page.foundation-modern .about-hero { grid-template-columns: 48px minmax(0, 1fr); }
+  .about-page.foundation-modern .about-hero__statement { grid-column: 2; }
+}
+
+@media (max-width: 720px) {
+  .about-page.foundation-modern .about-hero { grid-template-columns: 40px minmax(0, 1fr); padding: var(--space-4); }
+  .about-hero__mark { width: 40px; height: 40px; }
+  .about-page.foundation-modern .about-hero__statement { grid-column: 1 / -1; }
+}

@@ -1,6 +1,8 @@
-<section class="page">
-  <header class="page__header">
-    <div>
+<section class="page admin-modern">
+  <header class="page__header admin-hero">
+    <span class="admin-hero__mark" aria-hidden="true"><app-icon name="contact" /></span>
+    <div class="admin-hero__copy">
+      <span class="admin-hero__eyebrow">{{ t('admin.controlCenter') }}</span>
       <h1>{{ t('people.title') }}</h1>
       <p class="page__subtitle">{{ t('people.subtitle') }}</p>
     </div>
@@ -11,8 +13,15 @@
     </div>
   </header>
 
-  <div class="ds-card">
-    <div class="toolbar">
+  <div class="admin-metrics" [attr.aria-label]="t('admin.metrics.total')">
+    <article class="admin-metric admin-metric--primary"><span class="admin-metric__icon"><app-icon name="users" /></span><span><small>{{ t('admin.metrics.total') }}</small><strong>{{ metrics().total }}</strong></span></article>
+    <article class="admin-metric admin-metric--success"><span class="admin-metric__icon"><app-icon name="check" /></span><span><small>{{ t('admin.metrics.active') }}</small><strong>{{ metrics().active }}</strong></span></article>
+    <article class="admin-metric admin-metric--muted"><span class="admin-metric__icon"><app-icon name="lock" /></span><span><small>{{ t('admin.metrics.inactive') }}</small><strong>{{ metrics().inactive }}</strong></span></article>
+    <article class="admin-metric admin-metric--warning"><span class="admin-metric__icon"><app-icon name="filter" /></span><span><small>{{ t('admin.metrics.visible') }}</small><strong>{{ metrics().visible }}</strong></span></article>
+  </div>
+
+  <div class="ds-card admin-panel">
+    <div class="toolbar admin-toolbar">
       <input
         type="search"
         class="toolbar__search"
@@ -21,6 +30,21 @@
         [placeholder]="t('people.searchPlaceholder')"
         [attr.aria-label]="t('people.searchPlaceholder')"
       />
+      <p-multiselect
+        class="admin-multiselect"
+        panelStyleClass="admin-multiselect-panel"
+        [options]="statusOptions()"
+        optionLabel="label"
+        optionValue="value"
+        [placeholder]="t('admin.filters.allStatuses')"
+        [showClear]="true"
+        [maxSelectedLabels]="2"
+        [selectedItemsLabel]="t('admin.filters.selectedStatuses')"
+        [ngModel]="statusFilter()"
+        (ngModelChange)="statusFilter.set($event); page.set(1)"
+        [attr.aria-label]="t('admin.filters.status')"
+      />
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="clearFilters()"><app-icon name="filter" /> {{ t('crud.clear') }}</button>
       <span class="toolbar__count">{{ filtered().length }} {{ t('people.records') }}</span>
     </div>
 
@@ -32,8 +56,8 @@
     } @else if (filtered().length === 0) {
       <div class="empty"><p>{{ t('people.noMatches') }}</p></div>
     } @else {
-      <div class="table-wrap">
-        <table class="ds-table">
+      <div class="table-wrap admin-table-wrap">
+        <table class="ds-table admin-table">
           <thead>
             <tr>
               <th>{{ t('people.col.name') }}</th>

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { ApiService, HealthResponse } from '../../core/api.service';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
+import { AppIcon } from '../../shared/app-icon';
 
 type State = 'loading' | 'ok' | 'error';
 type GapType = 'missing' | 'expired' | 'rejected' | 'unassigned' | 'stuck';
@@ -61,7 +62,7 @@ interface JourneyNode {
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusChip, RouterLink],
+  imports: [StatusChip, RouterLink, AppIcon],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })

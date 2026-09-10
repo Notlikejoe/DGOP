@@ -1,6 +1,8 @@
-<section class="page">
-  <header class="page__header">
-    <div>
+<section class="page admin-modern">
+  <header class="page__header admin-hero">
+    <span class="admin-hero__mark" aria-hidden="true"><app-icon [name]="pageIcon()" /></span>
+    <div class="admin-hero__copy">
+      <span class="admin-hero__eyebrow">{{ t('admin.controlCenter') }}</span>
       <h1>{{ t(config().titleKey) }}</h1>
       <p class="page__subtitle">{{ t(config().subtitleKey) }}</p>
     </div>
@@ -9,7 +11,14 @@
     </button>
   </header>
 
-  <div class="ds-card">
+  <div class="admin-metrics" [attr.aria-label]="t('admin.metrics.total')">
+    <article class="admin-metric admin-metric--primary"><span class="admin-metric__icon"><app-icon name="database" /></span><span><small>{{ t('admin.metrics.total') }}</small><strong>{{ metrics().total }}</strong></span></article>
+    <article class="admin-metric admin-metric--success"><span class="admin-metric__icon"><app-icon name="check" /></span><span><small>{{ t('admin.metrics.active') }}</small><strong>{{ metrics().active }}</strong></span></article>
+    <article class="admin-metric admin-metric--muted"><span class="admin-metric__icon"><app-icon name="lock" /></span><span><small>{{ t('admin.metrics.inactive') }}</small><strong>{{ metrics().inactive }}</strong></span></article>
+    <article class="admin-metric admin-metric--warning"><span class="admin-metric__icon"><app-icon name="filter" /></span><span><small>{{ t('admin.metrics.visible') }}</small><strong>{{ metrics().visible }}</strong></span></article>
+  </div>
+
+  <div class="ds-card admin-panel">
     @if (state() === 'loading') {
       <p>{{ t('crud.loading') }}</p>
     } @else if (state() === 'error') {
@@ -21,7 +30,7 @@
         <button type="button" class="ds-btn ds-btn--ghost" (click)="openCreate()">+ {{ t('crud.new') }}</button>
       </div>
     } @else {
-      <div class="toolbar">
+      <div class="toolbar admin-toolbar">
         <input
           type="search"
           class="toolbar__search"
@@ -30,24 +39,31 @@
           [placeholder]="t('crud.searchPlaceholder')"
           [attr.aria-label]="t('crud.search')"
         />
-        <select
-          class="toolbar__status"
-          [value]="statusFilter()"
-          (change)="onStatusFilter($any($event.target).value)"
-          [attr.aria-label]="t('crud.status')"
-        >
-          <option value="all">{{ t('crud.filterAll') }}</option>
-          <option value="active">{{ t('crud.active') }}</option>
-          <option value="inactive">{{ t('crud.inactive') }}</option>
-        </select>
+        <p-multiselect
+          class="admin-multiselect"
+          panelStyleClass="admin-multiselect-panel"
+          [options]="statusOptions()"
+          optionLabel="label"
+          optionValue="value"
+          [placeholder]="t('admin.filters.allStatuses')"
+          [showClear]="true"
+          [maxSelectedLabels]="2"
+          [selectedItemsLabel]="t('admin.filters.selectedStatuses')"
+          [ngModel]="statusFilter()"
+          (ngModelChange)="onStatusFilter($event)"
+          [attr.aria-label]="t('admin.filters.status')"
+        />
+        <button type="button" class="ds-btn ds-btn--ghost" (click)="clearFilters()">
+          <app-icon name="filter" /> {{ t('crud.clear') }}
+        </button>
         <span class="toolbar__count">{{ filtered().length }} {{ t('crud.records') }}</span>
       </div>
 
       @if (filtered().length === 0) {
         <div class="empty"><p>{{ t('crud.noMatches') }}</p></div>
       } @else {
-      <div class="table-wrap">
-        <table class="ds-table">
+      <div class="table-wrap admin-table-wrap">
+        <table class="ds-table admin-table">
           <thead>
             <tr>
               @for (col of config().columns; track col.key) {

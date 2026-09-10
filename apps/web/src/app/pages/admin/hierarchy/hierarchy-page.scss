@@ -152,6 +152,45 @@
   font-weight: 800;
 }
 
+.panel-head__tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tree-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 4px var(--space-3);
+  color: var(--command-on);
+  background: linear-gradient(180deg, var(--command-surface), var(--command-surface-2));
+  border: 1px solid var(--command-border);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 45%, transparent), 0 2px 0 var(--command-border);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+}
+
+.tree-control:hover:not(:disabled) {
+  color: var(--command-mark-on);
+  background: var(--command-active);
+  border-color: color-mix(in srgb, var(--command-accent) 44%, var(--command-border));
+  transform: translateY(-1px);
+}
+
+.tree-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  box-shadow: none;
+}
+
 .toolbar {
   margin-bottom: var(--space-4);
 }

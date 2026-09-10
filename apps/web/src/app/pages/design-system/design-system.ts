@@ -4,6 +4,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
+import { AppIcon, AppIconName } from '../../shared/app-icon';
 import { NAV_SECTIONS, NavItem, NavSectionId } from '../../layout/navigation';
 
 interface ConsoleMetric {
@@ -11,6 +12,7 @@ interface ConsoleMetric {
   value: string;
   hintKey: string;
   tone: 'success' | 'warning' | 'danger' | 'info';
+  icon: AppIconName;
 }
 
 interface DesignTree {
@@ -60,7 +62,7 @@ interface GlobalSearchResponse {
 @Component({
   selector: 'app-design-system',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, StatusChip],
+  imports: [FormsModule, RouterLink, StatusChip, AppIcon],
   templateUrl: './design-system.html',
   styleUrl: './design-system.scss',
 })
@@ -80,24 +82,28 @@ export class DesignSystem implements OnDestroy {
       value: '91%',
       hintKey: 'ds.console.metric.healthHint',
       tone: 'success',
+      icon: 'gauge',
     },
     {
       labelKey: 'ds.console.metric.alerts',
       value: '7',
       hintKey: 'ds.console.metric.alertsHint',
       tone: 'warning',
+      icon: 'alert',
     },
     {
       labelKey: 'ds.console.metric.privacy',
       value: '1',
       hintKey: 'ds.console.metric.privacyHint',
       tone: 'danger',
+      icon: 'shield',
     },
     {
       labelKey: 'ds.console.metric.audit',
       value: '84%',
       hintKey: 'ds.console.metric.auditHint',
       tone: 'warning',
+      icon: 'scrollText',
     },
   ];
 
@@ -109,10 +115,16 @@ export class DesignSystem implements OnDestroy {
       groups: this.groupsFor(['governance']),
     },
     {
+      titleKey: 'hub.access.title',
+      subtitleKey: 'hub.access.subtitle',
+      rootKey: 'nav.section.accessManagement',
+      groups: this.groupsFor(['accessManagement']),
+    },
+    {
       titleKey: 'ds.tree.admin.title',
       subtitleKey: 'ds.tree.admin.subtitle',
       rootKey: 'nav.section.administration',
-      groups: this.groupsFor(['accessManagement', 'administration']),
+      groups: this.groupsFor(['administration']),
     },
   ];
 

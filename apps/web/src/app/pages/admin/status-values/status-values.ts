@@ -13,6 +13,7 @@ export class StatusValuesPage {
     titleKey: 'nav.statusValues',
     subtitleKey: 'statusValues.subtitle',
     apiBase: '/api/status-values',
+    iconName: 'listCheck',
     columns: [
       { key: 'domain', labelKey: 'statusValues.domain' },
       { key: 'sortOrder', labelKey: 'statusValues.order' },

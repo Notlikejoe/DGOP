@@ -1097,6 +1097,78 @@
   border-bottom: 3px solid #111827;
   text-shadow: 0 1px 0 #111827;
 }
+.permission-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 0;
+  padding: 0.72rem var(--space-3);
+  color: #fff;
+  background: linear-gradient(135deg, #334155 0%, #1f2937 52%, #111827 100%);
+  border-bottom: 3px solid #0f172a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 3px 0 rgba(15, 23, 42, 0.28);
+}
+.permission-group__head h3 {
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-shadow: 0 1px 0 #020617;
+}
+.permission-group__head span {
+  flex: 0 0 auto;
+  padding: 0.22rem 0.55rem;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.permission-screens {
+  margin-top: var(--space-4);
+}
+.permission-screen {
+  overflow: hidden;
+  background: linear-gradient(145deg, var(--surface), var(--surface-2));
+}
+.permission-screen__note,
+.permission-screen__shared {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+.permission-screen__note {
+  color: var(--on-surface-muted);
+  background: color-mix(in srgb, var(--surface-2) 82%, #cbd5e1);
+  border: 1px dashed color-mix(in srgb, var(--border) 78%, #64748b);
+}
+.permission-screen__shared {
+  margin-bottom: var(--space-3);
+  color: color-mix(in srgb, var(--primary) 82%, var(--on-surface));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  border-inline-start: 3px solid var(--primary);
+}
+.permission-screen__resources {
+  display: grid;
+  gap: var(--space-3);
+}
+.permission-screen__resource + .permission-screen__resource {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.permission-screen__resource h4 {
+  margin: 0 0 var(--space-2);
+  color: var(--on-surface);
+  font-size: var(--font-size-sm);
+}
 .permission-resource--selected {
   background: color-mix(in srgb, var(--success) 9%, var(--surface));
   border-color: var(--success);

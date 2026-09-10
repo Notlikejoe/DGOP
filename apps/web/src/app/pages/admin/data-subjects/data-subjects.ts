@@ -13,6 +13,7 @@ export class DataSubjectsPage {
     titleKey: 'nav.dataSubjects',
     subtitleKey: 'dataSubjects.subtitle',
     apiBase: '/api/data-subjects',
+    iconName: 'users',
     columns: [
       { key: 'code', labelKey: 'crud.code' },
       { key: 'name', labelKey: 'crud.name', kind: 'i18nName' },

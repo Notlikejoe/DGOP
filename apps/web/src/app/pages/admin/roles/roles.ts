@@ -73,9 +73,19 @@ interface PermissionResourceRow {
   actions: Set<string>;
 }
 
+interface PermissionScreenDefinition {
+  id: string;
+  labelKey: string;
+  resources: string[];
+}
+
+interface PermissionScreen extends PermissionScreenDefinition {
+  rows: PermissionResourceRow[];
+}
+
 interface PermissionGroup {
   labelKey: string;
-  rows: PermissionResourceRow[];
+  screens: PermissionScreen[];
 }
 
 type Mode = 'none' | 'create' | 'edit' | 'perms' | 'scope';
@@ -83,42 +93,167 @@ type State = 'loading' | 'ok' | 'error';
 type RoleTypeFilter = 'system' | 'custom';
 type RoleStatusFilter = 'active' | 'inactive';
 
-const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
-const RES_ORDER = [
-  'dashboard',
-  'design_system',
-  'roles',
-  'users',
-  'data_domains',
-  'data_subjects',
-  'business_capabilities',
-  'org_units',
-  'systems',
-  'classifications',
-  'role_types',
-  'raci_templates',
-  'status_values',
-  'audit',
+const ACTION_ORDER = [
+  'view',
+  'create',
+  'edit',
+  'delete',
+  'import',
+  'review',
+  'generate',
+  'download',
+  'run',
+  'writeback',
+  'analytics',
+  'baseline_accept',
 ];
 
-const RESOURCE_GROUPS = [
+const PERMISSION_SCREEN_GROUPS: Array<{
+  labelKey: string;
+  screens: PermissionScreenDefinition[];
+}> = [
   {
-    labelKey: 'roles.permissions.group.access',
-    resources: ['roles', 'users', 'audit'],
+    labelKey: 'roles.permissions.group.foundation',
+    screens: [
+      { id: 'command-center', labelKey: 'nav.dashboard', resources: ['dashboard'] },
+      { id: 'about', labelKey: 'nav.about', resources: [] },
+      { id: 'governance-map', labelKey: 'nav.designSystem', resources: ['design_system'] },
+      { id: 'global-search', labelKey: 'roles.permissions.screen.globalSearch', resources: ['search'] },
+    ],
   },
   {
     labelKey: 'roles.permissions.group.governance',
-    resources: ['data_domains', 'data_subjects', 'business_capabilities', 'org_units', 'systems'],
+    screens: [
+      { id: 'governance-home', labelKey: 'nav.section.governance', resources: [] },
+      { id: 'data-assets', labelKey: 'nav.dataAssets', resources: ['data_assets'] },
+      { id: 'ownership', labelKey: 'nav.ownership', resources: ['assignments'] },
+      { id: 'assignment-rules', labelKey: 'nav.assignmentRules', resources: ['assignment_rules'] },
+      { id: 'exceptions', labelKey: 'nav.exceptions', resources: ['assignments'] },
+      { id: 'workflow', labelKey: 'nav.workflow', resources: ['workflow_tasks', 'workflow_cases'] },
+      { id: 'workflow-designer', labelKey: 'nav.workflowDesigner', resources: ['workflow_cases'] },
+      {
+        id: 'data-quality',
+        labelKey: 'nav.dataQuality',
+        resources: ['data_quality_issues', 'data_quality_rules', 'data_quality_profiles'],
+      },
+      {
+        id: 'security-governance',
+        labelKey: 'nav.securityGovernance',
+        resources: [
+          'security_governance',
+          'masking_policies',
+          'role_data_access_maps',
+          'access_reviews',
+          'dlp_incidents',
+          'classification_change_requests',
+        ],
+      },
+      { id: 'open-data', labelKey: 'nav.openData', resources: ['open_data_candidates'] },
+      {
+        id: 'foi',
+        labelKey: 'nav.foi',
+        resources: ['foi_requests', 'foi_disclosures', 'foi_appeals'],
+      },
+      {
+        id: 'privacy',
+        labelKey: 'nav.privacyOperations',
+        resources: [
+          'privacy_operations',
+          'privacy_legal_bases',
+          'privacy_ropa_records',
+          'privacy_dpias',
+          'privacy_dsr_requests',
+          'privacy_breaches',
+        ],
+      },
+      {
+        id: 'data-sharing',
+        labelKey: 'nav.dataSharing',
+        resources: ['data_sharing_requests', 'data_sharing_agreements'],
+      },
+      { id: 'transparency', labelKey: 'nav.transparencyCockpit', resources: ['dashboard'] },
+      { id: 'reports', labelKey: 'nav.reports', resources: ['dashboard'] },
+      {
+        id: 'ndi-compliance',
+        labelKey: 'nav.ndi',
+        resources: ['ndi_specifications', 'evidence'],
+      },
+      { id: 'ndi-readiness', labelKey: 'nav.ndiReadiness', resources: ['ndi_scoring'] },
+      { id: 'ndi-gaps', labelKey: 'nav.ndiGaps', resources: ['ndi_scoring'] },
+      { id: 'ndi-audit-packs', labelKey: 'nav.auditPacks', resources: ['ndi_audit_packs'] },
+      { id: 'extended-domains', labelKey: 'nav.extendedDomains', resources: ['extended_domains'] },
+      { id: 'business-value', labelKey: 'nav.businessValue', resources: ['business_value'] },
+      {
+        id: 'governance-operations',
+        labelKey: 'nav.governanceOperations',
+        resources: ['governance_operations'],
+      },
+      {
+        id: 'training',
+        labelKey: 'nav.training',
+        resources: [
+          'training_courses',
+          'training_requirements',
+          'training_assignments',
+          'certification_tracks',
+          'certification_attempts',
+          'ce_activities',
+          'community_articles',
+          'expert_profiles',
+          'mentorship_pairs',
+        ],
+      },
+    ],
   },
   {
-    labelKey: 'roles.permissions.group.foundation',
-    resources: ['dashboard', 'design_system'],
+    labelKey: 'roles.permissions.group.access',
+    screens: [
+      { id: 'access-home', labelKey: 'nav.section.accessManagement', resources: [] },
+      { id: 'access-grants', labelKey: 'nav.accessGrants', resources: ['access_grants'] },
+      { id: 'roles', labelKey: 'nav.roles', resources: ['roles'] },
+      { id: 'users', labelKey: 'nav.users', resources: ['users'] },
+      { id: 'audit', labelKey: 'nav.audit', resources: ['audit'] },
+    ],
   },
   {
-    labelKey: 'roles.permissions.group.reference',
-    resources: ['classifications', 'role_types', 'raci_templates', 'status_values'],
+    labelKey: 'roles.permissions.group.administration',
+    screens: [
+      { id: 'administration-home', labelKey: 'nav.section.administration', resources: [] },
+      { id: 'people', labelKey: 'nav.people', resources: ['people'] },
+      { id: 'data-domains', labelKey: 'nav.dataDomains', resources: ['data_domains'] },
+      { id: 'data-subjects', labelKey: 'nav.dataSubjects', resources: ['data_subjects'] },
+      {
+        id: 'business-capabilities',
+        labelKey: 'nav.capabilities',
+        resources: ['business_capabilities'],
+      },
+      { id: 'organization-units', labelKey: 'nav.orgUnits', resources: ['org_units'] },
+      { id: 'systems', labelKey: 'nav.systems', resources: ['systems'] },
+      { id: 'integrations', labelKey: 'nav.integrations', resources: ['integrations'] },
+      { id: 'classifications', labelKey: 'nav.classifications', resources: ['classifications'] },
+      { id: 'role-types', labelKey: 'nav.roleTypes', resources: ['role_types'] },
+      { id: 'raci-templates', labelKey: 'nav.raci', resources: ['raci_templates'] },
+      { id: 'status-values', labelKey: 'nav.statusValues', resources: ['status_values'] },
+    ],
   },
 ];
+
+const RESOURCE_ORDER = [
+  ...new Set(
+    PERMISSION_SCREEN_GROUPS.flatMap((group) =>
+      group.screens.flatMap((screen) => screen.resources),
+    ),
+  ),
+];
+
+const SHARED_RESOURCES = new Set(
+  RESOURCE_ORDER.filter(
+    (resource) =>
+      PERMISSION_SCREEN_GROUPS.flatMap((group) => group.screens).filter((screen) =>
+        screen.resources.includes(resource),
+      ).length > 1,
+  ),
+);
 
 @Component({
   selector: 'app-roles',
@@ -158,8 +293,6 @@ export class RolesPage implements OnInit {
   protected readonly domSel = signal<Map<string, boolean>>(new Map());
   protected readonly maxClass = signal<number | null>(null);
   protected readonly preview = signal<ScopePreview | null>(null);
-
-  protected readonly actions = ACTIONS;
 
   protected readonly metrics = computed(() => {
     const roles = this.roles();
@@ -206,7 +339,7 @@ export class RolesPage implements OnInit {
     const ordered = [...byRes.keys()].sort((a, b) => idx(a) - idx(b) || a.localeCompare(b));
     return ordered.map((resource) => ({ resource, actions: byRes.get(resource)! }));
     function idx(resource: string): number {
-      const i = RES_ORDER.indexOf(resource);
+      const i = RESOURCE_ORDER.indexOf(resource);
       return i === -1 ? 999 : i;
     }
   });
@@ -215,17 +348,28 @@ export class RolesPage implements OnInit {
     const rows = this.resourceRows();
     const byResource = new Map(rows.map((row) => [row.resource, row]));
     const used = new Set<string>();
-    const groups = RESOURCE_GROUPS.map((group) => {
-      const groupRows = group.resources
-        .map((resource) => byResource.get(resource))
-        .filter((row): row is PermissionResourceRow => Boolean(row));
-      for (const row of groupRows) used.add(row.resource);
-      return { labelKey: group.labelKey, rows: groupRows };
-    }).filter((group) => group.rows.length > 0);
+    const groups: PermissionGroup[] = PERMISSION_SCREEN_GROUPS.map((group) => ({
+      labelKey: group.labelKey,
+      screens: group.screens.map((screen) => {
+        const screenRows = screen.resources
+          .map((resource) => byResource.get(resource))
+          .filter((row): row is PermissionResourceRow => Boolean(row));
+        for (const row of screenRows) used.add(row.resource);
+        return { ...screen, rows: screenRows };
+      }),
+    }));
 
     const otherRows = rows.filter((row) => !used.has(row.resource));
     if (otherRows.length) {
-      groups.push({ labelKey: 'roles.permissions.group.other', rows: otherRows });
+      groups.push({
+        labelKey: 'roles.permissions.group.other',
+        screens: otherRows.map((row) => ({
+          id: `other-${row.resource}`,
+          labelKey: `res.${row.resource}`,
+          resources: [row.resource],
+          rows: [row],
+        })),
+      });
     }
     return groups;
   });
@@ -331,6 +475,54 @@ export class RolesPage implements OnInit {
 
   protected selectedPermissionCount(): number {
     return this.permSel().size;
+  }
+
+  protected actionsFor(actions: Set<string>): string[] {
+    return [...actions].sort((a, b) => actionIndex(a) - actionIndex(b) || a.localeCompare(b));
+
+    function actionIndex(action: string): number {
+      const index = ACTION_ORDER.indexOf(action);
+      return index === -1 ? 999 : index;
+    }
+  }
+
+  protected screenPermissionCount(screen: PermissionScreen): number {
+    return this.screenPermissionKeys(screen).length;
+  }
+
+  protected screenSelectedCount(screen: PermissionScreen): number {
+    return this.screenPermissionKeys(screen).filter((key) => this.permSel().has(key)).length;
+  }
+
+  protected screenAllSelected(screen: PermissionScreen): boolean {
+    const keys = this.screenPermissionKeys(screen);
+    return keys.length > 0 && keys.every((key) => this.permSel().has(key));
+  }
+
+  protected screenSomeSelected(screen: PermissionScreen): boolean {
+    const selected = this.screenSelectedCount(screen);
+    return selected > 0 && selected < this.screenPermissionCount(screen);
+  }
+
+  protected screenHasSharedPermissions(screen: PermissionScreen): boolean {
+    return screen.resources.some((resource) => SHARED_RESOURCES.has(resource));
+  }
+
+  protected toggleScreenAll(screen: PermissionScreen): void {
+    const keys = this.screenPermissionKeys(screen);
+    const allOn = keys.length > 0 && keys.every((key) => this.permSel().has(key));
+    const next = new Set(this.permSel());
+    for (const key of keys) {
+      if (allOn) next.delete(key);
+      else next.add(key);
+    }
+    this.permSel.set(next);
+  }
+
+  private screenPermissionKeys(screen: PermissionScreen): string[] {
+    return screen.rows.flatMap((row) =>
+      [...row.actions].map((action) => this.permKey(row.resource, action)),
+    );
   }
 
   protected resourceSelectedCount(resource: string, actions: Set<string>): number {

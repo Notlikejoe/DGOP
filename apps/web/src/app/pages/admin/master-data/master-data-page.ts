@@ -14,6 +14,8 @@ import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip } from '../../../shared/status-chip';
+import { AppIcon, AppIconName } from '../../../shared/app-icon';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { MasterDataConfig, FieldConfig } from './master-data.types';
 
 interface Row {
@@ -22,13 +24,14 @@ interface Row {
 }
 
 type State = 'loading' | 'ok' | 'error';
+type StatusFilter = 'active' | 'inactive';
 const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
 const COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 @Component({
   selector: 'app-master-data',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Modal, StatusChip],
+  imports: [FormsModule, Modal, StatusChip, AppIcon, MultiSelectModule],
   templateUrl: './master-data-page.html',
   styleUrl: './master-data-page.scss',
 })
@@ -46,16 +49,16 @@ export class MasterDataPage implements OnInit {
 
   // Search / filter / pagination
   protected readonly search = signal('');
-  protected readonly statusFilter = signal<'all' | 'active' | 'inactive'>('all');
+  protected readonly statusFilter = signal<StatusFilter[]>([]);
   protected readonly page = signal(1);
   protected readonly pageSize = 10;
 
   protected readonly filtered = computed<Row[]>(() => {
     const term = this.search().trim().toLowerCase();
-    const status = this.statusFilter();
+    const statuses = this.statusFilter();
     return this.rows().filter((r) => {
-      if (status === 'active' && !r['isActive']) return false;
-      if (status === 'inactive' && r['isActive']) return false;
+      const rowStatus: StatusFilter = r['isActive'] ? 'active' : 'inactive';
+      if (statuses.length > 0 && !statuses.includes(rowStatus)) return false;
       if (!term) return true;
       const hay = [r['code'], r['nameEn'], r['nameAr'], r['domain']]
         .map((v) => String(v ?? '').toLowerCase())
@@ -63,6 +66,23 @@ export class MasterDataPage implements OnInit {
       return hay.includes(term);
     });
   });
+
+  protected readonly metrics = computed(() => {
+    const rows = this.rows();
+    return {
+      total: rows.length,
+      active: rows.filter((row) => !!row['isActive']).length,
+      inactive: rows.filter((row) => !row['isActive']).length,
+      visible: this.filtered().length,
+    };
+  });
+
+  protected readonly statusOptions = computed(() => [
+    { label: this.t('crud.active'), value: 'active' as StatusFilter },
+    { label: this.t('crud.inactive'), value: 'inactive' as StatusFilter },
+  ]);
+
+  protected readonly pageIcon = computed<AppIconName>(() => this.config().iconName ?? 'settings');
 
   protected readonly totalPages = computed(() =>
     Math.max(1, Math.ceil(this.filtered().length / this.pageSize)),
@@ -248,8 +268,14 @@ export class MasterDataPage implements OnInit {
     this.page.set(1);
   }
 
-  protected onStatusFilter(value: 'all' | 'active' | 'inactive'): void {
+  protected onStatusFilter(value: StatusFilter[]): void {
     this.statusFilter.set(value);
+    this.page.set(1);
+  }
+
+  protected clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set([]);
     this.page.set(1);
   }
 

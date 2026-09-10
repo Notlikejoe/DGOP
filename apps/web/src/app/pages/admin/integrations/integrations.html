@@ -1,6 +1,7 @@
-<section class="page integrations-page">
-  <header class="page__header">
-    <div>
+<section class="page integrations-page admin-modern">
+  <header class="page__header admin-hero">
+    <span class="admin-hero__mark" aria-hidden="true"><app-icon name="plug" /></span>
+    <div class="admin-hero__copy">
       <span class="eyebrow">{{ t('integrations.eyebrow') }}</span>
       <h1>{{ t('integrations.title') }}</h1>
       <p class="page__subtitle">{{ t('integrations.subtitle') }}</p>
@@ -12,38 +13,38 @@
   </header>
 
   @if (summary(); as s) {
-    <div class="integration-strip" aria-label="Integration health">
-      <article class="strip-card strip-card--hero">
+    <div class="integration-strip admin-metrics admin-metrics--wide" aria-label="Integration health">
+      <article class="strip-card strip-card--hero admin-metric--primary">
         <span>{{ t('integrations.metric.health') }}</span>
         <strong>{{ s.healthyConnectors }}/{{ s.connectors }}</strong>
         <small>{{ t('integrations.metric.healthHelp') }}</small>
       </article>
-      <article class="strip-card">
+      <article class="strip-card admin-metric--success">
         <span>{{ t('integrations.metric.syncedAssets') }}</span>
         <strong>{{ s.syncedAssets }}</strong>
         <small>{{ t('integrations.metric.syncedHelp') }}</small>
       </article>
-      <article class="strip-card">
+      <article class="strip-card admin-metric--warning">
         <span>{{ t('integrations.metric.batches') }}</span>
         <strong>{{ s.batches }}</strong>
         <small>{{ s.failedBatches }} {{ t('integrations.metric.needReview') }}</small>
       </article>
-      <article class="strip-card">
+      <article class="strip-card admin-metric--danger">
         <span>{{ t('integrations.metric.errors') }}</span>
         <strong>{{ s.openErrors }}</strong>
         <small>{{ t('integrations.metric.errorsHelp') }}</small>
       </article>
-      <article class="strip-card">
+      <article class="strip-card admin-metric--danger">
         <span>{{ t('integrations.metric.events') }}</span>
         <strong>{{ s.failedEvents + s.deadLetterEvents }}</strong>
         <small>{{ s.retryReadyEvents }} {{ t('integrations.metric.retryReady') }}</small>
       </article>
-      <article class="strip-card">
+      <article class="strip-card admin-metric--primary">
         <span>{{ t('integrations.metric.reconciliation') }}</span>
         <strong>{{ s.reconciliationReports }}</strong>
         <small>{{ t('integrations.metric.reconciliationHelp') }}</small>
       </article>
-      <article class="strip-card">
+      <article class="strip-card admin-metric--success">
         <span>{{ t('integrations.metric.writebacks') }}</span>
         <strong>{{ s.writebacks }}</strong>
         <small>
@@ -56,12 +57,12 @@
   }
 
   @if (state() === 'loading') {
-    <div class="ds-card"><p>{{ t('assets.loading') }}</p></div>
+    <div class="ds-card admin-panel"><p>{{ t('assets.loading') }}</p></div>
   } @else if (state() === 'error') {
-    <div class="ds-card"><p class="error">{{ t('integrations.error') }}</p></div>
+    <div class="ds-card admin-panel"><p class="error">{{ t('integrations.error') }}</p></div>
   } @else {
     <div class="integration-workspace">
-      <section class="ds-card connector-panel">
+      <section class="ds-card connector-panel admin-panel">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('integrations.connectors.eyebrow') }}</span>
@@ -103,7 +104,7 @@
         </div>
       </section>
 
-      <section class="ds-card sync-panel">
+      <section class="ds-card sync-panel admin-panel">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('integrations.sync.eyebrow') }}</span>
@@ -210,7 +211,7 @@
     </div>
 
     @if (preview(); as p) {
-      <section class="ds-card preview-panel">
+      <section class="ds-card preview-panel admin-panel">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('integrations.preview.eyebrow') }}</span>
@@ -231,8 +232,8 @@
           }
         </div>
 
-        <div class="sample-table">
-          <table class="ds-table">
+        <div class="sample-table admin-table-wrap">
+          <table class="ds-table admin-table">
             <thead>
               <tr>
                 <th>{{ t('integrations.map.externalId') }}</th>
@@ -268,7 +269,7 @@
     }
 
     <div class="history-grid">
-      <section class="ds-card batch-panel">
+      <section class="ds-card batch-panel admin-panel">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('integrations.history.eyebrow') }}</span>
@@ -301,7 +302,7 @@
         </div>
       </section>
 
-      <aside class="ds-card detail-panel">
+      <aside class="ds-card detail-panel admin-panel">
         @if (selectedBatch(); as batch) {
           <div class="detail-head">
             <div>
@@ -340,7 +341,7 @@
     </div>
 
     <div class="ops-grid">
-      <section class="ds-card event-panel">
+      <section class="ds-card event-panel admin-panel">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('integrations.events.eyebrow') }}</span>
@@ -385,7 +386,7 @@
         </div>
       </section>
 
-      <aside class="ds-card reconciliation-panel">
+      <aside class="ds-card reconciliation-panel admin-panel">
         <div class="panel-head compact">
           <div>
             <span class="eyebrow">{{ t('integrations.reconciliation.eyebrow') }}</span>
@@ -416,7 +417,7 @@
       </aside>
     </div>
 
-    <section class="ds-card writeback-panel">
+    <section class="ds-card writeback-panel admin-panel">
       <div class="panel-head compact">
         <div>
           <span class="eyebrow">{{ t('integrations.writeback.eyebrow') }}</span>

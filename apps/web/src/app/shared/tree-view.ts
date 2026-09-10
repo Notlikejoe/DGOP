@@ -10,6 +10,7 @@ export interface TreeRow {
   childCount?: number;
   depth: number;
   isActive?: boolean;
+  isExpanded?: boolean;
 }
 
 /** Presentational tree map for flattened hierarchy rows. */
@@ -22,6 +23,20 @@ export interface TreeRow {
       @for (row of rows(); track row.id) {
         <li class="tree__node" role="none">
           <div class="tree__line" [style.padding-inline-start.px]="row.depth * 30">
+            @if ((row.childCount ?? 0) > 0) {
+              <button
+                type="button"
+                class="tree__toggle"
+                [attr.aria-expanded]="row.isExpanded"
+                [attr.aria-label]="branchToggleLabel(row)"
+                [attr.title]="branchToggleLabel(row)"
+                (click)="toggle.emit(row.id)"
+              >
+                <app-icon [name]="row.isExpanded ? 'chevronDown' : 'chevronRight'" />
+              </button>
+            } @else {
+              <span class="tree__toggle-spacer" aria-hidden="true"></span>
+            }
             <button
               type="button"
               class="tree__row"
@@ -29,6 +44,7 @@ export interface TreeRow {
               [class.tree__row--selected]="selectedId() === row.id"
               [attr.aria-level]="row.depth + 1"
               [attr.aria-selected]="selectedId() === row.id"
+              [attr.aria-expanded]="(row.childCount ?? 0) > 0 ? row.isExpanded : null"
               [attr.aria-label]="rowAriaLabel(row)"
               (click)="select.emit(row.id)"
             >
@@ -95,6 +111,42 @@ export interface TreeRow {
         align-items: center;
         gap: var(--space-2);
         min-width: 0;
+      }
+
+      .tree__toggle,
+      .tree__toggle-spacer {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+      }
+
+      .tree__toggle {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        color: var(--command-mark-on);
+        background: linear-gradient(180deg, var(--command-surface), var(--command-surface-2));
+        border: 1px solid color-mix(in srgb, var(--command-accent) 42%, var(--command-border));
+        border-radius: var(--radius-sm);
+        box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 45%, transparent), 0 2px 0 var(--command-border);
+        cursor: pointer;
+        font: inherit;
+        transition: transform var(--motion-fast) var(--easing-standard), background var(--motion-fast) var(--easing-standard);
+      }
+
+      .tree__toggle:hover {
+        color: var(--on-primary);
+        background: var(--command-accent);
+        transform: translateY(-1px);
+      }
+
+      .tree__toggle:active {
+        transform: translateY(1px);
+        box-shadow: none;
+      }
+
+      :host-context([dir='rtl']) .tree__toggle app-icon {
+        transform: scaleX(-1);
       }
 
       .tree__line::before {
@@ -298,6 +350,7 @@ export class TreeView {
   readonly add = output<string>();
   readonly edit = output<string>();
   readonly remove = output<string>();
+  readonly toggle = output<string>();
 
   protected t(key: string): string {
     return this.i18n.t(key);
@@ -309,5 +362,9 @@ export class TreeView {
     if ((row.childCount ?? 0) > 0) parts.push(`${row.childCount} ${this.t('hierarchy.children')}`);
     parts.push(row.isActive === false ? this.t('crud.inactive') : this.t('crud.active'));
     return parts.join(', ');
+  }
+
+  protected branchToggleLabel(row: TreeRow): string {
+    return `${this.t(row.isExpanded ? 'hierarchy.collapseBranch' : 'hierarchy.expandBranch')}: ${row.label}`;
   }
 }

@@ -25,6 +25,8 @@ export interface MasterDataConfig {
   titleKey: string;
   subtitleKey: string;
   apiBase: string;
+  iconName?: AppIconName;
   columns: ColumnConfig[];
   fields: FieldConfig[];
 }
+import { AppIconName } from '../../../shared/app-icon';

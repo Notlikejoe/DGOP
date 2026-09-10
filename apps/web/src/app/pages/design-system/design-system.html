@@ -1,5 +1,6 @@
-<section class="design-console">
+<section class="design-console foundation-modern">
   <header class="design-hero">
+    <span class="design-hero__mark" aria-hidden="true"><app-icon name="map" /></span>
     <div>
       <p class="design-hero__eyebrow">{{ t('ds.console.eyebrow') }}</p>
       <h1>{{ t('ds.console.title') }}</h1>
@@ -15,9 +16,8 @@
   <section class="metric-strip" [attr.aria-label]="t('console.metrics')">
     @for (metric of metrics; track metric.labelKey) {
       <article class="metric-card" [class]="'metric-card metric-card--' + metric.tone">
-        <span>{{ t(metric.labelKey) }}</span>
-        <strong>{{ metric.value }}</strong>
-        <small>{{ t(metric.hintKey) }}</small>
+        <span class="metric-card__icon" aria-hidden="true"><app-icon [name]="metric.icon" /></span>
+        <span class="metric-card__copy"><span>{{ t(metric.labelKey) }}</span><strong>{{ metric.value }}</strong><small>{{ t(metric.hintKey) }}</small></span>
       </article>
     }
   </section>

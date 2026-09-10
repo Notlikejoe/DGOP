@@ -1,5 +1,5 @@
-<section class="hierarchy-page">
-  <header class="hierarchy-hero">
+<section class="hierarchy-page admin-modern">
+  <header class="hierarchy-hero admin-hero">
     <div class="hierarchy-hero__mark" aria-hidden="true">
       <app-icon [name]="pageIcon()" />
     </div>
@@ -14,11 +14,11 @@
     </button>
   </header>
 
-  <div class="metric-strip" [attr.aria-label]="t('hierarchy.summary')">
+  <div class="metric-strip admin-metrics" [attr.aria-label]="t('hierarchy.summary')">
     @for (metric of metrics(); track metric.labelKey) {
-      <section class="metric" [class]="'metric metric--' + metric.tone">
-        <span class="metric__label">{{ t(metric.labelKey) }}</span>
-        <strong class="metric__value">{{ metric.value }}</strong>
+      <section class="metric admin-metric" [class]="'metric admin-metric admin-metric--' + metric.tone">
+        <span class="admin-metric__icon"><app-icon [name]="pageIcon()" /></span>
+        <span><small class="metric__label">{{ t(metric.labelKey) }}</small><strong class="metric__value">{{ metric.value }}</strong></span>
       </section>
     }
   </div>
@@ -45,27 +45,52 @@
     </section>
   } @else {
     <div class="hierarchy-board">
-      <section class="map-panel" [attr.aria-label]="t('hierarchy.treeMap')">
+      <section class="map-panel admin-panel" [attr.aria-label]="t('hierarchy.treeMap')">
         <div class="panel-head">
           <div>
             <h2>{{ t('hierarchy.treeMap') }}</h2>
             <p>{{ t('hierarchy.treeMapHint') }}</p>
           </div>
-          <span class="panel-head__count">{{ visibleCount() }} {{ t('crud.records') }}</span>
+          <div class="panel-head__tools">
+            <span class="panel-head__count">{{ visibleCount() }} {{ t('crud.records') }}</span>
+            <button type="button" class="tree-control" [disabled]="allBranchesExpanded()" (click)="expandAll()">
+              <app-icon name="plus" /> {{ t('hierarchy.expandAll') }}
+            </button>
+            <button type="button" class="tree-control" [disabled]="expandedIds().size === 0" (click)="collapseAll()">
+              <app-icon name="minus" /> {{ t('hierarchy.collapseAll') }}
+            </button>
+          </div>
         </div>
 
-        <div class="toolbar">
+        <div class="toolbar admin-toolbar hierarchy-toolbar">
           <label class="toolbar__search">
             <span class="sr-only">{{ t('crud.search') }}</span>
             <app-icon name="searchAlert" />
             <input
               type="search"
               [value]="search()"
-              (input)="search.set($any($event.target).value)"
+              (input)="onSearch($any($event.target).value)"
               [placeholder]="t('crud.searchPlaceholder')"
               [attr.aria-label]="t('crud.search')"
             />
           </label>
+          <p-multiselect
+            class="admin-multiselect"
+            panelStyleClass="admin-multiselect-panel"
+            [options]="statusOptions()"
+            optionLabel="label"
+            optionValue="value"
+            [placeholder]="t('admin.filters.allStatuses')"
+            [showClear]="true"
+            [maxSelectedLabels]="2"
+            [selectedItemsLabel]="t('admin.filters.selectedStatuses')"
+            [ngModel]="statusFilter()"
+            (ngModelChange)="onStatusFilter($event)"
+            [attr.aria-label]="t('admin.filters.status')"
+          />
+          <button type="button" class="ds-btn ds-btn--ghost" (click)="clearFilters()">
+            <app-icon name="filter" /> {{ t('crud.clear') }}
+          </button>
         </div>
 
         @if (rows().length === 0) {
@@ -80,11 +105,12 @@
             (select)="selectNode($event)"
             (add)="openCreate($event)"
             (edit)="openEditById($event)"
+            (toggle)="toggleBranch($event)"
           />
         }
       </section>
 
-      <aside class="detail-panel" [attr.aria-label]="t('hierarchy.detailTitle')">
+      <aside class="detail-panel admin-panel" [attr.aria-label]="t('hierarchy.detailTitle')">
         @if (selectedNode(); as selected) {
           <div class="detail-panel__top">
             <span class="detail-panel__icon" aria-hidden="true">

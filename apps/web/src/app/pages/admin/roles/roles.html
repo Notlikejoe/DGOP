@@ -365,62 +365,79 @@
         <div class="privilege-builder">
           @for (group of permissionGroups(); track group.labelKey) {
             <section class="permission-group">
-              <h3>{{ t(group.labelKey) }}</h3>
-              <div class="permission-resources">
-                @for (row of group.rows; track row.resource) {
+              <header class="permission-group__head">
+                <h3>{{ t(group.labelKey) }}</h3>
+                <span>{{ group.screens.length }} {{ t('roles.permissions.screens') }}</span>
+              </header>
+              <div class="permission-resources permission-screens">
+                @for (screen of group.screens; track screen.id) {
                   <article
-                    class="permission-resource"
-                    [class.permission-resource--selected]="
-                      resourceAllSelected(row.resource, row.actions)
-                    "
-                    [class.permission-resource--partial]="
-                      resourceSomeSelected(row.resource, row.actions)
-                    "
+                    class="permission-resource permission-screen"
+                    [class.permission-resource--selected]="screenAllSelected(screen)"
+                    [class.permission-resource--partial]="screenSomeSelected(screen)"
                   >
                     <header class="permission-resource__head">
                       <div>
-                        <strong>{{ t('res.' + row.resource) }}</strong>
-                        <span
-                          >{{ resourceSelectedCount(row.resource, row.actions) }} /
-                          {{ row.actions.size }} {{ t('roles.permissions.actionsSelected') }}</span
-                        >
-                      </div>
-                      <button
-                        type="button"
-                        class="link-btn"
-                        (click)="toggleResourceAll(row.resource, row.actions)"
-                      >
-                        {{
-                          resourceAllSelected(row.resource, row.actions)
-                            ? t('roles.permissions.clearResource')
-                            : t('roles.permissions.selectResource')
-                        }}
-                      </button>
-                    </header>
-                    <div class="action-toggles">
-                      @for (action of actions; track action) {
-                        @if (row.actions.has(action)) {
-                          <label
-                            class="action-toggle"
-                            [class.action-toggle--selected]="hasPerm(row.resource, action)"
-                          >
-                            <input
-                              type="checkbox"
-                              [checked]="hasPerm(row.resource, action)"
-                              (change)="togglePerm(row.resource, action)"
-                              [attr.aria-label]="
-                                t('res.' + row.resource) + ' ' + t('act.' + action)
-                              "
-                            />
-                            <span>{{ t('act.' + action) }}</span>
-                          </label>
+                        <strong>{{ t(screen.labelKey) }}</strong>
+                        @if (screen.rows.length) {
+                          <span>
+                            {{ screenSelectedCount(screen) }} / {{ screenPermissionCount(screen) }}
+                            {{ t('roles.permissions.actionsSelected') }}
+                          </span>
                         } @else {
-                          <span class="action-toggle action-toggle--disabled">{{
-                            t('act.' + action)
-                          }}</span>
+                          <span>{{ t('roles.permissions.inheritedAccess') }}</span>
                         }
+                      </div>
+                      @if (screen.rows.length) {
+                        <button
+                          type="button"
+                          class="link-btn"
+                          (click)="toggleScreenAll(screen)"
+                        >
+                          {{
+                            screenAllSelected(screen)
+                              ? t('roles.permissions.clearResource')
+                              : t('roles.permissions.selectResource')
+                          }}
+                        </button>
                       }
-                    </div>
+                    </header>
+                    @if (!screen.rows.length) {
+                      <p class="permission-screen__note">
+                        {{ t('roles.permissions.inheritedHint') }}
+                      </p>
+                    } @else {
+                      @if (screenHasSharedPermissions(screen)) {
+                        <p class="permission-screen__shared">
+                          {{ t('roles.permissions.sharedPermission') }}
+                        </p>
+                      }
+                      <div class="permission-screen__resources">
+                        @for (row of screen.rows; track row.resource) {
+                          <section class="permission-screen__resource">
+                            @if (screen.rows.length > 1) {
+                              <h4>{{ t('res.' + row.resource) }}</h4>
+                            }
+                            <div class="action-toggles">
+                              @for (action of actionsFor(row.actions); track action) {
+                                <label
+                                  class="action-toggle"
+                                  [class.action-toggle--selected]="hasPerm(row.resource, action)"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    [checked]="hasPerm(row.resource, action)"
+                                    (change)="togglePerm(row.resource, action)"
+                                    [attr.aria-label]="t(screen.labelKey) + ' ' + t('act.' + action)"
+                                  />
+                                  <span>{{ t('act.' + action) }}</span>
+                                </label>
+                              }
+                            </div>
+                          </section>
+                        }
+                      </div>
+                    }
                   </article>
                 }
               </div>

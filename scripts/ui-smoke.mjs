@@ -87,7 +87,10 @@ const routes = (env.DGOP_SMOKE_ROUTES ?? [
   .filter(Boolean);
 
 const { chromium } = loadPlaywright();
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  ...(env.DGOP_BROWSER_EXE ? { executablePath: env.DGOP_BROWSER_EXE } : {}),
+});
 const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 const consoleErrors = [];
 const consoleWarnings = [];
@@ -143,6 +146,8 @@ try {
       systemDatabaseStatus = /\b(?:up|down)\b/iu.test(systemText);
     }
     let featureControls = true;
+    let hierarchyExpansion = true;
+    let hierarchyCounts = null;
     if (route.startsWith('/governance/workflow/designer')) {
       const splitButton = page.getByRole('button', { name: 'Split', exact: true });
       const mergeButton = page.getByRole('button', { name: 'Merge', exact: true });
@@ -163,11 +168,82 @@ try {
       const shapeCountAfter = await shapes.count();
       featureControls = splitEnabled && (await mergeButton.isVisible()) && shapeCountAfter >= shapeCountBefore + 4;
     }
-    checks.push({ route: label, title, overflow, rawKey, invalidText, systemDatabaseStatus, featureControls });
+    if (route === '/admin/capabilities' || route === '/admin/org-units') {
+      const nodes = page.locator('app-tree-view .tree__node');
+      const toggles = page.locator('app-tree-view .tree__toggle');
+      await nodes.first().waitFor({ state: 'visible', timeout: 10_000 });
+      const expandedCount = await nodes.count();
+      const toggleCount = await toggles.count();
+      if (toggleCount > 0) {
+        await toggles.first().click();
+        await page.waitForTimeout(75);
+        const branchCollapsedCount = await nodes.count();
+        await toggles.first().click();
+        await page.waitForTimeout(75);
+        const branchExpandedCount = await nodes.count();
+        await page.getByRole('button', { name: 'Collapse all', exact: true }).click();
+        await page.waitForTimeout(75);
+        const allCollapsedCount = await nodes.count();
+        await page.getByRole('button', { name: 'Expand all', exact: true }).click();
+        await page.waitForTimeout(75);
+        const allExpandedCount = await nodes.count();
+        hierarchyCounts = { expandedCount, branchCollapsedCount, branchExpandedCount, allCollapsedCount, allExpandedCount };
+        hierarchyExpansion =
+          branchCollapsedCount < expandedCount &&
+          branchExpandedCount === expandedCount &&
+          allCollapsedCount < expandedCount &&
+          allExpandedCount === expandedCount;
+      } else {
+        hierarchyExpansion = false;
+      }
+    }
+    checks.push({ route: label, title, overflow, rawKey, invalidText, systemDatabaseStatus, featureControls, hierarchyExpansion, hierarchyCounts });
   }
 
   for (const route of routes) {
     await checkRoute(route);
+  }
+
+  if (env.DGOP_SMOKE_PRIVILEGE_BUILDER === '1') {
+    await page.goto(`${baseUrl}/admin/roles`, { waitUntil: 'networkidle' });
+    const configurableRole = page.locator('.role-row').nth(1);
+    await configurableRole.waitFor({ state: 'visible', timeout: 10_000 });
+    await configurableRole.click();
+    await page.getByRole('button', { name: 'Permissions', exact: true }).click();
+    const builder = page.locator('.privilege-builder');
+    await builder.waitFor({ state: 'visible', timeout: 10_000 });
+    const permissionGroups = await builder.locator('.permission-group__head h3').allTextContents();
+    const permissionScreens = await builder.locator('.permission-screen > .permission-resource__head strong').allTextContents();
+    const specialtyActions = await builder.locator('.action-toggle').allTextContents();
+    const builderText = await builder.innerText();
+    const expectedGroups = ['Foundation & platform', 'Governance screens', 'Access Management screens', 'Administration screens'];
+    const expectedScreens = ['Command Center', 'Data Security & Access', 'Roles & Privileges', 'People Directory'];
+    const builderValid =
+      expectedGroups.every((label) => permissionGroups.includes(label)) &&
+      expectedScreens.every((label) => permissionScreens.includes(label)) &&
+      specialtyActions.some((label) => label.trim() === 'Import') &&
+      specialtyActions.some((label) => label.trim() === 'Run') &&
+      !/\b(?:res|act|roles\.permissions)\.[A-Za-z0-9_.-]+\b/u.test(builderText);
+    checks.push({
+      route: '/admin/roles privilege builder',
+      title: 'Privilege builder',
+      overflow: false,
+      rawKey: !builderValid,
+      invalidText: false,
+      systemDatabaseStatus: true,
+      featureControls: builderValid,
+      hierarchyExpansion: true,
+      hierarchyCounts: { groups: permissionGroups.length, screens: permissionScreens.length },
+    });
+    if (env.DGOP_SMOKE_PRIVILEGE_SCREENSHOT) {
+      await page.screenshot({ path: env.DGOP_SMOKE_PRIVILEGE_SCREENSHOT, fullPage: false });
+    }
+  }
+
+  if (env.DGOP_SMOKE_SCREENSHOT) {
+    const screenshotRoute = env.DGOP_SMOKE_SCREENSHOT_ROUTE ?? routes[0] ?? '/dashboard';
+    await page.goto(`${baseUrl}${screenshotRoute}`, { waitUntil: 'networkidle' });
+    await page.screenshot({ path: env.DGOP_SMOKE_SCREENSHOT, fullPage: true });
   }
 
   await page.evaluate(() => {
@@ -207,7 +283,7 @@ try {
   }
 
   const badChecks = checks.filter(
-    (check) => check.overflow || check.rawKey || check.invalidText || check.systemDatabaseStatus === false || check.featureControls === false || !check.title,
+    (check) => check.overflow || check.rawKey || check.invalidText || check.systemDatabaseStatus === false || check.featureControls === false || check.hierarchyExpansion === false || !check.title,
   );
   if (consoleErrors.length || consoleWarnings.length || failedResponses.length || badChecks.length) {
     fail(

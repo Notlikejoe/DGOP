@@ -689,3 +689,161 @@
     transition: none;
   }
 }
+
+/* Prime-inspired command-center finish: compact gradient hero and tactile controls. */
+.command-page.foundation-modern {
+  gap: var(--space-4);
+}
+
+.command-page.foundation-modern .command-hero {
+  grid-template-columns: 48px minmax(0, 1fr) 260px;
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-4) var(--space-5);
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at 88% 14%, rgba(45, 212, 191, 0.26), transparent 29%),
+    linear-gradient(125deg, #0f172a 0%, #172554 52%, #102a43 100%);
+  border: 3px solid #334155;
+  border-top-color: #475569;
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -2px 0 rgba(2, 6, 23, 0.62), 0 5px 0 #09111f, 0 14px 28px rgba(15, 23, 42, 0.24);
+}
+
+.command-hero__mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: #ecfeff;
+  background: linear-gradient(145deg, #2dd4bf, #0f766e);
+  border: 2px solid rgba(153, 246, 228, 0.74);
+  border-radius: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 4px 0 #073f3c, 0 9px 18px rgba(0, 0, 0, 0.25);
+  font-size: 1.25rem;
+}
+
+.command-page.foundation-modern .command-hero h1 {
+  color: #fff;
+  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.42);
+}
+
+.command-page.foundation-modern .command-hero p { color: #cbd5e1; }
+.command-page.foundation-modern .command-hero .eyebrow { color: #5eead4; font-weight: 850; letter-spacing: 0.1em; }
+
+.command-page.foundation-modern .command-hero__signal {
+  min-height: 132px;
+  padding: var(--space-4);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(15, 23, 42, 0.3));
+  border: 2px solid rgba(148, 163, 184, 0.48);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 3px 0 rgba(2, 6, 23, 0.7), 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.command-page.foundation-modern .signal__value { color: #fff; font-size: 2.55rem; }
+.command-page.foundation-modern .signal__label { color: #cbd5e1; }
+
+.command-page.foundation-modern .command-hero .ds-btn {
+  border-width: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 3px 0 #475569, 0 8px 14px rgba(0, 0, 0, 0.22);
+}
+
+.command-page.foundation-modern .command-hero .ds-btn--primary {
+  background: linear-gradient(180deg, #2dd4bf, #0f766e);
+  border-color: #5eead4;
+}
+
+.command-page.foundation-modern .command-hero .ds-btn--ghost {
+  color: #172033;
+  background: linear-gradient(180deg, #fff, #cbd5e1);
+  border-color: #94a3b8;
+}
+
+.command-page.foundation-modern .status-strip {
+  grid-template-columns: repeat(6, minmax(154px, 1fr));
+  gap: var(--space-2);
+  padding: 7px;
+  overflow-x: auto;
+  background: linear-gradient(180deg, #e2e8f0, #cbd5e1);
+  border: 2px solid #94a3b8;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 0 #64748b, 0 10px 22px rgba(15, 23, 42, 0.16);
+  scrollbar-gutter: stable;
+}
+
+.command-page.foundation-modern .status-metric {
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  gap: 2px var(--space-3);
+  min-height: 92px;
+  padding: 10px 12px;
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--metric-accent) 11%, var(--surface)));
+  border: 2px solid color-mix(in srgb, var(--metric-accent) 43%, #a8b4c2);
+  border-radius: 13px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 72%, transparent), 0 3px 0 color-mix(in srgb, var(--metric-accent) 45%, #475569), 0 7px 14px rgba(15, 23, 42, 0.14);
+}
+
+.command-page.foundation-modern .status-metric::before { display: none; }
+.command-page.foundation-modern .status-metric__icon {
+  grid-row: 1 / 4;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--metric-accent) 68%, #fff), var(--metric-accent));
+  border: 1px solid color-mix(in srgb, var(--metric-accent) 75%, #1e293b);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 3px 0 color-mix(in srgb, var(--metric-accent) 50%, #334155);
+}
+
+.command-page.foundation-modern .status-metric strong { color: var(--metric-accent); font-size: 1.55rem; }
+
+.command-page.foundation-modern .panel,
+.command-page.foundation-modern .empty-state {
+  border: 2px solid #aeb9c7;
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--surface-2) 88%, #e2e8f0));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 72%, transparent), 0 4px 0 #7c8999, 0 11px 22px rgba(15, 23, 42, 0.14);
+}
+
+.command-page.foundation-modern .panel__head {
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--border);
+}
+
+.command-page.foundation-modern .priority-grid { gap: var(--space-3); border: 0; }
+.command-page.foundation-modern .priority {
+  border: 2px solid color-mix(in srgb, var(--priority-accent) 38%, var(--border));
+  border-radius: 11px;
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--priority-accent) 8%, var(--surface-2)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent), 0 3px 0 color-mix(in srgb, var(--priority-accent) 38%, #64748b);
+}
+
+.command-page.foundation-modern .action-item,
+.command-page.foundation-modern .journey__node,
+.command-page.foundation-modern .gap-row,
+.command-page.foundation-modern .kv__row {
+  border-width: 2px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent), 0 2px 0 #94a3b8, 0 6px 12px rgba(15, 23, 42, 0.1);
+}
+
+.command-page.foundation-modern .journey__node {
+  border-top-width: 4px;
+  background: linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--journey-accent) 8%, var(--surface-2)));
+}
+
+@container (max-width: 760px) {
+  .command-page.foundation-modern .command-hero {
+    grid-template-columns: 40px minmax(0, 1fr);
+    padding: var(--space-4);
+  }
+
+  .command-hero__mark { width: 40px; height: 40px; }
+  .command-page.foundation-modern .command-hero__signal { grid-column: 1 / -1; }
+  .command-page.foundation-modern .status-strip { grid-template-columns: repeat(2, minmax(148px, 1fr)); }
+}
+
+@container (max-width: 480px) {
+  .command-page.foundation-modern .status-strip { grid-template-columns: 1fr; }
+}

@@ -13,6 +13,7 @@ export class ClassificationsPage {
     titleKey: 'nav.classifications',
     subtitleKey: 'classifications.subtitle',
     apiBase: '/api/classifications',
+    iconName: 'tags',
     columns: [
       { key: 'rank', labelKey: 'classifications.rank' },
       { key: 'code', labelKey: 'crud.code' },

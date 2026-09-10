@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { I18nService } from '../../core/i18n.service';
+import { AppIcon } from '../../shared/app-icon';
 
 interface AboutCard {
   titleKey: string;
@@ -23,7 +24,7 @@ interface QuickLink {
 @Component({
   selector: 'app-about-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, AppIcon],
   templateUrl: './about.html',
   styleUrl: './about.scss',
 })

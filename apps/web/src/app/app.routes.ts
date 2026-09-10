@@ -38,6 +38,12 @@ export const routes: Routes = [
         data: { hubId: 'governance' },
       },
       {
+        path: 'access-management',
+        loadComponent: () =>
+          import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),
+        data: { hubId: 'accessManagement' },
+      },
+      {
         path: 'assets',
         canActivate: [permissionGuard('data_assets.view')],
         loadComponent: () => import('./pages/admin/assets/assets').then((m) => m.AssetsPage),

@@ -6,6 +6,8 @@ import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip } from '../../../shared/status-chip';
+import { AppIcon } from '../../../shared/app-icon';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 type Responsibility = 'R' | 'A' | 'C' | 'I';
 
@@ -43,11 +45,12 @@ interface Draft {
   items: RaciItem[];
 }
 const CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/;
+type StatusFilter = 'active' | 'inactive';
 
 @Component({
   selector: 'app-admin-raci-templates',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Modal, StatusChip],
+  imports: [FormsModule, Modal, StatusChip, AppIcon, MultiSelectModule],
   templateUrl: './raci-templates.html',
   styleUrl: './raci-templates.scss',
 })
@@ -61,17 +64,35 @@ export class RaciTemplatesPage implements OnInit {
   protected readonly roleTypes = signal<RoleType[]>([]);
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly search = signal('');
+  protected readonly statusFilter = signal<StatusFilter[]>([]);
 
   protected readonly filtered = computed<RaciTemplate[]>(() => {
     const term = this.search().trim().toLowerCase();
-    if (!term) return this.templates();
     return this.templates().filter((t) =>
-      [t.code, t.nameEn, t.nameAr, t.processType ?? '']
+      (this.statusFilter().length === 0 || this.statusFilter().includes(t.isActive ? 'active' : 'inactive')) &&
+      (!term || [t.code, t.nameEn, t.nameAr, t.processType ?? '']
         .join(' ')
         .toLowerCase()
-        .includes(term),
+        .includes(term)),
     );
   });
+
+  protected readonly metrics = computed(() => ({
+    total: this.templates().length,
+    active: this.templates().filter((template) => template.isActive).length,
+    inactive: this.templates().filter((template) => !template.isActive).length,
+    visible: this.filtered().length,
+  }));
+
+  protected readonly statusOptions = computed(() => [
+    { label: this.t('crud.active'), value: 'active' as StatusFilter },
+    { label: this.t('crud.inactive'), value: 'inactive' as StatusFilter },
+  ]);
+
+  protected clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set([]);
+  }
 
   protected readonly modalOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);

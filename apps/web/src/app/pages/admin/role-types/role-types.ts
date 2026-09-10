@@ -13,6 +13,7 @@ export class RoleTypesPage {
     titleKey: 'nav.roleTypes',
     subtitleKey: 'roleTypes.subtitle',
     apiBase: '/api/role-types',
+    iconName: 'idCard',
     columns: [
       { key: 'code', labelKey: 'crud.code' },
       { key: 'name', labelKey: 'crud.name', kind: 'i18nName' },

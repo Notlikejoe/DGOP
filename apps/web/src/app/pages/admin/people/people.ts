@@ -8,6 +8,8 @@ import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip } from '../../../shared/status-chip';
 import { Pager } from '../../../shared/pager';
+import { AppIcon } from '../../../shared/app-icon';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 interface UserRef { id: string; email: string; displayName: string; }
 
@@ -33,11 +35,12 @@ interface Draft {
   isActive: boolean;
 }
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type StatusFilter = 'active' | 'inactive';
 
 @Component({
   selector: 'app-admin-people',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, Modal, StatusChip, Pager],
+  imports: [FormsModule, Modal, StatusChip, Pager, AppIcon, MultiSelectModule],
   templateUrl: './people.html',
   styleUrl: './people.scss',
 })
@@ -52,19 +55,32 @@ export class PeoplePage implements OnInit {
   protected readonly people = signal<Person[]>([]);
   protected readonly users = signal<UserRef[]>([]);
   protected readonly search = signal('');
+  protected readonly statusFilter = signal<StatusFilter[]>([]);
 
   protected readonly page = signal(1);
   protected readonly pageSize = signal(25);
 
   protected readonly filtered = computed(() => {
     const q = this.search().trim().toLowerCase();
-    if (!q) return this.people();
     return this.people().filter((p) =>
-      [p.fullNameEn, p.fullNameAr, p.email, p.jobTitle, p.organization]
+      (this.statusFilter().length === 0 || this.statusFilter().includes(p.isActive ? 'active' : 'inactive')) &&
+      (!q || [p.fullNameEn, p.fullNameAr, p.email, p.jobTitle, p.organization]
         .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(q)),
+        .some((v) => (v as string).toLowerCase().includes(q))),
     );
   });
+
+  protected readonly metrics = computed(() => ({
+    total: this.people().length,
+    active: this.people().filter((person) => person.isActive).length,
+    inactive: this.people().filter((person) => !person.isActive).length,
+    visible: this.filtered().length,
+  }));
+
+  protected readonly statusOptions = computed(() => [
+    { label: this.t('crud.active'), value: 'active' as StatusFilter },
+    { label: this.t('crud.inactive'), value: 'inactive' as StatusFilter },
+  ]);
 
   protected readonly totalPages = computed(() =>
     Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
@@ -77,6 +93,12 @@ export class PeoplePage implements OnInit {
 
   protected setSearch(value: string): void {
     this.search.set(value);
+    this.page.set(1);
+  }
+
+  protected clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set([]);
     this.page.set(1);
   }
 

@@ -13,6 +13,7 @@ export class SystemsPage {
     titleKey: 'nav.systems',
     subtitleKey: 'systems.subtitle',
     apiBase: '/api/systems',
+    iconName: 'server',
     columns: [
       { key: 'code', labelKey: 'crud.code' },
       { key: 'name', labelKey: 'crud.name', kind: 'i18nName' },

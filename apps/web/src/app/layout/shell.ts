@@ -320,7 +320,7 @@ export class Shell implements OnDestroy {
   protected isSectionActive(section: NavSection): boolean {
     const u = this.url();
     return (
-      (!!section.homeLink && (u === section.homeLink || u.startsWith(`${section.homeLink}/`))) ||
+      (!!section.homeLink && u === section.homeLink) ||
       section.items.some((item) => u === item.link || u.startsWith(`${item.link}/`))
     );
   }

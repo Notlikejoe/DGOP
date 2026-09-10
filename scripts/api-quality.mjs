@@ -530,7 +530,7 @@ if (
   !businessSequenceText.includes('businessSequence.upsert') ||
   !businessSequenceText.includes('nextAvailableBusinessCode') ||
   !workflowServiceText.includes("'workflow_case'") ||
-  !accessGrantsServiceText.includes("'access_grant'")
+  !/["']access_grant["']/u.test(accessGrantsServiceText)
 ) {
   fail(
     `Human-readable identifiers must use the shared atomic business sequence helper:${countBasedCodeGenerators
@@ -726,7 +726,7 @@ if (
   fail('API runtime must keep strict runtime validation, Helmet CSP/frame protections, trusted proxy handling, and credentialed allowlisted CORS enabled.');
 }
 if (
-  !mainText.includes("app.use(\n    '/api/auth/login'") ||
+  !/app\.use\(\s*['"]\/api\/auth\/login['"]/u.test(mainText) ||
   !mainText.includes('windowMs: 15 * 60_000') ||
   !mainText.includes('skipSuccessfulRequests: true')
 ) {

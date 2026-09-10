@@ -1,0 +1,200 @@
+# Functional requirement implementation ledger
+
+Generated from the supplied FD v1.0 requirement identifiers. Entries identify planned coverage, not implemented or passing tests. Cross-cutting rows will be refined to exact test files when their packet starts. Source documents remain authoritative.
+
+| Requirement | Planned phase | Proposed verification | Status |
+|---|---|---|---|
+| BR-01 | 3 | Deterministic rule and negative-input tests | Not implemented |
+| BR-02 | 5 | Deterministic rule and negative-input tests | Not implemented |
+| BR-03 | 5 | Deterministic rule and negative-input tests | Not implemented |
+| BR-04 | 8 | Deterministic rule and negative-input tests | Not implemented |
+| BR-05 | 6,8 | Deterministic rule and negative-input tests | Not implemented |
+| BR-06 | 8 | Deterministic rule and negative-input tests | Not implemented |
+| BR-07 | 6,10 | Deterministic rule and negative-input tests | Not implemented |
+| BR-08 | 8 | Deterministic rule and negative-input tests | Not implemented |
+| BR-09 | 3 | Deterministic rule and negative-input tests | Not implemented |
+| BR-10 | 10 | Deterministic rule and negative-input tests | Not implemented |
+| BR-11 | 10 | Deterministic rule and negative-input tests | Not implemented |
+| GEN-01 | 1–12 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-02 | 1–12 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-20 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-21 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-22 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-23 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-24 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-25 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-26 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-27 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-29 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-31 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-72 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-73 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-74 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-75 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-76 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-77 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-78 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-79 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-80 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-81 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-82 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-83 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-84 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-85 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-86 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-87 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-88 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-89 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-90 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-91 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-92 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-93 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-94 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-95 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-96 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-97 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-98 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-99 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-100 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-101 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-102 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-103 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-104 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-105 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-111 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-112 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-113 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-114 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-115 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-116 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-121 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-122 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-123 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-124 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-125 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-126 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-127 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-128 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-129 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
+| INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
+| INT-03 | 4 | Platform integration and legacy-case regression | Not implemented |
+| INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
+| INT-05 | 1–7 | Platform integration and legacy-case regression | Not implemented |
+| INT-06 | 1–7 | Platform integration and legacy-case regression | Not implemented |
+| MIG-01 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-02 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-03 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-04 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-05 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-06 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-07 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-08 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-09 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-10 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-11 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-12 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-13 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-14 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-15 | 12 | Import staging, source reconciliation and replay | Not implemented |
+| NFR-01 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-02 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-03 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-04 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-05 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-06 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-07 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-08 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-09 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-10 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-11 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-12 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-13 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-14 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-15 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-16 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-17 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-18 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-19 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| RM-01 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-02 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-03 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-04 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-05 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-06 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-07 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-08 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-09 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-10 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-11 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-12 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-13 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-14 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-15 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-16 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-17 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-18 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-19 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-20 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-21 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-22 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-23 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-24 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-25 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-26 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-27 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-28 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-29 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-30 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-31 | 9 | AIRS assessment / decision / operations | Not implemented |
+| RM-32 | 9 | AIRS assessment / decision / operations | Not implemented |
+| RM-33 | 9 | AIRS assessment / decision / operations | Not implemented |
+| RM-34 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-35 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-36 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-37 | 10 | AIRS assessment / decision / operations | Not implemented |
+| UC-01 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-02 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-03 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-04 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-05 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-06 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-07 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-08 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-09 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-10 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-11 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-12 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-13 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-14 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-15 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-16 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-17 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-18 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-19 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-20 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-21 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-22 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-23 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-24 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-25 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-26 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-27 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-28 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-29 | 4 | AIUC intake / classification / handoff | Not implemented |
+| WF-01 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-02 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-03 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-04 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-05 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-06 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-07 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-08 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-09 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-10 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-11 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-12 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |

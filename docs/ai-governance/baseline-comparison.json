@@ -1,0 +1,249 @@
+{
+  "tracked": 630,
+  "differences": [
+    {
+      "file": "apps/web/angular.json",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/app.routes.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/core/i18n.dictionary.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/layout/navigation.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/layout/shell.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/about/about.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/about/about.scss",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/about/about.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/assets/assets.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/classifications/classifications.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/data-subjects/data-subjects.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/hierarchy/hierarchy-page.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/hierarchy/hierarchy-page.scss",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/hierarchy/hierarchy-page.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/integrations/integrations.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/master-data/master-data-page.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/master-data/master-data-page.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/master-data/master-data.types.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/people/people.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/people/people.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/raci-templates/raci-templates.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/raci-templates/raci-templates.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/role-types/role-types.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/roles/roles.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/roles/roles.scss",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/roles/roles.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/status-values/status-values.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/admin/systems/systems.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/dashboard/dashboard.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/dashboard/dashboard.scss",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/dashboard/dashboard.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/design-system/design-system.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/design-system/design-system.scss",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/design-system/design-system.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/assignment-rules/assignment-rules.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/audit-packs/audit-packs.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/business-value/business-value.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/data-quality/data-quality.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/data-sharing/data-sharing.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/exception-queue/exception-queue.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/extended-domains/extended-domains.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/foi/foi.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/governance-operations/governance-operations.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/ndi/ndi-gaps.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/ndi/ndi-hub.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/ndi/ndi-readiness.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/open-data/open-data.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/ownership/ownership.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/privacy/privacy.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/reports/reports.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/security-governance/security-governance.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/training/training.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/transparency-cockpit/transparency-cockpit.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/governance/workflow/workflow.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/section-hub/section-hub.html",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/section-hub/section-hub.scss",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/pages/section-hub/section-hub.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/shared/app-icon.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "apps/web/src/app/shared/tree-view.ts",
+      "status": "content_diff"
+    },
+    {
+      "file": "scripts/ui-smoke.mjs",
+      "status": "content_diff"
+    }
+  ],
+  "active_source_additions": [
+    "apps\\web\\src\\admin-modern.scss",
+    "apps\\web\\src\\governance-modern.scss"
+  ]
+}

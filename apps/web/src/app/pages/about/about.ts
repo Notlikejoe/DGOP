@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { CardModule } from 'primeng/card';
+import { TagModule } from 'primeng/tag';
 import { I18nService } from '../../core/i18n.service';
-import { AppIcon } from '../../shared/app-icon';
 
 interface AboutCard {
+  icon: string;
   titleKey: string;
   bodyKey: string;
   tone: 'success' | 'warning' | 'info';
@@ -16,6 +18,7 @@ interface FlowStep {
 }
 
 interface QuickLink {
+  icon: string;
   labelKey: string;
   bodyKey: string;
   link: string;
@@ -24,7 +27,7 @@ interface QuickLink {
 @Component({
   selector: 'app-about-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, AppIcon],
+  imports: [RouterLink, CardModule, TagModule],
   templateUrl: './about.html',
   styleUrl: './about.scss',
 })
@@ -40,16 +43,19 @@ export class AboutPage {
 
   protected readonly principles: AboutCard[] = [
     {
+      icon: 'pi pi-sitemap',
       titleKey: 'about.what.operationalized.title',
       bodyKey: 'about.what.operationalized.body',
       tone: 'success',
     },
     {
+      icon: 'pi pi-users',
       titleKey: 'about.what.accountability.title',
       bodyKey: 'about.what.accountability.body',
       tone: 'info',
     },
     {
+      icon: 'pi pi-verified',
       titleKey: 'about.what.evidence.title',
       bodyKey: 'about.what.evidence.body',
       tone: 'warning',
@@ -58,27 +64,27 @@ export class AboutPage {
 
   protected readonly operatingModel: FlowStep[] = [
     {
-      icon: 'AD',
+      icon: 'pi pi-cog',
       titleKey: 'about.flow.admin.title',
       bodyKey: 'about.flow.admin.body',
     },
     {
-      icon: 'OW',
+      icon: 'pi pi-user-edit',
       titleKey: 'about.flow.ownership.title',
       bodyKey: 'about.flow.ownership.body',
     },
     {
-      icon: 'A3',
+      icon: 'pi pi-database',
       titleKey: 'about.flow.asset.title',
       bodyKey: 'about.flow.asset.body',
     },
     {
-      icon: 'CM',
+      icon: 'pi pi-briefcase',
       titleKey: 'about.flow.case.title',
       bodyKey: 'about.flow.case.body',
     },
     {
-      icon: 'EV',
+      icon: 'pi pi-shield',
       titleKey: 'about.flow.evidence.title',
       bodyKey: 'about.flow.evidence.body',
     },
@@ -86,31 +92,37 @@ export class AboutPage {
 
   protected readonly towers: AboutCard[] = [
     {
+      icon: 'pi pi-sitemap',
       titleKey: 'about.tower.governance.title',
       bodyKey: 'about.tower.governance.body',
       tone: 'success',
     },
     {
+      icon: 'pi pi-check-circle',
       titleKey: 'about.tower.compliance.title',
       bodyKey: 'about.tower.compliance.body',
       tone: 'warning',
     },
     {
+      icon: 'pi pi-database',
       titleKey: 'about.tower.data.title',
       bodyKey: 'about.tower.data.body',
       tone: 'info',
     },
     {
+      icon: 'pi pi-eye',
       titleKey: 'about.tower.transparency.title',
       bodyKey: 'about.tower.transparency.body',
       tone: 'info',
     },
     {
+      icon: 'pi pi-chart-line',
       titleKey: 'about.tower.value.title',
       bodyKey: 'about.tower.value.body',
       tone: 'success',
     },
     {
+      icon: 'pi pi-megaphone',
       titleKey: 'about.tower.awareness.title',
       bodyKey: 'about.tower.awareness.body',
       tone: 'warning',
@@ -130,16 +142,19 @@ export class AboutPage {
 
   protected readonly quickLinks: QuickLink[] = [
     {
+      icon: 'pi pi-compass',
       labelKey: 'about.link.governance.title',
       bodyKey: 'about.link.governance.body',
       link: '/governance',
     },
     {
+      icon: 'pi pi-cog',
       labelKey: 'about.link.admin.title',
       bodyKey: 'about.link.admin.body',
       link: '/admin',
     },
     {
+      icon: 'pi pi-map',
       labelKey: 'about.link.design.title',
       bodyKey: 'about.link.design.body',
       link: '/governance-map',

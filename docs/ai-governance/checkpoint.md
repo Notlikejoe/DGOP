@@ -39,3 +39,5 @@ Resumed after quota reset: 2% used initially, 38% at first integrated slice, 60%
 Administration justification fields and atomic initial AI user memberships were added before closing this packet. Web dependencies in apps/web/node_modules are an ignored junction to the existing active DGOP install; no packages were installed or upgraded. No production seed was published.
 
 Final Phase 1B verification: API and web production builds pass. Isolated test server stopped. Both source workbooks remain unchanged. Runtime configuration and local PrimeUI license are ignored and untracked.
+
+About DGOP follow-up: the desktop page now uses the full available viewport height while retaining all panels on one screen. Verified at a 1440×1300 browser viewport: page top 91px, bottom 1276px, with no document overflow. Saved after Phase 1B; carry this UI commit forward.

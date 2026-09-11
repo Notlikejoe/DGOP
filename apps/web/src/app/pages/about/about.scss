@@ -559,8 +559,8 @@
   }
 }
 
-/* Taller desktop viewport: readable cards within the 1440 x 1300 brief. */
-@media (min-width: 1101px) and (min-height: 1150px) {
+/* Desktop brief sizing applies independently of browser chrome and panel height. */
+@media (min-width: 1101px) {
   .about-page.foundation-modern {
     gap: 12px;
     font-size: 14px;

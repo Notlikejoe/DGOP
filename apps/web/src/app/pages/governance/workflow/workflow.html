@@ -68,28 +68,32 @@
             </article>
           </div>
 
+          <div class="workflow-insights-grid">
           @if (workflowDashboard(); as dash) {
-            <section class="workflow-dashboard" [attr.aria-label]="t('wf.dashboard.title')">
+            <section class="workflow-dashboard dashboard-card dashboard-card--engine" [attr.aria-label]="t('wf.dashboard.title')">
               <div class="workflow-dashboard__head">
-                <div>
-                  <span class="section-kicker">{{ t('wf.dashboard.eyebrow') }}</span>
-                  <h2>{{ t('wf.dashboard.title') }}</h2>
-                  <p>{{ t('wf.dashboard.subtitle') }}</p>
+                <div class="dashboard-card__title">
+                  <span class="dashboard-card__icon" aria-hidden="true"><i class="pi pi-bolt"></i></span>
+                  <div>
+                    <span class="section-kicker">{{ t('wf.dashboard.eyebrow') }}</span>
+                    <h2>{{ t('wf.dashboard.title') }}</h2>
+                    <p>{{ t('wf.dashboard.subtitle') }}</p>
+                  </div>
                 </div>
                 <app-status-chip [kind]="dash.summary.overdueTasks > 0 ? 'warning' : 'success'" [label]="dash.refreshSeconds + 's'" />
               </div>
               <div class="workflow-dashboard__grid">
-                <article>
+                <article class="dashboard-metric">
                   <span>{{ t('wf.dashboard.sla') }}</span>
                   <strong>{{ dash.summary.slaComplianceRate }}%</strong>
                   <small>{{ dash.summary.openTasks }} {{ t('wf.graph.openTasks') }}</small>
                 </article>
-                <article>
+                <article class="dashboard-metric">
                   <span>{{ t('wf.dashboard.avgCycle') }}</span>
                   <strong>{{ dash.summary.avgCompletionHours }}h</strong>
                   <small>{{ dash.summary.routesSampled }} {{ t('wf.graph.routes') }}</small>
                 </article>
-                <article>
+                <article class="dashboard-detail">
                   <span>{{ t('wf.dashboard.bottlenecks') }}</span>
                   @for (item of dash.bottlenecks.slice(0, 3); track item.stage + item.route) {
                     <div class="dashboard-list-row">
@@ -98,7 +102,7 @@
                     </div>
                   }
                 </article>
-                <article>
+                <article class="dashboard-detail">
                   <span>{{ t('wf.dashboard.workload') }}</span>
                   @for (item of dash.workload.slice(0, 3); track item.assignee) {
                     <div class="dashboard-list-row">
@@ -121,32 +125,35 @@
           }
 
           @if (workflowOperationsReport(); as report) {
-            <section class="workflow-report" [attr.aria-label]="t('wf.dashboard.reportTitle')">
+            <section class="workflow-report dashboard-card dashboard-card--report" [attr.aria-label]="t('wf.dashboard.reportTitle')">
               <div class="workflow-dashboard__head">
-                <div>
-                  <span class="section-kicker">{{ report.acceptanceEvidence.criterion }} &middot; {{ report.period.days }} {{ t('wf.graph.days') }}</span>
-                  <h2>{{ t('wf.dashboard.reportTitle') }}</h2>
-                  <p>{{ t('wf.dashboard.reportSubtitle') }}</p>
+                <div class="dashboard-card__title">
+                  <span class="dashboard-card__icon" aria-hidden="true"><i class="pi pi-chart-line"></i></span>
+                  <div>
+                    <span class="section-kicker">{{ report.acceptanceEvidence.criterion }} &middot; {{ report.period.days }} {{ t('wf.graph.days') }}</span>
+                    <h2>{{ t('wf.dashboard.reportTitle') }}</h2>
+                    <p>{{ t('wf.dashboard.reportSubtitle') }}</p>
+                  </div>
                 </div>
                 <app-status-chip [kind]="report.summary.overdueTasks > 0 ? 'warning' : 'success'" [label]="report.summary.slaCompliancePercentage + '%'" />
               </div>
               <div class="workflow-report__grid">
-                <article>
+                <article class="dashboard-metric">
                   <span>{{ t('wf.dashboard.initiated') }}</span>
                   <strong>{{ report.summary.initiatedWorkflows }}</strong>
                   <small>{{ report.summary.activeWorkflows }} {{ t('wf.dashboard.active') }}</small>
                 </article>
-                <article>
+                <article class="dashboard-metric">
                   <span>{{ t('wf.dashboard.completed') }}</span>
                   <strong>{{ report.summary.completedWorkflows }}</strong>
                   <small>{{ report.summary.failedWorkflows }} {{ t('wf.dashboard.failed') }}</small>
                 </article>
-                <article>
+                <article class="dashboard-metric">
                   <span>{{ t('wf.dashboard.avgTask') }}</span>
                   <strong>{{ report.summary.averageTaskCompletionHours }}h</strong>
                   <small>{{ report.summary.openTasks }} {{ t('wf.graph.openTasks') }}</small>
                 </article>
-                <article>
+                <article class="dashboard-detail">
                   <span>{{ t('wf.dashboard.stagePressure') }}</span>
                   @for (stage of report.stagePerformance.slice(0, 3); track stage.stage + stage.workflow) {
                     <div class="dashboard-list-row">
@@ -158,6 +165,7 @@
               </div>
             </section>
           }
+          </div>
 
           @if (configuration(); as cfg) {
             <section class="configuration-card" [attr.aria-label]="t('wf.config.title')">

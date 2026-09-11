@@ -567,8 +567,8 @@ export const DICT: Dict = {
   },
   'about.eyebrow': { en: 'Platform brief', ar: 'نبذة عن المنصة' },
   'about.title': {
-    en: 'DGOP v3.0 - Enterprise Governance Operations Platform',
-    ar: 'DGOP v3.0 - منصة عمليات الحوكمة المؤسسية',
+    en: 'DGOP v1.0 - Enterprise Governance Operations Platform',
+    ar: 'DGOP v1.0 - منصة عمليات الحوكمة المؤسسية',
   },
   'about.subtitle': {
     en: 'The operating system for enterprise data governance: a single operational layer that turns governance frameworks into daily workflows, ownership, evidence, and decisions.',

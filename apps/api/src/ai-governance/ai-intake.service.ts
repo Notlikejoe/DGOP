@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CaseStatus, Prisma } from '@prisma/client';
+import { CaseStatus, Prisma, TaskDecision, TaskStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { canonicalAiReference } from '../master-data/ai-reference.catalog';
@@ -18,6 +18,7 @@ import {
   assertAiIntakeDraftPayload,
   assertAiIntakeSubmission,
 } from './ai-intake.validation';
+import { addKsaBusinessDays, dateKey } from '../governance-operations/governance-operations.logic';
 
 type IntakeClient = PrismaService | Prisma.TransactionClient;
 type IntakeWarning = { field: AiIntakeField; code: string; message: string };
@@ -192,6 +193,31 @@ export class AiIntakeService {
     return duplicate ? [{ field: 'usecase_name', code: 'DUPLICATE_NAME_WARNING', message: 'An active AI use case already uses this name' }] : [];
   }
 
+  private async ksaDueDate(client: IntakeClient, start: Date, days: number): Promise<Date> {
+    const holidays = await client.ksaHoliday.findMany({ orderBy: { date: 'asc' } });
+    return addKsaBusinessDays(
+      start,
+      days,
+      holidays.filter(row => !row.isRecurring).map(row => dateKey(row.date)),
+      holidays.filter(row => row.isRecurring).map(row => row.date.toISOString().slice(5, 10)),
+    );
+  }
+
+  private async createTriageTask(client: Prisma.TransactionClient, caseId: string, actor: string, now: Date) {
+    const task = await client.workflowTask.create({
+      data: {
+        caseId,
+        title: 'AIUC completeness check and triage',
+        type: 'review',
+        status: TaskStatus.pending,
+        assigneeRoleCode: 'AI_WORKING_GROUP',
+        dueDate: await this.ksaDueDate(client, now, 5),
+      },
+    });
+    await client.workflowEvent.create({ data: { caseId, taskId: task.id, actor, action: 'aiuc.triage.assigned', toStatus: TaskStatus.pending } });
+    return task;
+  }
+
   private businessWarnings(
     payload: AiIntakeDraftV1,
     selected: Partial<Record<AiIntakeField, ReferenceSelection[]>>,
@@ -255,7 +281,13 @@ export class AiIntakeService {
       const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
       if (!current) throw new NotFoundException('AI use-case draft not found');
       if (current.requesterUserId !== userId) throw new ForbiddenException('Only the requester can edit this AI intake draft');
-      if (current.workflowCaseId || current.intakeRevisions[0]?.submittedAt) {
+      const returnedTask = current.workflowCaseId && current.workflowCase?.status === CaseStatus.awaiting_information
+        ? await tx.workflowTask.findFirst({
+          where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeUserId: userId, type: 'information' },
+          select: { id: true },
+        })
+        : null;
+      if ((current.workflowCaseId || current.intakeRevisions[0]?.submittedAt) && !returnedTask) {
         throw new ConflictException('Submitted AI intake fields are read-only');
       }
       if (current.version !== expectedVersion) throw new ConflictException('AI use-case draft changed; reload before saving');
@@ -267,7 +299,7 @@ export class AiIntakeService {
       const directory = await this.directoryReferences(tx, userId, payload);
       const duplicates = await this.duplicateWarning(tx, payload, id);
       const updated = await tx.aiUseCase.updateMany({
-        where: { id, version: expectedVersion, workflowCaseId: null },
+        where: { id, version: expectedVersion, workflowCaseId: returnedTask ? current.workflowCaseId : null },
         data: {
           ownerPersonId: directory.ownerPersonId,
           name: payload.usecase_name?.trim() || current.name,
@@ -322,6 +354,7 @@ export class AiIntakeService {
       await tx.workflowEvent.create({
         data: { caseId: workflowCase.id, actor: userId, action: 'aiuc.intake.submitted', toStatus: CaseStatus.submitted },
       });
+      const triageTask = await this.createTriageTask(tx, workflowCase.id, userId, now);
       const revision = (current.intakeRevisions[0]?.revision ?? 0) + 1;
       await tx.aiIntakeRevision.create({
         data: {
@@ -354,6 +387,8 @@ export class AiIntakeService {
         entityId: id,
         metadata: {
           caseCode,
+          triageTaskId: triageTask.id,
+          triageDueDate: triageTask.dueDate?.toISOString() ?? null,
           revision,
           referenceVersions: references.versionPins,
           conditions,
@@ -365,6 +400,150 @@ export class AiIntakeService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
+  async resubmit(userId: string, id: string, expectedVersion: number) {
+    return this.prisma.$transaction(async tx => {
+      await this.authorization.authorize(userId, 'case.create.aiuc', tx);
+      const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
+      if (!current) throw new NotFoundException('AI use case not found');
+      if (current.requesterUserId !== userId) throw new ForbiddenException('Only the requester can resubmit this AI intake');
+      if (!current.workflowCaseId || current.workflowCase?.status !== CaseStatus.awaiting_information) {
+        throw new ConflictException('AI intake is not awaiting requester information');
+      }
+      if (current.version !== expectedVersion) throw new ConflictException('AI use-case draft changed; reload before resubmitting');
+      const completionTask = await tx.workflowTask.findFirst({
+        where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeUserId: userId, type: 'information' },
+      });
+      if (!completionTask) throw new ConflictException('No active requester completion task exists');
+      const payload = current.intakeRevisions[0]?.payload ?? {};
+      const now = new Date();
+      this.assertSubmission(payload, dateInRiyadh(now));
+      const references = await this.currentReferences(tx, payload, now);
+      const directory = await this.directoryReferences(tx, userId, payload);
+      const revision = (current.intakeRevisions[0]?.revision ?? 0) + 1;
+      await tx.aiIntakeRevision.create({
+        data: { useCaseId: id, revision, schemaVersion: AI_INTAKE_SCHEMA_VERSION, payload: asJson(payload), submittedAt: now, createdBy: userId },
+      });
+      await tx.workflowTask.update({
+        where: { id: completionTask.id },
+        data: { status: TaskStatus.completed, decision: TaskDecision.approved, completedAt: now, decisionComment: 'Requester resubmitted the returned intake', formSubmittedAt: now, formSubmittedBy: userId },
+      });
+      await tx.workflowCase.update({
+        where: { id: current.workflowCaseId },
+        data: { status: CaseStatus.submitted, title: payload.usecase_name.trim(), description: payload.problem_desc.trim() },
+      });
+      const triageTask = await this.createTriageTask(tx, current.workflowCaseId, userId, now);
+      const updated = await tx.aiUseCase.updateMany({
+        where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
+        data: { ownerPersonId: directory.ownerPersonId, name: payload.usecase_name.trim(), description: payload.problem_desc.trim(), version: { increment: 1 } },
+      });
+      if (updated.count !== 1) throw new ConflictException('AI use-case draft changed; reload before resubmitting');
+      await tx.workflowEvent.create({ data: { caseId: current.workflowCaseId, taskId: completionTask.id, actor: userId, action: 'aiuc.intake.resubmitted', fromStatus: CaseStatus.awaiting_information, toStatus: CaseStatus.submitted } });
+      await this.audit.logRequired({
+        actor: userId, action: 'aiuc.intake.resubmitted', entityType: 'ai_use_case', entityId: id,
+        metadata: { caseCode: current.workflowCase?.code, revision, triageTaskId: triageTask.id, referenceVersions: references.versionPins },
+      }, tx);
+      return tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: intakeUseCase });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async triageQueue(userId: string) {
+    await this.authorization.authorize(userId, 'aiuc.classify.assess');
+    return this.prisma.aiUseCase.findMany({
+      where: {
+        deletedAt: null,
+        workflowCase: { is: { status: CaseStatus.submitted, tasks: { some: { status: TaskStatus.pending, assigneeRoleCode: 'AI_WORKING_GROUP' } } } },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 100,
+      select: intakeUseCase,
+    });
+  }
+
+  async triage(
+    userId: string,
+    id: string,
+    expectedVersion: number,
+    decision: 'accept' | 'return' | 'reject',
+    justification?: string,
+  ) {
+    return this.prisma.$transaction(async tx => {
+      const actor = await this.authorization.authorize(userId, 'aiuc.classify.assess', tx);
+      const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
+      if (!current || !current.workflowCaseId || current.workflowCase?.status !== CaseStatus.submitted) {
+        throw new NotFoundException('Submitted AI intake is not available for triage');
+      }
+      if (current.version !== expectedVersion) throw new ConflictException('AI use case changed; reload before recording triage');
+      if (decision !== 'accept' && !justification?.trim()) {
+        throw new BadRequestException('Return and reject decisions require justification');
+      }
+      const task = await tx.workflowTask.findFirst({
+        where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeRoleCode: 'AI_WORKING_GROUP' },
+      });
+      if (!task) throw new ConflictException('No active AIUC triage task exists');
+      const now = new Date();
+      const nextStatus = decision === 'accept' ? CaseStatus.under_review
+        : decision === 'return' ? CaseStatus.awaiting_information : CaseStatus.rejected;
+      await tx.workflowTask.update({
+        where: { id: task.id },
+        data: {
+          status: TaskStatus.completed,
+          decision: decision === 'accept' ? TaskDecision.approved : TaskDecision.rejected,
+          decisionComment: justification?.trim() || 'Triage accepted',
+          completedAt: now,
+          formSubmittedAt: now,
+          formSubmittedBy: userId,
+        },
+      });
+      await tx.workflowCase.update({ where: { id: current.workflowCaseId }, data: { status: nextStatus } });
+      let useCaseRef = current.useCaseRef;
+      if (decision === 'accept') {
+        useCaseRef = useCaseRef ?? await this.identifiers.nextUseCaseRef(tx);
+        await tx.workflowTask.create({
+          data: {
+            caseId: current.workflowCaseId,
+            title: 'Six-criterion SDAIA classification assessment',
+            type: 'review',
+            status: TaskStatus.pending,
+            assigneeRoleCode: 'AI_WORKING_GROUP',
+            dueDate: await this.ksaDueDate(tx, now, 10),
+          },
+        });
+      } else if (decision === 'return') {
+        await tx.workflowTask.create({
+          data: {
+            caseId: current.workflowCaseId,
+            title: 'Complete returned AIUC intake',
+            type: 'information',
+            status: TaskStatus.pending,
+            assigneeUserId: current.requesterUserId,
+            dueDate: await this.ksaDueDate(tx, now, 5),
+          },
+        });
+      }
+      const updated = await tx.aiUseCase.updateMany({
+        where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
+        data: { useCaseRef, version: { increment: 1 } },
+      });
+      if (updated.count !== 1) throw new ConflictException('AI use case changed; reload before recording triage');
+      await tx.workflowEvent.create({
+        data: {
+          caseId: current.workflowCaseId,
+          taskId: task.id,
+          actor: userId,
+          action: `aiuc.triage.${decision}`,
+          fromStatus: CaseStatus.submitted,
+          toStatus: nextStatus,
+          comment: justification?.trim() || null,
+        },
+      });
+      await this.audit.logRequired({
+        actor: userId, action: `aiuc.triage.${decision}`, entityType: 'ai_use_case', entityId: id,
+        metadata: { actorRoles: actor.roles, caseCode: current.workflowCase.code, useCaseRef, taskId: task.id, justification: justification?.trim() || null },
+      }, tx);
+      return tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: intakeUseCase });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
   async listOwn(userId: string) {
     await this.authorization.authorize(userId, 'case.view.aiuc.own');
     return this.prisma.aiUseCase.findMany({
@@ -373,6 +552,64 @@ export class AiIntakeService {
       take: 100,
       select: intakeUseCase,
     });
+  }
+
+  async lookups(userId: string) {
+    await this.authorization.authorize(userId, 'case.create.aiuc');
+    const now = new Date();
+    const lists: Record<string, { listCode: string; versionId: string; values: ReferenceSelection[] }> = {};
+    const missingLists: string[] = [];
+    for (const [field, alias] of Object.entries(AI_INTAKE_REFERENCE_FIELDS)) {
+      const listCode = canonicalAiReference(alias);
+      const version = await this.prisma.governedReferenceVersion.findFirst({
+        where: {
+          listCode,
+          state: 'published',
+          effectiveFrom: { lte: now },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }],
+        },
+        orderBy: { version: 'desc' },
+        include: { values: { orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] } },
+      });
+      if (!version) {
+        missingLists.push(listCode);
+        continue;
+      }
+      lists[field] = {
+        listCode,
+        versionId: version.id,
+        values: version.values.map(value => ({ code: value.code, labelEn: value.labelEn, labelAr: value.labelAr })),
+      };
+    }
+    const directory = await this.prisma.user.findMany({
+      where: { isActive: true, person: { is: { isActive: true, deletedAt: null } } },
+      orderBy: { displayName: 'asc' },
+      take: 1000,
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        person: { select: { id: true, fullNameEn: true, fullNameAr: true } },
+        userRoles: { where: { role: { isActive: true, deletedAt: null } }, select: { role: { select: { code: true } } } },
+      },
+    });
+    const users = directory.map(user => ({
+      id: user.id,
+      personId: user.person!.id,
+      email: user.email,
+      displayName: user.displayName,
+      nameEn: user.person!.fullNameEn,
+      nameAr: user.person!.fullNameAr,
+      roles: user.userRoles.map(row => row.role.code),
+    }));
+    return {
+      ready: missingLists.length === 0,
+      missingLists: [...new Set(missingLists)].sort(),
+      lists,
+      proposedOwners: users.filter(user => user.roles.includes('AI_USECASE_OWNER')),
+      dataOwners: users.map(user => ({ ...user, expectedRole: user.roles.includes('data_owner') })),
+      executiveSponsors: users,
+    };
   }
 
   async getOwn(userId: string, id: string) {

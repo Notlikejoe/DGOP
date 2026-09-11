@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsObject, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateAiIntakeDraftDto {
   @IsOptional()
@@ -22,4 +22,15 @@ export class SubmitAiIntakeDto {
   @IsInt()
   @Min(1)
   expectedVersion!: number;
+}
+
+export class TriageAiIntakeDto extends SubmitAiIntakeDto {
+  @IsString()
+  @IsIn(['accept', 'return', 'reject'])
+  decision!: 'accept' | 'return' | 'reject';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  justification?: string;
 }

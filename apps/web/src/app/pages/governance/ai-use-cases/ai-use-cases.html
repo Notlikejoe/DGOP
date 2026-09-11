@@ -1,0 +1,174 @@
+<section class="page aiuc-page governance-modern">
+  <header class="page__header aiuc-hero">
+    <div>
+      <span class="eyebrow">{{ t('aiuc.eyebrow') }}</span>
+      <h1>{{ t('aiuc.title') }}</h1>
+      <p class="page__subtitle">{{ t('aiuc.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="load(selected()?.id)">
+        <app-icon name="refresh" />{{ t('crud.retry') }}
+      </button>
+      <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createDraft()">
+        <app-icon name="plus" />{{ t('aiuc.new') }}
+      </button>
+    </div>
+  </header>
+
+  @if (lookups(); as refs) {
+    @if (!refs.ready) {
+      <section class="configuration-gate" role="status">
+        <app-icon name="alert" />
+        <div><strong>{{ t('aiuc.referenceGate.title') }}</strong><p>{{ t('aiuc.referenceGate.body') }}</p></div>
+        <span>{{ refs.missingLists.join(', ') }}</span>
+      </section>
+    }
+  }
+
+  @if (state() === 'loading') {
+    <section class="ds-card state-card">{{ t('crud.loading') }}</section>
+  } @else if (state() === 'error') {
+    <section class="ds-card state-card state-card--error">
+      <p>{{ t('aiuc.error.load') }}</p>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
+    </section>
+  } @else {
+    <div class="aiuc-workspace">
+      <aside class="ds-card case-rail">
+        <div class="panel-head">
+          <div><span class="eyebrow">{{ t('aiuc.rail.eyebrow') }}</span><h2>{{ t('aiuc.rail.title') }}</h2></div>
+          <span class="count">{{ cases().length }}</span>
+        </div>
+        <div class="case-list">
+          @for (item of cases(); track item.id) {
+            <button type="button" class="case-row" [class.case-row--active]="selected()?.id === item.id" (click)="selectCase(item)">
+              <span class="case-row__icon"><app-icon name="fileCheck" /></span>
+              <span class="case-row__copy">
+                <strong>{{ item.name }}</strong>
+                <small>{{ item.workflowCase?.code || t('aiuc.status.unnumbered') }}</small>
+                <small>{{ item.updatedAt | date:'medium' }}</small>
+              </span>
+              <app-status-chip [kind]="statusKind(item)" [label]="statusLabel(item)" />
+            </button>
+          } @empty {
+            <div class="empty-state"><app-icon name="fileCheck" /><strong>{{ t('aiuc.empty.title') }}</strong><p>{{ t('aiuc.empty.body') }}</p></div>
+          }
+        </div>
+      </aside>
+
+      <main class="intake-main">
+        @if (selected(); as item) {
+          <section class="ds-card intake-toolbar">
+            <div>
+              <span class="eyebrow">{{ item.workflowCase?.code || t('aiuc.status.unnumbered') }}</span>
+              <h2>{{ item.name }}</h2>
+              <p>{{ completedRequired() }} / {{ requiredTotal }} {{ t('aiuc.completion') }}</p>
+            </div>
+            <div class="toolbar-actions">
+              <app-status-chip [kind]="statusKind(item)" [label]="statusLabel(item)" />
+              <button type="button" class="ds-btn ds-btn--ghost" [disabled]="isReadOnly() || !dirty() || saving()" (click)="save()">
+                <app-icon name="fileCheck" />{{ t('aiuc.saveDraft') }}
+              </button>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="isReadOnly() || saving() || !lookups()?.ready" (click)="submit()">
+                <app-icon name="shield" />{{ t('aiuc.submit') }}
+              </button>
+            </div>
+          </section>
+
+          @if (isReadOnly()) {
+            <section class="read-only-note" role="status"><app-icon name="lock" />{{ t('aiuc.readOnly') }}</section>
+          }
+          @if (warnings().length) {
+            <section class="warning-list" aria-live="polite">
+              <strong>{{ t('aiuc.warnings') }}</strong>
+              @for (warning of warnings(); track warning.code + warning.field) { <p>{{ warning.message }}</p> }
+            </section>
+          }
+          @if (issues().length) {
+            <section class="issue-summary" role="alert">
+              <strong>{{ t('aiuc.validation.title') }}</strong>
+              <p>{{ t('aiuc.validation.body') }}</p>
+            </section>
+          }
+
+          <form class="intake-form" (submit)="$event.preventDefault()">
+            @for (section of sections; track section.number) {
+              <section class="ds-card intake-section">
+                <header class="section-head">
+                  <span>{{ section.number }}</span>
+                  <div><small>{{ t('aiuc.sectionLabel') }} {{ section.number }}</small><h2>{{ sectionLabel(section.number) }}</h2></div>
+                </header>
+                <div class="field-grid">
+                  @for (field of section.fields; track field.code) {
+                    <label class="form-field" [class.form-field--wide]="field.wide" [class.form-field--invalid]="fieldIssues(field.code).length">
+                      <span>{{ fieldLabel(field.code) }} @if (field.required) { <b aria-hidden="true">*</b> }</span>
+                      @switch (field.kind) {
+                        @case ('textarea') {
+                          <textarea rows="3" [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)"></textarea>
+                        }
+                        @case ('date') {
+                          <input type="date" [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)" />
+                        }
+                        @case ('decimal') {
+                          <input type="number" step="any" [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event, field.kind)" />
+                        }
+                        @case ('select') {
+                          <select [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)">
+                            <option value="">{{ t('aiuc.select') }}</option>
+                            @for (option of options(field.code); track option.code) { <option [value]="option.code">{{ optionLabel(option) }}</option> }
+                          </select>
+                        }
+                        @case ('multiselect') {
+                          <select multiple size="5" [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || []" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)">
+                            @for (option of options(field.code); track option.code) { <option [value]="option.code">{{ optionLabel(option) }}</option> }
+                          </select>
+                          <small>{{ t('aiuc.multiSelectHint') }}</small>
+                        }
+                        @case ('user') {
+                          @if (field.code === 'requester') {
+                            <input type="text" [value]="requesterLabel()" disabled />
+                          } @else {
+                            <select [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)">
+                              <option value="">{{ t('aiuc.select') }}</option>
+                              @for (user of usersFor(field.code); track user.id) { <option [value]="user.id">{{ userLabel(user) }}</option> }
+                            </select>
+                          }
+                        }
+                        @case ('boolean-detail') {
+                          <div class="compound-field">
+                            <select [disabled]="isReadOnly()" [required]="true" [ngModel]="booleanAnswer(field.code)" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateBoolean(field.code, $event)">
+                              <option value="">{{ t('aiuc.select') }}</option><option value="true">{{ t('aiuc.yes') }}</option><option value="false">{{ t('aiuc.no') }}</option>
+                            </select>
+                            <textarea rows="2" [disabled]="isReadOnly()" [required]="true" [placeholder]="field.code === 'simpler_alternatives' ? t('aiuc.justification') : t('aiuc.details')" [ngModel]="booleanText(field.code)" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateBooleanText(field.code, $event)"></textarea>
+                          </div>
+                        }
+                        @case ('constraints') {
+                          <div class="compound-field">
+                            <label class="check"><input type="checkbox" [disabled]="isReadOnly()" [checked]="value(field.code)?.none || false" (change)="setConstraintsNone($any($event.target).checked)" />{{ t('aiuc.none') }}</label>
+                            <textarea rows="3" [disabled]="isReadOnly() || value(field.code)?.none" [ngModel]="value(field.code)?.text || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="setConstraintsText($event)"></textarea>
+                          </div>
+                        }
+                        @case ('attachments') {
+                          <div class="attachment-field">
+                            <div class="attachment-entry"><input type="text" [disabled]="isReadOnly()" [ngModel]="attachmentInput()" [ngModelOptions]="{standalone:true}" (ngModelChange)="attachmentInput.set($event)" [placeholder]="t('aiuc.attachmentPlaceholder')" /><button type="button" class="ds-btn ds-btn--ghost" [disabled]="isReadOnly()" (click)="addAttachment()">{{ t('aiuc.add') }}</button></div>
+                            @for (id of value('attachments') || []; track id) { <span class="attachment-chip">{{ id }}<button type="button" [disabled]="isReadOnly()" (click)="removeAttachment(id)" [attr.aria-label]="t('crud.delete')">×</button></span> }
+                          </div>
+                        }
+                        @default {
+                          <input type="text" [disabled]="isReadOnly()" [required]="field.required" [attr.maxlength]="field.maxLength || null" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)" />
+                        }
+                      }
+                      @for (issue of fieldIssues(field.code); track issue.code) { <small class="field-error">{{ issue.message }}</small> }
+                    </label>
+                  }
+                </div>
+              </section>
+            }
+          </form>
+        } @else {
+          <section class="ds-card empty-state empty-state--main"><app-icon name="fileCheck" /><h2>{{ t('aiuc.empty.title') }}</h2><p>{{ t('aiuc.empty.body') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="createDraft()">{{ t('aiuc.new') }}</button></section>
+        }
+      </main>
+    </div>
+  }
+</section>

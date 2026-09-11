@@ -34,6 +34,7 @@ export async function testPhase2A(db: PrismaClient) {
   const owner = await createActor('intake-owner', 'AI_USECASE_OWNER');
   const dataOwner = await createActor('intake-data-owner', 'data_owner');
   const sponsor = await createActor('intake-sponsor', 'AI_EXECUTIVE_TEAM');
+  const triageReviewer = await createActor('intake-triage', 'AI_WORKING_GROUP');
 
   const lists: Record<string, Array<[string, string, string]>> = {
     L_STREAMS: [['STREAM_1', 'Stream 1', 'المسار الأول']],
@@ -90,9 +91,35 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal(submitted.intakeRevisions[0].revision, 3);
   assert.ok(submitted.intakeRevisions[0].submittedAt);
   assert.equal(await db.aiIntakeRevision.count({ where: { useCaseId: draft.id } }), 3);
+  const initialTriageTask = await db.workflowTask.findFirstOrThrow({
+    where: { caseId: submitted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_WORKING_GROUP' },
+  });
+  assert.equal(initialTriageTask.type, 'review');
+  assert.ok(initialTriageTask.dueDate);
   await assert.rejects(service.updateDraft(requester.id, draft.id, 3, { problem_desc: 'too late' }));
   await assert.rejects(service.submit(requester.id, draft.id, 3));
-  assert.equal(await db.auditLog.count({ where: { entityId: draft.id, action: { startsWith: 'aiuc.intake.' } } }), 3);
+
+  assert.equal((await service.triageQueue(triageReviewer.id)).length, 1);
+  await assert.rejects(service.triage(triageReviewer.id, draft.id, 3, 'return'));
+  const returned = await service.triage(triageReviewer.id, draft.id, 3, 'return', 'Clarify the current-state baseline');
+  assert.equal(returned.workflowCase!.status, 'awaiting_information');
+  assert.equal(returned.version, 4);
+  assert.equal(returned.useCaseRef, null);
+  const clarified = await service.updateDraft(requester.id, draft.id, 4, { current_state: 'Manual review measured over the last quarter' });
+  assert.equal(clarified.version, 5);
+  assert.equal(clarified.intakeRevisions[0].revision, 4);
+  const resubmitted = await service.resubmit(requester.id, draft.id, 5);
+  assert.equal(resubmitted.workflowCase!.status, 'submitted');
+  assert.equal(resubmitted.version, 6);
+  assert.equal(resubmitted.intakeRevisions[0].revision, 5);
+  const accepted = await service.triage(triageReviewer.id, draft.id, 6, 'accept');
+  assert.equal(accepted.workflowCase!.status, 'under_review');
+  assert.match(accepted.useCaseRef!, /^AI-\d{3,}$/u);
+  assert.equal(accepted.version, 7);
+  assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', title: { contains: 'classification' } } }), 1);
+  await assert.rejects(service.updateDraft(requester.id, draft.id, 7, { problem_desc: 'too late again' }));
+  assert.equal((await service.triageQueue(triageReviewer.id)).length, 0);
+  assert.equal(await db.auditLog.count({ where: { entityId: draft.id, action: { startsWith: 'aiuc.intake.' } } }), 5);
   assert.equal((await service.listOwn(requester.id)).length, 1);
   assert.equal((await service.getOwn(requester.id, draft.id)).id, draft.id);
 
@@ -118,6 +145,10 @@ export async function testPhase2A(db: PrismaClient) {
     });
     assert.equal(httpCreate.status, 201);
     assert.equal((await fetch(`${base}/api/ai/use-cases`, { headers })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/triage`, { headers })).status, 403);
+    const lookups = await fetch(`${base}/api/ai/use-cases/lookups`, { headers });
+    assert.equal(lookups.status, 200);
+    assert.equal((await lookups.json() as { ready: boolean }).ready, true);
     const rejected = await fetch(`${base}/api/ai/use-cases`, {
       method: 'POST', headers,
       body: JSON.stringify({ payload: {}, injectedField: true }),
@@ -127,5 +158,5 @@ export async function testPhase2A(db: PrismaClient) {
     await app.close();
   }
 
-  console.log('Phase 2A integration passed: draft revisions, live grants, governed references, directory checks, optimistic locking, atomic submit numbering, immutable submission and HTTP authorization/DTO checks.');
+  console.log('Phase 2 intake integration passed: draft revisions, governed lookups, five-business-day triage, return/revise/resubmit, triage acceptance numbering, immutable history and HTTP authorization/DTO checks.');
 }

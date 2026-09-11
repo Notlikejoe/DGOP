@@ -90,6 +90,12 @@ export const routes: Routes = [
           import('./pages/governance/workflow/case-detail').then((m) => m.WorkflowCasePage),
       },
       {
+        path: 'governance/ai-use-cases',
+        canActivate: [permissionGuard('case.view.aiuc.own')],
+        loadComponent: () =>
+          import('./pages/governance/ai-use-cases/ai-use-cases').then((m) => m.AiUseCasesPage),
+      },
+      {
         path: 'governance/access',
         canActivate: [permissionGuard('access_grants.view')],
         loadComponent: () =>

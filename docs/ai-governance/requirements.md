@@ -159,14 +159,14 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-35 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-36 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-37 | 10 | AIRS assessment / decision / operations | Not implemented |
-| UC-01 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-02 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-03 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-04 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-05 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-06 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-07 | 2 | AIUC intake / classification / handoff | Not implemented |
-| UC-08 | 2 | AIUC intake / classification / handoff | Not implemented |
+| UC-01 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A |
+| UC-02 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
+| UC-03 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
+| UC-04 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B; publication gate open |
+| UC-05 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
+| UC-06 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
+| UC-07 | 2 | AIUC intake / classification / handoff | Partial — conditions/warnings implemented; co-signature pending |
+| UC-08 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-09 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-10 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-11 | 3 | AIUC intake / classification / handoff | Not implemented |
@@ -175,17 +175,17 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-14 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-15 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-16 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-17 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-18 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-17 | 3 | AIUC intake / classification / handoff | Partial — five-day task implemented; SLA warning/escalation pending |
+| UC-18 | 3 | AIUC intake / classification / handoff | Partial — five-day return/resubmit implemented; warning/closure pending |
 | UC-19 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-20 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-21 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-22 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-23 | 4 | AIUC intake / classification / handoff | Not implemented |
-| UC-24 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-24 | 4 | AIUC intake / classification / handoff | Implemented — Phase 2B |
 | UC-25 | 4 | AIUC intake / classification / handoff | Not implemented |
 | UC-26 | 4 | AIUC intake / classification / handoff | Not implemented |
-| UC-27 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-27 | 4 | AIUC intake / classification / handoff | Partial — triage reject/return paths implemented |
 | UC-28 | 4 | AIUC intake / classification / handoff | Not implemented |
 | UC-29 | 4 | AIUC intake / classification / handoff | Not implemented |
 | WF-01 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
@@ -203,4 +203,4 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 
 Phase 1B backend update: exact 10-role/25-permission catalog and reference publication controls are tested. Source-list reconciliation, full GEN-116 integration certification, and workflow assignment/completion wiring remain open; see phase-1b.md. Do not mark complete business requirements from these supporting components alone.
 
-Phase 2A backend update: UC-01 through UC-08 now have tested intake API support for the exact field boundary, required-field and reference validation, requester/owner identity, warning conditions, append-only revisions, case numbering and post-submission immutability. The UI, triage decisions, return path, SLA and full workflow acceptance remain open, so the ledger below stays conservative; see phase-2a.md.
+Phase 2A/2B update: UC-01 through UC-08 have tested API and requester-screen support for the exact field boundary, required-field and reference validation, requester/owner identity, warning conditions, append-only revisions, case numbering and controlled return edits. The first triage loop covers the five-day working-group task, return/resubmit, triage rejection and UC-24 numbering. Classification, conditional reviews, complete SLA notification behavior and downstream handoff remain open; see phase-2a.md and phase-2b.md.

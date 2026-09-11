@@ -529,14 +529,14 @@
   .quick-links span { font-size: 12px; }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 880px) {
   .about-page.foundation-modern {
     grid-template-columns: minmax(0, 1fr);
     .about-panel--principles, .about-panel--towers { grid-column: 1; grid-row: auto; }
   }
 }
 
-@media (min-width: 1101px) and (max-height: 950px) {
+@media (min-width: 881px) and (max-height: 950px) {
   .about-page.foundation-modern {
     gap: 8px;
     .about-hero { padding: 10px 14px; gap: 8px 14px; }
@@ -560,12 +560,12 @@
 }
 
 /* Desktop brief sizing applies independently of browser chrome and panel height. */
-@media (min-width: 1101px) {
+@media (min-width: 881px) {
   .about-page.foundation-modern {
     gap: 12px;
     font-size: 14px;
     .about-hero { padding: 14px 16px; gap: 12px 16px; }
-    .about-hero h1 { font-size: 26px; white-space: nowrap; }
+    .about-hero h1 { font-size: clamp(14px, 1.65vw, 26px); white-space: nowrap; }
     .about-hero__statement { padding: 12px; }
     .about-hero__statement strong { font-size: 16px; }
     .about-hero__statement p { font-size: 13px; }

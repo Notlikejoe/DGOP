@@ -21,6 +21,10 @@ import { ToastService } from '../../../shared/toast.service';
 import { Modal } from '../../../shared/modal';
 import { StatusChip, StatusKind } from '../../../shared/status-chip';
 import { AppIcon } from '../../../shared/app-icon';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { TableModule } from 'primeng/table';
+import { TooltipModule } from 'primeng/tooltip';
 import {
   SLA_KIND,
   CASE_STATUS_KIND,
@@ -223,7 +227,7 @@ const WORKFLOW_ROUTE_FAMILY_BY_TYPE = new Map<string, RouteFamilyMeta>([
 @Component({
   selector: 'app-workflow',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, Modal, StatusChip, AppIcon],
+  imports: [FormsModule, RouterLink, Modal, StatusChip, AppIcon, ButtonModule, InputTextModule, TableModule, TooltipModule],
   templateUrl: './workflow.html',
   styleUrls: ['./workflow.scss', './workflow-designer.scss'],
 })
@@ -277,6 +281,20 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly tasks = signal<Task[]>([]);
   protected readonly taskTotal = signal(0);
+  protected readonly taskQuery = signal('');
+  protected readonly taskSlaFilter = signal('all');
+  protected readonly filteredTasks = computed(() => {
+    const query = this.taskQuery().trim().toLocaleLowerCase();
+    const sla = this.taskSlaFilter();
+    return this.tasks().filter((task) => {
+      if (sla !== 'all' && task.slaStatus !== sla) return false;
+      if (!query) return true;
+      return [task.title, task.type, task.case?.code, task.case?.title]
+        .some((value) => value?.toLocaleLowerCase().includes(query));
+    });
+  });
+  protected readonly overdueInboxTasks = computed(() => this.tasks().filter((task) => task.slaStatus === 'overdue').length);
+  protected readonly atRiskInboxTasks = computed(() => this.tasks().filter((task) => task.slaStatus === 'at_risk').length);
   protected readonly cases = signal<CaseRow[]>([]);
   protected readonly caseTotal = signal(0);
   protected readonly assets = signal<Ref[]>([]);

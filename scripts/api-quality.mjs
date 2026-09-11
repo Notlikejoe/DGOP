@@ -885,6 +885,8 @@ const destructiveAllowlist = new Set([
   'apps/api/src/assets/assets.service.ts:assetRelationship.delete',
   'apps/api/src/users/users.service.ts:userRole.deleteMany',
   'apps/api/src/roles/roles.service.ts:rolePermission.deleteMany',
+  // Explicit AI catalog reconciliation revokes only invalid role grants and audits the removal.
+  'apps/api/src/ai-governance/ai-security-catalog.ts:rolePermission.delete',
   'apps/api/src/roles/roles.service.ts:roleDataScope.deleteMany',
   'apps/api/src/master-data/raci-templates.service.ts:raciTemplateItem.deleteMany',
   'apps/api/src/governance-lifecycle/governance-lifecycle.service.ts:dataDomainCouncilMember.deleteMany',

@@ -200,3 +200,5 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | WF-10 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-11 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-12 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+
+Phase 1B backend update: exact 10-role/25-permission catalog and reference publication controls are tested. Source-list reconciliation, full GEN-116 integration certification, and workflow assignment/completion wiring remain open; see phase-1b.md. Do not mark complete business requirements from these supporting components alone.

@@ -4772,6 +4772,7 @@ model GovernedReferenceVersion {
   effectiveTo   DateTime?
   sourceSha256  String?                  @db.VarChar(64)
   sourceLocator String?
+  approvalDigest String?                  @db.VarChar(64)
   createdBy     String
   approvedBy    String?
   approvedAt    DateTime?

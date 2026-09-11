@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
+import { AI_PERMISSIONS, AiPermission, aiRoleMayHold } from '../ai-governance/ai-permissions';
 import {
   CreateRoleDto,
   SetRolePermissionsDto,
@@ -165,6 +166,21 @@ export class RolesService {
     const unknown = dto.permissions.filter((k) => !idByKey.has(k));
     if (unknown.length) {
       throw new BadRequestException(`Unknown permissions: ${unknown.join(', ')}`);
+    }
+    const aiRequested=dto.permissions.filter(k=>(AI_PERMISSIONS as string[]).includes(k));
+    if (aiRequested.some(k=>!aiRoleMayHold(role.code,k as AiPermission))) {
+      throw new ForbiddenException('AI permissions may only be granted to their catalog roles');
+    }
+    const currentAi=await this.prisma.rolePermission.findMany({where:{roleId:role.id,permission:{OR:AI_PERMISSIONS.map(code=>{const at=code.lastIndexOf('.');return {resource:code.slice(0,at),action:code.slice(at+1)};})}},include:{permission:true}});
+    if (aiRequested.length || currentAi.length) {
+      if (!dto.justification?.trim()) throw new BadRequestException('Justification required for AI permission changes');
+      await this.prisma.$transaction(async tx=>{
+        await tx.rolePermission.deleteMany({where:{roleId:role.id}});
+        await tx.rolePermission.createMany({data:dto.permissions.map(k=>({roleId:role.id,permissionId:idByKey.get(k)!})),skipDuplicates:true});
+        await this.audit.logRequired({actor,action:'ai.role.permissions.set',entityType:'role',entityId:role.id,
+          metadata:{oldValue:currentAi.map(g=>`${g.permission.resource}.${g.permission.action}`),newValue:aiRequested,justification:dto.justification}},tx);
+      });
+      return this.get(role.id);
     }
     await this.prisma.$transaction([
       this.prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),

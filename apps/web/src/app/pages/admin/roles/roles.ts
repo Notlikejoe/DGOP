@@ -289,6 +289,7 @@ export class RolesPage implements OnInit {
 
   protected form = { code: '', nameEn: '', nameAr: '', description: '', isActive: true };
   protected readonly permSel = signal<Set<string>>(new Set());
+  protected permissionJustification = '';
   protected readonly orgSel = signal<Map<string, boolean>>(new Map());
   protected readonly domSel = signal<Map<string, boolean>>(new Map());
   protected readonly maxClass = signal<number | null>(null);
@@ -605,6 +606,7 @@ export class RolesPage implements OnInit {
   }
 
   protected openPerms(role: RoleListItem): void {
+    this.permissionJustification = '';
     this.fetchDetail(role.id, (detail) => {
       this.permSel.set(new Set(detail.permissions));
       this.mode.set('perms');
@@ -643,6 +645,7 @@ export class RolesPage implements OnInit {
     this.http
       .put(`/api/roles/${this.active()!.id}/permissions`, {
         permissions: [...this.permSel()],
+        justification: this.permissionJustification.trim() || undefined,
       })
       .subscribe({
         next: () => {

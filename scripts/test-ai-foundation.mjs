@@ -16,12 +16,12 @@ if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' || url.port !
 }
 const pg = process.env.DGOP_TEST_PG_BIN ?? 'C:/Program Files/PostgreSQL/16/bin';
 const stamp = Date.now().toString();
-const migration = '20260911090000_ai_governance_foundation';
+const migration = '20260911160000_ai_reference_approval';
 const baseline = join(root, 'storage/ai-test', stamp, 'prisma');
 mkdirSync(join(baseline, 'migrations'), { recursive: true });
 copyFileSync(join(api, 'prisma/schema.prisma'), join(baseline, 'schema.prisma'));
 for (const entry of readdirSync(join(api, 'prisma/migrations'), { withFileTypes: true })) {
-  if (entry.name === migration) continue;
+  if (entry.isDirectory() && entry.name >= migration) continue;
   cpSync(join(api, 'prisma/migrations', entry.name), join(baseline, 'migrations', entry.name), { recursive: true });
 }
 function run(command, args, env) {

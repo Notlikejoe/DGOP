@@ -14,6 +14,7 @@ export class CreateUserDto {
   @IsEmail() email!: string;
   @IsString() @IsNotEmpty() displayName!: string;
   @IsString() @MinLength(USER_PASSWORD_MIN_LENGTH) password!: string;
+  @IsOptional() @IsString() @IsNotEmpty() justification?: string;
 
   @IsOptional()
   @IsArray()
@@ -30,6 +31,7 @@ export class SetUserRolesDto {
   @IsArray()
   @IsString({ each: true })
   roleCodes!: string[];
+  @IsOptional() @IsString() @IsNotEmpty() justification?: string;
 }
 
 export class ResetPasswordDto {

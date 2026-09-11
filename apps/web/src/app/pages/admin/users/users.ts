@@ -82,6 +82,7 @@ export class UsersPage implements OnInit {
   protected readonly formError = signal(false);
 
   protected form = { email: '', displayName: '', password: '', isActive: true };
+  protected accessJustification = '';
   protected readonly roleSel = signal<Set<string>>(new Set());
   protected resetPwd = '';
 
@@ -204,6 +205,7 @@ export class UsersPage implements OnInit {
   }
 
   protected openCreate(): void {
+    this.accessJustification = '';
     this.form = { email: '', displayName: '', password: '', isActive: true };
     this.roleSel.set(new Set());
     this.active.set(null);
@@ -227,6 +229,7 @@ export class UsersPage implements OnInit {
         displayName: this.form.displayName.trim(),
         password: this.form.password,
         roleCodes: [...this.roleSel()],
+        justification: this.accessJustification.trim() || undefined,
       })
       .subscribe({
         next: () => {
@@ -296,6 +299,7 @@ export class UsersPage implements OnInit {
   }
 
   protected openRoles(user: AdminUser): void {
+    this.accessJustification = '';
     this.roleSel.set(new Set(user.roles.map((role) => role.code)));
     this.active.set(user);
     this.mode.set('roles');
@@ -315,7 +319,7 @@ export class UsersPage implements OnInit {
   protected saveRoles(): void {
     this.saving.set(true);
     this.http
-      .put(`/api/users/${this.active()!.id}/roles`, { roleCodes: [...this.roleSel()] })
+      .put(`/api/users/${this.active()!.id}/roles`, { roleCodes: [...this.roleSel()], justification: this.accessJustification.trim() || undefined })
       .subscribe({
         next: () => {
           this.saving.set(false);

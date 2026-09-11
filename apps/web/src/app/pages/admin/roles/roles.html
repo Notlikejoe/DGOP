@@ -450,6 +450,10 @@
           {{ t('crud.cancel') }}
         </button>
         @if (!isSysAdmin(role)) {
+          <label class="field">
+            <span class="field__label">{{ t('admin.accessJustification') }}</span>
+            <input type="text" name="permissionJustification" [(ngModel)]="permissionJustification" maxlength="2000" />
+          </label>
           <button
             type="button"
             class="ds-btn ds-btn--primary"

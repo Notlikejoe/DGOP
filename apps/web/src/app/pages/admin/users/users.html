@@ -306,6 +306,10 @@
 @if (mode() === 'create') {
   <app-modal class="create-user-modal" [title]="t('users.newTitle')" size="lg" (close)="close()">
     <form class="form" (ngSubmit)="saveCreate()">
+      <label class="field">
+        <span class="field__label">{{ t('admin.accessJustification') }}</span>
+        <input pInputText name="accessJustification" [(ngModel)]="accessJustification" maxlength="2000" />
+      </label>
       <div class="dialog-intro">
         <span class="dialog-intro__icon"><app-icon name="userCheck" /></span>
         <p>{{ t('users.createHint') }}</p>
@@ -450,6 +454,10 @@
         </div>
       </div>
       <p class="modal-note">{{ t('users.roleAssignmentHint') }}</p>
+      <label class="field">
+        <span class="field__label">{{ t('admin.accessJustification') }}</span>
+        <input pInputText name="accessJustification" [(ngModel)]="accessJustification" maxlength="2000" />
+      </label>
       <div class="role-picker role-picker--modal">
         @for (role of roleOptions(); track role.id) {
           <label class="role-card" [class.role-card--selected]="roleChecked(role.code)">

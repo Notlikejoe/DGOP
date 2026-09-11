@@ -1,0 +1,100 @@
+import assert from 'node:assert/strict';
+import { PrismaClient } from '@prisma/client';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { AuditService } from '../src/audit/audit.service';
+import { AiAuthorizationService } from '../src/ai-governance/ai-authorization.service';
+import { syncAiSecurityCatalog } from '../src/ai-governance/ai-security-catalog';
+import { AiReferencePublicationService } from '../src/master-data/ai-reference-publication.service';
+import { GovernedReferenceService } from '../src/master-data/governed-reference.service';
+import { RolesService } from '../src/roles/roles.service';
+import { UsersService } from '../src/users/users.service';
+import { splitAiPermission } from '../src/ai-governance/ai-permissions';
+import { NestFactory } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
+import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from '../src/app.module';
+
+export async function testPhase1B(db:PrismaClient) {
+  const prisma=db as PrismaService;
+  const audit=new AuditService(prisma);
+  for (const code of ['system_admin','dmo_admin','auditor','executive','data_owner','privacy_officer','security_reviewer','technical_steward','business_steward']) {
+    await db.role.upsert({where:{code},create:{code,nameEn:code,nameAr:code,isSystem:true},update:{}});
+  }
+  const first=await db.$transaction(tx=>syncAiSecurityCatalog(tx,audit,'test-installer','Phase 1B integration fixture'),{timeout:30000});
+  assert.equal(first.roles,10);assert.equal(first.permissions,25);
+  const second=await db.$transaction(tx=>syncAiSecurityCatalog(tx,audit,'test-installer','Idempotency verification'),{timeout:30000});
+  assert.equal(second.grants,0);assert.equal(second.revocations,0);
+  async function actor(label:string,codes:string[]) {
+    const roles=await db.role.findMany({where:{code:{in:codes}}});
+    return db.user.create({data:{email:`${label}@phase1b.test`,displayName:label,passwordHash:'not-a-login',userRoles:{create:roles.map(r=>({roleId:r.id}))}}});
+  }
+  const proposer=await actor('proposer',['AI_GOVERNANCE_OFFICER']);
+  const approver=await actor('approver',['AI_ETHICS_COMMITTEE']);
+  const publisher=await actor('publisher',['dmo_admin']);
+  const admin=await actor('admin',['system_admin']);
+  const auditor=await actor('auditor',['auditor','AI_GOVERNANCE_OFFICER']);
+  const executive=await actor('executive',['executive']);
+  const auth=new AiAuthorizationService(prisma,audit);
+  await assert.rejects(auth.authorize(admin.id,'refdata.publish'));
+  await assert.rejects(auth.authorize(auditor.id,'refdata.propose.ai'));
+  await assert.rejects(auth.authorize(executive.id,'case.create.aiuc'));
+  const liveActor=await auth.authorize(proposer.id,'refdata.propose.ai');
+  await assert.rejects(auth.enforceDuty(liveActor,'approve_aiuc',{requesterId:proposer.id},'test-case'));
+  assert.equal(await db.auditLog.count({where:{action:'ai.sod.blocked'}}),1);
+  const service=new AiReferencePublicationService(prisma,auth,audit);
+  const proposal={nameEn:'Test tier',nameAr:'تصنيف اختباري',sourceSha256:'a'.repeat(64),sourceLocator:'synthetic fixture, not workbook seed',justification:'Test proposal',values:[{code:'LOW',labelEn:'Low',labelAr:'منخفض',sortOrder:0,metadata:{score:1}}]};
+  const draft=await service.propose(proposer.id,'R_SDAIA_TIER',proposal);
+  assert.equal((await service.review(publisher.id,draft.id)).values[0].labelAr,'منخفض');
+  await assert.rejects(service.review(admin.id,draft.id));
+  await assert.rejects(service.publish(publisher.id,draft.id,'Without approval'));
+  await service.approve(approver.id,draft.id,'Independent test approval');
+  await db.governedReferenceValue.update({where:{versionId_code:{versionId:draft.id,code:'LOW'}},data:{labelEn:'Changed'}});
+  await assert.rejects(service.publish(publisher.id,draft.id,'Stale approval'));
+  await service.approve(approver.id,draft.id,'Approve current content');
+  await service.publish(publisher.id,draft.id,'Publish current approved content');
+  assert.equal((await new GovernedReferenceService(prisma).activeVersion('L_TIER')).id,draft.id);
+  await assert.rejects(service.publish(publisher.id,draft.id,'Duplicate publish'));
+  const next=await service.propose(proposer.id,'R_SDAIA_TIER',proposal);
+  await service.approve(approver.id,next.id,'Approve replacement');
+  const outcomes=await Promise.allSettled([service.publish(publisher.id,next.id,'Concurrent publish A'),service.publish(publisher.id,next.id,'Concurrent publish B')]);
+  assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal((await db.governedReferenceVersion.findUniqueOrThrow({where:{id:draft.id}})).state,'retired');
+  assert.equal(await db.governedReferenceVersion.count({where:{listCode:'R_SDAIA_TIER',state:'published'}}),1);
+  const failAudit={logRequired:async()=>{throw new Error('Audit unavailable');}} as unknown as AuditService;
+  const failing=new AiReferencePublicationService(prisma,auth,failAudit);
+  const before=await db.governedReferenceVersion.count();
+  await assert.rejects(failing.propose(proposer.id,'L_STAGE',proposal),/Audit unavailable/);
+  assert.equal(await db.governedReferenceVersion.count(),before);
+  assert.equal(await db.governedReferenceList.count({where:{code:'L_STAGE'}}),0);
+  const proposerRole=await db.role.findUniqueOrThrow({where:{code:'AI_GOVERNANCE_OFFICER'}});
+  const permission=await db.permission.findUniqueOrThrow({where:{resource_action:splitAiPermission('refdata.propose.ai')}});
+  await db.rolePermission.delete({where:{roleId_permissionId:{roleId:proposerRole.id,permissionId:permission.id}}});
+  await assert.rejects(auth.authorize(proposer.id,'refdata.propose.ai'));
+  await db.rolePermission.create({data:{roleId:proposerRole.id,permissionId:permission.id}});
+  const rolesService=new RolesService(prisma,audit,{} as never);
+  const execRole=await db.role.findUniqueOrThrow({where:{code:'executive'}});
+  await assert.rejects(rolesService.setPermissions(execRole.id,{permissions:['case.approve.aiuc'],justification:'Forbidden privilege'},'test'));
+  const users=new UsersService(prisma,audit);
+  const newUser={email:'created-user@phase1b.test',displayName:'Created user',password:'test-only-unique-password!',roleCodes:['AI_RISK_OWNER']};
+  await assert.rejects(users.create(newUser,'test'));
+  const createdUser=await users.create({...newUser,justification:'Assign initial test ownership'},'test');
+  assert.equal(await db.auditLog.count({where:{action:'ai.user.created',entityId:createdUser.id}}),1);
+  await assert.rejects(users.setRoles(proposer.id,{roleCodes:[]},'test'));
+  await users.setRoles(proposer.id,{roleCodes:[],justification:'Revoke test membership'},'test');
+  assert.equal(await db.auditLog.count({where:{action:'ai.user.roles.set',entityId:proposer.id}}),1);
+  await assert.rejects(auth.authorize(proposer.id,'refdata.propose.ai'));
+  const app=await NestFactory.create(AppModule,{logger:false});
+  try {
+    app.setGlobalPrefix('api');
+    app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));
+    await app.listen(0,'127.0.0.1');
+    const base=await app.getUrl();
+    const jwt=app.get(JwtService);
+    const bearer=(id:string)=>({authorization:`Bearer ${jwt.sign({sub:id,tokenVersion:0,roles:['system_admin']})}`});
+    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`)).status,401);
+    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`,{headers:bearer(publisher.id)})).status,200);
+    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`,{headers:bearer(admin.id)})).status,403);
+    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}/publish`,{method:'POST',headers:{...bearer(publisher.id),'content-type':'application/json'},body:JSON.stringify({justification:'test',injectedField:true})})).status,400);
+  } finally {await app.close();}
+  console.log('Phase 1B integration passed: catalog idempotency, explicit grants, role/membership controls, SoD audit, reference approval digest, atomic replacement, concurrent publication and audit-failure rollback.');
+}

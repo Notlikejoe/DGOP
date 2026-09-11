@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AiGovernanceModule } from '../ai-governance/ai-governance.module';
+import { AiReferenceController } from './ai-reference.controller';
+import { AiReferencePublicationService } from './ai-reference-publication.service';
 import { GovernedReferenceService } from './governed-reference.service';
 import { OrganizationUnitsController } from './organization-units.controller';
 import { OrganizationUnitsService } from './organization-units.service';
@@ -20,7 +23,9 @@ import { StatusValuesController } from './status-values.controller';
 import { StatusValuesService } from './status-values.service';
 
 @Module({
+  imports: [AiGovernanceModule],
   controllers: [
+    AiReferenceController,
     OrganizationUnitsController,
     SystemsController,
     ClassificationsController,
@@ -32,6 +37,7 @@ import { StatusValuesService } from './status-values.service';
     StatusValuesController,
   ],
   providers: [
+    AiReferencePublicationService,
     GovernedReferenceService,
     OrganizationUnitsService,
     SystemsService,

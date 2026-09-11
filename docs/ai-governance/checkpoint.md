@@ -1,8 +1,8 @@
 # AI governance implementation checkpoint
 
-Completed: Phase 0 and Phase 1A database/NestJS foundation (2026-09-11).
-Next: Phase 1B authorization, segregation of duties, audited reference publication and validated source seed mapping.
-Branch: codex/ai-governance-phase1a
+Completed: Phase 0, Phase 1A, and Phase 1B backend security/publication packet (2026-09-11). Phase 1B production seed reconciliation and release gates remain open.
+Next: resolve the Phase 1B source reconciliation and release verification gates, then Phase 2 intake. See phase-1b.md for exact boundaries.
+Branch: codex/ai-governance-phase1b
 Upstream baseline: f32c796
 Preserved active UI baseline: d15743f
 Prior checkpoint commits: b12e471, b35ae7a
@@ -33,3 +33,9 @@ The adjacent manifest.json records original paths, sizes and SHA-256 hashes. Pre
 User pause (2026-09-11): resume Phase 1B only when the user returns after the 15:06 Riyadh quota reset. Current interim request is About DGOP UI compaction; do not advance AI phases during this UI task. Phase 1A code checkpoint: e16daf6. Preserve source workbooks.
 
 Interim About UI saved on codex/about-compact, which includes Phase 1A e16daf6. Resume AI work from this branch (or carry the About commit forward) so the new UI is preserved. Only About template/styles and its title translations were synchronized to the running app source; the AI backend remains isolated. Desktop verification: English 1440x900 and 1920x1080, Arabic/dark 1440x900 fit one screen; mobile keeps all content with scrolling.
+
+Resumed after quota reset: 2% used initially, 38% at first integrated slice, 60% during final verification (account-wide). No resets used. Phase 1B code retains the About UI commits through dc9fdda. API build, focused regressions and clean/upgrade database/HTTP checks passed. No live API deployment. Read phase-1b.md before continuing; source discrepancies are recorded in work/ai-reference-reconciliation.json in the task workspace. Earlier pause instructions above are historical and have been superseded by this resumed packet.
+
+Administration justification fields and atomic initial AI user memberships were added before closing this packet. Web dependencies in apps/web/node_modules are an ignored junction to the existing active DGOP install; no packages were installed or upgraded. No production seed was published.
+
+Final Phase 1B verification: API and web production builds pass. Isolated test server stopped. Both source workbooks remain unchanged. Runtime configuration and local PrimeUI license are ignored and untracked.

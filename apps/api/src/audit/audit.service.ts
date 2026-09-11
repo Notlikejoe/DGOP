@@ -124,6 +124,12 @@ export class AuditService {
     }
   }
 
+  /** Governance commands must roll back if their audit record cannot be written. */
+  async logRequired(entry: AuditEntry, client?: AuditWriter): Promise<void> {
+    if (client) await this.writeLocked(entry, client);
+    else await this.prisma.$transaction((tx) => this.writeLocked(entry, tx));
+  }
+
   /** Distinct entity types and actions for filter dropdowns. */
   async facets(): Promise<{ entityTypes: string[]; actions: string[] }> {
     const [types, actions] = await Promise.all([

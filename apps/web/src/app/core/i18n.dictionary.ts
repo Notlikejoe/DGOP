@@ -565,6 +565,7 @@ export const DICT: Dict = {
     en: 'The safest path is shown first so nontechnical users can act without guessing which table matters.',
     ar: 'يظهر المسار الأكثر أمانا أولا حتى يتمكن المستخدم غير التقني من العمل دون تخمين الجدول المهم.',
   },
+  'admin.accessJustification': { en: 'Access-change justification (required for AI permissions)', ar: 'مبرر تغيير الوصول (مطلوب لصلاحيات الذكاء الاصطناعي)' },
   'about.eyebrow': { en: 'Platform brief', ar: 'نبذة عن المنصة' },
   'about.title': {
     en: 'DGOP v1.0 - Enterprise Governance Operations Platform',

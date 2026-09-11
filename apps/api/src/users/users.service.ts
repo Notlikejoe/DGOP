@@ -14,6 +14,7 @@ import {
   UpdateUserDto,
 } from './users.dto';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
+import { AI_PERMISSIONS, splitAiPermission } from '../ai-governance/ai-permissions';
 
 @Injectable()
 export class UsersService {
@@ -79,6 +80,17 @@ export class UsersService {
     if (existing) throw new ConflictException('Email already in use');
     const roleIds = await this.resolveRoleIds(dto.roleCodes ?? []);
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    const aiGrant=roleIds.length ? await this.prisma.rolePermission.findFirst({where:{roleId:{in:roleIds},permission:{OR:AI_PERMISSIONS.map(splitAiPermission)}}}) : null;
+    if (aiGrant) {
+      if (!dto.justification?.trim()) throw new BadRequestException('Justification required for initial AI role memberships');
+      const created=await this.prisma.$transaction(async tx=>{
+        const record=await tx.user.create({data:{email,displayName:dto.displayName,passwordHash,userRoles:{create:roleIds.map(roleId=>({roleId}))}},include:{userRoles:{include:{role:true}}}});
+        await this.audit.logRequired({actor,action:'ai.user.created',entityType:'user',entityId:record.id,
+          metadata:{oldValue:[],newValue:dto.roleCodes,justification:dto.justification}},tx);
+        return record;
+      });
+      return this.toAdminUser(created);
+    }
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -124,6 +136,19 @@ export class UsersService {
     const willHaveSystemAdmin = dto.roleCodes.includes('system_admin');
     if (!willHaveSystemAdmin) {
       await this.assertNotLastSystemAdmin(user.id);
+    }
+    const prior=await this.prisma.userRole.findMany({where:{userId:id},include:{role:true}});
+    const affectedRoleIds=[...new Set([...roleIds,...prior.map(r=>r.roleId)])];
+    const aiGrant=await this.prisma.rolePermission.findFirst({where:{roleId:{in:affectedRoleIds},permission:{OR:AI_PERMISSIONS.map(splitAiPermission)}}});
+    if (aiGrant) {
+      if (!dto.justification?.trim()) throw new BadRequestException('Justification required for AI role-membership changes');
+      await this.prisma.$transaction(async tx=>{
+        await tx.userRole.deleteMany({where:{userId:id}});
+        await tx.userRole.createMany({data:roleIds.map(roleId=>({userId:id,roleId})),skipDuplicates:true});
+        await this.audit.logRequired({actor,action:'ai.user.roles.set',entityType:'user',entityId:id,
+          metadata:{oldValue:prior.map(r=>r.role.code),newValue:dto.roleCodes,justification:dto.justification}},tx);
+      });
+      return this.toAdminUser(await this.findByIdWithRoles(id));
     }
     await this.prisma.$transaction([
       this.prisma.userRole.deleteMany({ where: { userId: user.id } }),

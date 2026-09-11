@@ -51,8 +51,9 @@ export class UpdateRoleDto {
 export class SetRolePermissionsDto {
   @IsArray()
   @IsString({ each: true })
-  @Matches(/^[a-z_]+\.[a-z_]+$/, { each: true, message: 'each permission must be resource.action' })
+  @Matches(/^[a-z_]+(?:\.[a-z_]+)+$/, { each: true, message: 'each permission must be a dotted permission code' })
   permissions!: string[];
+  @IsOptional() @IsString() @IsNotEmpty() justification?: string;
 }
 
 export class ScopeEntryDto {

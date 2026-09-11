@@ -6,6 +6,7 @@ import { GovernedReferenceService } from '../src/master-data/governed-reference.
 import { PrismaService } from '../src/prisma/prisma.service';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
+import { testPhase1B } from './ai-phase1b.integration';
 
 const url = new URL(process.env.DGOP_AI_TEST_DATABASE_URL ?? '');
 assert.equal(url.hostname, '127.0.0.1');
@@ -76,6 +77,7 @@ async function main() {
   assert.ok(app.get(AiIdentifiersService));
   assert.ok(app.get(GovernedReferenceService));
   await app.close();
+  await testPhase1B(db);
   console.log(`Database foundation passed: concurrent/collision/rollback numbering, parent integrity, immutable history, reference lifecycle, ${rejected} rejected invalid writes/reads, full Nest application startup.`);
 }
 main().finally(() => db.$disconnect()).catch(error => { console.error(error); process.exitCode = 1; });

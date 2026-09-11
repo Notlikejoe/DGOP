@@ -38,6 +38,7 @@ export async function testPhase2A(db: PrismaClient) {
   const dataOwner = await createActor('intake-data-owner', 'data_owner');
   const sponsor = await createActor('intake-sponsor', 'AI_EXECUTIVE_TEAM');
   const triageReviewer = await createActor('intake-triage', 'AI_WORKING_GROUP');
+  const officer = await createActor('intake-officer', 'AI_GOVERNANCE_OFFICER');
 
   const lists: Record<string, Array<[string, string, string]>> = {
     L_STREAMS: [['STREAM_1', 'Stream 1', 'المسار الأول']],
@@ -94,6 +95,24 @@ export async function testPhase2A(db: PrismaClient) {
   await db.governedReferenceVersion.update({
     where: { id: scoreVersion.id },
     data: { state: 'published', effectiveFrom: new Date('2020-01-01'), approvedBy: 'phase2a-fixture', approvedAt: new Date('2020-01-01') },
+  });
+
+  const evidenceDomain = await db.ndiDomain.create({
+    data: { code: 'AI_PHASE_2D', nameEn: 'AI governance decisions', nameAr: 'قرارات حوكمة الذكاء الاصطناعي' },
+  });
+  const evidenceSpecification = await db.ndiSpecification.create({
+    data: {
+      code: 'AI-P2D-001', domainId: evidenceDomain.id,
+      nameEn: 'Classification decision evidence', nameAr: 'دليل قرار التصنيف',
+    },
+  });
+  const decisionEvidence = await db.ndiEvidence.create({
+    data: {
+      specId: evidenceSpecification.id, title: 'Phase 2D decision minute',
+      fileName: 'phase-2d-decision.pdf', originalName: 'phase-2d-decision.pdf', mimeType: 'application/pdf',
+      sizeBytes: 4, sha256: 'a'.repeat(64), submittedBy: officer.email, status: 'approved',
+      reviewedBy: officer.email, reviewedAt: new Date('2026-09-10T08:00:00Z'),
+    },
   });
 
   await db.governedReferenceList.upsert({
@@ -191,6 +210,27 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal((assessed.assessments[0].result as { proposedTierCode: string }).proposedTierCode, 'HIGH');
   assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: draft.id, kind: 'classification' } }), 1);
   assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER' } }), 1);
+  assert.equal((await classification.verificationQueue(officer.id)).length, 1);
+  await assert.rejects(classification.verificationQueue(triageReviewer.id));
+  await assert.rejects(classification.override(officer.id, draft.id, 8, 'LIMITED',
+    'A supported override', [], 'RAIO-P2D-001'));
+  const overridden = await classification.override(officer.id, draft.id, 8, 'LIMITED',
+    'Observed operational controls reduce the governed exposure', [decisionEvidence.id], 'RAIO-P2D-001', '127.0.0.1');
+  assert.equal(overridden.version, 9);
+  const overrideResult = overridden.assessments[0].result as {
+    proposedTierCode: string; approvedTierCode: string; officerDecision: { evidenceIds: string[]; authorityReference: string };
+  };
+  assert.equal(overrideResult.proposedTierCode, 'HIGH');
+  assert.equal(overrideResult.approvedTierCode, 'LIMITED');
+  assert.deepEqual(overrideResult.officerDecision.evidenceIds, [decisionEvidence.id]);
+  assert.equal(overrideResult.officerDecision.authorityReference, 'RAIO-P2D-001');
+  assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: draft.id, kind: 'classification' } }), 2);
+  assert.equal(await db.workflowTask.count({ where: {
+    caseId: accepted.workflowCase!.id, status: 'pending', title: 'Adopt verified SDAIA classification', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER',
+  } }), 1);
+  assert.equal((await classification.verificationQueue(officer.id)).length, 0);
+  const overrideAudit = await db.auditLog.findFirstOrThrow({ where: { entityId: draft.id, action: 'aiuc.classification.overridden' } });
+  assert.equal((overrideAudit.metadata as { clientIp: string }).clientIp, '127.0.0.1');
   assert.equal((await classification.queue(triageReviewer.id)).length, 0);
   await assert.rejects(classification.assess(triageReviewer.id, draft.id, 8, {
     kind: 'classification', scores: Array(6).fill({ value: 3, justification: 'Cannot assess twice' }),
@@ -200,6 +240,39 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal(await db.auditLog.count({ where: { entityId: draft.id, action: { startsWith: 'aiuc.intake.' } } }), 5);
   assert.equal((await service.listOwn(requester.id)).length, 1);
   assert.equal((await service.getOwn(requester.id, draft.id)).id, draft.id);
+
+  const manualDraft = await service.createDraft(requester.id, { usecase_name: 'Automated eligibility', proposed_owner: owner.id });
+  await service.updateDraft(requester.id, manualDraft.id, 1, { ...complete, usecase_name: 'Automated eligibility' });
+  const manualSubmitted = await service.submit(requester.id, manualDraft.id, 2);
+  const manualAccepted = await service.triage(triageReviewer.id, manualDraft.id, 3, 'accept');
+  const manualAssessed = await classification.assess(triageReviewer.id, manualDraft.id, 4, {
+    kind: 'classification', scores: Array(6).fill(null).map((_, index) => ({ value: 2, justification: `Initial criterion evidence ${index + 1}` })),
+  });
+  assert.equal(manualAssessed.version, 5);
+  const returnedAssessment = await classification.returnForReassessment(officer.id, manualDraft.id, 5,
+    'Reassess the autonomy evidence before the officer decision', '127.0.0.2');
+  assert.equal(returnedAssessment.version, 6);
+  assert.equal(await db.workflowTask.count({ where: {
+    caseId: manualSubmitted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_WORKING_GROUP',
+    title: 'Six-criterion SDAIA classification assessment',
+  } }), 1);
+  const reassessed = await classification.assess(triageReviewer.id, manualDraft.id, 6, {
+    kind: 'classification', scores: Array(6).fill(null).map((_, index) => ({ value: 3, justification: `Reassessed criterion evidence ${index + 1}` })),
+  });
+  assert.equal(reassessed.version, 7);
+  await assert.rejects(classification.unacceptable(officer.id, manualDraft.id, 7,
+    'The residual impact is prohibited', [], 'ETHICS-2026-04'));
+  const unacceptable = await classification.unacceptable(officer.id, manualDraft.id, 7,
+    'The residual impact is prohibited despite the calculated tier', [decisionEvidence.id], 'ETHICS-2026-04', '127.0.0.3');
+  assert.equal(unacceptable.version, 8);
+  const unacceptableResult = unacceptable.assessments[0].result as { proposedTierCode: string; approvedTierCode: string };
+  assert.equal(unacceptableResult.proposedTierCode, 'LIMITED');
+  assert.equal(unacceptableResult.approvedTierCode, 'UNACCEPTABLE');
+  assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: manualDraft.id, kind: 'classification' } }), 3);
+  assert.equal(await db.workflowTask.count({ where: {
+    caseId: manualAccepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'STEERING_COMMITTEE',
+    title: 'Decide restriction or stop for Unacceptable AI use case',
+  } }), 1);
 
   const incomplete = await service.createDraft(requester.id, { usecase_name: 'Incomplete request', proposed_owner: owner.id });
   await assert.rejects(service.submit(requester.id, incomplete.id, 1));
@@ -220,6 +293,10 @@ export async function testPhase2A(db: PrismaClient) {
       authorization: `Bearer ${jwt.sign({ sub: triageReviewer.id, tokenVersion: 0, roles: ['AI_WORKING_GROUP'] })}`,
       'content-type': 'application/json',
     };
+    const officerHeaders = {
+      authorization: `Bearer ${jwt.sign({ sub: officer.id, tokenVersion: 0, roles: ['AI_GOVERNANCE_OFFICER'] })}`,
+      'content-type': 'application/json',
+    };
     assert.equal((await fetch(`${base}/api/ai/use-cases`)).status, 401);
     const httpCreate = await fetch(`${base}/api/ai/use-cases`, {
       method: 'POST', headers,
@@ -231,6 +308,8 @@ export async function testPhase2A(db: PrismaClient) {
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers: reviewerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/queue`, { headers: reviewerHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: reviewerHeaders })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: officerHeaders })).status, 200);
     const lookups = await fetch(`${base}/api/ai/use-cases/lookups`, { headers });
     assert.equal(lookups.status, 200);
     assert.equal((await lookups.json() as { ready: boolean }).ready, true);
@@ -243,5 +322,5 @@ export async function testPhase2A(db: PrismaClient) {
     await app.close();
   }
 
-  console.log('Phase 2 integration passed: intake revisions, five-day triage, return/resubmit, AI numbering, governed six-criterion max-rule classification, immutable rounds, task handoff and HTTP authorization.');
+  console.log('Phase 2 integration passed: intake revisions, triage, governed classification, officer return, evidence-backed tier override, manual Unacceptable routing, immutable rounds and HTTP authorization.');
 }

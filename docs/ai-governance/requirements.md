@@ -169,9 +169,9 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-08 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-09 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; publication gate open |
 | UC-10 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; governed band metadata required |
-| UC-11 | 3 | AIUC intake / classification / handoff | Partial — engine exclusion implemented; manual path pending |
-| UC-12 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-13 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-11 | 3 | AIUC intake / classification / handoff | Partial — engine exclusion, evidence-backed manual Unacceptable decision, immutable audit, and Steering routing implemented; downstream Steering decision pending |
+| UC-12 | 3 | AIUC intake / classification / handoff | Partial — verify/override operations preserve proposed and approved tiers, evidence, authority reference, actor role/IP, and immutable history; reversal and final higher-authority approval pending |
+| UC-13 | 3 | AIUC intake / classification / handoff | Partial — Minimal/Limited route to officer adoption, High to Ethics review, and Unacceptable to Steering; downstream decision screens pending |
 | UC-14 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-15 | 3 | AIUC intake / classification / handoff | Partial — stages 1–4 tasks implemented; BPMN registration pending |
 | UC-16 | 3 | AIUC intake / classification / handoff | Partial — existing task/decision types reused in implemented stages |

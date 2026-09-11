@@ -1,13 +1,13 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
 
-type ReviewTab = 'triage' | 'classification';
+type ReviewTab = 'triage' | 'classification' | 'verification';
 type CriterionCode = 'individual_impact' | 'affected_scope' | 'harm_likelihood' | 'decision_autonomy'
   | 'data_fairness_transparency' | 'technical_resilience';
 
@@ -20,6 +20,15 @@ interface AiReviewCase {
   updatedAt: string;
   workflowCase: { id: string; code: string; status: string };
   intakeRevisions: Array<{ payload: Record<string, unknown>; revision: number }>;
+  assessments: Array<{
+    id: string;
+    round: number;
+    engineVersion: string;
+    inputs: Record<string, unknown>;
+    result: Record<string, unknown>;
+    createdBy: string;
+    createdAt: string;
+  }>;
 }
 
 interface ScoreOption {
@@ -79,16 +88,20 @@ export class AiReviewPage implements OnInit {
   protected readonly tab = signal<ReviewTab>('triage');
   protected readonly triageCases = signal<AiReviewCase[]>([]);
   protected readonly classificationCases = signal<AiReviewCase[]>([]);
+  protected readonly verificationCases = signal<AiReviewCase[]>([]);
   protected readonly selected = signal<AiReviewCase | null>(null);
   protected readonly configuration = signal<ClassificationConfiguration | null>(null);
   protected readonly justification = signal('');
   protected readonly scores = signal<Record<string, { value: number | null; justification: string }>>({});
+  protected readonly decisionTierCode = signal('');
+  protected readonly decisionEvidenceIds = signal('');
+  protected readonly authorityReference = signal('');
   protected readonly working = signal(false);
   protected readonly scoreMax = computed(() => {
     const values = CRITERIA.map(criterion => this.scores()[criterion]?.value).filter((value): value is number => typeof value === 'number');
     return values.length ? Math.max(...values) : null;
   });
-  protected readonly proposedTier = computed(() => {
+  protected readonly calculatedTier = computed(() => {
     const max = this.scoreMax();
     if (max === null) return null;
     return this.configuration()?.tiers.find(tier => tier.automatic && tier.minScore !== undefined && tier.maxScore !== undefined
@@ -98,6 +111,19 @@ export class AiReviewPage implements OnInit {
     const score = this.scores()[criterion];
     return typeof score?.value === 'number' && !!score.justification.trim();
   }));
+  protected readonly latestAssessment = computed(() => this.selected()?.assessments?.[0] ?? null);
+  protected readonly assessmentResult = computed(() => this.latestAssessment()?.result ?? {});
+  protected readonly assessmentProposedTier = computed(() => {
+    const code = this.assessmentResult()['proposedTierCode'];
+    return typeof code === 'string' ? this.configuration()?.tiers.find(tier => tier.code === code) ?? null : null;
+  });
+  protected readonly decisionIsOverride = computed(() => !!this.decisionTierCode()
+    && this.decisionTierCode() !== this.assessmentProposedTier()?.code);
+  protected readonly decisionReady = computed(() => {
+    if (!this.decisionTierCode()) return false;
+    if (!this.decisionIsOverride()) return true;
+    return !!this.justification().trim() && !!this.authorityReference().trim() && this.evidenceIdList().length > 0;
+  });
 
   ngOnInit(): void { void this.load(); }
 
@@ -108,15 +134,17 @@ export class AiReviewPage implements OnInit {
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
-      const [triage, classification, configuration] = await Promise.all([
-        firstValueFrom(this.http.get<AiReviewCase[]>('/api/ai/use-cases/triage')),
-        firstValueFrom(this.http.get<AiReviewCase[]>('/api/ai/use-cases/classification/queue')),
+      const [triage, classification, verification, configuration] = await Promise.all([
+        this.loadQueue('/api/ai/use-cases/triage'),
+        this.loadQueue('/api/ai/use-cases/classification/queue'),
+        this.loadQueue('/api/ai/use-cases/classification/verification/queue'),
         firstValueFrom(this.http.get<ClassificationConfiguration>('/api/ai/use-cases/classification/configuration')),
       ]);
       this.triageCases.set(triage);
       this.classificationCases.set(classification);
+      this.verificationCases.set(verification);
       this.configuration.set(configuration);
-      const rows = this.tab() === 'triage' ? triage : classification;
+      const rows = this.rowsFor(this.tab(), triage, classification, verification);
       this.select(rows.find(row => row.id === preferredId) ?? rows[0] ?? null);
       this.state.set('ok');
     } catch (error) {
@@ -127,7 +155,7 @@ export class AiReviewPage implements OnInit {
 
   protected setTab(tab: ReviewTab): void {
     this.tab.set(tab);
-    const rows = tab === 'triage' ? this.triageCases() : this.classificationCases();
+    const rows = this.rowsFor(tab);
     this.select(rows[0] ?? null);
   }
 
@@ -135,6 +163,28 @@ export class AiReviewPage implements OnInit {
     this.selected.set(item);
     this.justification.set('');
     this.scores.set(Object.fromEntries(CRITERIA.map(criterion => [criterion, { value: null, justification: '' }])));
+    const proposed = item?.assessments?.[0]?.result?.['proposedTierCode'];
+    this.decisionTierCode.set(typeof proposed === 'string' ? proposed : '');
+    this.decisionEvidenceIds.set('');
+    this.authorityReference.set('');
+  }
+
+  protected activeCases(): AiReviewCase[] { return this.rowsFor(this.tab()); }
+
+  protected tabLabel(tab = this.tab()): string { return this.t(`aiReview.tab.${tab}`); }
+
+  private rowsFor(tab: ReviewTab, triage = this.triageCases(), classification = this.classificationCases(),
+    verification = this.verificationCases()): AiReviewCase[] {
+    return tab === 'triage' ? triage : tab === 'classification' ? classification : verification;
+  }
+
+  private async loadQueue(url: string): Promise<AiReviewCase[]> {
+    try {
+      return await firstValueFrom(this.http.get<AiReviewCase[]>(url));
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 403) return [];
+      throw error;
+    }
   }
 
   protected payload(): Record<string, unknown> { return this.selected()?.intakeRevisions[0]?.payload ?? {}; }
@@ -209,6 +259,20 @@ export class AiReviewPage implements OnInit {
       : anchor.descriptionEn ?? anchor.labelEn ?? '';
   }
 
+  protected assessedCriterion(criterion: CriterionCode): { score: number | null; justification: string } {
+    const inputs = this.latestAssessment()?.inputs;
+    const rows = Array.isArray(inputs?.['criteria']) ? inputs['criteria'] as Array<Record<string, unknown>> : [];
+    const row = rows.find(value => value['criterion'] === criterion);
+    return {
+      score: typeof row?.['value'] === 'number' ? row['value'] : null,
+      justification: typeof row?.['justification'] === 'string' ? row['justification'] : '',
+    };
+  }
+
+  protected evidenceIdList(): string[] {
+    return [...new Set(this.decisionEvidenceIds().split(/[\s,;]+/u).map(value => value.trim()).filter(Boolean))];
+  }
+
   protected async assess(): Promise<void> {
     const item = this.selected();
     const configuration = this.configuration();
@@ -229,6 +293,54 @@ export class AiReviewPage implements OnInit {
       await this.load();
     } catch (error) {
       this.toast.errorFrom(error, this.t('aiReview.error.assessment'));
+    } finally {
+      this.working.set(false);
+    }
+  }
+
+  protected async recordVerification(): Promise<void> {
+    const item = this.selected();
+    const proposed = this.assessmentProposedTier()?.code;
+    const target = this.decisionTierCode();
+    if (!item || !proposed || !target || !this.decisionReady() || this.working()) return;
+    const isSame = target === proposed;
+    const isUnacceptable = target === 'UNACCEPTABLE';
+    const operation = isSame ? 'verify' : isUnacceptable ? 'unacceptable' : 'override';
+    const body: Record<string, unknown> = { expectedVersion: item.version };
+    if (isSame) {
+      if (this.justification().trim()) body['justification'] = this.justification().trim();
+    } else {
+      if (!isUnacceptable) body['approvedTierCode'] = target;
+      body['justification'] = this.justification().trim();
+      body['evidenceIds'] = this.evidenceIdList();
+      body['authorityReference'] = this.authorityReference().trim();
+    }
+    this.working.set(true);
+    try {
+      await firstValueFrom(this.http.post(`/api/ai/use-cases/classification/${item.id}/${operation}`, body));
+      this.toast.success(this.t(`aiReview.verification.${operation}.saved`));
+      await this.load();
+    } catch (error) {
+      this.toast.errorFrom(error, this.t('aiReview.error.verification'));
+    } finally {
+      this.working.set(false);
+    }
+  }
+
+  protected async returnForReassessment(): Promise<void> {
+    const item = this.selected();
+    if (!item || !this.justification().trim() || this.working()) return;
+    this.working.set(true);
+    try {
+      await firstValueFrom(this.http.post(`/api/ai/use-cases/classification/${item.id}/return`, {
+        expectedVersion: item.version,
+        justification: this.justification().trim(),
+      }));
+      this.toast.success(this.t('aiReview.verification.return.saved'));
+      this.tab.set('classification');
+      await this.load(item.id);
+    } catch (error) {
+      this.toast.errorFrom(error, this.t('aiReview.error.verification'));
     } finally {
       this.working.set(false);
     }

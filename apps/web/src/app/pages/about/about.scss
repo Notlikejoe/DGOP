@@ -483,7 +483,7 @@
     align-items: center;
     gap: 12px;
     min-width: 0;
-    > div { min-width: 0; overflow-x: auto; }
+    > div { min-width: 0; overflow: hidden; }
   }
   .about-hero__mark { flex: 0 0 36px; width: 36px; height: 36px; }
   .about-hero__eyebrow { font-size: 10px; margin: 0 0 2px; }

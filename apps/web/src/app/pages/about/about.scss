@@ -603,3 +603,28 @@
     }
   }
 }
+
+/* One-step typography increase requested for the complete About screen. */
+.about-page.foundation-modern {
+  font-size: 15px;
+
+  .about-hero h1 { font-size: clamp(16px, 1.8vw, 28px); }
+  .about-hero__eyebrow,
+  .integration-panel__eyebrow { font-size: 11px; }
+  .about-hero__copy > p,
+  .about-hero__statement p,
+  .about-panel__head p,
+  .principle-card p,
+  .tower-card p,
+  .flow-step p,
+  .quick-links span { font-size: 14px; }
+  .about-hero__statement strong { font-size: 17px; }
+  .about-panel__head h2,
+  .integration-panel h2 { font-size: 18px; }
+  .principle-card strong,
+  .tower-card strong,
+  .flow-step strong,
+  .quick-links strong { font-size: 14px; }
+  .alignment-chips span,
+  .integration-tools span { font-size: 12px; }
+}

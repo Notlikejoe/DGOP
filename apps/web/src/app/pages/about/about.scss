@@ -330,6 +330,7 @@
   }
 }
 
+
 /* Prime-inspired platform brief treatment shared with the modern workspaces. */
 .about-page.foundation-modern { gap: var(--space-4); }
 
@@ -555,5 +556,26 @@
     .about-hero__statement { grid-column: 1; }
     .principle-grid, .tower-grid, .operating-flow, .quick-links { grid-template-columns: minmax(0, 1fr); }
     .integration-tools { justify-content: flex-start; }
+  }
+}
+
+/* Taller desktop viewport: readable cards within the 1440 x 1300 brief. */
+@media (min-width: 1101px) and (min-height: 1150px) {
+  .about-page.foundation-modern {
+    gap: 12px;
+    font-size: 14px;
+    .about-hero { padding: 14px 16px; gap: 12px 16px; }
+    .about-hero h1 { font-size: 26px; white-space: nowrap; }
+    .about-hero__statement { padding: 12px; }
+    .about-hero__statement strong { font-size: 16px; }
+    .about-hero__statement p { font-size: 13px; }
+    .about-panel, .integration-panel { padding: 12px; }
+    .about-panel__head h2, .integration-panel h2 { font-size: 17px; }
+    .about-panel__head p { font-size: 13px; }
+    .principle-card, .tower-card, .flow-step { padding: 10px; gap: 5px; }
+    .principle-card strong, .tower-card strong, .flow-step strong { font-size: 13px; }
+    .principle-card p, .tower-card p, .flow-step p { font-size: 13px; line-height: 1.35; }
+    .quick-links a { padding: 10px; }
+    .quick-links span { font-size: 13px; }
   }
 }

@@ -81,6 +81,7 @@ model RoleDataScope {
 
 /// Application users (local authentication for development).
 model User {
+  aiRequests                    AiUseCase[]
   id                            String                        @id @default(uuid())
   email                         String                        @unique
   passwordHash                  String
@@ -118,6 +119,9 @@ model UserRole {
 
 /// Directory of people (governance actors); optionally linked to a login account.
 model Person {
+  aiOwnedUseCases               AiUseCase[]
+  aiOwnedRisks                  AiRisk[]
+  aiAssignedActions             AiTreatmentAction[]
   id                            String                        @id @default(uuid())
   fullNameEn                    String
   fullNameAr                    String
@@ -193,19 +197,20 @@ model Classification {
 
 /// Organizational hierarchy (entities, departments, sections).
 model OrganizationUnit {
-  id        String             @id @default(uuid())
-  code      String             @unique
-  nameEn    String
-  nameAr    String
-  parentId  String?
-  parent    OrganizationUnit?  @relation("OrgTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children  OrganizationUnit[] @relation("OrgTree")
-  systems   SystemPlatform[]
-  assets    DataAsset[]
-  isActive  Boolean            @default(true)
-  deletedAt DateTime?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  aiUseCases AiUseCase[]
+  id         String             @id @default(uuid())
+  code       String             @unique
+  nameEn     String
+  nameAr     String
+  parentId   String?
+  parent     OrganizationUnit?  @relation("OrgTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children   OrganizationUnit[] @relation("OrgTree")
+  systems    SystemPlatform[]
+  assets     DataAsset[]
+  isActive   Boolean            @default(true)
+  deletedAt  DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
 
   @@index([parentId])
   @@map("organization_units")
@@ -507,6 +512,7 @@ model BusinessCapability {
 
 /// Governed data assets (the core inventory of data the organization manages).
 model DataAsset {
+  aiUseCases                AiUseCase[]
   id                        String                         @id @default(uuid())
   code                      String                         @unique
   nameEn                    String
@@ -841,6 +847,8 @@ enum GovernanceCouncilMemberRole {
 
 /// A governance workflow case (a controlled piece of work, e.g. an assignment approval).
 model WorkflowCase {
+  aiUseCase                     AiUseCase?
+  aiRisk                        AiRisk?
   id                            String                         @id @default(uuid())
   code                          String                         @unique
   title                         String
@@ -895,6 +903,7 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  aiTreatmentAction       AiTreatmentAction?
   id                      String                    @id @default(uuid())
   caseId                  String
   title                   String
@@ -4732,4 +4741,211 @@ model BusinessSequence {
   updatedAt DateTime @updatedAt
 
   @@map("business_sequences")
+}
+
+// Shared governed reference data. These tables belong to MasterDataModule,
+// not to the AI bounded context. Published/retired content is DB-protected.
+enum GovernedReferenceState {
+  draft
+  published
+  retired
+}
+
+model GovernedReferenceList {
+  code          String                     @id @db.VarChar(80)
+  nameEn        String
+  nameAr        String
+  ownerRoleCode String
+  regulatory    Boolean                    @default(false)
+  createdAt     DateTime                   @default(now())
+  versions      GovernedReferenceVersion[]
+
+  @@map("governed_reference_lists")
+}
+
+model GovernedReferenceVersion {
+  id            String                   @id @default(uuid())
+  listCode      String
+  version       Int
+  state         GovernedReferenceState   @default(draft)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  sourceSha256  String?                  @db.VarChar(64)
+  sourceLocator String?
+  createdBy     String
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  list          GovernedReferenceList    @relation(fields: [listCode], references: [code], onDelete: Restrict)
+  values        GovernedReferenceValue[]
+  assessments   AiAssessmentRound[]
+
+  @@unique([listCode, version])
+  @@index([listCode, state, effectiveFrom])
+  @@map("governed_reference_versions")
+}
+
+model GovernedReferenceValue {
+  versionId String
+  code      String                   @db.VarChar(100)
+  labelEn   String
+  labelAr   String
+  sortOrder Int                      @default(0)
+  metadata  Json                     @default("{}")
+  version   GovernedReferenceVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+
+  @@id([versionId, code])
+  @@map("governed_reference_values")
+}
+
+enum AiAssessmentKind {
+  classification
+  inherent
+  residual
+}
+
+/// Canonical AI use-case identity. Drafts exist before triage allocates AI-###.
+/// Full 28-field intake lives in append-only, schema-versioned revisions.
+/// Register projections/remaining business fields are added in the AIRS phase.
+model AiUseCase {
+  id                 String                 @id @default(uuid())
+  useCaseRef         String?                @unique
+  workflowCaseId     String?                @unique
+  assetId            String?
+  requesterUserId    String
+  ownerPersonId      String?
+  organizationUnitId String?
+  name               String                 @db.VarChar(200)
+  description        String?
+  isSampleData       Boolean                @default(false)
+  version            Int                    @default(1)
+  createdBy          String
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  deletedAt          DateTime?
+  requester          User                   @relation(fields: [requesterUserId], references: [id], onDelete: Restrict)
+  owner              Person?                @relation(fields: [ownerPersonId], references: [id], onDelete: Restrict)
+  organizationUnit   OrganizationUnit?      @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
+  workflowCase       WorkflowCase?          @relation(fields: [workflowCaseId], references: [id], onDelete: Restrict)
+  asset              DataAsset?             @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  intakeRevisions    AiIntakeRevision[]
+  risks              AiRisk[]
+  assessments        AiAssessmentRound[]
+  obligations        AiApprovalObligation[]
+
+  @@index([ownerPersonId, deletedAt])
+  @@index([organizationUnitId, deletedAt])
+  @@index([assetId])
+  @@map("ai_use_cases")
+}
+
+model AiIntakeRevision {
+  id            String    @id @default(uuid())
+  useCaseId     String
+  revision      Int
+  schemaVersion Int       @default(1)
+  /// JSON shape is AiIntakeV1; partial values permitted only for draft capture.
+  payload       Json
+  submittedAt   DateTime?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  useCase       AiUseCase @relation(fields: [useCaseId], references: [id], onDelete: Restrict)
+
+  @@unique([useCaseId, revision])
+  @@map("ai_intake_revisions")
+}
+
+/// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
+model AiRisk {
+  id             String                 @id @default(uuid())
+  useCaseId      String
+  riskRef        String?                @unique
+  workflowCaseId String?                @unique
+  ownerPersonId  String?
+  title          String?                @db.VarChar(200)
+  cause          String?
+  event          String?
+  effect         String?
+  isSampleData   Boolean                @default(false)
+  version        Int                    @default(1)
+  createdBy      String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  deletedAt      DateTime?
+  useCase        AiUseCase              @relation(fields: [useCaseId], references: [id], onDelete: Restrict)
+  workflowCase   WorkflowCase?          @relation(fields: [workflowCaseId], references: [id], onDelete: Restrict)
+  owner          Person?                @relation(fields: [ownerPersonId], references: [id], onDelete: Restrict)
+  assessments    AiAssessmentRound[]
+  actions        AiTreatmentAction[]
+  obligations    AiApprovalObligation[]
+
+  @@unique([id, useCaseId])
+  @@index([useCaseId, deletedAt])
+  @@index([ownerPersonId, deletedAt])
+  @@map("ai_risks")
+}
+
+/// Immutable calculation history; no default/fabricated scores. An optional
+/// composite risk FK ensures risk assessments belong to the same use case.
+model AiAssessmentRound {
+  id                     String                   @id @default(uuid())
+  useCaseId              String
+  riskId                 String?
+  kind                   AiAssessmentKind
+  round                  Int
+  schemaVersion          Int                      @default(1)
+  engineVersion          String
+  ruleReferenceVersionId String
+  inputs                 Json
+  result                 Json
+  createdBy              String
+  createdAt              DateTime                 @default(now())
+  useCase                AiUseCase                @relation(fields: [useCaseId], references: [id], onDelete: Restrict)
+  risk                   AiRisk?                  @relation(fields: [riskId, useCaseId], references: [id, useCaseId], onDelete: Restrict)
+  ruleReferenceVersion   GovernedReferenceVersion @relation(fields: [ruleReferenceVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([riskId, kind, round])
+  @@index([useCaseId, kind, createdAt])
+  @@map("ai_assessment_rounds")
+}
+
+model AiTreatmentAction {
+  id               String        @id @default(uuid())
+  riskId           String
+  actionRef        String        @unique
+  workflowTaskId   String?       @unique
+  assigneePersonId String?
+  title            String        @db.VarChar(200)
+  targetDate       DateTime?
+  version          Int           @default(1)
+  createdBy        String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+  risk             AiRisk        @relation(fields: [riskId], references: [id], onDelete: Restrict)
+  workflowTask     WorkflowTask? @relation(fields: [workflowTaskId], references: [id], onDelete: Restrict)
+  assignee         Person?       @relation(fields: [assigneePersonId], references: [id], onDelete: Restrict)
+
+  @@index([riskId, deletedAt])
+  @@map("ai_treatment_actions")
+}
+
+/// Conditions remain separate obligations rather than disappearing into a note.
+model AiApprovalObligation {
+  id          String    @id @default(uuid())
+  useCaseId   String
+  riskId      String?
+  sourceKey   String
+  description String
+  version     Int       @default(1)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  useCase     AiUseCase @relation(fields: [useCaseId], references: [id], onDelete: Restrict)
+  risk        AiRisk?   @relation(fields: [riskId, useCaseId], references: [id, useCaseId], onDelete: Restrict)
+
+  @@unique([useCaseId, sourceKey])
+  @@map("ai_approval_obligations")
 }

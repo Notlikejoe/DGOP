@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { GovernedReferenceService } from './governed-reference.service';
 import { OrganizationUnitsController } from './organization-units.controller';
 import { OrganizationUnitsService } from './organization-units.service';
 import { SystemsController } from './systems.controller';
@@ -31,6 +32,7 @@ import { StatusValuesService } from './status-values.service';
     StatusValuesController,
   ],
   providers: [
+    GovernedReferenceService,
     OrganizationUnitsService,
     SystemsService,
     ClassificationsService,
@@ -41,5 +43,6 @@ import { StatusValuesService } from './status-values.service';
     BusinessCapabilitiesService,
     StatusValuesService,
   ],
+  exports: [GovernedReferenceService],
 })
 export class MasterDataModule {}

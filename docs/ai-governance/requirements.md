@@ -2,6 +2,8 @@
 
 Generated from the supplied FD v1.0 requirement identifiers. Entries identify planned coverage, not implemented or passing tests. Cross-cutting rows will be refined to exact test files when their packet starts. Source documents remain authoritative.
 
+Phase 1A update (2026-09-11): supporting database/module contracts are implemented and tested; see phase-1a.md and apps/api/test/ai-foundation.integration.ts. No entire FD business requirement is marked complete: authorization, public operations and workflow behavior are still pending. “Not implemented” below means the complete requirement is not yet delivered, rather than absence of foundation work.
+
 | Requirement | Planned phase | Proposed verification | Status |
 |---|---|---|---|
 | BR-01 | 3 | Deterministic rule and negative-input tests | Not implemented |

@@ -1,7 +1,7 @@
 # AI governance implementation checkpoint
 
-Completed: Phase 0, Phase 1A, and Phase 1B backend security/publication packet (2026-09-11). Phase 1B production seed reconciliation and release gates remain open.
-Next: resolve the Phase 1B source reconciliation and release verification gates, then Phase 2 intake. See phase-1b.md for exact boundaries.
+Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, and Phase 2A AIUC intake API packets (2026-09-11). Phase 1B production seed reconciliation and release gates remain open.
+Next: Phase 2B nine-section intake UI and triage workflow, while keeping source-list publication blocked until the workbook differences are reviewed. See phase-1b.md and phase-2a.md for exact boundaries.
 Branch: codex/ai-governance-phase1b
 Upstream baseline: f32c796
 Preserved active UI baseline: d15743f
@@ -39,5 +39,7 @@ Resumed after quota reset: 2% used initially, 38% at first integrated slice, 60%
 Administration justification fields and atomic initial AI user memberships were added before closing this packet. Web dependencies in apps/web/node_modules are an ignored junction to the existing active DGOP install; no packages were installed or upgraded. No production seed was published.
 
 Final Phase 1B verification: API and web production builds pass. Isolated test server stopped. Both source workbooks remain unchanged. Runtime configuration and local PrimeUI license are ignored and untracked.
+
+Phase 2A checkpoint: five AIUC API operations implement partial drafts, exact 28-field submission validation, append-only revisions, live governed-reference/directory checks, optimistic locking, audit and atomic `AIUC-YYYY-NNNNNN` allocation. Clean and Phase 1B-upgrade database/HTTP tests pass. `AI-###` remains intentionally unallocated until Phase 2B triage acceptance (UC-24). No live deployment or source-workbook change.
 
 About DGOP follow-up: the desktop page now uses the full available viewport height while retaining all panels on one screen. Verified at a 1440×1300 browser viewport: page top 91px, bottom 1276px, with no document overflow. Saved after Phase 1B; carry this UI commit forward.

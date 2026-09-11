@@ -167,14 +167,14 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-06 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-07 | 2 | AIUC intake / classification / handoff | Partial — conditions/warnings implemented; co-signature pending |
 | UC-08 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
-| UC-09 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-10 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-11 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-09 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; publication gate open |
+| UC-10 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; governed band metadata required |
+| UC-11 | 3 | AIUC intake / classification / handoff | Partial — engine exclusion implemented; manual path pending |
 | UC-12 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-13 | 3 | AIUC intake / classification / handoff | Not implemented |
 | UC-14 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-15 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-16 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-15 | 3 | AIUC intake / classification / handoff | Partial — stages 1–4 tasks implemented; BPMN registration pending |
+| UC-16 | 3 | AIUC intake / classification / handoff | Partial — existing task/decision types reused in implemented stages |
 | UC-17 | 3 | AIUC intake / classification / handoff | Partial — five-day task implemented; SLA warning/escalation pending |
 | UC-18 | 3 | AIUC intake / classification / handoff | Partial — five-day return/resubmit implemented; warning/closure pending |
 | UC-19 | 3 | AIUC intake / classification / handoff | Not implemented |
@@ -204,3 +204,5 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 Phase 1B backend update: exact 10-role/25-permission catalog and reference publication controls are tested. Source-list reconciliation, full GEN-116 integration certification, and workflow assignment/completion wiring remain open; see phase-1b.md. Do not mark complete business requirements from these supporting components alone.
 
 Phase 2A/2B update: UC-01 through UC-08 have tested API and requester-screen support for the exact field boundary, required-field and reference validation, requester/owner identity, warning conditions, append-only revisions, case numbering and controlled return edits. The first triage loop covers the five-day working-group task, return/resubmit, triage rejection and UC-24 numbering. Classification, conditional reviews, complete SLA notification behavior and downstream handoff remain open; see phase-2a.md and phase-2b.md.
+
+Phase 2C update: UC-09 and UC-10 have tested API and reviewer-screen support for six justified governed scores, inline anchors, the server-side maximum rule, governed automatic tier bands, immutable version-pinned rounds and officer-verification task creation. The manual Unacceptable and override paths, full template/assignment-rule registration, conditional reviews and tier approval remain open; see phase-2c.md.

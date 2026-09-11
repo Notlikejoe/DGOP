@@ -1,7 +1,7 @@
 # AI governance implementation checkpoint
 
-Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, Phase 2A AIUC intake API, and the Phase 2B requester UI plus stages 1–3 triage loop (2026-09-11). Phase 1B production seed reconciliation and release gates remain open.
-Next: finish Phase 2B with the six-criterion classification stage and full `AIUC_APPROVAL_V1` registration, while keeping source-list publication blocked until the workbook differences are reviewed. See phase-1b.md, phase-2a.md and phase-2b.md for exact boundaries.
+Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, Phase 2A AIUC intake API, Phase 2B requester UI/stages 1–3 triage loop, and Phase 2C six-criterion assessment plus reviewer UI (2026-09-11). Phase 1B production seed reconciliation and release gates remain open.
+Next: implement Responsible AI Officer verification/override and register the remaining `AIUC_APPROVAL_V1` stages and assignment rules, while keeping source-list publication blocked until the workbook differences are reviewed. See phase-1b.md through phase-2c.md for exact boundaries.
 Branch: codex/ai-governance-phase2a
 Upstream baseline: f32c796
 Preserved active UI baseline: d15743f
@@ -43,5 +43,7 @@ Final Phase 1B verification: API and web production builds pass. Isolated test s
 Phase 2A checkpoint: five AIUC API operations implement partial drafts, exact 28-field submission validation, append-only revisions, live governed-reference/directory checks, optimistic locking, audit and atomic `AIUC-YYYY-NNNNNN` allocation. Clean and Phase 1B-upgrade database/HTTP tests pass. `AI-###` remains intentionally unallocated until Phase 2B triage acceptance (UC-24). No live deployment or source-workbook change.
 
 Phase 2B first-loop checkpoint: the bilingual nine-section requester screen, governed lookup endpoint, five-KSA-business-day working-group task, Accept / Return / Reject triage, returned-case revision/resubmission and transactional `AI-###` allocation are implemented. Accept opens the stage-4 classification task; the scoring UI/engine, conditional co-signatures, tier decision, asset/AIRS handoff, SLA notifications and shared attachment upload remain open. API/web builds and clean/upgrade isolated database/HTTP tests pass. No live deployment, seed publication or workbook change.
+
+Phase 2C checkpoint: the bilingual working-group reviewer screen now covers triage and the six-criterion classification queue. The server validates one justified 1–5 score per criterion against published score metadata, computes the maximum, resolves the proposed tier through published band metadata, stores an immutable version-pinned round and creates the officer-verification task. Builds, focused contracts, and clean/upgrade database/HTTP tests pass. Approved-tier decisions and later workflow stages remain open.
 
 About DGOP follow-up: the desktop page now uses the full available viewport height while retaining all panels on one screen. Verified at a 1440×1300 browser viewport: page top 91px, bottom 1276px, with no document overflow. Saved after Phase 1B; carry this UI commit forward.

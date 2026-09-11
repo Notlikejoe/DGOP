@@ -132,6 +132,7 @@ const PERMISSION_SCREEN_GROUPS: Array<{
       { id: 'workflow', labelKey: 'nav.workflow', resources: ['workflow_tasks', 'workflow_cases'] },
       { id: 'workflow-designer', labelKey: 'nav.workflowDesigner', resources: ['workflow_cases'] },
       { id: 'ai-use-cases', labelKey: 'nav.aiUseCases', resources: ['case.create', 'case.view.aiuc'] },
+      { id: 'ai-review', labelKey: 'nav.aiReview', resources: ['aiuc.classify', 'case.approve.aiuc'] },
       {
         id: 'data-quality',
         labelKey: 'nav.dataQuality',

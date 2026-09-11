@@ -47,6 +47,15 @@ export interface AiIntakeV1 {
 }
 
 export type AiIntakeDraftV1 = Partial<AiIntakeV1>;
+export const AI_CLASSIFICATION_CRITERIA = [
+  'individual_impact',
+  'affected_scope',
+  'harm_likelihood',
+  'decision_autonomy',
+  'data_fairness_transparency',
+  'technical_resilience',
+] as const;
+export type AiClassificationCriterion = typeof AI_CLASSIFICATION_CRITERIA[number];
 export type JustifiedScore = Readonly<{ value: number; justification: string }>;
 export interface AiCalculationInputV1 {
   kind: 'classification' | 'inherent' | 'residual';

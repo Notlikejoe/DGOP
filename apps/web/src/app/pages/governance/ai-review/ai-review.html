@@ -1,0 +1,73 @@
+<section class="page ai-review-page governance-modern">
+  <header class="page__header review-hero">
+    <div><span class="eyebrow">{{ t('aiReview.eyebrow') }}</span><h1>{{ t('aiReview.title') }}</h1><p class="page__subtitle">{{ t('aiReview.subtitle') }}</p></div>
+    <button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load(selected()?.id)"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
+  </header>
+
+  @if (configuration(); as config) {
+    @if (!config.ready) {
+      <section class="configuration-gate" role="status"><app-icon name="alert" /><div><strong>{{ t('aiReview.config.title') }}</strong><p>{{ t('aiReview.config.body') }}</p></div><span>{{ config.issues.join(' · ') }}</span></section>
+    }
+  }
+
+  @if (state() === 'loading') {
+    <section class="ds-card state-card">{{ t('crud.loading') }}</section>
+  } @else if (state() === 'error') {
+    <section class="ds-card state-card state-card--error"><p>{{ t('aiReview.error.load') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section>
+  } @else {
+    <div class="review-workspace">
+      <aside class="ds-card queue-rail">
+        <div class="queue-tabs" role="tablist">
+          <button type="button" [class.active]="tab() === 'triage'" (click)="setTab('triage')">{{ t('aiReview.tab.triage') }} <span>{{ triageCases().length }}</span></button>
+          <button type="button" [class.active]="tab() === 'classification'" (click)="setTab('classification')">{{ t('aiReview.tab.classification') }} <span>{{ classificationCases().length }}</span></button>
+        </div>
+        <div class="queue-list">
+          @for (item of (tab() === 'triage' ? triageCases() : classificationCases()); track item.id) {
+            <button type="button" class="queue-row" [class.queue-row--active]="selected()?.id === item.id" (click)="select(item)">
+              <span class="queue-icon"><app-icon name="shield" /></span><span><strong>{{ item.name }}</strong><small>{{ item.workflowCase.code }}</small><small>{{ item.useCaseRef || t('aiReview.pendingAiRef') }}</small></span><app-status-chip kind="info" [label]="tab() === 'triage' ? t('aiReview.tab.triage') : t('aiReview.tab.classification')" />
+            </button>
+          } @empty {
+            <div class="empty-state"><app-icon name="fileCheck" /><strong>{{ t('aiReview.empty.title') }}</strong><p>{{ t('aiReview.empty.body') }}</p></div>
+          }
+        </div>
+      </aside>
+
+      <main class="review-main">
+        @if (selected(); as item) {
+          <section class="ds-card review-toolbar"><div><span class="eyebrow">{{ item.workflowCase.code }} · {{ item.useCaseRef || t('aiReview.pendingAiRef') }}</span><h2>{{ item.name }}</h2></div><app-status-chip kind="info" [label]="tab() === 'triage' ? t('aiReview.tab.triage') : t('aiReview.tab.classification')" /></section>
+
+          @if (tab() === 'triage') {
+            <section class="ds-card intake-summary">
+              <header class="section-head"><span>28</span><div><small>{{ t('aiReview.triage.context') }}</small><h2>{{ t('aiReview.triage.intake') }}</h2></div></header>
+              <div class="summary-grid">
+                @for (field of intakeFields; track field) { <div><small>{{ fieldLabel(field) }}</small><p>{{ renderValue(payload()[field]) }}</p></div> }
+              </div>
+            </section>
+            <section class="ds-card decision-card">
+              <div><span class="eyebrow">{{ t('aiReview.triage.decision') }}</span><h2>{{ t('aiReview.triage.title') }}</h2><p>{{ t('aiReview.triage.body') }}</p></div>
+              <label><span>{{ t('aiReview.justification') }}</span><textarea rows="4" [ngModel]="justification()" (ngModelChange)="justification.set($event)" [placeholder]="t('aiReview.justificationHint')"></textarea></label>
+              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="decide('accept')">{{ t('aiReview.accept') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification().trim()" (click)="decide('return')">{{ t('aiReview.return') }}</button><button type="button" class="ds-btn danger-action" [disabled]="working() || !justification().trim()" (click)="decide('reject')">{{ t('aiReview.reject') }}</button></div>
+            </section>
+          } @else {
+            <section class="classification-result" [class.classification-result--ready]="proposedTier()">
+              <div><span>{{ t('aiReview.calculated') }}</span><strong>{{ scoreMax() ?? '—' }}</strong></div><div><span>{{ t('aiReview.proposedTier') }}</span><strong>{{ proposedTier() ? optionLabel(proposedTier()!) : '—' }}</strong></div><p>{{ t('aiReview.maxRule') }}</p>
+            </section>
+            <section class="criterion-grid">
+              @for (criterion of criteria; track criterion; let index = $index) {
+                <article class="ds-card criterion-card">
+                  <header><span>{{ index + 1 }}</span><h2>{{ criterionLabel(criterion) }}</h2></header>
+                  <label><span>{{ t('aiReview.score') }}</span><select [ngModel]="selectedScore(criterion) ?? ''" (ngModelChange)="setScore(criterion, $event)"><option value="">{{ t('aiuc.select') }}</option>@for (score of configuration()?.scores || []; track score.code) { <option [value]="score.score">{{ score.score }} · {{ optionLabel(score) }}</option> }</select></label>
+                  @if (anchorText(criterion)) { <p class="anchor-text"><app-icon name="info" />{{ anchorText(criterion) }}</p> }
+                  <label><span>{{ t('aiReview.scoreJustification') }} <b>*</b></span><textarea rows="4" [ngModel]="scoreJustification(criterion)" (ngModelChange)="setJustification(criterion, $event)"></textarea></label>
+                </article>
+              }
+            </section>
+            <section class="ds-card assessment-actions"><div><strong>{{ t('aiReview.assessment.review') }}</strong><p>{{ t('aiReview.assessment.reviewBody') }}</p></div><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !configuration()?.ready || !assessmentComplete()" (click)="assess()"><app-icon name="shield" />{{ t('aiReview.assessment.submit') }}</button></section>
+          }
+        } @else {
+          <section class="ds-card empty-state empty-state--main"><app-icon name="fileCheck" /><h2>{{ t('aiReview.empty.title') }}</h2><p>{{ t('aiReview.empty.body') }}</p></section>
+        }
+      </main>
+    </div>
+  }
+</section>

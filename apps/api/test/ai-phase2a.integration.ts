@@ -5,6 +5,8 @@ import { AuditService } from '../src/audit/audit.service';
 import { AiAuthorizationService } from '../src/ai-governance/ai-authorization.service';
 import { AiIdentifiersService } from '../src/ai-governance/ai-identifiers.service';
 import { AiIntakeService } from '../src/ai-governance/ai-intake.service';
+import { AiClassificationService } from '../src/ai-governance/ai-classification.service';
+import { AI_CLASSIFICATION_CRITERIA } from '../src/ai-governance/ai-governance.contracts';
 import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ValidationPipe } from '@nestjs/common';
@@ -15,6 +17,7 @@ export async function testPhase2A(db: PrismaClient) {
   const audit = new AuditService(prisma);
   const authorization = new AiAuthorizationService(prisma, audit);
   const service = new AiIntakeService(prisma, authorization, new AiIdentifiersService(), audit);
+  const classification = new AiClassificationService(prisma, authorization, audit);
 
   async function createActor(label: string, roleCode: string) {
     const role = await db.role.findUniqueOrThrow({ where: { code: roleCode } });
@@ -60,6 +63,62 @@ export async function testPhase2A(db: PrismaClient) {
       data: { state: 'published', effectiveFrom: new Date('2020-01-01'), approvedBy: 'phase2a-fixture', approvedAt: new Date('2020-01-01') },
     });
   }
+
+  await db.governedReferenceList.upsert({
+    where: { code: 'R_SDAIA_SCORE' },
+    create: { code: 'R_SDAIA_SCORE', nameEn: 'SDAIA score', nameAr: 'درجة سدايا', ownerRoleCode: 'AI_GOVERNANCE_OFFICER' },
+    update: {},
+  });
+  await db.governedReferenceVersion.updateMany({
+    where: { listCode: 'R_SDAIA_SCORE', state: 'published' },
+    data: { state: 'retired', effectiveTo: new Date('2099-01-01') },
+  });
+  const scoreVersionNumber = (await db.governedReferenceVersion.aggregate({ where: { listCode: 'R_SDAIA_SCORE' }, _max: { version: true } }))._max.version ?? 0;
+  const scoreVersion = await db.governedReferenceVersion.create({ data: { listCode: 'R_SDAIA_SCORE', version: scoreVersionNumber + 1, createdBy: 'phase2a-fixture' } });
+  await db.governedReferenceValue.createMany({
+    data: [1, 2, 3, 4, 5].map(score => ({
+      versionId: scoreVersion.id,
+      code: `SCORE_${score}`,
+      labelEn: `Score ${score}`,
+      labelAr: `الدرجة ${score}`,
+      sortOrder: score,
+      metadata: {
+        score,
+        anchors: Object.fromEntries(AI_CLASSIFICATION_CRITERIA.map(criterion => [criterion, {
+          labelEn: `${criterion} anchor ${score}`,
+          labelAr: `${criterion} ${score}`,
+        }])),
+      },
+    })),
+  });
+  await db.governedReferenceVersion.update({
+    where: { id: scoreVersion.id },
+    data: { state: 'published', effectiveFrom: new Date('2020-01-01'), approvedBy: 'phase2a-fixture', approvedAt: new Date('2020-01-01') },
+  });
+
+  await db.governedReferenceList.upsert({
+    where: { code: 'R_SDAIA_TIER' },
+    create: { code: 'R_SDAIA_TIER', nameEn: 'SDAIA tier', nameAr: 'تصنيف سدايا', ownerRoleCode: 'AI_GOVERNANCE_OFFICER' },
+    update: {},
+  });
+  await db.governedReferenceVersion.updateMany({
+    where: { listCode: 'R_SDAIA_TIER', state: 'published' },
+    data: { state: 'retired', effectiveTo: new Date('2099-01-01') },
+  });
+  const tierVersionNumber = (await db.governedReferenceVersion.aggregate({ where: { listCode: 'R_SDAIA_TIER' }, _max: { version: true } }))._max.version ?? 0;
+  const tierVersion = await db.governedReferenceVersion.create({ data: { listCode: 'R_SDAIA_TIER', version: tierVersionNumber + 1, createdBy: 'phase2a-fixture' } });
+  await db.governedReferenceValue.createMany({
+    data: [
+      { code: 'MINIMAL', labelEn: 'Minimal or none', labelAr: 'مخاطر قليلة أو معدومة', metadata: { automatic: true, minScore: 1, maxScore: 2 } },
+      { code: 'LIMITED', labelEn: 'Limited', labelAr: 'مخاطر محدودة', metadata: { automatic: true, minScore: 3, maxScore: 3 } },
+      { code: 'HIGH', labelEn: 'High', labelAr: 'مخاطر عالية', metadata: { automatic: true, minScore: 4, maxScore: 5 } },
+      { code: 'UNACCEPTABLE', labelEn: 'Unacceptable', labelAr: 'مخاطر غير مقبولة', metadata: { automatic: false } },
+    ].map((value, sortOrder) => ({ ...value, sortOrder, versionId: tierVersion.id })),
+  });
+  await db.governedReferenceVersion.update({
+    where: { id: tierVersion.id },
+    data: { state: 'published', effectiveFrom: new Date('2020-01-01'), approvedBy: 'phase2a-fixture', approvedAt: new Date('2020-01-01') },
+  });
 
   const draft = await service.createDraft(requester.id, { usecase_name: 'Assisted matching', proposed_owner: owner.id });
   assert.equal(draft.version, 1);
@@ -117,6 +176,25 @@ export async function testPhase2A(db: PrismaClient) {
   assert.match(accepted.useCaseRef!, /^AI-\d{3,}$/u);
   assert.equal(accepted.version, 7);
   assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', title: { contains: 'classification' } } }), 1);
+  const classificationConfig = await classification.configuration(triageReviewer.id);
+  assert.equal(classificationConfig.ready, true);
+  assert.equal((await classification.queue(triageReviewer.id)).length, 1);
+  await assert.rejects(classification.assess(triageReviewer.id, draft.id, 7, {
+    kind: 'classification', scores: Array(5).fill({ value: 3, justification: 'Evidence reviewed' }),
+  }));
+  const assessed = await classification.assess(triageReviewer.id, draft.id, 7, {
+    kind: 'classification',
+    scores: [1, 2, 3, 4, 5, 4].map(value => ({ value, justification: `Criterion evidence supports score ${value}` })),
+  });
+  assert.equal(assessed.version, 8);
+  assert.equal((assessed.assessments[0].result as { scoreMax: number }).scoreMax, 5);
+  assert.equal((assessed.assessments[0].result as { proposedTierCode: string }).proposedTierCode, 'HIGH');
+  assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: draft.id, kind: 'classification' } }), 1);
+  assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER' } }), 1);
+  assert.equal((await classification.queue(triageReviewer.id)).length, 0);
+  await assert.rejects(classification.assess(triageReviewer.id, draft.id, 8, {
+    kind: 'classification', scores: Array(6).fill({ value: 3, justification: 'Cannot assess twice' }),
+  }));
   await assert.rejects(service.updateDraft(requester.id, draft.id, 7, { problem_desc: 'too late again' }));
   assert.equal((await service.triageQueue(triageReviewer.id)).length, 0);
   assert.equal(await db.auditLog.count({ where: { entityId: draft.id, action: { startsWith: 'aiuc.intake.' } } }), 5);
@@ -138,6 +216,10 @@ export async function testPhase2A(db: PrismaClient) {
       authorization: `Bearer ${jwt.sign({ sub: requester.id, tokenVersion: 0, roles: ['business_steward'] })}`,
       'content-type': 'application/json',
     };
+    const reviewerHeaders = {
+      authorization: `Bearer ${jwt.sign({ sub: triageReviewer.id, tokenVersion: 0, roles: ['AI_WORKING_GROUP'] })}`,
+      'content-type': 'application/json',
+    };
     assert.equal((await fetch(`${base}/api/ai/use-cases`)).status, 401);
     const httpCreate = await fetch(`${base}/api/ai/use-cases`, {
       method: 'POST', headers,
@@ -146,6 +228,9 @@ export async function testPhase2A(db: PrismaClient) {
     assert.equal(httpCreate.status, 201);
     assert.equal((await fetch(`${base}/api/ai/use-cases`, { headers })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/triage`, { headers })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers: reviewerHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/queue`, { headers: reviewerHeaders })).status, 200);
     const lookups = await fetch(`${base}/api/ai/use-cases/lookups`, { headers });
     assert.equal(lookups.status, 200);
     assert.equal((await lookups.json() as { ready: boolean }).ready, true);
@@ -158,5 +243,5 @@ export async function testPhase2A(db: PrismaClient) {
     await app.close();
   }
 
-  console.log('Phase 2 intake integration passed: draft revisions, governed lookups, five-business-day triage, return/revise/resubmit, triage acceptance numbering, immutable history and HTTP authorization/DTO checks.');
+  console.log('Phase 2 integration passed: intake revisions, five-day triage, return/resubmit, AI numbering, governed six-criterion max-rule classification, immutable rounds, task handoff and HTTP authorization.');
 }

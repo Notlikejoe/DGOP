@@ -1,0 +1,9 @@
+# Phase 3R — Scoped use-case dashboard and repaired indicators
+
+Implemented locally, 2026-09-13, with 3S/3T/3U. A new AI Governance Dashboard is registered through the existing DGOP route/navigation pattern, using its Angular/PrimeNG tables, cards, typography, colors and bilingual dictionary. No dashboard engine, library, provider or permission is added.
+
+The eligible registered-use-case cohort consists of non-deleted, non-sample rows with a business use-case reference and an active registered asset within current organization/domain/classification scope. GEN-85 counts this cohort. GEN-98 / BR-10 counts the exact approved SDAIA HIGH code from the latest classification record; proposed High or a High/Critical 4×4 risk level does not confer membership. GEN-99 / BR-11 counts absent approved classifications. The register has no spreadsheet cross-reference and every refresh recomputes counts from stores. GEN-103 displays independently counted High + unclassified + other classified rows against the cohort total.
+
+Governance/Auditor views offer read-only, stably paginated case summaries and register distribution by organization unit. Distribution uses the authoritative DGOP organization relation; department-list R_DEPT expansion remains later reporting work. Executive output remains aggregates only. Actual Risk Owner mode receives no use-case register population. All access depends on live eligible role grants and current data scope.
+
+Verification: isolated clean-install and baseline-upgrade Nest/HTTP/database tests cover 105 additional eligible register rows, approved-versus-proposed High, unclassified and sample High exclusion, full-count/page independence, stable pages, reconciliation/distribution equality, excluded organization scope, asset inactivity and live-user inactivity. API/Angular builds and AI security contracts pass. No browser visual acceptance, source-workbook repair/edit, import, publication or live deployment claimed.

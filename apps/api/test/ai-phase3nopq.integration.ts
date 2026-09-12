@@ -1,3 +1,4 @@
+import { testPhase3RSTU } from './ai-phase3rstu.integration';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { ValidationPipe } from '@nestjs/common';
@@ -68,6 +69,7 @@ export async function testPhase3NOPQ(db:PrismaClient,f:{riskId:string;riskOwnerI
   const base=await app.getUrl(),jwt=app.get(JwtService),headers={authorization:`Bearer ${jwt.sign({sub:f.officerId,tokenVersion:0,roles:['system_admin']})}`,'content-type':'application/json'};
   assert.equal((await fetch(`${base}/api/ai/review-operations/cadence-config`,{headers})).status,200);assert.equal((await fetch(`${base}/api/ai/review-operations/report?filter=POSTED_STATUS`,{headers})).status,400);
   assert.equal((await fetch(`${base}/api/ai/review-operations/annual/${next.id}/handover`,{method:'POST',headers,body:JSON.stringify({...handover,actorId:f.officerId})})).status,400);assert.equal((await fetch(`${base}/api/ai/review-operations/monthly`,{method:'POST',headers,body:JSON.stringify({organizationUnitId:unitId,periodMonth:previous,capturedAt:new Date(),measures:{overdue:0}})})).status,400);
+  await testPhase3RSTU(db,f);
   console.log('Phases 3N/3O/3P/3Q passed: approved cadence pins/version history, immutable officer handover/inactive recovery, scoped filtered SQL aggregates and read-only drilldown, closed-Saudi-month snapshots/visibility, evidence/audit rollback, concurrent exactly-once operations and HTTP input/privacy guards.');
  }finally{await app.close();}
 }

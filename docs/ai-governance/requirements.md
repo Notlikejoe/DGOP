@@ -15,8 +15,8 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | BR-07 | 6,10 | Deterministic rule and negative-input tests | Partial — current approved-plan mean completion derived from immutable execution rounds; reporting/KPI persistence and full model remain |
 | BR-08 | 8 | Deterministic rule and negative-input tests | Not implemented |
 | BR-09 | 3 | Deterministic rule and negative-input tests | Not implemented |
-| BR-10 | 10 | Deterministic rule and negative-input tests | Not implemented |
-| BR-11 | 10 | Deterministic rule and negative-input tests | Not implemented |
+| BR-10 | 10 | Deterministic rule and negative-input tests | Implemented locally — approved SDAIA HIGH use-case count from current scoped non-sample register, independent of proposed tiers/residual bands; real store reconciliation tested |
+| BR-11 | 10 | Deterministic rule and negative-input tests | Implemented locally — absent approved SDAIA classification count from current scoped non-sample register; register total reconciliation tested |
 | GEN-01 | 1–12 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-02 | 1–12 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-20 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -40,32 +40,32 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-77 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-78 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-79 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-80 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-81 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-82 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-83 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-84 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-85 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-86 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-87 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-88 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-89 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-90 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-91 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-92 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-93 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-94 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-80 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — 19 server-computed live scoped KPI projections and 21 explicit bilingual definitions implemented; scheduled snapshots and GEN-100/101 cohorts remain |
+| GEN-81 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — submitted non-sample AIUC case count, once per case rather than resubmission; historical month-close reporting remains |
+| GEN-82 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — terminal AIUC acceptance ratio from latest completed adoption resolution and installed terminal lifecycle; historical month-close reporting remains |
+| GEN-83 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — completed triage attempts within pinned KSA business-day deadline over completed triage attempts; scheduled reporting remains |
+| GEN-84 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — distinct completed triage return-event attempts over completed triage attempts; scheduled reporting remains |
+| GEN-85 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — full-population scoped registered-use-case count and stable read-only summaries implemented; daily snapshots remain |
+| GEN-86 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — full-population scoped identified AIR-reference risk count implemented; daily snapshots remain |
+| GEN-87 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — current calculated paired HIGH/CRITICAL residual count and 4×4 matrix implemented; scheduled snapshots/load certification remain |
+| GEN-88 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — actual-owner scoped open-risk count using installed closed/cancelled lifecycle mapping implemented; scheduled reporting remains |
+| GEN-89 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — scoped identified risks without assigned owner count implemented; daily snapshots remain |
+| GEN-90 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — mean current inherent score with missing/superseded round exclusion and source count implemented; monthly reporting remains |
+| GEN-91 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — mean valid current paired residual score with missing/superseded exclusion implemented; monthly reporting remains |
+| GEN-92 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — mean valid current paired score reduction including negative values and null empty denominator implemented; monthly reporting remains |
+| GEN-93 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — verified current approved-plan treated risks over approved-plan risks implemented; source sample migration/scheduled monthly reporting remain |
+| GEN-94 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — protected Saudi deadline overdue current approved-plan action count and read-only drilldown implemented; dedicated source sample provenance/daily snapshots remain |
 | GEN-95 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — complete-population scoped live periodic overdue count implemented with sample/supersession exclusions; SQL aggregates, scoped filters/drilldown and explicit monthly archive implemented; full dashboards and scheduled reporting remain |
 | GEN-96 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — due-as-of live compliance numerator/denominator and no-due null state implemented; immutable explicit closed-month capture/archive implemented using current population/state at capture time; automatic historical reporting/full dashboards remain |
-| GEN-97 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-98 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-99 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-100 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-101 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-102 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-103 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-104 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-105 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-97 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — current inherent HIGH/CRITICAL risks with at least one verified current approved-plan action complete over current HIGH/CRITICAL risks, plus gap drilldown implemented; monthly reporting remains |
+| GEN-98 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — exact approved SDAIA HIGH non-sample scoped register count and reconciliation, not proposed tier or residual risk band |
+| GEN-99 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — absent approved SDAIA classification non-sample scoped register count and reconciliation |
+| GEN-100 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented — definition/coverage recorded with no fabricated value; dedicated due-assessment cohort packet next |
+| GEN-101 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented — definition/coverage recorded with no fabricated value; current High/proposed-High Ethics cohort packet next |
+| GEN-102 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — repaired cards use store queries with no spreadsheet cross-references or client-computed values |
+| GEN-103 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — independently counted High/unclassified/other classified totals reconcile to eligible register and organization distribution implemented; historical source migration reconciliation remains |
+| GEN-104 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — executive allowed KPI subset and numeric residual matrix, no case-action authority and aggregate-only privacy implemented; certified read-only executive summaries/drilldowns remain |
+| GEN-105 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Partial — register/risk sample flags and optional immutable plan/action JSON sample markers excluded from current projections; dedicated treatment-plan source sample migration/admin certification remains |
 | GEN-111 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-112 | 1,3,6 | Band-derived permissions and Critical denial | Implemented — Low/Medium/High accept permissions resolve from computed residual band; Critical has no acceptance permission and only Steering restrict/stop/return outcomes |
 | GEN-113 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -158,7 +158,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-34 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-35 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-36 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-37 | 10 | AIRS assessment / decision / operations | Not implemented |
+| RM-37 | 10 | AIRS assessment / decision / operations | Partial — computed approved-High/unclassified cards and current register reconciliation implemented/tested beyond 100 rows; original workbook migration reconciliation remains |
 | UC-01 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A |
 | UC-02 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-03 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
@@ -214,3 +214,5 @@ Phase 3J1/3J2 update: seven recognized PRC-05 trigger entry and immutable supers
 Phase 3K/3L/3M update (2026-09-12): the annual register-review loop, additional triggers during an active reassessment and scoped live periodic-review report are implemented together. Annual snapshots are immutable and require complete current register visibility; additional triggers retain completed history but cancel pending tasks and require fresh eight-dimensional scoring. GEN-95/96 projections include complete scoped populations, explicit due-as-of denominators, and no client dates/authority. Annual findings and periodic measures are distinct. These packets do not complete the 21-KPI dashboard, scheduled monthly reporting, source metadata release reconciliation or production certification. See phase-3k.md, phase-3l.md and phase-3m.md. Prior pending notes above are historical.
 
 Phase 3N/3O/3P/3Q update (2026-09-13): approved R_CADENCE display version pins and FD status labels, evidence-backed immutable annual officer handover, scoped filtered SQL review reporting/read-only drilldown and one-per-register closed-Saudi-month immutable capture/archive are implemented locally. Monthly captures use currently eligible source membership and completion state at capture time, not historical month-end reconstruction. Executive detail remains denied; Auditor writes remain denied. These packets do not claim full 21-KPI dashboard, automatic scheduling, production reference approval or release certification. See phase-3n.md through phase-3q.md.
+
+Phase 3R/3S/3T/3U update (2026-09-13): existing-stack bilingual AI dashboard with approved-SDAIA repaired counts/reconciliation, current risk posture/paired residual matrix, current approved-plan treatment measures, adoption-pipeline ratios and explicit 21-KPI definitions is implemented locally. Nineteen live current-scope projections have values; GEN-100/101 cohorts have no fabricated output and remain next work. Actual-owner operational scope, Auditor reads, executive aggregate-only audience subset, sample exclusions, source pairing, null empty denominators and stable filtered summaries are tested. Scheduled daily/month-close snapshots, R_DEPT distribution expansion, source migration and production/load certification remain open. See phase-3r.md through phase-3u.md.

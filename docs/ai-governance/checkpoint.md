@@ -1,6 +1,22 @@
 # AI governance implementation checkpoint
 
-## Latest four-packet checkpoint — 2026-09-13
+## Latest four-packet checkpoint — 2026-09-13 (3R–3U)
+
+Completed locally from 46b1cca: 3R use-case dashboard and repaired approved-SDAIA High/unclassified indicators with register reconciliation; 3S current risk posture, current-pair residual 4×4 matrix and top-ten scoped summaries; 3T current approved-plan treatment completion/overdue/completeness measures; 3U adoption-pipeline ratios and explicit bilingual 21-KPI definitions. Nineteen live KPI computations have values. GEN-100 due-assessment completeness and GEN-101 current High/proposed-High Ethics cohorts remain explicitly pending. Existing Nest/Prisma/PostgreSQL and Angular/PrimeNG DGOP screen/navigation patterns retained. No dependency, schema migration, workflow graph or production seed changes.
+
+Dashboard refresh is a server-timestamped cumulative live current-scope projection. Daily/Monthly tags show design frequency, not an implemented scheduler. Valid negative risk reduction is retained; missing scores/empty ratio denominators show —. Only current inherent/residual pairs and current approved non-cancelled plan actions contribute; active-reassessment triggers exclude obsolete score provenance. Registered asset scope and non-sample source exclusions apply. Unlinked adoption requests fail closed on restricted domain/classification scope. Executive output follows its KPI subset and numeric matrix with no individual records/actions. Auditor reads are read-only. Actual Risk Owner views/drilldowns contain own risk rows only. Register distribution uses DGOP organization units; R_DEPT expansion/source sample migration remain later work.
+
+Verification: final API and Angular production builds and focused AI security contracts pass. Complete isolated clean-install and baseline-upgrade PostgreSQL/Nest/HTTP harness passes all earlier phases plus full counts beyond 100 rows, independent approved/proposed SDAIA classification/sample/deleted exclusions, stable paginated summaries/reconciliation, scoped/active-asset/live-user exclusions, matrix/count totals and top-ten order, stale/current residual pairing, additional-trigger invalidation, negative reduction, null/zero-action states, verified completion/partial overdue/mean/cancelled/stale/sample-plan contracts, explicit terminal acceptance and on-time/late/return triage numerator/denominator deltas, role/Auditor/executive/actual-owner privacy and invalid/unauthenticated/mutation-route rejection. Test fixtures preserve one-use-case asset identity. No browser visual or concurrency load acceptance claimed. Native worker/workflow engines did not change; their previously passing baselines remain preserved.
+
+Runtime/quota: isolated test cluster on 55438 stopped normally after verification, ignored configuration/storage retained. Account-wide five-hour usage 51% at entry, 61% after API/UI slice and 68% during verification and 75% at final checkpoint; weekly 38%,40%,41%,42%. Two reset credits remain unused. No active-app AI synchronization, live database change, provider/external dispatch, original workbook edit/import/publication, push or deployment. About DGOP and byte-preserved source copies retained. This batch is the next local commit (use git log for identifier); branch codex/ai-governance-phase2a.
+
+Next bounded packet: 3V dedicated GEN-100/101 governance KPI cohorts with current-round provenance and explicit denominator contracts. Read phase-3r.md through phase-3u.md first. Remaining work includes automatic scoped dashboard snapshots/reporting, approved risk-library/manual initiation, higher-authority reversal, AVOID/ESCALATE paths, source migration/sample provenance, provider delivery and release/load certification. Preserve R_IMPD source reconciliation and approved cadence metadata gates; never substitute the live database.
+
+Older checkpoint notes below are historical; their pending items are superseded only where the latest packets explicitly cover them.
+
+
+
+## Previous four-packet checkpoint — 2026-09-13 (3N–3Q)
 
 Completed locally from ca93542: 3N governed cadence/status display with immutable approved bilingual label pins; 3O evidence-backed annual officer handover and inactive-incumbent recovery; 3P server-filtered review history, SQL aggregate measures and scoped read-only drilldown; 3Q immutable closed-Saudi-month periodic-review capture/archive. Existing DGOP Nest/Prisma/PostgreSQL and Angular/PrimeNG UX/UI retained; no dependencies added or upgraded.
 
@@ -15,7 +31,7 @@ Next bounded packet: 3R scoped AI dashboard baseline beyond periodic review meas
 The older checkpoints below are historical and their pending items are superseded by the latest completed packets.
 
 
-## Latest three-packet checkpoint — 2026-09-12
+## Previous three-packet checkpoint — 2026-09-12 (3K–3M)
 
 3K: one protected native annual calendar and Review task per organization register, full-register officer authority, immutable source history and trends/control-effectiveness/non-conformity findings with evidence, Saudi server deadlines, completion-to-next 365-day cycle and scoped Auditor read-only visibility. Historical snapshots fail closed when a member is outside current scope. Annual identity is pinned; handover remains later work.
 

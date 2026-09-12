@@ -15,6 +15,7 @@ import { AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routi
 import { AiResidualAssessmentService, residualPrerequisite } from '../src/ai-governance/ai-residual-assessment.service';
 import { RISK_DIMENSIONS, RISK_DIMENSION_ROLES, jsonRecord } from '../src/ai-governance/ai-risk-scoring';
 import { riskScoringFixture } from './ai-risk-scoring.fixture';
+import { testPhase3G } from './ai-phase3g.integration';
 export async function testPhase3F2(db:PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;auditorId:string}) {
  const prisma=db as PrismaService,audit=new AuditService(prisma),auth=new AiAuthorizationService(prisma,audit),routing=new AiWorkflowRoutingService(prisma),risks=new AiRiskIntakeService(prisma,auth,new ScopeService(prisma),routing,new AiIdentifiersService(),audit),scoring=new AiRiskAssessmentService(prisma,auth,risks,routing,audit);
  const service=new AiResidualAssessmentService(prisma,auth,risks,scoring,routing,audit),failed=new AiResidualAssessmentService(prisma,auth,risks,scoring,routing,{logRequired:async()=>{throw new Error('Injected residual audit failure');}} as unknown as AuditService);
@@ -74,5 +75,6 @@ export async function testPhase3F2(db:PrismaClient,f:{riskId:string;riskOwnerId:
  const app=await NestFactory.create(AppModule,{logger:false});try{app.setGlobalPrefix('api');app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));await app.listen(0,'127.0.0.1');const base=await app.getUrl(),jwt=app.get(JwtService),headers={authorization:`Bearer ${jwt.sign({sub:f.riskOwnerId,tokenVersion:0,roles:['system_admin']})}`,'content-type':'application/json'};
  assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/residual`)).status,401);assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/residual`,{headers})).status,200);assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/residual/complete`,{method:'POST',headers,body:JSON.stringify({...complete,expectedVersion:version,score:1,riskAccepted:true,authorityRole:'AI_RISK_OWNER'})})).status,400);
  }finally{await app.close();}
+ await testPhase3G(db,f);
  console.log('Phase 3F2 passed: completed-action/native-task/evidence prerequisites, High/Critical RM-24, fresh competent-role residual dimensions, controls without numeric modifiers, publication restart, immutable history, role/scope/Auditor/audit rollback, concurrent exactly-once start/scoring, ACCEPT deterioration, officer-review routing and HTTP protection.');
 }

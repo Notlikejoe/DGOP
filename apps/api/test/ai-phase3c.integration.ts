@@ -152,7 +152,7 @@ export async function testPhase3C(db: PrismaClient, f: { riskId: string; riskOwn
   try {
     app.setGlobalPrefix('api'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.listen(0, '127.0.0.1');
-    assert.equal(jsonRecord((await db.workflowTemplate.findUniqueOrThrow({ where: { id: template.id } })).designerJson)['seedRevision'], 'airs-lifecycle-phase3f2-1');
+    assert.equal(jsonRecord((await db.workflowTemplate.findUniqueOrThrow({ where: { id: template.id } })).designerJson)['seedRevision'], 'airs-lifecycle-phase3g-1');
     const base = await app.getUrl(), jwt = app.get(JwtService), headers = { authorization: `Bearer ${jwt.sign({ sub: f.officerId, tokenVersion: 0, roles: ['system_admin'] })}`, 'content-type': 'application/json' };
     assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/assessment/adoption`)).status, 401);
     assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/assessment/adoption`, { headers })).status, 200);

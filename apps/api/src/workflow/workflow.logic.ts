@@ -645,7 +645,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
-// Phase 3F2 executes treatment completion gates and fresh residual scoring. Later AI services
+// Phase 3G executes residual review and band-authority decisions. Later AI services
 // implement the downstream gates; generic workflow mutations are blocked for AIRS.
 export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
@@ -675,7 +675,14 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-residual-assessment', 'Residual risk assessment', 'تقييم الخطر المتبقي', 'Reassess likelihood and eight fresh impacts after treatment before officer review.', 'review', 'review', 'AI_RISK_OWNER', 5,
       { assignmentConfigJson: { dimensionsReferenceList: 'R_IMPD', competentRoleAssessment: true } }),
     stage('airs-residual-adoption', 'Residual assessment review', 'مراجعة تقييم الخطر المتبقي', 'Review the immutable residual calculation before band-derived acceptance authority decisions.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
-    stage('airs-monitoring', 'Risk acceptance and monitoring', 'قبول الخطر ومتابعته', 'Apply the governed acceptance authority and recurring review cadence.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
+    stage('airs-residual-authority', 'Computed residual authority', 'صلاحية الخطر المتبقي المحسوبة', 'Route only from the immutable computed residual band.', 'gateway', 'routing', undefined, 0, { nodeType: 'decision_gateway', isDecision: true, gatewayConfigJson: { allowedOutcomes: ['LOW','MEDIUM','HIGH','CRITICAL'], serverComputed: true } }),
+    stage('airs-accept-low', 'Low risk owner acceptance', 'قبول المالك للخطر المنخفض', 'Actual Use-Case Owner decides Low residual risk.', 'decision', 'approval', 'AI_USECASE_OWNER', 5, { isDecision: true }),
+    stage('airs-accept-medium-owner', 'Medium risk owner decision', 'قرار المالك للخطر المتوسط', 'Actual Use-Case Owner decides before independent officer countersignature.', 'decision', 'approval', 'AI_USECASE_OWNER', 5, { isDecision: true }),
+    stage('airs-accept-medium-countersign', 'Medium risk officer countersignature', 'مصادقة المسؤول على الخطر المتوسط', 'Independent officer countersigns the actual owner decision.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
+    stage('airs-residual-ethics', 'High residual Ethics review', 'مراجعة أخلاقيات الخطر المتبقي المرتفع', 'Fresh independent Ethics approval before Executive Team acceptance.', 'decision', 'approval', 'AI_ETHICS_COMMITTEE', 5, { isDecision: true }),
+    stage('airs-accept-high', 'High residual Executive decision', 'قرار الفريق التنفيذي للخطر المتبقي المرتفع', 'L3 Executive Team decides after independent Ethics approval.', 'decision', 'approval', 'AI_EXECUTIVE_TEAM', 5, { isDecision: true }),
+    stage('airs-restrict-critical', 'Critical risk restrict or stop', 'تقييد أو إيقاف الخطر الكارثي', 'L4 Steering Committee restricts/stops the use case; plain acceptance is forbidden.', 'decision', 'approval', 'STEERING_COMMITTEE', 5, { isDecision: true, gatewayConfigJson: { allowedOutcomes: ['restrict','stop','return'] } }),
+    stage('airs-monitoring', 'Risk monitoring preparation', 'إعداد متابعة الخطر', 'Register the next governed review cadence; authority decisions are already recorded.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
     stage('airs-closure', 'Risk case closure', 'إغلاق حالة الخطر', 'Retain the risk identity and final resolution.', 'closure', 'review', undefined, 0, { isFinal: true }),
   ],
   transitions: [
@@ -703,8 +710,22 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('airs-escalation-gate', 'airs-response-proposal', 'Return from escalation preparation', 'إعادة من إعداد التصعيد'),
     link('airs-treatment', 'airs-residual-assessment', 'Treatment completed', 'اكتمال المعالجة'),
     link('airs-residual-assessment', 'airs-residual-adoption', 'Residual calculation recorded', 'تسجيل حساب الخطر المتبقي'),
-    link('airs-residual-adoption', 'airs-monitoring', 'Residual review prerequisites complete', 'اكتمال متطلبات مراجعة الخطر المتبقي', 'approved'),
+    link('airs-residual-adoption', 'airs-residual-authority', 'Residual review approved', 'اعتماد مراجعة الخطر المتبقي', 'approved'),
     link('airs-residual-adoption', 'airs-residual-assessment', 'Return for fresh residual assessment', 'إعادة تقييم الخطر المتبقي', 'rejected', false),
+    link('airs-residual-authority', 'airs-accept-low', 'Computed Low', 'منخفض محسوب', 'LOW'),
+    link('airs-residual-authority', 'airs-accept-medium-owner', 'Computed Medium', 'متوسط محسوب', 'MEDIUM'),
+    link('airs-residual-authority', 'airs-residual-ethics', 'Computed High; independent Ethics', 'مرتفع محسوب؛ مراجعة أخلاقية مستقلة', 'HIGH'),
+    { ...link('airs-residual-authority', 'airs-restrict-critical', 'Computed Critical; restrict/stop', 'كارثي محسوب؛ تقييد أو إيقاف', 'CRITICAL'), isDefaultPath: true },
+    ...[
+      ['airs-accept-low','airs-monitoring'], ['airs-accept-medium-owner','airs-accept-medium-countersign'],
+      ['airs-accept-medium-countersign','airs-monitoring'], ['airs-residual-ethics','airs-accept-high'], ['airs-accept-high','airs-monitoring'],
+    ].flatMap(([from,to])=>[
+      link(from,to,'Authority prerequisite approved','اعتماد متطلب الصلاحية','approved'),
+      link(from,'airs-residual-assessment','Return for fresh residual assessment','إعادة تقييم الخطر المتبقي','rejected',false),
+    ]),
+    link('airs-restrict-critical','airs-monitoring','Use case restricted','تقييد حالة الاستخدام','restrict'),
+    link('airs-restrict-critical','airs-monitoring','Use case stopped','إيقاف حالة الاستخدام','stop'),
+    link('airs-restrict-critical','airs-residual-assessment','Return for fresh residual assessment','إعادة تقييم الخطر المتبقي','rejected',false),
     link('airs-monitoring', 'airs-closure', 'Monitoring completed', 'اكتمال المتابعة'),
   ],
 };

@@ -4818,6 +4818,9 @@ enum AiAssessmentKind {
 /// Full 28-field intake lives in append-only, schema-versioned revisions.
 /// Register projections/remaining business fields are added in the AIRS phase.
 model AiUseCase {
+  operationalStatusCode String?
+  operationalDecisionId String?
+  operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict)
   id                 String                 @id @default(uuid())
   useCaseRef         String?                @unique
   workflowCaseId     String?                @unique
@@ -4928,6 +4931,8 @@ model AiAssessmentRound {
 
 /// Append-only specialist review/adoption evidence; calculated rounds remain unchanged.
 model AiRiskAssessmentDecision {
+  restrictedUseCases AiUseCase[]
+  conditions Json @default("[]")
   id            String @id @default(uuid())
   assessmentId  String
   taskId        String @unique

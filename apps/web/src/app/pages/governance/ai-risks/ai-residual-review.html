@@ -1,0 +1,26 @@
+<section class="assessment-workspace" [attr.aria-busy]="working()">
+  @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
+  @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button></section> }
+  @else if (context(); as c) {
+    @if (c.assessmentId) {
+      <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiResidualReview.title') }} · {{ t('aiAssessment.round') }} {{ c.round }}</h2><p>{{ t('aiResidualReview.subtitle') }}</p></div><app-status-chip kind="info" [label]="t(c.riskAccepted ? 'aiResidualReview.accepted' : 'aiResidualReview.notAccepted')" /></header>
+      @if (c.operationalStatusCode) { <div class="override-notice" role="status">{{ t('aiResidualReview.status.' + c.operationalStatusCode) }}</div> }
+      @if ((!c.referencesCurrent || !c.prerequisitesReady) && c.tasks.length) { <div class="override-notice" role="status">{{ t('aiResidualReview.changed') }}</div> }
+      @for (task of c.tasks; track task.id) {
+        <section class="ds-card decision-card specialist-decision"><h2>{{ t('aiResidualReview.kind.' + task.kind) }}</h2>
+          @if (task.canReturn) {
+            <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="drafts()[task.id].justification" (ngModelChange)="patch(task.id,'justification',$event)"></textarea></label>
+            <label><span>{{ t('aiAdoption.evidence') }} <b>*</b></span><textarea rows="2" [ngModel]="drafts()[task.id].evidence" (ngModelChange)="patch(task.id,'evidence',$event)"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label>
+            <label><span>{{ t('aiResidualReview.conditions') }}</span><textarea rows="2" [ngModel]="drafts()[task.id].conditions" (ngModelChange)="patch(task.id,'conditions',$event)"></textarea></label>
+            <div class="decision-actions">@for (outcome of task.outcomes; track outcome) { <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !drafts()[task.id].justification.trim() || !drafts()[task.id].evidence.trim()" (click)="decide(task.id,outcome)">{{ t('aiResidualReview.outcome.' + outcome) }}</button> }<button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !drafts()[task.id].justification.trim() || !drafts()[task.id].evidence.trim()" (click)="decide(task.id,'return')">{{ t('aiAdoption.return') }}</button></div>
+          } @else { <p>{{ t('aiAdoption.waitingRole') }}</p> }
+        </section>
+      }
+      @for (round of c.history; track round.id) {
+        @if (round.decisions.length) { <section class="ds-card decision-card"><h2>{{ t('aiAdoption.history') }} · {{ t('aiAssessment.round') }} {{ round.round }}</h2>
+          @for (d of round.decisions; track d.id) { <article><header class="assessment-result"><strong>{{ t('aiResidualReview.kind.' + d.kind) }}</strong><app-status-chip kind="info" [label]="t('aiResidualReview.outcome.' + d.decision)" /></header><p>{{ d.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ d.evidenceIds.join(', ') }}</small>@for (condition of d.conditions; track $index) { <p>{{ condition }}</p> }</article> }
+        </section> }
+      }
+    }
+  }
+</section>

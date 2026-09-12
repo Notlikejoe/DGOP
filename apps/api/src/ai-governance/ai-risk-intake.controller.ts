@@ -7,6 +7,8 @@ import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { AiRiskAssessmentService } from './ai-risk-assessment.service';
 import { CompleteResidualAssessmentDto, CompleteRiskAssessmentDto, RestartRiskAssessmentDto, RiskDimensionScoreDto } from './ai-risk-assessment.dto';
 import { AiResidualAssessmentService } from './ai-residual-assessment.service';
+import { AiResidualDecisionService } from './ai-residual-decision.service';
+import { DecideResidualRiskDto } from './ai-residual-decision.dto';
 import { AiRiskAdoptionService } from './ai-risk-adoption.service';
 import { ReviewRiskAssessmentDto } from './ai-risk-adoption.dto';
 import { AiRiskResponseService } from './ai-risk-response.service';
@@ -17,11 +19,14 @@ import { RecordTreatmentProgressDto, SaveTreatmentActionDto } from './ai-treatme
 @Controller('ai/risks')
 export class AiRiskIntakeController {
   constructor(private readonly service: AiRiskIntakeService, private readonly assessments: AiRiskAssessmentService, private readonly adoption: AiRiskAdoptionService,
-    private readonly responses: AiRiskResponseService, private readonly treatment: AiTreatmentService, private readonly residual: AiResidualAssessmentService) {}
+    private readonly responses: AiRiskResponseService, private readonly treatment: AiTreatmentService, private readonly residual: AiResidualAssessmentService, private readonly residualDecisions: AiResidualDecisionService) {}
   // Authenticated reads enforce own/org/all alternatives with live grants and data scope.
   @Get() list(@CurrentUser() user: AuthUser) { return this.service.list(user.id); }
   @Get('lookups') lookups(@CurrentUser() user: AuthUser) { return this.service.lookups(user.id); }
   @Get(':id/residual') residualContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.residual.context(user.id,id); }
+  @Get(':id/residual/review') residualReview(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.residualDecisions.context(user.id,id); }
+  @Post(':id/residual/decisions/:taskId')
+  decideResidual(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string, @Body() dto: DecideResidualRiskDto, @Req() req: Request) { return this.residualDecisions.decide(user.id,id,taskId,dto,req.ip); }
   @Post(':id/residual/start') @RequirePermissions('airs.risk.assess')
   startResidual(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) { return this.residual.start(user.id,id,dto.expectedVersion,req.ip); }
   @Post(':id/residual/restart') @RequirePermissions('airs.risk.assess')

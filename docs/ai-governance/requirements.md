@@ -24,13 +24,13 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-22 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-23 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-24 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-25 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-25 | 1,3,6 | Computed band authority | Implemented — immutable residual band selects protected actual-owner/RAIO/Ethics/Executive/Steering tasks and explicit permissions; posted roles/bands cannot confer authority |
 | GEN-26 | 1,3,6 | AIUC final-decision segregation | Implemented — requester/linked owner excluded from decision queues and blocked at recording; configured tier role, claimed assignee and live permission enforced; generic task assignment/decision bypass blocked |
-| GEN-27 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-27 | 1,3,6 | Risk-owner self-acceptance exclusion | Implemented — actual Risk Owner cannot accept/countersign Medium+, including combined competent roles; native SQL guards reinforce the service checks |
 | GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented — approval excludes nominated executors and progress/completion excludes the immutable plan approver, including combined roles |
 | GEN-29 | 1,3,6 | Independent Ethics owner recusal | Implemented for AIUC and inherent AIRS review — actual owner identities blocked and recusal audit persists on rejection |
 | GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-31 | 1,3,6 | Evidence-backed authority decisions | Partial — AIUC Executive Team/Steering final decisions require justification, existing evidence and transactional audit; AIRS acceptance and higher-authority reversal remain |
+| GEN-31 | 1,3,6 | Evidence-backed authority decisions | Partial — AIUC and AIRS authority decisions require justification, existing evidence and transactional audit with immutable conditions; higher-authority reversal remains |
 | GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-72 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-73 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -67,7 +67,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-104 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-105 | 10 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-111 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-112 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-112 | 1,3,6 | Band-derived permissions and Critical denial | Implemented — Low/Medium/High accept permissions resolve from computed residual band; Critical has no acceptance permission and only Steering restrict/stop/return outcomes |
 | GEN-113 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-114 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-115 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -84,10 +84,10 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
-| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff, AIRS intake/inherent adoption, response/plan approval, action execution and gated residual calculation through pending officer review implemented; acceptance/monitoring/closure remain |
+| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff and AIRS intake/inherent/response/plan/action/residual review plus band acceptance/Critical restriction implemented; monitoring/closure remain |
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
-| INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — AIUC approved/implemented/closed transitions and AIRS draft use existing case states; risk lifecycle/other terminal paths remain |
+| INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — AIUC approved/implemented/closed and AIRS Draft/Under Review/Decision Made transitions use existing case states; guarded Critical use-case suspension/archive implemented; monitoring/other terminal paths remain |
 | MIG-01 | 11 | Import staging, source reconciliation and replay | Not implemented |
 | MIG-02 | 11 | Import staging, source reconciliation and replay | Not implemented |
 | MIG-03 | 11 | Import staging, source reconciliation and replay | Not implemented |
@@ -129,7 +129,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-05 | 5 | AIRS assessment / decision / operations | Not implemented |
 | RM-06 | 5 | Risk record fields | Partial — intake/controls, inherent/residual score histories, adoption/response/consultation and treatment progress implemented; full governed status/monitoring/control-domain model remains |
 | RM-07 | 5 | Mandatory causal triple | Implemented — draft submission rejects missing cause/event/effect with field-specific issues; no AIR reference or assessment task created on rejection |
-| RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight fresh competent-role tasks and immutable inherent/residual rounds, conditional inherent Ethics/officer adoption and fresh reference-change restarts implemented; residual officer adoption/return remains |
+| RM-08 | 5 | Competent-role impact assessment rounds | Implemented — eight fresh competent-role inherent/residual tasks, immutable rounds, officer adoption/returns, conditional inherent Ethics and fresh High residual Ethics; returned/reference-change rounds carry no previous scores/approvals |
 | RM-09 | 5 | Final impact and highest dimension | Implemented — read-only MAX of eight and highest dimension via pinned R_IMPD, with governed deterministic tie order and retained tied set |
 | RM-10 | 5 | AIRS assessment / decision / operations | Partial — permanent ACT records, one-to-one assigned DGOP tasks, authorized evidence-backed progress/completion and immutable execution history; full field/status/control-domain model remains |
 | RM-11 | 5 | AIRS assessment / decision / operations | Not implemented |
@@ -140,10 +140,10 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-16 | 5 | AIRS assessment / decision / operations | Implemented — version-pinned governed control effectiveness and current post-treatment controls mandatory before residual calculation |
 | RM-17 | 5 | AIRS assessment / decision / operations | Implemented — fresh justified residual likelihood/eight impacts after completed treatment; no effectiveness-based numeric modifier |
 | RM-18 | 5 | AIRS assessment / decision / operations | Implemented — immutable residual probability × max impact, governed score/band/severity and display-only risk reduction |
-| RM-19 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-20 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-21 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-22 | 6 | AIRS assessment / decision / operations | Partial — five published strategies, transfer evidence/consultations, officer strategy approval, real complete independently approved MITIGATE/TRANSFER plans; avoidance closure, residual acceptance and escalation execution remain |
+| RM-19 | 6 | Band authority matrix | Partial — actual Low owner, sequential independent Medium countersign, fresh High Ethics/Executive and Critical Steering native tasks/decisions implemented; higher-authority reversal and structured shared escalation records remain |
+| RM-20 | 6 | Critical restriction/stop | Implemented — Critical acceptance denied; Steering restrict/stop/return only, with guarded actual use-case suspension/archive linked to immutable decision |
+| RM-21 | 6 | No Risk Owner self-acceptance Medium+ | Implemented — server-resolved actual Risk Owner excluded from Medium/High/Critical authority decisions despite extra roles; Medium owner/countersigner must also be independent |
+| RM-22 | 6 | AIRS assessment / decision / operations | Partial — published strategies, transfer consultations, approved MITIGATE/TRANSFER plans/execution and residual acceptance/Critical decisions implemented; avoidance closure and separate escalation execution remain |
 | RM-23 | 6 | AIRS assessment / decision / operations | Partial — ACT records/independent plan approval, assigned target-date tasks and evidence-backed execution with derived mean/overdue; warning/breach notifications and automatic governed status/KPI reporting remain |
 | RM-24 | 6 | AIRS assessment / decision / operations | Implemented — residual start/contribution/calculation blocks inherent High/Critical with zero verified completed actions; approved treatment requires all planned actions complete |
 | RM-25 | 8 | AIRS assessment / decision / operations | Not implemented |
@@ -188,11 +188,11 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-27 | 4 | AIUC intake / classification / handoff | Partial — triage and final reject/return paths implemented; final rejection retains AI identifier and creates no asset/AIRS; withdrawal/escalation/noncompletion closure and notifications remain |
 | UC-28 | 4 | AIUC intake / classification / handoff | Partial — specialist and final decisions require existing DGOP evidence; remaining stage-specific checklists/upload requirements remain |
 | UC-29 | 4 | AIUC intake / classification / handoff | Not implemented |
-| WF-01 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-02 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-03 | 3,6,8 | Mandatory procedure review gates | Partial — AIUC reviews and inherent AIRS conditional Ethics/adoption gates enforced with negative tests; later procedure gates remain |
-| WF-04 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-05 | 3,6,8 | Owner–approver segregation | Partial — AIUC and inherent AIRS adoption owner/assessor exclusions enforced and audit-recorded; treatment/acceptance stage enforcement remains |
+| WF-01 | 3,6,8 | Actual Low owner acceptance | Implemented — only the active actual Use-Case Owner with explicit Low grant can accept the computed Low residual round |
+| WF-02 | 3,6,8 | Sequential Medium owner/countersign | Implemented — actual-owner decision then independent officer countersign; no acceptance/advancement after owner alone, including current-owner changes and combined-role exclusion |
+| WF-03 | 3,6,8 | Mandatory procedure review gates | Partial — AIUC and inherent/residual officer/Ethics gates plus fresh independent High Ethics before Executive acceptance enforced; later monitoring/escalation procedure gates remain |
+| WF-04 | 3,6,8 | Critical acceptance denial | Implemented — computed Critical routes to Steering restrict/stop/return only; plain acceptance blocked in service/SQL and HTTP rejects injected band/authority fields |
+| WF-05 | 3,6,8 | Owner–approver segregation | Implemented for current AIUC/AIRS review/treatment/acceptance — actual owners/assessors cannot adopt their own rounds; independent plan/execution and Medium countersign/High Ethics checks are audited |
 | WF-06 | 3,6,8 | Workflow gate and SoD negative tests | Implemented for AIUC — Phase 2E; personal-data Privacy co-signature blocks tier decision until complete |
 | WF-07 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-08 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |

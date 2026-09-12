@@ -44,7 +44,12 @@ export class AiRiskAssessment {
   protected isResidual(): boolean { return this.assessmentKind() === 'residual'; }
   private endpoint(): string { return this.isResidual() ? 'residual' : 'assessment'; }
   protected roundStatus(round: AssessmentContext['rounds'][number]): string {
-    if (this.isResidual()) return this.t('aiResidual.pendingReview');
+    if (this.isResidual()) {
+      if (round.decisions.some(d=>d.decision==='return')) return this.t('aiAdoption.decision.return');
+      if (round.decisions.some(d=>d.decision==='restrict'||d.decision==='stop')) return this.t('aiResidualReview.notAccepted');
+      if (round.decisions.some(d=>d.decision==='accept'&&(d.kind==='countersign'||d.kind==='executive'||d.kind==='accept_owner'&&round.result.bandCode==='LOW'))) return this.t('aiResidualReview.accepted');
+      return this.t(round.decisions.some(d=>d.kind==='adoption'&&d.decision==='approve')?'aiResidualReview.pendingAuthority':'aiResidual.pendingReview');
+    }
     return this.t(round.decisions.some(value => value.decision === 'return') ? 'aiAdoption.decision.return'
       : round.decisions.some(value => value.kind === 'adoption' && value.decision === 'approve') ? 'aiAdoption.adopted' : 'aiAssessment.pendingAdoption');
   }

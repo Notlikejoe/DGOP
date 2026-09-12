@@ -23,7 +23,7 @@ export function residualPrerequisite(strategy:string,band:string,planned:number,
 export class AiResidualAssessmentService {
  constructor(private readonly prisma:PrismaService,private readonly authorization:AiAuthorizationService,private readonly risks:AiRiskIntakeService,
   private readonly scoring:AiRiskAssessmentService,private readonly routing:AiWorkflowRoutingService,private readonly audit:AuditService){}
- private async gate(tx:Prisma.TransactionClient,userId:string,id:string){
+ async gate(tx:Prisma.TransactionClient,userId:string,id:string){
   const access=await this.risks.visibility(userId,tx),risk=await tx.aiRisk.findFirst({where:{AND:[access.where,{id}]},select:riskSelect});
   if(!risk)throw new NotFoundException('AI risk not found');
   const inherent=risk.assessments[0],adopted=inherent?.decisions.some(d=>d.kind==='adoption'&&d.decision==='approve');
@@ -48,15 +48,18 @@ export class AiResidualAssessmentService {
   if(plan){const ids=jsonRecord(plan.snapshot)['actionIds'];if(!Array.isArray(ids)||ids.length!==actions.length||actions.some(a=>!ids.includes(a.id)))integrity=false;}
   const reason=response&&inherent?residualPrerequisite(response.strategyCode,jsonRecord(inherent.result)['bandCode'] as string,actions.length,completed):'An adopted inherent assessment and approved response are required';
   const tasks=risk.workflowCase?.templateId?await tx.workflowTask.findMany({where:{caseId:risk.workflowCase.id,templateStage:{is:{templateId:risk.workflowCase.templateId,code:STAGE,isActive:true,template:{is:{code:AIRS_TEMPLATE_CODE,isActive:true,deletedAt:null}}}}}}):[];
-  const coordinators=tasks.filter(t=>(t.status===TaskStatus.pending||t.status===TaskStatus.in_progress)&&!jsonRecord(t.formDataJson)['dimension']&&jsonRecord(t.formDataJson)['responseId']===response?.id&&t.assigneeRoleCode==='AI_RISK_OWNER'&&t.assigneeUserId===risk.owner?.userId);
+  const coordinators=tasks.filter(t=>(t.status===TaskStatus.pending||t.status===TaskStatus.in_progress)&&!!jsonRecord(t.formDataJson)['configuration']&&!jsonRecord(t.formDataJson)['dimension']&&jsonRecord(t.formDataJson)['responseId']===response?.id&&t.assigneeRoleCode==='AI_RISK_OWNER'&&t.assigneeUserId===risk.owner?.userId);
   const coordinator=coordinators.length===1?coordinators[0]:null;
-  const rounds=await tx.aiAssessmentRound.findMany({where:{riskId:id,kind:'residual'},orderBy:{round:'desc'},take:20});
-  const hasRound=rounds.some(round=>jsonRecord(round.inputs)['responseId']===response?.id);
+  const rounds=await tx.aiAssessmentRound.findMany({where:{riskId:id,kind:'residual'},orderBy:{round:'desc'},include:{decisions:true}});
+  const responseRound=rounds.find(round=>jsonRecord(round.inputs)['responseId']===response?.id);
+  const returnDecision=responseRound?.decisions.find(d=>d.decision==='return');
+  const hasRound=!!responseRound&&!returnDecision;
+  const returnTasks=tasks.filter(t=>t.status===TaskStatus.pending&&t.assigneeUserId===risk.owner?.userId&&t.assigneeRoleCode==='AI_RISK_OWNER'&&jsonRecord(t.formDataJson)['returnDecisionId']===returnDecision?.id&&!!returnDecision&&jsonRecord(t.formDataJson)['returnedAssessmentId']===responseRound?.id&&jsonRecord(t.formDataJson)['responseId']===response?.id);
   const acceptanceTasks=response?await tx.workflowTask.findMany({where:{caseId:risk.workflowCase!.id,status:TaskStatus.pending,templateStage:{code:'airs-acceptance-gate'}}}):[];
-  const acceptance=response?.strategyCode!=='ACCEPT'||!!coordinator||hasRound||acceptanceTasks.filter(t=>jsonRecord(t.formDataJson)['responseId']===response.id).length===1;
+  const acceptance=response?.strategyCode!=='ACCEPT'||!!coordinator||hasRound||returnTasks.length===1||acceptanceTasks.filter(t=>jsonRecord(t.formDataJson)['responseId']===response.id).length===1;
   const ready=!!adopted&&!!response&&risk.workflowCase?.status==='under_review'&&!reason&&integrity&&acceptance&&(!['MITIGATE','TRANSFER'].includes(response.strategyCode)||!!plan);
   const ownerActive=!!await tx.person.findFirst({where:{id:risk.ownerPersonId??'',isActive:true,deletedAt:null},select:{id:true}});
-  return {...access,risk,inherent,response,plan,actions,completed,reason:!integrity?'Treatment completion provenance/evidence is inconsistent':reason,ready,tasks,coordinator,rounds,hasRound,acceptanceTasks,ownerActive};
+  return {...access,risk,inherent,response,plan,actions,completed,reason:!integrity?'Treatment completion provenance/evidence is inconsistent':reason,ready,tasks,coordinator,rounds,hasRound,acceptanceTasks,ownerActive,returnTasks,responseRound};
  }
  private owner(gate:Awaited<ReturnType<AiResidualAssessmentService['gate']>>){if(!gate.ownerActive||!gate.permissions.has('airs.risk.assess')||!gate.actor.roles.includes('AI_RISK_OWNER')||gate.actor.roles.includes('auditor')||gate.actor.id!==gate.risk.owner?.userId)throw new ForbiddenException('Only the active assigned Risk Owner coordinates residual assessment');}
  private version(gate:{ready:boolean;reason:string|null;risk:{version:number}},version:number){if(!gate.ready)throw new ConflictException(gate.reason??'Approved treatment prerequisites are required');if(gate.risk.version!==version)throw new ConflictException('AI risk changed; reload before residual scoring');}
@@ -73,7 +76,7 @@ export class AiResidualAssessmentService {
   const current=!!pinned&&await this.current(tx,pinned,controls.versionId),owner=gate.ownerActive&&gate.actor.id===gate.risk.owner?.userId&&gate.actor.roles.includes('AI_RISK_OWNER')&&gate.permissions.has('airs.risk.assess')&&!gate.actor.roles.includes('auditor');
   const contributions=gate.coordinator?gate.tasks.filter(task=>jsonRecord(task.formDataJson)['coordinatorTaskId']===gate.coordinator!.id):[];
   return {version:gate.risk.version,eligible:!!gate.response,prerequisite:gate.reason,planned:gate.actions.length,completed:gate.completed,configuration:config,controlReference:controls,started:!!pinned,referencesCurrent:current,
-   canStart:owner&&gate.ready&&!gate.coordinator&&!gate.hasRound&&config.ready&&!!controls.versionId&&!!controls.values.length,
+   canStart:owner&&gate.ready&&!gate.coordinator&&!gate.hasRound&&(!gate.responseRound||gate.returnTasks.length===1)&&config.ready&&!!controls.versionId&&!!controls.values.length,
    canRestart:owner&&gate.ready&&!!pinned&&!gate.hasRound,canComplete:owner&&gate.ready&&current&&contributions.length===8&&contributions.every(t=>t.status==='completed'),
    tasks:contributions.map(task=>{const data=jsonRecord(task.formDataJson),mapping=config.dimensions.find(value=>value.dimension===data['dimension']);return {id:task.id,dimension:data['dimension'],status:task.status,assessorRoleCode:task.assigneeRoleCode,score:data['score']??null,
     canContribute:gate.ready&&current&&gate.permissions.has('airs.risk.assess')&&!gate.actor.roles.includes('auditor')&&!!mapping&&task.status==='pending'&&gate.actor.roles.includes(mapping.assessorRoleCode)&&(!task.assigneeUserId||task.assigneeUserId===userId)&&(mapping.assessorRoleCode!=='AI_RISK_OWNER'||owner)};}),rounds:gate.rounds};
@@ -82,7 +85,7 @@ export class AiResidualAssessmentService {
   if(restart&&(!justification.trim()||justification.length>2000))throw new BadRequestException('Residual restart requires written justification');
   return this.prisma.$transaction(async tx=>{
    await this.authorization.authorize(userId,'airs.risk.assess',tx);const gate=await this.gate(tx,userId,id);this.owner(gate);this.version(gate,expectedVersion);
-   if(gate.hasRound||(!restart&&gate.coordinator)||restart&&!jsonRecord(gate.coordinator?.formDataJson)['configuration'])throw new ConflictException('Residual assessment already started/scored or has no round to restart');
+   if(gate.hasRound||(!restart&&gate.coordinator)||restart&&!jsonRecord(gate.coordinator?.formDataJson)['configuration']||(!restart&&gate.responseRound&&gate.returnTasks.length!==1))throw new ConflictException('Residual assessment already started/scored or has no authorized round to restart');
    const config=await this.scoring.configuration(tx),controls=await this.controls(tx);
    if(!config.ready||!controls.versionId||!controls.values.length)throw new BadRequestException('Published residual scoring/control-effectiveness configuration is required');
    if(!await this.current(tx,config,controls.versionId,true))throw new ConflictException('Residual references changed');
@@ -95,6 +98,7 @@ export class AiResidualAssessmentService {
    const previous=await tx.aiAssessmentRound.aggregate({where:{riskId:id,kind:'residual'},_max:{round:true}}),round=(previous._max.round??0)+1;
    const task=await this.routing.createStageTask(tx,gate.risk.workflowCase!.id,STAGE,new Date(),{templateCode:AIRS_TEMPLATE_CODE,assigneeUserId:userId,assigneeRoleCode:'AI_RISK_OWNER',formDataJson:{responseId:gate.response!.id,inherentAssessmentId:gate.inherent!.id,planId:gate.plan?.id??null,configuration:config,controlReference:controls,assessmentRound:round,restartedFromTaskId:restart?gate.coordinator!.id:null,completedActionIds:gate.actions.filter(a=>a.progress[0]?.completionPct===100).map(a=>a.id)} as Prisma.InputJsonObject});
    if(!restart)for(const old of gate.acceptanceTasks.filter(t=>jsonRecord(t.formDataJson)['responseId']===gate.response!.id))await tx.workflowTask.update({where:{id:old.id},data:{status:TaskStatus.completed,completedAt:new Date()}});
+   if(!restart)for(const old of gate.returnTasks)await tx.workflowTask.update({where:{id:old.id},data:{status:TaskStatus.completed,completedAt:new Date()}});
    for(const mapping of config.dimensions)await this.routing.createStageTask(tx,gate.risk.workflowCase!.id,STAGE,new Date(),{templateCode:AIRS_TEMPLATE_CODE,title:`Residual: ${mapping.labelEn} / ${mapping.labelAr}`,assigneeRoleCode:mapping.assessorRoleCode,assigneeUserId:mapping.assessorRoleCode==='AI_RISK_OWNER'?userId:mapping.assessorRoleCode==='AI_USECASE_OWNER'?ownerId:undefined,formDataJson:{responseId:gate.response!.id,coordinatorTaskId:task.id,dimension:mapping.dimension,assessmentRound:round}});
    await this.commit(tx,gate.risk,expectedVersion,userId,restart?'airs.residual.restarted':'airs.residual.started',{coordinatorTaskId:task.id,referenceVersions:config.referenceVersions,controlVersionId:controls.versionId,justification:restart?justification.trim():null,clientIp:clientIp??null});return {id,version:expectedVersion+1};
   },options);

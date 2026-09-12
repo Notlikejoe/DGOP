@@ -96,6 +96,11 @@ export const routes: Routes = [
           import('./pages/governance/ai-use-cases/ai-use-cases').then((m) => m.AiUseCasesPage),
       },
       {
+        path: 'governance/ai-reviews',
+        canActivate: [permissionGuard(['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'])],
+        loadComponent: () => import('./pages/governance/ai-reviews/ai-reviews').then(m => m.AiReviewsPage),
+      },
+      {
         path: 'governance/ai-risks',
         canActivate: [permissionGuard(['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'])],
         loadComponent: () => import('./pages/governance/ai-risks/ai-risks').then((m) => m.AiRisksPage),

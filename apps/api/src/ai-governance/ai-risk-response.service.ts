@@ -1,3 +1,4 @@
+import { requiredInherentRound } from './ai-reassessment-state';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TaskDecision, TaskStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -48,7 +49,7 @@ export class AiRiskResponseService {
     const access = await this.risks.visibility(userId, tx);
     const risk = await tx.aiRisk.findFirst({ where: { AND: [access.where, { id }] }, select: riskSelect });
     if (!risk) throw new NotFoundException('AI risk not found');
-    const assessment = await tx.aiAssessmentRound.findFirst({ where: { riskId: id, kind: 'inherent' }, orderBy: { round: 'desc' }, include: { decisions: true } });
+    const assessment = await tx.aiAssessmentRound.findFirst({ where: { riskId: id, kind: 'inherent', round: { gte: await requiredInherentRound(tx,id) } }, orderBy: { round: 'desc' }, include: { decisions: true } });
     const adoption = assessment?.decisions.find(value => value.kind === 'adoption' && value.decision === 'approve');
     const tasks = risk.workflowCase?.templateId ? await tx.workflowTask.findMany({ where: { caseId: risk.workflowCase.id, status: TaskStatus.pending,
       templateStage: { is: { templateId: risk.workflowCase.templateId, code: { in: [AIRS_STAGE.response, AIRS_STAGE.proposal, AIRS_STAGE.consultation] },

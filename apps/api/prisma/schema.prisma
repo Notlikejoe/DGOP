@@ -197,6 +197,7 @@ model Classification {
 
 /// Organizational hierarchy (entities, departments, sections).
 model OrganizationUnit {
+  aiAnnualReviews AiAnnualReview[]
   aiUseCases AiUseCase[]
   id         String             @id @default(uuid())
   code       String             @unique
@@ -848,6 +849,7 @@ enum GovernanceCouncilMemberRole {
 
 /// A governance workflow case (a controlled piece of work, e.g. an assignment approval).
 model WorkflowCase {
+  aiAnnualReviews AiAnnualReview[]
   aiUseCase                     AiUseCase?
   aiRisk                        AiRisk?
   id                            String                         @id @default(uuid())
@@ -904,6 +906,8 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  reassessmentTrigger AiReassessmentTrigger?
+  aiAnnualReview AiAnnualReview?
   reassessment AiRiskReassessment?
   aiRiskReview AiRiskReview?
   treatmentProgress AiTreatmentProgress[]
@@ -4261,6 +4265,7 @@ enum GovernanceEscalationStatus {
 }
 
 enum ComplianceCalendarType {
+  ai_annual_review
   ai_risk_review
   processing_activity_review
   cross_border_transfer_monitoring
@@ -4404,6 +4409,7 @@ model GovernanceEscalation {
 }
 
 model ComplianceCalendarTemplate {
+  aiAnnualReviews AiAnnualReview[]
   aiRiskReviews AiRiskReview[]
   id                     String                         @id @default(uuid())
   code                   String                         @unique
@@ -4428,6 +4434,7 @@ model ComplianceCalendarTemplate {
 }
 
 model ComplianceCalendarOccurrence {
+  aiAnnualReview AiAnnualReview?
   aiRiskReview AiRiskReview?
   id             String                     @id @default(uuid())
   templateId     String
@@ -5023,6 +5030,7 @@ model AiRiskReviewSignal {
 
 /// Procedure-triggered fresh assessment, never a mutation of accepted history.
 model AiRiskReassessment {
+  additionalTriggers AiReassessmentTrigger[]
   id String @id @default(uuid())
   riskId String
   previousAcceptanceDecisionId String @unique
@@ -5185,4 +5193,61 @@ model AiApprovalObligation {
 
   @@unique([useCaseId, sourceKey])
   @@map("ai_approval_obligations")
+}
+
+/// Additional evidenced triggers invalidate pending work, retaining completed history.
+model AiReassessmentTrigger {
+  id String @id @default(uuid())
+  reassessmentId String
+  coordinatorTaskId String @unique
+  requiredInherentRound Int
+  triggerCode String
+  justification String
+  evidenceIds Json
+  actorId String
+  clientIp String?
+  createdAt DateTime @default(now())
+  reassessment AiRiskReassessment @relation(fields: [reassessmentId], references: [id], onDelete: Restrict)
+  coordinatorTask WorkflowTask @relation(fields: [coordinatorTaskId], references: [id], onDelete: Restrict)
+  @@index([reassessmentId, createdAt])
+  @@map("ai_reassessment_triggers")
+}
+/// One immutable yearly review instance for a native organization-unit register.
+model AiAnnualReview {
+  id String @id @default(uuid())
+  organizationUnitId String
+  calendarTemplateId String
+  calendarOccurrenceId String @unique
+  workflowCaseId String
+  taskId String @unique
+  round Int
+  anchorAt DateTime
+  dueAt DateTime
+  assignedOfficerId String
+  sourceSnapshot Json
+  createdBy String
+  createdAt DateTime @default(now())
+  organizationUnit OrganizationUnit @relation(fields: [organizationUnitId], references: [id], onDelete: Restrict)
+  calendarTemplate ComplianceCalendarTemplate @relation(fields: [calendarTemplateId], references: [id], onDelete: Restrict)
+  calendarOccurrence ComplianceCalendarOccurrence @relation(fields: [calendarOccurrenceId], references: [id], onDelete: Restrict)
+  workflowCase WorkflowCase @relation(fields: [workflowCaseId], references: [id], onDelete: Restrict)
+  task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  completion AiAnnualReviewCompletion?
+  @@unique([organizationUnitId, round])
+  @@index([dueAt])
+  @@map("ai_annual_reviews")
+}
+model AiAnnualReviewCompletion {
+  id String @id @default(uuid())
+  reviewId String @unique
+  actorId String
+  trendsSummary String
+  controlEffectivenessSummary String
+  nonconformitySummary String
+  evidenceIds Json
+  completedAt DateTime
+  clientIp String?
+  createdAt DateTime @default(now())
+  review AiAnnualReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  @@map("ai_annual_review_completions")
 }

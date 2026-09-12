@@ -1,0 +1,13 @@
+# Phase 3L — Additional procedure triggers during reassessment
+
+Implemented locally together with 3K/3M, 2026-09-12. The actual eligible Risk Owner or scoped Working Group/Responsible AI Officer cadence authority can record any of the seven recognized PRC-05 triggers while a genuine reassessment is active. The server requires the current risk version, written justification, existing evidence, active actual owner and unchanged original submitted-intake provenance. Auditor/dual-role denial remains in the shared explicit-grant authorization layer and SQL guard.
+
+Each additional trigger is immutable and linked to the latest reassessment and a fresh native inherent coordinator. It cancels pending/in-progress AIRS tasks from the current case, retaining completed contributions, assessments and decisions. The UI explicitly says that an additional trigger restarts the assessment. No old numeric scores are copied. The fresh requirement is the next computed inherent round; recording a trigger before final scoring can reuse the unallocated round number with an entirely new coordinator and contributions.
+
+Inherent adoption, response, treatment and residual gates enforce the latest trigger's required inherent round. SQL also blocks new assessment authority decisions that cite an obsolete inherent round. The owner must start and complete eight fresh competent-role dimensions, independent adoption, fresh response/residual prerequisites and the calculated-band authority path before the existing renewed-monitoring rebase can proceed. Historical acceptance cannot satisfy these gates. No suspended/archived use-case state is cleared.
+
+The existing bilingual risk monitoring panel exposes a server-gated additional-trigger action and evidence-backed trigger history. It uses the same form/components/theme and optimistic version handling as earlier packets. Exactly-one concurrent trigger commits at a given risk version; replay with that version is rejected. There is no auto-acknowledgment or automatic external incident subscription.
+
+Real clean/upgrade tests exercise new triggers during partially completed scoring and again after an inherent round completes, retained completed contribution values, cancelled obsolete coordinator/tasks, fresh empty contributions, blocked obsolete adoption/residual readiness, owner and officer authority, Auditor/stale-write denial, required-audit rollback, concurrent exactly-once trigger, immutable trigger ledger, fresh authority-to-monitoring progression and protected HTTP fields. Build and native regressions are recorded in checkpoint.md. No external delivery, live database/source publication or deployment is claimed.
+
+Read phase-3k.md/phase-3m.md and checkpoint.md before continuing.

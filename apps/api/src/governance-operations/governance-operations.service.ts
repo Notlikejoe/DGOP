@@ -1703,7 +1703,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     const { holidayDates, recurringHolidayDates } = await this.holidayConfig();
     const now = new Date();
     const templates = await this.prisma.complianceCalendarTemplate.findMany({
-      where: { status: ComplianceCalendarStatus.active, nextRunAt: { lte: now }, type: { not: ComplianceCalendarType.ai_risk_review } },
+      where: { status: ComplianceCalendarStatus.active, nextRunAt: { lte: now }, type: { notIn: [ComplianceCalendarType.ai_risk_review,ComplianceCalendarType.ai_annual_review] } },
     });
     let created = 0;
     for (const template of templates) {
@@ -1762,7 +1762,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   async createTemplate(dto: CreateComplianceCalendarTemplateDto, actor: string) {
-    if (dto.type === ComplianceCalendarType.ai_risk_review) throw new ForbiddenException('Use the protected AI review registration operation');
+    if ((dto.type === ComplianceCalendarType.ai_risk_review || dto.type === ComplianceCalendarType.ai_annual_review)) throw new ForbiddenException('Use the protected AI review registration operation');
     const nextRunAt = this.parseDate(dto.nextRunAt);
     const row = await this.prisma.complianceCalendarTemplate.create({
       data: {
@@ -1783,7 +1783,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   async updateTemplate(id: string, dto: UpdateComplianceCalendarTemplateDto, actor: string) {
     const existing = await this.prisma.complianceCalendarTemplate.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('compliance_calendar_template not found');
-    if (existing.type === ComplianceCalendarType.ai_risk_review) throw new ForbiddenException('Use the protected AI review cadence operation');
+    if ((existing.type === ComplianceCalendarType.ai_risk_review || existing.type === ComplianceCalendarType.ai_annual_review)) throw new ForbiddenException('Use the protected AI review cadence operation');
     const row = await this.prisma.complianceCalendarTemplate.update({
       where: { id },
       data: {

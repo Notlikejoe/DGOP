@@ -76,8 +76,8 @@ export class AiRiskReviewService {
   async context(userId:string,id:string) {return this.prisma.$transaction(async tx=>{
     const g=await this.decisions.gate(tx,userId,id),history=await tx.aiRiskReview.findMany({where:{riskId:id},include:reviewInclude,orderBy:{round:'desc'}}),cadence=await this.cadence(tx);
     const ownerActive=!!g.risk.owner?.userId&&!!await tx.person.findFirst({where:{id:g.risk.ownerPersonId!,isActive:true,deletedAt:null},select:{id:true}});
-    const reassessments=await tx.aiRiskReassessment.findMany({where:{riskId:id},orderBy:{inherentRound:'desc'}});
-    return {version:g.risk.version,reassessments,canReassess:!!this.terminal(g)&&['implemented','decision_made'].includes(g.risk.workflowCase?.status??'')&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),cadenceReady:!!cadence,canRegister:!!cadence&&this.manages(g)&&!!this.terminal(g)&&(!history.length||!!history[0].cancellation)&&g.risk.workflowCase?.status==='decision_made',canRecalculate:this.manages(g)&&history.length>0,
+    const reassessments=await tx.aiRiskReassessment.findMany({where:{riskId:id},orderBy:{inherentRound:'desc'},include:{additionalTriggers:{orderBy:{createdAt:'desc'}}}});
+    return {version:g.risk.version,reassessments,canAddTrigger:!!reassessments.length&&g.risk.workflowCase?.status==='under_review'&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),canReassess:!!this.terminal(g)&&['implemented','decision_made'].includes(g.risk.workflowCase?.status??'')&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),cadenceReady:!!cadence,canRegister:!!cadence&&this.manages(g)&&!!this.terminal(g)&&(!history.length||!!history[0].cancellation)&&g.risk.workflowCase?.status==='decision_made',canRecalculate:this.manages(g)&&history.length>0,
       history:history.map(r=>({...r,task:undefined,status:r.cancellation?'superseded':aiReviewStatus(!!r.completion,r.dueAt),canComplete:!!cadence&&!!this.terminal(g)&&!r.completion&&!r.cancellation&&ownerActive&&g.risk.workflowCase?.status==='implemented'&&r.assignedOwnerId===userId&&g.risk.owner?.userId===userId&&g.permissions.has('airs.risk.assess')&&g.actor.roles.includes('AI_RISK_OWNER')&&!g.actor.roles.includes('auditor')&&r.task.status==='pending'}))};
   },options);}
   async register(userId:string,id:string,expectedVersion:number,clientIp?:string) {return this.prisma.$transaction(async tx=>{
@@ -139,6 +139,27 @@ export class AiRiskReviewService {
       await tx.workflowCase.update({where:{id:g.risk.workflowCase!.id},data:{status:'under_review'}});
       await this.changed(tx,g,userId,'airs.reassessment.started',{reassessmentId:reassessment.id,coordinatorTaskId:task.id,inherentRound,triggerCode:dto.triggerCode,justification:dto.justification.trim(),evidenceIds,supersededReviewIds:pending.map(r=>r.id),previousAcceptanceDecisionId:terminal.id,clientIp:clientIp??null});
       return {id,version:dto.expectedVersion+1,reassessmentId:reassessment.id,coordinatorTaskId:task.id};
+    },options);
+  }
+  async addTrigger(userId:string,id:string,dto:ReassessAiRiskDto,clientIp?:string) {
+    if(!REASSESSMENT_TRIGGERS.includes(dto.triggerCode)||typeof dto.justification!=='string'||!dto.justification.trim()||dto.justification.length>5000||!Array.isArray(dto.evidenceIds)||!dto.evidenceIds.length||dto.evidenceIds.length>20||dto.evidenceIds.some(v=>typeof v!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(v)))throw new BadRequestException('Recognized PRC-05 trigger, written justification and existing evidence are required');
+    return this.prisma.$transaction(async tx=>{
+      const g=await this.decisions.gate(tx,userId,id);
+      if(this.manages(g))await this.authorization.authorize(userId,'airs.cadence.manage',tx);
+      else {await this.authorization.authorize(userId,'airs.risk.assess',tx);if(!g.actor.roles.includes('AI_RISK_OWNER')||g.risk.owner?.userId!==userId)throw new ForbiddenException('Only the actual Risk Owner or cadence authority may record additional triggers');}
+      const entry=await tx.aiRiskReassessment.findFirst({where:{riskId:id},orderBy:{inherentRound:'desc'}});
+      if(!entry||g.risk.workflowCase?.status!=='under_review'||g.risk.version!==dto.expectedVersion)throw new ConflictException('An active reassessment and current version are required');
+      const assignedOwnerId=await this.owner(tx,g),evidenceIds=[...new Set(dto.evidenceIds)];
+      if(await tx.ndiEvidence.count({where:{id:{in:evidenceIds},deletedAt:null}})!==evidenceIds.length)throw new BadRequestException('Every trigger evidence identifier must exist');
+      const source=await tx.workflowTask.findUniqueOrThrow({where:{id:entry.sourceIntakeTaskId},include:{templateStage:true}});
+      if(source.caseId!==g.risk.workflowCase.id||source.status!=='completed'||source.templateStage?.code!=='airs-identification'||JSON.stringify(jsonRecord(source.formDataJson)['submittedIntake'])!==JSON.stringify(g.risk.intakeData))throw new ConflictException('Original intake provenance changed');
+      const requiredInherentRound=(await tx.aiAssessmentRound.aggregate({where:{riskId:id,kind:'inherent'},_max:{round:true}}))._max.round??0;
+      const pending=await tx.workflowTask.findMany({where:{caseId:g.risk.workflowCase.id,status:{in:['pending','in_progress']},templateStage:{is:{templateId:g.risk.workflowCase.templateId!,code:{startsWith:'airs-'},isActive:true}}},select:{id:true}});
+      await tx.workflowTask.updateMany({where:{id:{in:pending.map(t=>t.id)},status:{in:['pending','in_progress']}},data:{status:'cancelled',completedAt:new Date()}});
+      const task=await this.routing.createStageTask(tx,g.risk.workflowCase.id,'airs-inherent-assessment',new Date(),{templateCode:AIRS_TEMPLATE_CODE,assigneeRoleCode:'AI_RISK_OWNER',assigneeUserId:assignedOwnerId,formDataJson:{sourceIntakeTaskId:source.id,riskRef:g.risk.riskRef,previousAcceptanceDecisionId:entry.previousAcceptanceDecisionId,reassessmentRequiredRound:requiredInherentRound+1,reassessmentId:entry.id}});
+      const trigger=await tx.aiReassessmentTrigger.create({data:{reassessmentId:entry.id,coordinatorTaskId:task.id,requiredInherentRound:requiredInherentRound+1,triggerCode:dto.triggerCode,justification:dto.justification.trim(),evidenceIds,actorId:userId,clientIp}});
+      await this.changed(tx,g,userId,'airs.reassessment.trigger.recorded',{triggerId:trigger.id,reassessmentId:entry.id,requiredInherentRound:trigger.requiredInherentRound,coordinatorTaskId:task.id,cancelledTaskIds:pending.map(t=>t.id),triggerCode:dto.triggerCode,justification:dto.justification.trim(),evidenceIds,clientIp:clientIp??null});
+      return {id,version:dto.expectedVersion+1,triggerId:trigger.id,coordinatorTaskId:task.id};
     },options);
   }
   private async changed(tx:Prisma.TransactionClient,g:Gate,actor:string,action:string,metadata:Record<string,unknown>) {

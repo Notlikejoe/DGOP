@@ -12,6 +12,8 @@ export class AiRiskReviewController {
   @Get() context(@CurrentUser() user:AuthUser,@Param('id',ParseUUIDPipe) id:string){return this.reviews.context(user.id,id);}
   @Post('reassess')
   reassess(@CurrentUser() user:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:ReassessAiRiskDto,@Req() req:Request){return this.reviews.reassess(user.id,id,dto,req.ip);}
+  @Post('triggers')
+  trigger(@CurrentUser() user:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:ReassessAiRiskDto,@Req() req:Request){return this.reviews.addTrigger(user.id,id,dto,req.ip);}
   @Post('register') @RequirePermissions('airs.cadence.manage')
   register(@CurrentUser() user:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:AiRiskVersionDto,@Req() req:Request){return this.reviews.register(user.id,id,dto.expectedVersion,req.ip);}
   @Post('recalculate') @RequirePermissions('airs.cadence.manage')

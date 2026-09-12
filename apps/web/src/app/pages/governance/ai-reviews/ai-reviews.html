@@ -1,0 +1,47 @@
+<section class="page ai-review-page governance-modern" [attr.aria-busy]="working()">
+  <header class="page__header review-hero"><div><span class="eyebrow">{{ t('aiRisk.eyebrow') }}</span><h1>{{ t('aiReviews.title') }}</h1><p class="page__subtitle">{{ t('aiReviews.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || state() === 'loading'" (click)="load()"><app-icon name="refresh" />{{ t('crud.retry') }}</button></header>
+  @if (state() === 'loading') { <section class="ds-card state-card" role="status">{{ t('crud.loading') }}</section> }
+  @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiReviews.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section> }
+  @else if (report(); as r) {
+    <nav class="review-tabs" [attr.aria-label]="t('aiReviews.title')"><button type="button" class="ds-btn" [class.ds-btn--primary]="tab() === 'report'" [attr.aria-pressed]="tab() === 'report'" (click)="tab.set('report')">{{ t('aiReviews.report') }}</button>@if (r.mode === 'governance' || r.mode === 'audit') { <button type="button" class="ds-btn" [class.ds-btn--primary]="tab() === 'annual'" [attr.aria-pressed]="tab() === 'annual'" (click)="tab.set('annual')">{{ t('aiReviews.annual') }}</button> }</nav>
+    @if (tab() === 'report') {
+      <p class="report-caption">{{ t('aiReviews.asOf') }} {{ r.asOf | date:'medium':'+0300' }} · {{ t('aiReviews.periodicScope') }}</p>
+      <div class="review-kpis">
+        <section class="ds-card review-kpi" [class.review-kpi--danger]="r.periodic.overdue > 0"><app-icon name="alert" /><div><h2>{{ t('aiReviews.overdue') }}</h2><strong>{{ r.periodic.overdue }}</strong><small>GEN-95</small></div></section>
+        <section class="ds-card review-kpi"><app-icon name="shield" /><div><h2>{{ t('aiReviews.onTime') }}</h2><strong>{{ r.periodic.onTimePercent === null ? '—' : r.periodic.onTimePercent + '%' }}</strong><small>GEN-96 · {{ r.periodic.closedOnTime }} / {{ r.periodic.due }} {{ t('aiReviews.dueReviews') }}</small></div></section>
+        <section class="ds-card review-kpi"><app-icon name="listCheck" /><div><h2>{{ t('aiMonitoring.status.due_soon') }}</h2><strong>{{ r.periodic.dueSoon }}</strong><small>{{ t('aiReviews.sevenDays') }}</small></div></section>
+        <section class="ds-card review-kpi"><app-icon name="check" /><div><h2>{{ t('aiMonitoring.completedReviews') }}</h2><strong>{{ r.periodic.completed }}</strong><small>{{ r.periodic.superseded }} {{ t('aiMonitoring.status.superseded') }}</small></div></section>
+      </div>
+      <p class="report-caption">{{ t('aiReviews.measureHelp') }}</p>
+      @if (r.aggregateOnly) { <section class="ds-card state-card">{{ t('aiReviews.aggregate') }}</section> }
+      @else {
+        <section class="ds-card review-calendar"><header class="section-head"><app-icon name="listCheck" /><h2>{{ t('aiReviews.calendar') }} · {{ r.calendarTotal }}</h2></header>
+          <p-table [value]="r.calendar" dataKey="id" [rowHover]="true" [stripedRows]="true" [scrollable]="true" [tableStyle]="{'min-width':'38rem'}">
+            <ng-template #header><tr><th>{{ t('aiReviews.risk') }}</th><th>{{ t('aiMonitoring.due') }}</th><th>{{ t('aiMonitoring.currentStatus') }}</th></tr></ng-template>
+            <ng-template #body let-row><tr><td><strong>{{ row.risk.riskRef }}</strong><p>{{ row.risk.title }}</p></td><td>{{ row.dueAt | date:'medium':'+0300' }}</td><td><app-status-chip [kind]="row.status === 'due_soon' ? 'warning' : 'info'" [label]="t('aiMonitoring.status.' + row.status)" /></td></tr></ng-template>
+            <ng-template #emptymessage><tr><td colspan="3" class="state-card">{{ t('aiReviews.noDates') }}</td></tr></ng-template>
+          </p-table>
+          @if (r.calendarTotal > r.pageSize) { <div class="review-pagination"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="r.page === 1" (click)="load(r.page - 1)">{{ t('aiReviews.previous') }}</button><span>{{ r.page }}</span><button type="button" class="ds-btn ds-btn--ghost" [disabled]="r.page * r.pageSize >= r.calendarTotal" (click)="load(r.page + 1)">{{ t('aiReviews.next') }}</button></div> }
+        </section>
+      }
+    } @else {
+      <section class="ds-card decision-card"><h2>{{ t('aiReviews.annual') }}</h2><p>{{ t('aiReviews.annualHelp') }}</p><label><span>{{ t('aiReviews.organization') }}</span><select [(ngModel)]="unitId" [disabled]="working()" (ngModelChange)="selectUnit()"><option value="">{{ t('aiReviews.chooseUnit') }}</option>@for (unit of units(); track unit.id) { <option [value]="unit.id">{{ label(unit) }}</option> }</select></label></section>
+      @if (annualState() === 'loading') { <section class="ds-card state-card" role="status">{{ t('crud.loading') }}</section> }
+      @else if (annualState() === 'error') { <section class="ds-card state-card"><p>{{ t('aiReviews.annualScope') }}</p><button type="button" class="ds-btn ds-btn--ghost" (click)="selectUnit()">{{ t('crud.retry') }}</button></section> }
+      @else if (annual(); as c) {
+        @if (c.canRegister) { <button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="register()">{{ t('aiReviews.register') }}</button> }
+        @for (row of c.history; track row.id) {
+          <section class="ds-card decision-card"><header class="review-toolbar"><h2>{{ t('aiAssessment.round') }} {{ row.round }} · {{ row.dueAt | date:'medium':'+0300' }}</h2><app-status-chip [kind]="row.status === 'overdue' ? 'danger' : row.status === 'completed' ? 'success' : 'info'" [label]="t('aiMonitoring.status.' + row.status)" /></header>
+            <p>{{ t('aiReviews.snapshot') }} {{ row.sourceSnapshot.asOf | date:'medium':'+0300' }} · {{ row.sourceSnapshot.members.length }} {{ t('aiReviews.risks') }}</p>
+            <p-table [value]="row.sourceSnapshot.members" dataKey="id" [paginator]="row.sourceSnapshot.members.length > 8" [rows]="8" [stripedRows]="true" [scrollable]="true" [tableStyle]="{'min-width':'32rem'}"><ng-template #header><tr><th>{{ t('aiReviews.risk') }}</th><th>{{ t('aiReviews.inherent') }}</th><th>{{ t('aiReviews.residual') }}</th></tr></ng-template><ng-template #body let-member><tr><td>{{ member.riskRef }}</td><td>{{ score(member,'inherent') }}</td><td>{{ score(member,'residual') }}</td></tr></ng-template><ng-template #emptymessage><tr><td colspan="3">{{ t('aiRisk.empty') }}</td></tr></ng-template></p-table>
+            @if (row.canComplete) {
+              <div class="annual-findings"><label><span>{{ t('aiReviews.trends') }} *</span><textarea rows="3" maxlength="5000" [(ngModel)]="trends"></textarea></label><label><span>{{ t('aiReviews.controls') }} *</span><textarea rows="3" maxlength="5000" [(ngModel)]="controls"></textarea></label><label><span>{{ t('aiReviews.nonconformities') }} *</span><textarea rows="3" maxlength="5000" [(ngModel)]="nonconformities"></textarea></label><label><span>{{ t('aiAdoption.evidence') }} *</span><textarea rows="2" [(ngModel)]="evidence"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label></div>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !trends.trim() || !controls.trim() || !nonconformities.trim() || !evidence.trim()" (click)="complete(row)">{{ t('aiReviews.complete') }}</button>
+            }
+            @if (row.completion; as done) { <dl class="annual-completion"><div><dt>{{ t('aiReviews.trends') }}</dt><dd>{{ done.trendsSummary }}</dd></div><div><dt>{{ t('aiReviews.controls') }}</dt><dd>{{ done.controlEffectivenessSummary }}</dd></div><div><dt>{{ t('aiReviews.nonconformities') }}</dt><dd>{{ done.nonconformitySummary }}</dd></div><div><dt>{{ t('aiAdoption.evidence') }}</dt><dd>{{ done.evidenceIds.join(', ') }}</dd></div></dl><small>{{ done.completedAt | date:'medium':'+0300' }}</small> }
+          </section>
+        } @empty { <section class="ds-card state-card">{{ t('aiReviews.noAnnual') }}</section> }
+      }
+    }
+  }
+</section>

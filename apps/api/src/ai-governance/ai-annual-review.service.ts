@@ -1,0 +1,94 @@
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { ScopeService } from '../access/scope.service';
+import { AiAuthorizationService } from './ai-authorization.service';
+import { AiRiskIntakeService } from './ai-risk-intake.service';
+import { AiIdentifiersService } from './ai-identifiers.service';
+import { AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
+import { aiReviewDue, aiReviewStatus } from './ai-risk-review.service';
+import { reviewMeasures } from './ai-review-report.service';
+import { jsonRecord } from './ai-risk-scoring';
+import { CompleteAnnualReviewDto } from './ai-review-operations.dto';
+
+const options={isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:15000,maxWait:15000};
+const include={completion:true,organizationUnit:{select:{nameEn:true,nameAr:true}},task:true} satisfies Prisma.AiAnnualReviewInclude;
+type Annual=Prisma.AiAnnualReviewGetPayload<{include:typeof include}>;
+
+@Injectable()
+export class AiAnnualReviewService {
+  constructor(private readonly prisma:PrismaService,private readonly authorization:AiAuthorizationService,private readonly scope:ScopeService,
+    private readonly risks:AiRiskIntakeService,private readonly routing:AiWorkflowRoutingService,private readonly identifiers:AiIdentifiersService,private readonly audit:AuditService){}
+  private async access(tx:Prisma.TransactionClient,userId:string,write=false) {
+    const access=await this.risks.visibility(userId,tx);
+    if(!access.permissions.has('case.view.airs.org')&&!access.permissions.has('case.view.airs.all'))throw new ForbiddenException('Annual reviews require register visibility');
+    if(write){await this.authorization.authorize(userId,'airs.cadence.manage',tx);if(!access.actor.roles.includes('AI_GOVERNANCE_OFFICER')||access.actor.roles.includes('auditor'))throw new ForbiddenException('Annual comprehensive review is owned by the Responsible AI Officer');}
+    return {...access,scope:await this.scope.resolve(access.actor.roles)};
+  }
+  private async registerScope(tx:Prisma.TransactionClient,userId:string,unitId:string,write=false) {
+    const access=await this.access(tx,userId,write);
+    const unit=await tx.organizationUnit.findFirst({where:{id:unitId,isActive:true,deletedAt:null}});
+    if(!unit||access.scope.orgUnits!=='all'&&!access.scope.orgUnits.includes(unitId))throw new NotFoundException('AI organization register not found');
+    // Full register coverage is required; never label a partial domain/classification view comprehensive.
+    if(access.scope.domains!=='all'||access.scope.maxClassRank!==null)throw new ForbiddenException('Annual review requires full domain and classification coverage of this organization register');
+    const unitWhere:Prisma.AiRiskWhereInput={deletedAt:null,isSampleData:false,riskRef:{not:null},workflowCase:{is:{type:'AIRS'}},useCase:{is:{organizationUnitId:unitId,deletedAt:null,isSampleData:false,asset:{is:{isActive:true,deletedAt:null}}}}};
+    if(await tx.aiRisk.count({where:unitWhere})!==await tx.aiRisk.count({where:{AND:[unitWhere,access.where]}}))throw new ForbiddenException('Annual review requires visibility of every register member');
+    return {...access,unit,where:{AND:[unitWhere,access.where]} satisfies Prisma.AiRiskWhereInput};
+  }
+  private async visibleSnapshot(tx:Prisma.TransactionClient,where:Prisma.AiRiskWhereInput,row:Annual){
+    const members=jsonRecord(row.sourceSnapshot)['members'] as Array<{id:string}>|undefined;
+    if(!Array.isArray(members)||members.some(m=>!m||typeof m.id!=='string')||await tx.aiRisk.count({where:{AND:[where,{id:{in:members.map(m=>m.id)}}]}})!==members.length)throw new ForbiddenException('Historical annual snapshot is outside current register visibility');
+  }
+  async units(userId:string){return this.prisma.$transaction(async tx=>{
+    const a=await this.access(tx,userId),canManage=a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor')&&a.scope.domains==='all'&&a.scope.maxClassRank===null;
+    const units=await tx.organizationUnit.findMany({where:{isActive:true,deletedAt:null,...(a.scope.orgUnits==='all'?{}:{id:{in:a.scope.orgUnits}})},select:{id:true,nameEn:true,nameAr:true},orderBy:{nameEn:'asc'}});
+    return {canManage,units};
+  },options);}
+  async context(userId:string,unitId:string){return this.prisma.$transaction(async tx=>{
+    const a=await this.registerScope(tx,userId,unitId),rows=await tx.aiAnnualReview.findMany({where:{organizationUnitId:unitId},include,orderBy:{round:'desc'}});
+    for(const row of rows)await this.visibleSnapshot(tx,a.where,row);
+    const officer=a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor');
+    return {organizationUnit:a.unit,canRegister:officer&&!rows.length,history:rows.map(r=>({...r,task:undefined,status:aiReviewStatus(!!r.completion,r.dueAt),canComplete:officer&&!r.completion&&r.assignedOfficerId===userId&&r.task.status==='pending'}))};
+  },options);}
+  private async open(tx:Prisma.TransactionClient,userId:string,unitId:string,anchorAt:Date,round:number,calendarId?:string,caseId?:string){
+    const a=await this.registerScope(tx,userId,unitId,true),now=new Date(),dueAt=aiReviewDue(anchorAt,365),id=randomUUID();
+    const members=await tx.aiRisk.findMany({where:a.where,orderBy:{id:'asc'},select:{id:true,riskRef:true,version:true,assessments:{orderBy:{createdAt:'desc'},select:{id:true,kind:true,round:true,result:true,createdAt:true}}}});
+    const reviewRows=await tx.aiRiskReview.findMany({where:{riskId:{in:members.map(m=>m.id)}},select:{dueAt:true,completion:{select:{completedAt:true}},cancellation:{select:{id:true}}}});
+    const sourceSnapshot={asOf:now.toISOString(),members:members.map(m=>({...m,assessments:m.assessments.map(v=>({...v,createdAt:v.createdAt.toISOString()}))})),periodic:reviewMeasures(reviewRows,now)};
+    const calendar=calendarId?await tx.complianceCalendarTemplate.update({where:{id:calendarId},data:{status:'active',lastRunAt:anchorAt,nextRunAt:dueAt,updatedBy:userId}}):await tx.complianceCalendarTemplate.create({data:{code:`CAL-AI-ANNUAL-${unitId}`,title:`${a.unit.nameEn} · Annual AI comprehensive review`,type:'ai_annual_review',cadence:'annual',ownerRoleCode:'AI_GOVERNANCE_OFFICER',lastRunAt:anchorAt,nextRunAt:dueAt,defaultSlaBusinessDays:0,createdBy:userId}});
+    if(!caseId){const template=await tx.workflowTemplate.findFirstOrThrow({where:{code:AIRS_TEMPLATE_CODE,isActive:true,deletedAt:null}});caseId=(await tx.workflowCase.create({data:{code:await this.identifiers.nextCaseCode(tx,'AIRS',now.getUTCFullYear()),title:calendar.title,type:'AIRS',status:'implemented',templateId:template.id,createdBy:userId}})).id;}
+    const occurrence=await tx.complianceCalendarOccurrence.create({data:{templateId:calendar.id,code:`${calendar.code}-${round}`,title:calendar.title,dueAt,workflowCaseId:caseId,createdBy:userId}});
+    const task=await this.routing.createStageTask(tx,caseId,'airs-annual-review',now,{templateCode:AIRS_TEMPLATE_CODE,assigneeRoleCode:'AI_GOVERNANCE_OFFICER',assigneeUserId:userId,formDataJson:{annualReviewId:id,organizationUnitId:unitId}});
+    await tx.workflowTask.update({where:{id:task.id},data:{dueDate:dueAt}});
+    return tx.aiAnnualReview.create({data:{id,organizationUnitId:unitId,calendarTemplateId:calendar.id,calendarOccurrenceId:occurrence.id,workflowCaseId:caseId,taskId:task.id,round,anchorAt,dueAt,assignedOfficerId:userId,createdBy:userId,sourceSnapshot}});
+  }
+  async register(userId:string,unitId:string,clientIp?:string){return this.prisma.$transaction(async tx=>{
+    await this.registerScope(tx,userId,unitId,true);
+    if(await tx.aiAnnualReview.count({where:{organizationUnitId:unitId}}))throw new ConflictException('Annual calendar already registered');
+    const review=await this.open(tx,userId,unitId,new Date(),1);
+    await this.audit.logRequired({actor:userId,action:'ai.annual.review.register',entityType:'ai_annual_review',entityId:review.id,metadata:{organizationUnitId:unitId,dueAt:review.dueAt,clientIp:clientIp??null}},tx);
+    await tx.workflowEvent.create({data:{caseId:review.workflowCaseId,taskId:review.taskId,actor:userId,action:'ai.annual.review.register'}});
+    return {reviewId:review.id};
+  },options);}
+  async complete(userId:string,reviewId:string,dto:CompleteAnnualReviewDto,clientIp?:string){
+    for(const v of [dto.trendsSummary,dto.controlEffectivenessSummary,dto.nonconformitySummary])if(typeof v!=='string'||!v.trim()||v.length>5000)throw new BadRequestException('Written trends, control effectiveness and non-conformity findings are required');
+    if(!Array.isArray(dto.evidenceIds)||!dto.evidenceIds.length||dto.evidenceIds.length>20||dto.evidenceIds.some(v=>typeof v!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(v)))throw new BadRequestException('Existing review evidence identifiers are required');
+    return this.prisma.$transaction(async tx=>{
+      const row=await tx.aiAnnualReview.findUnique({where:{id:reviewId},include});if(!row)throw new NotFoundException('Annual review not found');
+      const a=await this.registerScope(tx,userId,row.organizationUnitId,true);await this.visibleSnapshot(tx,a.where,row);
+      if(row.completion||row.round!==dto.expectedRound||row.task.status!=='pending'||row.task.assigneeUserId!==userId||row.assignedOfficerId!==userId||row.task.dueDate?.getTime()!==row.dueAt.getTime()||jsonRecord(row.task.formDataJson)['annualReviewId']!==row.id)throw new ConflictException('Annual review gate changed or belongs to another officer');
+      const evidenceIds=[...new Set(dto.evidenceIds)];if(await tx.ndiEvidence.count({where:{id:{in:evidenceIds},deletedAt:null}})!==evidenceIds.length)throw new BadRequestException('Every evidence identifier must exist');
+      const completedAt=new Date();await tx.aiAnnualReviewCompletion.create({data:{reviewId,actorId:userId,trendsSummary:dto.trendsSummary.trim(),controlEffectivenessSummary:dto.controlEffectivenessSummary.trim(),nonconformitySummary:dto.nonconformitySummary.trim(),evidenceIds,completedAt,clientIp}});
+      await tx.workflowTask.update({where:{id:row.taskId},data:{status:'completed',completedAt,formSubmittedBy:userId,formSubmittedAt:completedAt}});
+      await tx.complianceCalendarOccurrence.update({where:{id:row.calendarOccurrenceId},data:{status:'completed',completedAt}});
+      const next=await this.open(tx,userId,row.organizationUnitId,completedAt,row.round+1,row.calendarTemplateId,row.workflowCaseId);
+      await tx.governanceNotification.updateMany({where:{workflowTaskId:row.taskId,status:{not:'archived'}},data:{status:'archived'}});
+      await tx.governanceEscalation.updateMany({where:{workflowTaskId:row.taskId,status:{not:'resolved'}},data:{status:'resolved',resolvedAt:completedAt,updatedBy:userId}});
+      await this.audit.logRequired({actor:userId,action:'ai.annual.review.complete',entityType:'ai_annual_review',entityId:reviewId,metadata:{nextReviewId:next.id,completedAt,evidenceIds,clientIp:clientIp??null}},tx);
+      await tx.workflowEvent.create({data:{caseId:row.workflowCaseId,taskId:row.taskId,actor:userId,action:'ai.annual.review.complete'}});
+      return {reviewId,nextReviewId:next.id};
+    },options);
+  }
+}

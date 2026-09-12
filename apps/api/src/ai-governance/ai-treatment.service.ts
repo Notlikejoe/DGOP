@@ -1,3 +1,4 @@
+import { requiredInherentRound } from './ai-reassessment-state';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { isDeepStrictEqual } from 'node:util';
 import { Prisma, TaskStatus, TaskDecision } from '@prisma/client';
@@ -35,6 +36,8 @@ export class AiTreatmentService {
  private async gate(tx: Prisma.TransactionClient, userId: string, id: string) {
   const access = await this.risks.visibility(userId,tx), risk = await tx.aiRisk.findFirst({where:{AND:[access.where,{id}]},select:riskSelect});
   if (!risk) throw new NotFoundException('AI risk not found');
+  const requiredRound=await requiredInherentRound(tx,id);
+  if(risk.assessments[0]?.round<requiredRound)risk.assessments=[];
   const response = await tx.aiRiskResponse.findFirst({where:{riskId:id,strategyCode:{in:['MITIGATE','TRANSFER']},decisions:{some:{kind:'officer',decision:'approve'}}},orderBy:{round:'desc'},include:{decisions:true}});
   const tasks = response && risk.workflowCase?.templateId ? await tx.workflowTask.findMany({where:{caseId:risk.workflowCase.id,status:TaskStatus.pending,
    templateStage:{is:{templateId:risk.workflowCase.templateId,isActive:true,code:{in:[PREPARE,APPROVE]},template:{is:{code:AIRS_TEMPLATE_CODE,isActive:true,deletedAt:null}}}}},include:{templateStage:{select:{code:true}}}}) : [];

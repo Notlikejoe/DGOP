@@ -1,10 +1,13 @@
+@if (!isResidual() || state() !== 'ok' || context()?.eligible) {
 <section class="assessment-workspace" [attr.aria-busy]="working()">
-  <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiAssessment.title') }}</h2><p>{{ t('aiAssessment.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load()">{{ t('crud.retry') }}</button></header>
+  <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t(isResidual() ? 'aiResidual.title' : 'aiAssessment.title') }}</h2><p>{{ t(isResidual() ? 'aiResidual.subtitle' : 'aiAssessment.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load()">{{ t('crud.retry') }}</button></header>
   @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
   @else if (state() === 'error') { <section class="ds-card state-card">{{ t('aiAssessment.error') }}</section> }
   @else if (context(); as context) {
+    @if (isResidual() && context.prerequisite) { <div class="override-notice" role="status"><p>{{ t('aiResidual.prerequisite') }} · {{ context.completed }}/{{ context.planned }}</p></div> }
+    @if (isResidual() && !context.controlReference?.versionId) { <div class="override-notice" role="status">{{ t('aiResidual.controlsReference') }}</div> }
     @if (!context.configuration.ready) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAssessment.references') }}</p></div> }
-    @if (context.canStart) { <section class="ds-card decision-card"><p>{{ t('aiAssessment.startHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="start()">{{ t('aiAssessment.start') }}</button></section> }
+    @if (context.canStart) { <section class="ds-card decision-card"><p>{{ t(isResidual() ? 'aiResidual.startHelp' : 'aiAssessment.startHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="start()">{{ t(isResidual() ? 'aiResidual.start' : 'aiAssessment.start') }}</button></section> }
     @if (context.started && context.tasks.length && !context.referencesCurrent) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAssessment.changedReferences') }}</p></div> }
     @if (context.canRestart) { <details class="ds-card decision-card"><summary>{{ t('aiAssessment.restart') }}</summary><p>{{ t('aiAssessment.restartHelp') }}</p><label><span>{{ t('aiAssessment.justification') }}</span><textarea rows="2" maxlength="2000" [ngModel]="restartJustification()" (ngModelChange)="restartJustification.set($event)"></textarea></label><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !restartJustification().trim()" (click)="restart()">{{ t('aiAssessment.restart') }}</button></details> }
     @if (context.started && context.tasks.length) {
@@ -27,12 +30,15 @@
       <section class="ds-card decision-card"><h2>{{ t('aiAssessment.likelihood') }}</h2><label><span>{{ t('aiAssessment.likelihood') }} <b>*</b></span><select [ngModel]="likelihood()" (ngModelChange)="likelihood.set($event)"><option [ngValue]="null">{{ t('aiuc.select') }}</option>@for (score of context.configuration.scores; track score.score) { <option [ngValue]="score.score">{{ score.score }}</option> }</select></label>
         @if (anchor(likelihood(), 'likelihood'); as text) { <p class="anchor-text">{{ text }}</p> }
         <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="justification()" (ngModelChange)="justification.set($event)"></textarea></label>
-        <p>{{ t('aiAssessment.formula') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !likelihood() || !justification().trim()" (click)="complete()">{{ t('aiAssessment.complete') }}</button>
+        @if (isResidual()) { <label><span>{{ t('aiResidual.currentControls') }} *</span><textarea rows="3" maxlength="5000" [ngModel]="currentControls()" (ngModelChange)="currentControls.set($event)"></textarea></label><label><span>{{ t('aiResidual.effectiveness') }} *</span><select [ngModel]="controlEffectiveness()" (ngModelChange)="controlEffectiveness.set($event)"><option value="">{{ t('aiuc.select') }}</option>@for (value of context.controlReference?.values; track value.code) { <option [value]="value.code">{{ bilingual(value) }}</option> }</select></label><p>{{ t('aiResidual.noModifier') }}</p> }
+        <p>{{ t('aiAssessment.formula') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !likelihood() || !justification().trim() || (isResidual() && (!currentControls().trim() || !controlEffectiveness()))" (click)="complete()">{{ t(isResidual() ? 'aiResidual.complete' : 'aiAssessment.complete') }}</button>
       </section>
     }
     @for (round of context.rounds; track round.id) {
       <section class="ds-card decision-card"><header class="assessment-result"><div><span class="eyebrow">{{ t('aiAssessment.round') }} {{ round.round }}</span><h2>{{ round.result.score }} · {{ bilingual({ labelEn: round.result.bandLabelEn, labelAr: round.result.bandLabelAr }) }}</h2><p>{{ round.result.likelihood }} × {{ round.result.impactFinal }} · {{ round.result.severityCode }}</p></div><app-status-chip kind="info" [label]="roundStatus(round)" /></header>
         <p>{{ t('aiAssessment.highest') }}: {{ dimensionLabel(round.result.impactTopDimension) }}</p>
+        @if (isResidual() && round.result.riskReductionPct !== undefined) { <p>{{ t('aiResidual.reduction') }}: {{ reduction(round.result.riskReductionPct) }}</p> }
+        @if (isResidual() && round.inputs.controlEffectiveness; as effectiveness) { <p>{{ t('aiResidual.effectiveness') }}: {{ bilingual(effectiveness) }}</p><p>{{ t('aiResidual.currentControls') }}: {{ round.inputs.currentControls }}</p> }
         @if (round.result.tiedDimensions.length > 1) { <p>{{ t('aiAssessment.tieHelp') }}</p> }
         @if (round.result.ethicsReviewRequired) { <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiAssessment.ethicsRequired') }}</span></div> }
         <details><summary>{{ t('aiAssessment.history') }}</summary><p>{{ t('aiAssessment.likelihood') }}: {{ round.inputs.likelihood.value }} · {{ round.inputs.likelihood.justification }}</p>@for (dimension of round.inputs.dimensions; track dimension.dimension) { <p><strong>{{ dimensionLabel(dimension.dimension) }} · {{ dimension.value }}</strong><br />{{ dimension.justification }}</p> }</details>
@@ -40,3 +46,4 @@
     }
   }
 </section>
+}

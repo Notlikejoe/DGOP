@@ -84,7 +84,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
-| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff, AIRS intake, inherent scoring/adoption and response-strategy approval through protected pending prerequisites implemented; downstream execution/authority gates remain |
+| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff, AIRS intake/inherent adoption, response/plan approval, action execution and gated residual calculation through pending officer review implemented; acceptance/monitoring/closure remain |
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
 | INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — AIUC approved/implemented/closed transitions and AIRS draft use existing case states; risk lifecycle/other terminal paths remain |
@@ -127,25 +127,25 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-03 | 5 | AIRS numbering | Partial — AIR business reference allocated atomically on risk submission; automatic workflow case number remains reserved on handoff, manual submission numbering remains |
 | RM-04 | 5 | Risk source facts and sample handling | Partial — department/source handoff preserved and third-party involvement confirmed at intake; sample reporting exclusions and other computed fields remain |
 | RM-05 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-06 | 5 | Risk record fields | Partial — intake, justified likelihood/eight impacts, immutable inherent/adoption and response/consultation history implemented; full treatment/residual fields remain |
+| RM-06 | 5 | Risk record fields | Partial — intake/controls, inherent/residual score histories, adoption/response/consultation and treatment progress implemented; full governed status/monitoring/control-domain model remains |
 | RM-07 | 5 | Mandatory causal triple | Implemented — draft submission rejects missing cause/event/effect with field-specific issues; no AIR reference or assessment task created on rejection |
-| RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight justified tasks, immutable inherent rounds, independent conditional Ethics review, officer adoption and fresh reassessment returns implemented; residual assessment remains |
+| RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight fresh competent-role tasks and immutable inherent/residual rounds, conditional inherent Ethics/officer adoption and fresh reference-change restarts implemented; residual officer adoption/return remains |
 | RM-09 | 5 | Final impact and highest dimension | Implemented — read-only MAX of eight and highest dimension via pinned R_IMPD, with governed deterministic tie order and retained tied set |
 | RM-10 | 5 | AIRS assessment / decision / operations | Partial — permanent ACT records, one-to-one assigned DGOP tasks, authorized evidence-backed progress/completion and immutable execution history; full field/status/control-domain model remains |
 | RM-11 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-12 | 5 | Server-only computed outputs | Partial — inherent outputs computed server-side, DTO injection rejected and persisted rounds SQL-immutable; other scoring/rollups remain |
+| RM-12 | 5 | Server-only computed outputs | Partial — inherent/residual outputs computed server-side, injected score/authority/acceptance rejected and persisted rounds SQL-immutable; other reporting/cadence rollups remain |
 | RM-13 | 5 | Inherent risk scoring | Implemented — justified 1–4 likelihood with published bilingual anchors × MAX impact, server-calculated range 1–16 |
-| RM-14 | 5 | Risk bands and harmony | Partial — four approved inherent bands through published R_LEVEL implemented; residual, reporting and model-harmony alerts remain |
+| RM-14 | 5 | Risk bands and harmony | Partial — four governed inherent/residual bands through published R_LEVEL implemented; reporting and model-harmony alerts remain |
 | RM-15 | 5 | Severity emission and overrides | Partial — P4/P3/P2/P1 emitted in inherent result/audit/UI; shared WorkflowCase severity integration and justified override authorities remain |
-| RM-16 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-17 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-18 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-16 | 5 | AIRS assessment / decision / operations | Implemented — version-pinned governed control effectiveness and current post-treatment controls mandatory before residual calculation |
+| RM-17 | 5 | AIRS assessment / decision / operations | Implemented — fresh justified residual likelihood/eight impacts after completed treatment; no effectiveness-based numeric modifier |
+| RM-18 | 5 | AIRS assessment / decision / operations | Implemented — immutable residual probability × max impact, governed score/band/severity and display-only risk reduction |
 | RM-19 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-20 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-21 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-22 | 6 | AIRS assessment / decision / operations | Partial — five published strategies, transfer evidence/consultations, officer strategy approval, real complete independently approved MITIGATE/TRANSFER plans; avoidance closure, residual acceptance and escalation execution remain |
 | RM-23 | 6 | AIRS assessment / decision / operations | Partial — ACT records/independent plan approval, assigned target-date tasks and evidence-backed execution with derived mean/overdue; warning/breach notifications and automatic governed status/KPI reporting remain |
-| RM-24 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-24 | 6 | AIRS assessment / decision / operations | Implemented — residual start/contribution/calculation blocks inherent High/Critical with zero verified completed actions; approved treatment requires all planned actions complete |
 | RM-25 | 8 | AIRS assessment / decision / operations | Not implemented |
 | RM-26 | 8 | AIRS assessment / decision / operations | Not implemented |
 | RM-27 | 8 | AIRS assessment / decision / operations | Not implemented |

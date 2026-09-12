@@ -645,7 +645,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
-// Phase 3E executes inherent review, response approval and independent treatment-plan approval. Later AI services
+// Phase 3F2 executes treatment completion gates and fresh residual scoring. Later AI services
 // implement the downstream gates; generic workflow mutations are blocked for AIRS.
 export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
@@ -672,7 +672,9 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-escalation-gate', 'Governance escalation preparation', 'إعداد التصعيد الحوكمي', 'Prepare routing through the existing DGOP escalation ladder; no plain risk acceptance.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5,
       { gatewayConfigJson: { allowedOutcomes: ['escalate', 'return'] } }),
     stage('airs-treatment', 'Treatment implementation', 'تنفيذ المعالجة', 'Complete assigned treatment actions with evidence.', 'implementation', 'review', 'AI_WORKING_GROUP', 5),
-    stage('airs-residual-assessment', 'Residual risk assessment', 'تقييم الخطر المتبقي', 'Reassess risk after treatment before authority acceptance.', 'review', 'review', 'AI_RISK_OWNER', 5),
+    stage('airs-residual-assessment', 'Residual risk assessment', 'تقييم الخطر المتبقي', 'Reassess likelihood and eight fresh impacts after treatment before officer review.', 'review', 'review', 'AI_RISK_OWNER', 5,
+      { assignmentConfigJson: { dimensionsReferenceList: 'R_IMPD', competentRoleAssessment: true } }),
+    stage('airs-residual-adoption', 'Residual assessment review', 'مراجعة تقييم الخطر المتبقي', 'Review the immutable residual calculation before band-derived acceptance authority decisions.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
     stage('airs-monitoring', 'Risk acceptance and monitoring', 'قبول الخطر ومتابعته', 'Apply the governed acceptance authority and recurring review cadence.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
     stage('airs-closure', 'Risk case closure', 'إغلاق حالة الخطر', 'Retain the risk identity and final resolution.', 'closure', 'review', undefined, 0, { isFinal: true }),
   ],
@@ -700,7 +702,9 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('airs-acceptance-gate', 'airs-residual-assessment', 'Residual assessment prerequisites complete', 'اكتمال متطلبات تقييم الخطر المتبقي'),
     link('airs-escalation-gate', 'airs-response-proposal', 'Return from escalation preparation', 'إعادة من إعداد التصعيد'),
     link('airs-treatment', 'airs-residual-assessment', 'Treatment completed', 'اكتمال المعالجة'),
-    link('airs-residual-assessment', 'airs-monitoring', 'Residual assessment recorded', 'تسجيل التقييم المتبقي'),
+    link('airs-residual-assessment', 'airs-residual-adoption', 'Residual calculation recorded', 'تسجيل حساب الخطر المتبقي'),
+    link('airs-residual-adoption', 'airs-monitoring', 'Residual review prerequisites complete', 'اكتمال متطلبات مراجعة الخطر المتبقي', 'approved'),
+    link('airs-residual-adoption', 'airs-residual-assessment', 'Return for fresh residual assessment', 'إعادة تقييم الخطر المتبقي', 'rejected', false),
     link('airs-monitoring', 'airs-closure', 'Monitoring completed', 'اكتمال المتابعة'),
   ],
 };

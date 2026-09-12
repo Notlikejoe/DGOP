@@ -11,3 +11,7 @@ export class CompleteRiskAssessmentDto extends AiRiskVersionDto {
 export class RestartRiskAssessmentDto extends AiRiskVersionDto {
   @IsString() @MaxLength(2000) justification!: string;
 }
+export class CompleteResidualAssessmentDto extends CompleteRiskAssessmentDto {
+  @IsString() @MaxLength(80) controlEffectivenessCode!: string;
+  @IsString() @MaxLength(5000) currentControls!: string;
+}

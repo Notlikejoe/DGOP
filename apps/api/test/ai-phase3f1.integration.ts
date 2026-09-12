@@ -8,6 +8,7 @@ import { AiIdentifiersService } from '../src/ai-governance/ai-identifiers.servic
 import { AiRiskIntakeService } from '../src/ai-governance/ai-risk-intake.service';
 import { AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
 import { AiTreatmentService } from '../src/ai-governance/ai-treatment.service';
+import { testPhase3F2 } from './ai-phase3f2.integration';
 export async function testPhase3F1(db:PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;auditorId:string}) {
  const prisma=db as PrismaService,audit=new AuditService(prisma),scope=new ScopeService(prisma),auth=new AiAuthorizationService(prisma,audit),routing=new AiWorkflowRoutingService(prisma),ids=new AiIdentifiersService();
  const risks=new AiRiskIntakeService(prisma,auth,scope,routing,ids,audit),service=new AiTreatmentService(prisma,auth,risks,routing,ids,scope,audit);
@@ -54,5 +55,6 @@ export async function testPhase3F1(db:PrismaClient,f:{riskId:string;riskOwnerId:
  assert.deepEqual((await db.aiTreatmentPlan.findUniqueOrThrow({where:{id:snapshot.id}})).snapshot,snapshot.snapshot);
  assert.equal((await db.workflowTask.findUniqueOrThrow({where:{id:original.id}})).dueDate!.getTime(),original.dueDate!.getTime());
  assert.equal((await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId}})).version,version);assert.equal(await db.aiAssessmentRound.count({where:{riskId:f.riskId,kind:'residual'}}),0);
+ await testPhase3F2(db,f);
  console.log('Phase 3F1 passed: assigned executor/live scope/activity/Auditor controls, immutable approver GEN-28, provenance/deadline protection, required completion evidence, audit rollback, concurrent exactly-once progress/completion, immutable execution ledger, computed mean/overdue/closure and no residual fabrication.');
 }

@@ -3,6 +3,18 @@ export type Dict = Record<string, { en: string; ar: string }>;
 
 /** Minimal in-app i18n for Sprint 0. Replaced by a full i18n pipeline later. */
 export const DICT: Dict = {
+  'aiResidual.title': { en: 'Residual risk assessment', ar: 'تقييم الخطر المتبقي' },
+  'aiResidual.subtitle': { en: 'Reassess likelihood and all eight impacts before residual review and acceptance.', ar: 'أعد تقييم الاحتمالية والأبعاد الثمانية للأثر قبل مراجعة الخطر المتبقي وقبوله.' },
+  'aiResidual.pendingReview': { en: 'Pending residual review; risk not accepted', ar: 'بانتظار مراجعة الخطر المتبقي؛ لم يتم قبول الخطر' },
+  'aiResidual.prerequisite': { en: 'Completed treatment and verified evidence are required. High/Critical cannot proceed with zero completed actions.', ar: 'تلزم معالجة مكتملة وأدلة متحقق منها. لا يمكن للخطر المرتفع أو الكارثي المتابعة دون إجراءات مكتملة.' },
+  'aiResidual.controlsReference': { en: 'An approved control-effectiveness list must be published.', ar: 'يجب نشر قائمة فعالية الضوابط المعتمدة.' },
+  'aiResidual.startHelp': { en: 'Open eight fresh assessments; previous inherent scores will remain unchanged.', ar: 'افتح ثمانية تقييمات جديدة؛ تبقى درجات الخطر الكامن دون تغيير.' },
+  'aiResidual.start': { en: 'Start residual assessment', ar: 'بدء تقييم الخطر المتبقي' },
+  'aiResidual.currentControls': { en: 'Current controls after treatment', ar: 'الضوابط الحالية بعد المعالجة' },
+  'aiResidual.effectiveness': { en: 'Control effectiveness', ar: 'فعالية الضوابط' },
+  'aiResidual.noModifier': { en: 'Control effectiveness is recorded separately. Residual scores come from fresh assessments.', ar: 'تسجل فعالية الضوابط بصورة مستقلة. تستند درجات الخطر المتبقي إلى تقييمات جديدة.' },
+  'aiResidual.complete': { en: 'Calculate residual risk', ar: 'حساب الخطر المتبقي' },
+  'aiResidual.reduction': { en: 'Risk reduction (display only)', ar: 'نسبة تخفيض الخطر (للعرض فقط)' },
   'aiExecution.total': { en: 'Overall action completion', ar: 'الإنجاز الإجمالي للإجراءات' },
   'aiExecution.progress': { en: 'Action completion', ar: 'إنجاز الإجراء' },
   'aiExecution.overdue': { en: 'Overdue', ar: 'متأخر' },

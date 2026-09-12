@@ -50,7 +50,7 @@ export class AiRiskAssessmentService {
     if (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== risk.owner?.userId) throw new ForbiddenException('Only the assigned Risk Owner coordinates this assessment');
   }
 
-  private async referencesCurrent(tx: Prisma.TransactionClient, config: RiskScoringConfiguration, lock = false) {
+  async referencesCurrent(tx: Prisma.TransactionClient, config: RiskScoringConfiguration, lock = false) {
     const ids = Object.values(config.referenceVersions);
     if (lock) {
       const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM governed_reference_versions
@@ -62,7 +62,7 @@ export class AiRiskAssessmentService {
       OR: [{ effectiveTo: null }, { effectiveTo: { gt: new Date() } }] } }) === 3;
   }
 
-  private async configuration(tx: Prisma.TransactionClient = this.prisma) {
+  async configuration(tx: Prisma.TransactionClient = this.prisma) {
     const now = new Date();
     const versions = await Promise.all(['R_SCORE14', 'R_IMPD', 'R_LEVEL'].map(async listCode => {
       const matches = await tx.governedReferenceVersion.findMany({ where: { listCode, state: 'published', effectiveFrom: { lte: now },

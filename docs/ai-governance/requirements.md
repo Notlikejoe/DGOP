@@ -27,7 +27,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-25 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-26 | 1,3,6 | AIUC final-decision segregation | Implemented — requester/linked owner excluded from decision queues and blocked at recording; configured tier role, claimed assignee and live permission enforced; generic task assignment/decision bypass blocked |
 | GEN-27 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Partial — independent plan approval excludes nominated executors and own-plan authors; execution-time approver exclusion remains |
 | GEN-29 | 1,3,6 | Independent Ethics owner recusal | Implemented for AIUC and inherent AIRS review — actual owner identities blocked and recusal audit persists on rejection |
 | GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-31 | 1,3,6 | Evidence-backed authority decisions | Partial — AIUC Executive Team/Steering final decisions require justification, existing evidence and transactional audit; AIRS acceptance and higher-authority reversal remain |
@@ -131,7 +131,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-07 | 5 | Mandatory causal triple | Implemented — draft submission rejects missing cause/event/effect with field-specific issues; no AIR reference or assessment task created on rejection |
 | RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight justified tasks, immutable inherent rounds, independent conditional Ethics review, officer adoption and fresh reassessment returns implemented; residual assessment remains |
 | RM-09 | 5 | Final impact and highest dimension | Implemented — read-only MAX of eight and highest dimension via pinned R_IMPD, with governed deterministic tie order and retained tied set |
-| RM-10 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-10 | 5 | AIRS assessment / decision / operations | Partial — permanent ACT records and one-to-one assigned DGOP tasks after independent plan approval; action execution/completion and full field model remain |
 | RM-11 | 5 | AIRS assessment / decision / operations | Not implemented |
 | RM-12 | 5 | Server-only computed outputs | Partial — inherent outputs computed server-side, DTO injection rejected and persisted rounds SQL-immutable; other scoring/rollups remain |
 | RM-13 | 5 | Inherent risk scoring | Implemented — justified 1–4 likelihood with published bilingual anchors × MAX impact, server-calculated range 1–16 |
@@ -143,8 +143,8 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-19 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-20 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-21 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-22 | 6 | AIRS assessment / decision / operations | Partial — five published strategies, owner proposal, transfer provider/contract evidence and applicable consultations, officer approval and protected prerequisite routing; real plans, avoidance closure, residual acceptance and escalation execution remain |
-| RM-23 | 6 | AIRS assessment / decision / operations | Partial — treatment-plan prerequisite task only; action records/ACT numbering, plan approval, action SLA and execution remain |
+| RM-22 | 6 | AIRS assessment / decision / operations | Partial — five published strategies, transfer evidence/consultations, officer strategy approval, real complete independently approved MITIGATE/TRANSFER plans; avoidance closure, residual acceptance and escalation execution remain |
+| RM-23 | 6 | AIRS assessment / decision / operations | Partial — ACT records, independent immutable plan approval/returns and assigned tasks anchored to KSA target dates; execution, warning/breach notifications and completion/overdue aggregates remain |
 | RM-24 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-25 | 8 | AIRS assessment / decision / operations | Not implemented |
 | RM-26 | 8 | AIRS assessment / decision / operations | Not implemented |

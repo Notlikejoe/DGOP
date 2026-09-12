@@ -10,14 +10,25 @@ import { AiRiskAdoptionService } from './ai-risk-adoption.service';
 import { ReviewRiskAssessmentDto } from './ai-risk-adoption.dto';
 import { AiRiskResponseService } from './ai-risk-response.service';
 import { ProposeRiskResponseDto } from './ai-risk-response.dto';
+import { AiTreatmentService } from './ai-treatment.service';
+import { SaveTreatmentActionDto } from './ai-treatment.dto';
 
 @Controller('ai/risks')
 export class AiRiskIntakeController {
   constructor(private readonly service: AiRiskIntakeService, private readonly assessments: AiRiskAssessmentService, private readonly adoption: AiRiskAdoptionService,
-    private readonly responses: AiRiskResponseService) {}
+    private readonly responses: AiRiskResponseService, private readonly treatment: AiTreatmentService) {}
   // Authenticated reads enforce own/org/all alternatives with live grants and data scope.
   @Get() list(@CurrentUser() user: AuthUser) { return this.service.list(user.id); }
   @Get('lookups') lookups(@CurrentUser() user: AuthUser) { return this.service.lookups(user.id); }
+  @Get(':id/treatment') treatmentContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.treatment.context(user.id,id); }
+  @Post(':id/actions') @RequirePermissions('airs.risk.assess')
+  addAction(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveTreatmentActionDto, @Req() req: Request) { return this.treatment.save(user.id,id,dto,undefined,req.ip); }
+  @Patch(':id/actions/:actionId') @RequirePermissions('airs.risk.assess')
+  editAction(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('actionId', ParseUUIDPipe) actionId: string, @Body() dto: SaveTreatmentActionDto, @Req() req: Request) { return this.treatment.save(user.id,id,dto,actionId,req.ip); }
+  @Post(':id/treatment/submit') @RequirePermissions('airs.risk.assess')
+  submitPlan(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) { return this.treatment.submit(user.id,id,dto.expectedVersion,req.ip); }
+  @Post(':id/treatment/tasks/:taskId')
+  reviewPlan(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string, @Body() dto: ReviewRiskAssessmentDto, @Req() req: Request) { return this.treatment.review(user.id,id,taskId,dto,req.ip); }
   @Get(':id/response') responseContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.responses.context(user.id, id); }
   @Post(':id/response/prepare') @RequirePermissions('airs.risk.assess')
   prepareResponse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) {

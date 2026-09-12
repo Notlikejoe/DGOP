@@ -1,0 +1,38 @@
+# Phase 3E — Treatment actions and independent plan approval
+
+Implemented 2026-09-12 from a7ec26b. Reuses NestJS/Prisma, Angular, the existing installed DGOP/PrimeNG screen styles, directory, scope/grants, workflow tasks, KSA calendar and evidence/audit services. No dependencies added. This is a bounded plan preparation/approval packet; execution and residual assessment are Phase 3F.
+
+## Delivered
+
+- An adopted MITIGATE/TRANSFER response and one active bound treatment-plan gate are required. Current assigned AI_RISK_OWNER with airs.risk.assess prepares actions; the latest adopted inherent assessment must still match. Other strategies keep their separate protected prerequisites.
+- Each saved action receives a permanent ACT-### from the existing transactional identifier allocator and retains its AIR/use-case/response chain. Create/edit supports title, full required action, governed action type, mapped DGOP priority, existing executor, optional start date, target date, evidence requirements/available evidence and DGOP task type. Computed completion, acceptance, task linkage and identifiers cannot be posted.
+- Published R_ACTTYPE must contain exactly PREVENTIVE, DETECTIVE, CORRECTIVE and IMPROVEMENT. Published R_PRIORITY must provide one-to-one metadata dgopPriorityCode mappings to LOW/NORMAL/HIGH/CRITICAL. These are explicit contracts, not approved production imports. Each action pins its current publications and bilingual labels. Missing/retired/ambiguous references block writes; updating a returned action repins it explicitly.
+- Executors require an active existing user and directory person, explicit airs.risk.assess, a permitted installed execution role (AI_MODEL_OWNER, AI_MLOPS_LEAD, privacy_officer, security_reviewer or technical_steward), and effective scope to the linked asset. Combined-role Auditors cannot execute. Live roles, activity and scope are rechecked at submission and approval.
+- Target dates must be valid calendar dates, current/future at save, and not earlier than the optional start date. PREVENTIVE/CORRECTIVE actions require an evidence specification. All supplied evidence IDs must be existing nondeleted DGOP evidence. Available execution evidence can remain empty until actual completion in Phase 3F.
+- Submission requires at least one complete action and revalidates pinned publications, evidence, executor eligibility and TRANSFER provider/contract evidence/applicable consultations. It creates an immutable plan round containing all action IDs, original details and risk/response provenance, freezes those details and opens one officer approval task. Up to 50 actions per plan are supported.
+- Only actual AI_GOVERNANCE_OFFICER with case.approve.airs and scoped access reviews. GEN-28 excludes designated executors; WF-05 excludes plan author, Risk Owner and Use-Case Owner. Combined-role Auditors remain read-only. Approve/Return requires written justification and 1–20 existing evidence IDs. Approval verifies the current action set still exactly matches its immutable submitted snapshot.
+- Return retains the original immutable submission/decision and opens a fresh assigned owner preparation task against the same response. Actions can then be revised while retaining ACT identity. A new submission creates a fresh round; old approval/return records never authorize it. Changed publications leave Return available.
+- Approval creates exactly one existing DGOP task per action, assigned to its actual executor/installed role and selected Investigation/Evidence Upload/Data Entry type. Tasks carry action/risk/response/plan/decision/approver provenance, zero initial completion and a KSA date-only SLA anchor. Due time is the target date at 23:59:59.999 KSA, not the generic stage's five-day deadline.
+- Serializable risk-version locking, workflow events and required audit are atomic with action numbering, snapshots, decisions, task creation/claims and linkage. Audit failure rolls everything back; concurrent duplicate submissions/actions/approvals cannot double-create work.
+
+## Persistence and UI
+
+Migration 20260912193000_ai_treatment_plans extends the existing AiTreatmentAction with nullable response provenance and planData, preserving legacy foundation rows. It adds AiTreatmentPlan and AiTreatmentPlanDecision with restricted parent/task FKs, unique round/task/decision keys, SQL parent guards and immutable snapshot/decision triggers. SQL rejects response reparenting and adding/editing/archiving actions while their submitted/approved plan is frozen. The original action identity/version guard remains active.
+
+The managed AIRS seed revision is airs-lifecycle-phase3e-1, with a dedicated independent plan-approval stage and return edge. Generic workflow mutation and maintenance continue to be blocked for AIUC/AIRS.
+
+API: scoped GET risks/:id/treatment; owner POST risks/:id/actions and PATCH actions/:actionId; owner POST treatment/submit; officer POST treatment/tasks/:taskId. HTTP whitelist validation rejects actor, ACT identifier and computed completion injections. The existing bilingual AI Risk Register now includes action cards, preparation form, independent review and recorded plan-round decisions, reusing existing responsive styles, controls, status chips and toast handling.
+
+## Remaining scope and release boundary
+
+Assigned action tasks are pending and executionAvailable=false. This packet does not implement completion APIs, evidence-on-completion, action status/progress/closure updates, overdue/completion aggregation, residual scoring or acceptance, SLA warning/breach notifications, control-domain tag selection, AVOID closure or ESCALATE execution. A real approved plan is delivered; its pending tasks do not mean treatment is completed or High/Critical residual prerequisites are met. The case remains Under Review.
+
+Next: Phase 3F action execution/progress/completion with plan-approver exclusions and required preventive/corrective evidence, then completed-action gating and fresh residual assessment. Reuse task deadlines and snapshots; never alter approved plan details. Treat RM-24 and full RM-23 as open until their operational gates/notifications exist.
+
+Development remains isolated/local. No active-app AI synchronization, live database substitution, production publication/import, push or deployment. About DGOP and both original workbooks remain preserved; the source R_IMPD discrepancy and release gates remain open. Test publications are synthetic fixtures only. No browser visual acceptance is claimed. Final verification/quota/runtime observations are recorded in checkpoint.md.
+
+## Verification
+
+API and Angular production builds pass, focused AI security/AIRS graph contracts pass, and shared workflow checks pass 89/89. Real isolated clean-install and baseline-upgrade PostgreSQL/HTTP tests pass. They exercise action creation/ACT identity, date/evidence/executor/activity/scope blocks, optimistic locking, submitted/approved SQL freezing, publication retirement with return available, immutable rounds after revision, combined-role GEN-28/WF-05/Auditor denials, required-audit rollback of action/submission/return/approval, concurrent exactly-once action creation/approval/task spawning, both MITIGATE and TRANSFER, correct task types and KSA target deadlines, no fabricated residual/completion/case closure and authenticated HTTP field-injection rejection. No broader visual acceptance is claimed.
+
+Account-wide usage: five-hour 73% start, 81% after first slice, 85% completion; weekly 11%, 13%, 13%. No resets consumed; two remain available. Isolated PostgreSQL cluster stopped after checks, with ignored test configuration/storage retained.

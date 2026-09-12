@@ -904,6 +904,8 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  treatmentPlan AiTreatmentPlan?
+  treatmentPlanDecision AiTreatmentPlanDecision?
   riskResponseProposal AiRiskResponse?
   riskResponseDecision AiRiskResponseDecision?
   riskAssessmentDecision AiRiskAssessmentDecision?
@@ -4945,6 +4947,8 @@ model AiRiskAssessmentDecision {
 
 /// Immutable response proposals tied to an adopted inherent assessment.
 model AiRiskResponse {
+  actions AiTreatmentAction[]
+  plans AiTreatmentPlan[]
   id String @id @default(uuid())
   riskId String
   assessmentId String
@@ -4983,6 +4987,9 @@ model AiRiskResponseDecision {
 }
 
 model AiTreatmentAction {
+  responseId String?
+  response AiRiskResponse? @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  planData Json?
   id               String        @id @default(uuid())
   riskId           String
   actionRef        String        @unique
@@ -5001,6 +5008,36 @@ model AiTreatmentAction {
 
   @@index([riskId, deletedAt])
   @@map("ai_treatment_actions")
+}
+
+model AiTreatmentPlan {
+  id String @id @default(uuid())
+  responseId String
+  round Int
+  taskId String @unique
+  submittedBy String
+  snapshot Json
+  createdAt DateTime @default(now())
+  response AiRiskResponse @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  decision AiTreatmentPlanDecision?
+  @@unique([responseId, round])
+  @@map("ai_treatment_plans")
+}
+
+model AiTreatmentPlanDecision {
+  id String @id @default(uuid())
+  planId String @unique
+  taskId String @unique
+  decision String
+  actorId String
+  justification String
+  evidenceIds Json
+  clientIp String?
+  createdAt DateTime @default(now())
+  plan AiTreatmentPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  @@map("ai_treatment_plan_decisions")
 }
 
 /// Conditions remain separate obligations rather than disappearing into a note.

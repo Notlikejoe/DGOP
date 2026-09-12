@@ -645,7 +645,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
-// Phase 3D executes inherent review/adoption and response proposals/consultations/strategy approval. Later AI services
+// Phase 3E executes inherent review, response approval and independent treatment-plan approval. Later AI services
 // implement the downstream gates; generic workflow mutations are blocked for AIRS.
 export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
@@ -666,6 +666,7 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-response-proposal', 'Response strategy proposal', 'اقتراح استراتيجية الاستجابة', 'Propose a justified response with evidence and processing-location confirmation.', 'review', 'information', 'AI_RISK_OWNER', 5),
     stage('airs-transfer-consultation', 'Transfer consultation', 'استشارة نقل الخطر', 'Complete required privacy and security consultations for this transfer proposal.', 'review', 'review', 'privacy_officer', 5),
     stage('airs-treatment-plan', 'Treatment plan preparation', 'إعداد خطة المعالجة', 'Prepare real actions and independent plan approval before implementation.', 'review', 'information', 'AI_RISK_OWNER', 5),
+    stage('airs-plan-approval', 'Independent treatment plan approval', 'اعتماد مستقل لخطة المعالجة', 'Review action completeness, evidence, executor eligibility and plan/execution separation.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
     stage('airs-avoidance-review', 'Avoidance prerequisites', 'متطلبات تجنب الخطر', 'Review scope-change or stop and closure prerequisites.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
     stage('airs-acceptance-gate', 'Risk acceptance prerequisites', 'متطلبات قبول الخطر', 'Require actual residual assessment and its governed acceptance authority.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
     stage('airs-escalation-gate', 'Governance escalation preparation', 'إعداد التصعيد الحوكمي', 'Prepare routing through the existing DGOP escalation ladder; no plain risk acceptance.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5,
@@ -692,7 +693,9 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('airs-response', 'airs-avoidance-review', 'Avoidance strategy approved', 'اعتماد التجنب', 'avoid'),
     link('airs-response', 'airs-acceptance-gate', 'Acceptance strategy approved', 'اعتماد استراتيجية القبول', 'accept'),
     link('airs-response', 'airs-escalation-gate', 'Escalation strategy approved', 'اعتماد استراتيجية التصعيد', 'escalate'),
-    link('airs-treatment-plan', 'airs-treatment', 'Plan prerequisites complete', 'اكتمال متطلبات الخطة'),
+    link('airs-treatment-plan', 'airs-plan-approval', 'Treatment plan submitted', 'تقديم خطة المعالجة'),
+    link('airs-plan-approval', 'airs-treatment', 'Independent plan approval', 'اعتماد مستقل للخطة', 'approved'),
+    link('airs-plan-approval', 'airs-treatment-plan', 'Return plan for revision', 'إعادة الخطة للمراجعة', 'rejected', false),
     link('airs-avoidance-review', 'airs-closure', 'Avoidance and closure prerequisites complete', 'اكتمال متطلبات التجنب والإغلاق'),
     link('airs-acceptance-gate', 'airs-residual-assessment', 'Residual assessment prerequisites complete', 'اكتمال متطلبات تقييم الخطر المتبقي'),
     link('airs-escalation-gate', 'airs-response-proposal', 'Return from escalation preparation', 'إعادة من إعداد التصعيد'),

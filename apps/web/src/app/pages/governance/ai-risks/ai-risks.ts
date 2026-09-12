@@ -9,6 +9,7 @@ import { StatusChip } from '../../../shared/status-chip';
 import { AiRiskAssessment } from './ai-risk-assessment';
 import { AiRiskAdoption } from './ai-risk-adoption';
 import { AiRiskResponse } from './ai-risk-response';
+import { AiTreatment } from './ai-treatment';
 
 interface RiskItem {
   id: string; riskRef: string | null; version: number; title: string | null; cause: string | null; event: string | null; effect: string | null;
@@ -24,7 +25,7 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);

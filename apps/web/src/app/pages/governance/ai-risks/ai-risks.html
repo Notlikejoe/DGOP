@@ -30,7 +30,7 @@
             @if (item.canEdit) { <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="save()">{{ t('aiRisk.save') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !lookups().ready" (click)="save(true)">{{ t('aiRisk.submit') }}</button></div> }
             @else { <div class="review-gate-note"><app-icon name="info" /><span>{{ t(item.workflowCase.status === 'draft' ? 'aiRisk.ownerOnly' : 'aiRisk.awaitingAssessment') }}</span></div> }
           </section>
-          @if (item.riskRef) { <app-ai-risk-assessment [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-adoption [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-response [riskId]="item.id" (updated)="load(item.id)" /> }
+          @if (item.riskRef) { <app-ai-risk-assessment [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-adoption [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-response [riskId]="item.id" (updated)="load(item.id)" /><app-ai-treatment [riskId]="item.id" (updated)="load(item.id)" /> }
         } @else { <section class="ds-card empty-state empty-state--main"><app-icon name="shield" /><h2>{{ t('aiRisk.empty') }}</h2></section> }
       </main>
     </div>

@@ -14,6 +14,7 @@ import { AiRiskResponseService } from '../src/ai-governance/ai-risk-response.ser
 import { RESPONSE_STRATEGIES } from '../src/ai-governance/ai-risk-response.dto';
 import { AIRS_STAGE, AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
 import { jsonRecord } from '../src/ai-governance/ai-risk-scoring';
+import { testPhase3E } from './ai-phase3e.integration';
 
 export async function testPhase3D(db: PrismaClient, f: { riskId: string; riskOwnerId: string; useCaseOwnerId: string;
   otherRiskOwnerId: string; privacyId: string; securityId: string; auditorId: string; officerId: string }) {
@@ -146,5 +147,6 @@ export async function testPhase3D(db: PrismaClient, f: { riskId: string; riskOwn
     assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/response/propose`, { method: 'POST', headers,
       body: JSON.stringify({ ...proposal(version), score: 16, riskAccepted: true, actorId: f.officerId }) })).status, 400);
   } finally { await app.close(); }
+  await testPhase3E(db,f);
   console.log('Phase 3D passed: version-pinned proposals, all five prerequisite routes, conditional transfer consultations, publication retirement, live scope/roles/SoD, immutable history, required-audit rollback, concurrent exactly-once actions and HTTP protection.');
 }

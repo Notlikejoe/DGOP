@@ -88,7 +88,7 @@ export class AiRiskAssessmentService {
       const tasks = await this.tasks(tx, risk);
       const coordinator = tasks.find(task => !jsonRecord(task.formDataJson)['dimension'] && task.assigneeRoleCode === 'AI_RISK_OWNER'
         && [TaskStatus.pending, TaskStatus.in_progress].includes(task.status as 'pending' | 'in_progress'));
-      const pinned = (jsonRecord(coordinator?.formDataJson)['configuration'] ?? jsonRecord(risk.assessments[0]?.inputs)['configuration']) as RiskScoringConfiguration | undefined;
+      const pinned = (coordinator ? jsonRecord(coordinator.formDataJson)['configuration'] : jsonRecord(risk.assessments[0]?.inputs)['configuration']) as RiskScoringConfiguration | undefined;
       const config = pinned ? { ...pinned, ready: scoringConfigurationIssues(pinned).length === 0, issues: scoringConfigurationIssues(pinned) } : await this.configuration(tx);
       const referencesCurrent = !!pinned && await this.referencesCurrent(tx, pinned);
       const canAssess = risk.workflowCase?.status === 'under_review' && permissions.has('airs.risk.assess') && !actor.roles.includes('auditor');
@@ -212,8 +212,7 @@ export class AiRiskAssessmentService {
         result: result as Prisma.InputJsonObject } });
       await tx.workflowTask.update({ where: { id: coordinator.id }, data: { status: TaskStatus.completed, completedAt: now,
         formSubmittedAt: now, formSubmittedBy: actor.id, formDataJson: { ...data, assessmentId: assessment.id } as Prisma.InputJsonObject } });
-      const adoption = await this.routing.createStageTask(tx, risk.workflowCase!.id, 'airs-assessment-adoption', now, {
-        templateCode: AIRS_TEMPLATE_CODE, formDataJson: { assessmentId: assessment.id, ethicsReviewRequired, riskRef: risk.riskRef } });
+      const adoption = await this.routing.openRiskAssessmentGate(tx, risk.workflowCase!.id, assessment.id, ethicsReviewRequired, risk.riskRef!, now);
       await tx.aiRisk.update({ where: { id }, data: { version: { increment: 1 } } });
       await tx.workflowEvent.create({ data: { caseId: risk.workflowCase!.id, taskId: adoption.id, actor: actor.id,
         action: 'airs.inherent.scored', comment: `${computed.score}: ${computed.bandCode}; pending adoption` } });

@@ -1,0 +1,27 @@
+<section class="assessment-workspace" [attr.aria-busy]="working()">
+  @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
+  @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button></section> }
+  @else if (context(); as context) {
+    @if (context.assessmentId) {
+      <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiAdoption.title') }} · {{ t('aiAssessment.round') }} {{ context.round }}</h2><p>{{ t('aiAdoption.subtitle') }}</p></div></header>
+      @if (context.recused) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAdoption.recused') }}</p></div> }
+      @if (context.ethicsRequired && !context.ethicsApproved && context.tasks.length) { <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiAdoption.waitingEthics') }}</span></div> }
+      @if (!context.referencesCurrent && context.tasks.length) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAdoption.references') }}</p></div> }
+      @if (context.canPrepare) { <section class="ds-card decision-card"><p>{{ t('aiAdoption.prepareHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="prepare()">{{ t('aiAdoption.prepare') }}</button></section> }
+      @for (task of context.tasks; track task.id) {
+        <section class="ds-card decision-card specialist-decision"><h2>{{ t('aiAdoption.kind.' + task.kind) }}</h2>
+          @if (task.canReturn) {
+            <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="drafts()[task.id].justification" (ngModelChange)="patch(task.id, 'justification', $event)"></textarea></label>
+            <label><span>{{ t('aiAdoption.evidence') }} <b>*</b></span><textarea rows="2" [ngModel]="drafts()[task.id].evidence" (ngModelChange)="patch(task.id, 'evidence', $event)"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label>
+            <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !task.canApprove || !drafts()[task.id].justification.trim() || !drafts()[task.id].evidence.trim()" (click)="review(task.id, 'approve')">{{ t('aiAdoption.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !drafts()[task.id].justification.trim() || !drafts()[task.id].evidence.trim()" (click)="review(task.id, 'return')">{{ t('aiAdoption.return') }}</button></div>
+          } @else { <p>{{ t('aiAdoption.waitingRole') }}</p> }
+        </section>
+      }
+      @for (round of context.history; track round.id) {
+        @if (round.decisions.length) { <section class="ds-card decision-card"><h2>{{ t('aiAdoption.history') }} · {{ t('aiAssessment.round') }} {{ round.round }}</h2>
+          @for (decision of round.decisions; track decision.id) { <article><header class="assessment-result"><strong>{{ t('aiAdoption.kind.' + decision.kind) }}</strong><app-status-chip kind="info" [label]="t('aiAdoption.decision.' + decision.decision)" /></header><p>{{ decision.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ decision.evidenceIds.join(', ') }}</small></article> }
+        </section> }
+      }
+    }
+  }
+</section>

@@ -28,7 +28,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-26 | 1,3,6 | AIUC final-decision segregation | Implemented — requester/linked owner excluded from decision queues and blocked at recording; configured tier role, claimed assignee and live permission enforced; generic task assignment/decision bypass blocked |
 | GEN-27 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-29 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented for AIUC Ethics review — Phase 2E; owner recusal is system-blocked and audit-recorded |
+| GEN-29 | 1,3,6 | Independent Ethics owner recusal | Implemented for AIUC and inherent AIRS review — actual owner identities blocked and recusal audit persists on rejection |
 | GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-31 | 1,3,6 | Evidence-backed authority decisions | Partial — AIUC Executive Team/Steering final decisions require justification, existing evidence and transactional audit; AIRS acceptance and higher-authority reversal remain |
 | GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -84,7 +84,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
-| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC asset/AIRS handoff, assigned AIRS intake and inherent assessment through pending adoption implemented; adoption and downstream authority gates remain |
+| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff, AIRS intake, inherent scoring, conditional independent review and officer adoption through pending response implemented; downstream authority gates remain |
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
 | INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — AIUC approved/implemented/closed transitions and AIRS draft use existing case states; risk lifecycle/other terminal paths remain |
@@ -122,14 +122,14 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | NFR-17 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
 | NFR-18 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
 | NFR-19 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| RM-01 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-01 | 5 | AIRS lifecycle | Partial — inherent assessment/review/adoption and returns implemented; response, treatment, residual acceptance and monitoring remain |
 | RM-02 | 5 | AIRS initiation paths | Partial — automatic AIUC handoff discovery and assigned intake implemented; manual/workshop, library and reassessment starts remain |
 | RM-03 | 5 | AIRS numbering | Partial — AIR business reference allocated atomically on risk submission; automatic workflow case number remains reserved on handoff, manual submission numbering remains |
 | RM-04 | 5 | Risk source facts and sample handling | Partial — department/source handoff preserved and third-party involvement confirmed at intake; sample reporting exclusions and other computed fields remain |
 | RM-05 | 5 | AIRS assessment / decision / operations | Not implemented |
 | RM-06 | 5 | Risk record fields | Partial — intake fields plus justified likelihood/eight impacts and immutable inherent score/band history implemented; full adoption/treatment/residual fields remain |
 | RM-07 | 5 | Mandatory causal triple | Implemented — draft submission rejects missing cause/event/effect with field-specific issues; no AIR reference or assessment task created on rejection |
-| RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight role-specific justified 1–4 tasks and immutable inherent round implemented; officer adoption/conditional Ethics review and residual rounds remain |
+| RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight justified tasks, immutable inherent rounds, independent conditional Ethics review, officer adoption and fresh reassessment returns implemented; residual assessment remains |
 | RM-09 | 5 | Final impact and highest dimension | Implemented — read-only MAX of eight and highest dimension via pinned R_IMPD, with governed deterministic tie order and retained tied set |
 | RM-10 | 5 | AIRS assessment / decision / operations | Not implemented |
 | RM-11 | 5 | AIRS assessment / decision / operations | Not implemented |
@@ -190,9 +190,9 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-29 | 4 | AIUC intake / classification / handoff | Not implemented |
 | WF-01 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-02 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-03 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-03 | 3,6,8 | Mandatory procedure review gates | Partial — AIUC reviews and inherent AIRS conditional Ethics/adoption gates enforced with negative tests; later procedure gates remain |
 | WF-04 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-05 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-05 | 3,6,8 | Owner–approver segregation | Partial — AIUC and inherent AIRS adoption owner/assessor exclusions enforced and audit-recorded; treatment/acceptance stage enforcement remains |
 | WF-06 | 3,6,8 | Workflow gate and SoD negative tests | Implemented for AIUC — Phase 2E; personal-data Privacy co-signature blocks tier decision until complete |
 | WF-07 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-08 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |

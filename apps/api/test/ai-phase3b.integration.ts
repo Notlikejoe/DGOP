@@ -14,6 +14,7 @@ import { AiRiskIntakeService } from '../src/ai-governance/ai-risk-intake.service
 import { AiRiskAssessmentService } from '../src/ai-governance/ai-risk-assessment.service';
 import { RiskDimension, jsonRecord } from '../src/ai-governance/ai-risk-scoring';
 import { riskScoringFixture } from './ai-risk-scoring.fixture';
+import { testPhase3C } from './ai-phase3c.integration';
 
 export async function testPhase3B(db: PrismaClient, fixture: { riskId: string; riskOwnerId: string; useCaseOwnerId: string;
   otherRiskOwnerId: string; privacyId: string; securityId: string; auditorId: string; officerId: string }) {
@@ -109,8 +110,8 @@ export async function testPhase3B(db: PrismaClient, fixture: { riskId: string; r
   assert.equal(result.bandCode, 'HIGH'); assert.equal(result.severityCode, 'P2'); assert.equal(result.ethicsReviewRequired, true); assert.equal(result.adopted, false);
   assert.equal((inputs['dimensions'] as unknown[]).length, 8);
   assert.notEqual(jsonRecord(result.referenceVersions)['R_SCORE14'], oldScoreVersion);
-  assert.equal((await db.workflowTask.findFirstOrThrow({ where: { caseId: preserved.workflowCaseId!, status: 'pending' } })).assigneeRoleCode, 'AI_GOVERNANCE_OFFICER');
-  assert.equal(await db.workflowTask.count({ where: { caseId: preserved.workflowCaseId!, status: 'pending' } }), 1);
+  assert.equal((await db.workflowTask.findFirstOrThrow({ where: { caseId: preserved.workflowCaseId!, status: 'pending', templateStage: { code: 'airs-assessment-adoption' } } })).assigneeRoleCode, 'AI_GOVERNANCE_OFFICER');
+  assert.equal(await db.workflowTask.count({ where: { caseId: preserved.workflowCaseId!, status: 'pending' } }), 2, 'High assessment now opens mandatory independent Ethics alongside the blocked adoption task');
   await assert.rejects(db.aiAssessmentRound.update({ where: { id: round.id }, data: { result: {} } }));
   await assert.rejects(db.aiAssessmentRound.delete({ where: { id: round.id } }));
   const finalRisk = await db.aiRisk.findUniqueOrThrow({ where: { id } });
@@ -131,5 +132,6 @@ export async function testPhase3B(db: PrismaClient, fixture: { riskId: string; r
     assert.equal((await fetch(`${base}/api/ai/risks/${id}/assessment/tasks/${modelTask.id}`, { method: 'POST', headers,
       body: JSON.stringify({ expectedVersion: 17, value: 4, justification: 'Injected score', assessedBy: model.id }) })).status, 400);
   } finally { await app.close(); }
+  await testPhase3C(db, fixture);
   console.log('Phase 3B integration passed: governed role-specific impact tasks, own/scoped queues, scoring/restart provenance, stale/computed-input/role blocks, audit rollback, exactly-one claims/final round, immutable inputs/results, no residual fabrication and HTTP authorization.');
 }

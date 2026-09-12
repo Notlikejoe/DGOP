@@ -18,10 +18,10 @@ export const riskSelect = {
   ownerPersonId: true, intakeData: true, handoffPayload: true, aiucHandoffSourceId: true,
   owner: { select: { id: true, userId: true, fullNameEn: true, fullNameAr: true } },
   useCase: { select: { id: true, useCaseRef: true, name: true, assetId: true, organizationUnitId: true,
-    organizationUnit: { select: { nameEn: true, nameAr: true } }, asset: { select: { code: true, nameEn: true, nameAr: true } } } },
+    owner: { select: { userId: true } }, organizationUnit: { select: { nameEn: true, nameAr: true } }, asset: { select: { code: true, nameEn: true, nameAr: true } } } },
   obligations: { where: { deletedAt: null }, select: { id: true, description: true } },
   assessments: { where: { kind: 'inherent' }, orderBy: { round: 'desc' }, take: 20,
-    select: { id: true, round: true, engineVersion: true, inputs: true, result: true, createdAt: true } },
+    select: { id: true, round: true, engineVersion: true, inputs: true, result: true, createdAt: true, decisions: true } },
   workflowCase: { select: { id: true, code: true, type: true, status: true, templateId: true,
     tasks: { where: { status: { in: [TaskStatus.pending, TaskStatus.in_progress] } }, select: {
       id: true, assigneeUserId: true, assigneeRoleCode: true, dueDate: true, templateStage: { select: { code: true } },
@@ -59,7 +59,7 @@ export class AiRiskIntakeService {
 
   async visibility(userId: string, tx: Prisma.TransactionClient = this.prisma) {
     const actor = await this.authorization.authorizeAny(userId, VIEW, tx);
-    const candidates = [...VIEW, 'case.create.airs', 'airs.risk.assess'] as AiPermission[];
+    const candidates = [...VIEW, 'case.create.airs', 'airs.risk.assess', 'case.approve.airs'] as AiPermission[];
     const grants = await tx.rolePermission.findMany({ where: { role: { is: { code: { in: actor.roles }, isActive: true, deletedAt: null } },
       permission: { is: { OR: candidates.map(splitAiPermission) } } }, include: { permission: true, role: { select: { code: true } } } });
     const permissions = new Set(grants.filter(grant => aiRoleMayHold(grant.role.code, `${grant.permission.resource}.${grant.permission.action}` as AiPermission))

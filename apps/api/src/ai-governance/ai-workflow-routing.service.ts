@@ -5,7 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export const AIUC_TEMPLATE_CODE = 'AIUC_APPROVAL_V1';
 export const AIRS_TEMPLATE_CODE = 'AIRS_LIFECYCLE_V1';
-export const AIRS_STAGE = { identification: 'airs-identification', inherent: 'airs-inherent-assessment' } as const;
+export const AIRS_STAGE = { identification: 'airs-identification', inherent: 'airs-inherent-assessment',
+  ethics: 'airs-ethics-review', adoption: 'airs-assessment-adoption', response: 'airs-response' } as const;
 export const AIUC_STAGE = {
   triage: 'aiuc-triage',
   completion: 'aiuc-completion',
@@ -33,6 +34,13 @@ function record(value: unknown): ConfigRecord {
 @Injectable()
 export class AiWorkflowRoutingService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async openRiskAssessmentGate(client: Prisma.TransactionClient, caseId: string, assessmentId: string, ethicsReviewRequired: boolean, riskRef: string, now: Date) {
+    const formDataJson = { assessmentId, ethicsReviewRequired, riskRef };
+    const adoption = await this.createStageTask(client, caseId, AIRS_STAGE.adoption, now, { templateCode: AIRS_TEMPLATE_CODE, formDataJson });
+    if (ethicsReviewRequired) await this.createStageTask(client, caseId, AIRS_STAGE.ethics, now, { templateCode: AIRS_TEMPLATE_CODE, formDataJson });
+    return adoption;
+  }
 
   async binding(client: RoutingClient = this.prisma, templateCode: string = AIUC_TEMPLATE_CODE) {
     const template = await client.workflowTemplate.findFirst({

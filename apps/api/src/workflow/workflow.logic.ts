@@ -645,7 +645,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
-// Phase 3B executes identification and competent-role inherent assessment. Later AI services
+// Phase 3C executes inherent assessment, independent review and officer adoption. Later AI services
 // implement the downstream gates; generic workflow mutations are blocked for AIRS.
 export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
@@ -656,7 +656,12 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-inherent-assessment', 'Inherent risk assessment', 'تقييم الخطر المتأصل', 'Assess likelihood and the eight justified impact dimensions.', 'review', 'review', 'AI_RISK_OWNER', 5, {
       assignmentConfigJson: { dimensionsReferenceList: 'R_IMPD', multiInstance: 'dimension', coordinatorRoleCode: 'AI_RISK_OWNER' },
     }),
-    stage('airs-assessment-adoption', 'Assessment adoption', 'اعتماد تقييم الخطر', 'Approve the assessment with the required independent reviews.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
+    stage('airs-ethics-review', 'Independent risk Ethics review', 'مراجعة أخلاقيات الخطر المستقلة', 'Review High/Critical assessment rounds independently before adoption.', 'review', 'review', 'AI_ETHICS_COMMITTEE', 10, {
+      assignmentConfigJson: { independentOwners: true, requiredBands: ['HIGH', 'CRITICAL'], sourceHighTier: true },
+    }),
+    stage('airs-assessment-adoption', 'Assessment adoption', 'اعتماد تقييم الخطر', 'Approve the assessment with the required independent reviews.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, {
+      isDecision: true, gatewayConfigJson: { requiredReviewStage: 'airs-ethics-review', mode: 'conditional_review_complete' },
+    }),
     stage('airs-response', 'Response strategy approval', 'اعتماد استراتيجية الاستجابة', 'Approve the response strategy and segregated treatment plan.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
     stage('airs-treatment', 'Treatment implementation', 'تنفيذ المعالجة', 'Complete assigned treatment actions with evidence.', 'implementation', 'review', 'AI_WORKING_GROUP', 5),
     stage('airs-residual-assessment', 'Residual risk assessment', 'تقييم الخطر المتبقي', 'Reassess risk after treatment before authority acceptance.', 'review', 'review', 'AI_RISK_OWNER', 5),
@@ -665,7 +670,11 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
   transitions: [
     link('airs-identification', 'airs-inherent-assessment', 'Submitted risk', 'تقديم الخطر'),
-    link('airs-inherent-assessment', 'airs-assessment-adoption', 'Assessment recorded', 'تسجيل التقييم'),
+    { ...link('airs-inherent-assessment', 'airs-assessment-adoption', 'Assessment recorded; no independent review required', 'تسجيل التقييم دون مراجعة مستقلة مطلوبة'), isDefaultPath: true },
+    link('airs-inherent-assessment', 'airs-ethics-review', 'High/Critical or High-tier review', 'مراجعة الخطر العالي أو الكارثي', undefined, true),
+    link('airs-ethics-review', 'airs-assessment-adoption', 'Independent review approved', 'اعتماد المراجعة المستقلة', 'approved'),
+    link('airs-ethics-review', 'airs-inherent-assessment', 'Return for reassessment', 'إعادة التقييم', 'rejected', false),
+    link('airs-assessment-adoption', 'airs-inherent-assessment', 'Return for reassessment', 'إعادة التقييم', 'rejected', false),
     link('airs-assessment-adoption', 'airs-response', 'Assessment approved', 'اعتماد التقييم', 'approved'),
     link('airs-response', 'airs-treatment', 'Plan approved', 'اعتماد الخطة', 'approved'),
     link('airs-treatment', 'airs-residual-assessment', 'Treatment completed', 'اكتمال المعالجة'),

@@ -143,7 +143,7 @@ const WORKFLOW_TEST_RUN_CREATE_ATTEMPTS = 5;
 const WORKFLOW_REPORT_CASE_LIMIT = 2_000;
 const SYSTEM_ROUTE_GRAPH_REVISIONS: Readonly<Record<string, string>> = Object.fromEntries(
   DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code,
-    seed.code === 'AIUC_APPROVAL_V1' ? 'aiuc-approval-phase2g-1' : seed.code === 'AIRS_LIFECYCLE_V1' ? 'airs-lifecycle-phase3b-1' : 'v6-volume2-complete-3']),
+    seed.code === 'AIUC_APPROVAL_V1' ? 'aiuc-approval-phase2g-1' : seed.code === 'AIRS_LIFECYCLE_V1' ? 'airs-lifecycle-phase3c-1' : 'v6-volume2-complete-3']),
 );
 const WORKFLOW_ROUTE_TYPE_PRIORITY = [
   'owner_assignment_approval',

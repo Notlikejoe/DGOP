@@ -31,7 +31,7 @@
       </section>
     }
     @for (round of context.rounds; track round.id) {
-      <section class="ds-card decision-card"><header class="assessment-result"><div><span class="eyebrow">{{ t('aiAssessment.round') }} {{ round.round }}</span><h2>{{ round.result.score }} · {{ bilingual({ labelEn: round.result.bandLabelEn, labelAr: round.result.bandLabelAr }) }}</h2><p>{{ round.result.likelihood }} × {{ round.result.impactFinal }} · {{ round.result.severityCode }}</p></div><app-status-chip kind="info" [label]="t('aiAssessment.pendingAdoption')" /></header>
+      <section class="ds-card decision-card"><header class="assessment-result"><div><span class="eyebrow">{{ t('aiAssessment.round') }} {{ round.round }}</span><h2>{{ round.result.score }} · {{ bilingual({ labelEn: round.result.bandLabelEn, labelAr: round.result.bandLabelAr }) }}</h2><p>{{ round.result.likelihood }} × {{ round.result.impactFinal }} · {{ round.result.severityCode }}</p></div><app-status-chip kind="info" [label]="roundStatus(round)" /></header>
         <p>{{ t('aiAssessment.highest') }}: {{ dimensionLabel(round.result.impactTopDimension) }}</p>
         @if (round.result.tiedDimensions.length > 1) { <p>{{ t('aiAssessment.tieHelp') }}</p> }
         @if (round.result.ethicsReviewRequired) { <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiAssessment.ethicsRequired') }}</span></div> }

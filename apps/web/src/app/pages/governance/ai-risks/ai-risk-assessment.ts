@@ -14,7 +14,7 @@ interface AssessmentContext {
     dimensions: Array<{ dimension: string; labelEn: string; labelAr: string }> };
   tasks: Array<{ id: string; dimension: string; assessorRoleCode: string; status: string; canContribute: boolean;
     score: { value: number; justification: string } | null }>;
-  rounds: Array<{ id: string; round: number; result: { likelihood: number; impactFinal: number; impactTopDimension: string;
+  rounds: Array<{ id: string; round: number; decisions: Array<{ kind: string; decision: string }>; result: { likelihood: number; impactFinal: number; impactTopDimension: string;
     tiedDimensions: string[]; score: number; bandCode: string; bandLabelEn: string; bandLabelAr: string; severityCode: string; ethicsReviewRequired: boolean };
     inputs: { likelihood: { value: number; justification: string }; dimensions: Array<{ dimension: string; value: number; justification: string; assessedRoleCode: string }> } }>;
 }
@@ -36,6 +36,10 @@ export class AiRiskAssessment {
   private loadSequence = 0;
   constructor() { effect(() => { void this.load(this.riskId()); }); }
   protected t(key: string): string { return this.i18n.t(key); }
+  protected roundStatus(round: AssessmentContext['rounds'][number]): string {
+    return this.t(round.decisions.some(value => value.decision === 'return') ? 'aiAdoption.decision.return'
+      : round.decisions.some(value => value.kind === 'adoption' && value.decision === 'approve') ? 'aiAdoption.adopted' : 'aiAssessment.pendingAdoption');
+  }
   protected bilingual(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }
   protected dimensionLabel(dimension: string): string {
     const value = this.context()?.configuration.dimensions.find(value => value.dimension === dimension);

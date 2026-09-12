@@ -11,11 +11,12 @@ export interface AiDutyFacts {
   riskOwnerId?: string;
   planApproverIds?: readonly string[];
   planExecutorIds?: readonly string[];
+  assessmentAssessorIds?: readonly string[];
   residualScore?: number;
   justification?: string;
   evidenceIds?: readonly string[];
 }
-export type AiDutyAction = 'approve_aiuc' | 'approve_plan' | 'execute_plan' | 'ethics_review'
+export type AiDutyAction = 'approve_aiuc' | 'approve_plan' | 'execute_plan' | 'ethics_review' | 'adopt_assessment'
   | 'accept_low' | 'accept_medium' | 'accept_high' | 'restrict_critical' | 'task';
 
 export function aiDutyViolation(actorId: string, roles: readonly string[], action: AiDutyAction, facts: AiDutyFacts, completion = true): string | null {
@@ -26,6 +27,7 @@ export function aiDutyViolation(actorId: string, roles: readonly string[], actio
   if (action === 'execute_plan' && facts.planApproverIds?.includes(actorId)) return 'GEN-28';
   if (action === 'approve_plan' && facts.planExecutorIds?.includes(actorId)) return 'GEN-28';
   if (action === 'ethics_review' && [facts.useCaseOwnerId,facts.riskOwnerId].includes(actorId)) return 'GEN-29';
+  if (action === 'adopt_assessment' && ([facts.useCaseOwnerId,facts.riskOwnerId].includes(actorId) || facts.assessmentAssessorIds?.includes(actorId))) return 'WF-05';
   if (action.startsWith('accept_') || action === 'restrict_critical') {
     const scores = {accept_low:[1,2],accept_medium:[3,4,6],accept_high:[8,9,12],restrict_critical:[16]};
     if (!scores[action as keyof typeof scores]?.includes(facts.residualScore!)) return 'GEN-112';

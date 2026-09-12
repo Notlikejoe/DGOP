@@ -904,6 +904,7 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  riskAssessmentDecision AiRiskAssessmentDecision?
   aiTreatmentAction       AiTreatmentAction?
   id                      String                    @id @default(uuid())
   caseId                  String
@@ -4910,10 +4911,31 @@ model AiAssessmentRound {
   useCase                AiUseCase                @relation(fields: [useCaseId], references: [id], onDelete: Restrict)
   risk                   AiRisk?                  @relation(fields: [riskId, useCaseId], references: [id, useCaseId], onDelete: Restrict)
   ruleReferenceVersion   GovernedReferenceVersion @relation(fields: [ruleReferenceVersionId], references: [id], onDelete: Restrict)
+  decisions              AiRiskAssessmentDecision[]
 
   @@unique([riskId, kind, round])
   @@index([useCaseId, kind, createdAt])
   @@map("ai_assessment_rounds")
+}
+
+/// Append-only specialist review/adoption evidence; calculated rounds remain unchanged.
+model AiRiskAssessmentDecision {
+  id            String @id @default(uuid())
+  assessmentId  String
+  taskId        String @unique
+  kind          String
+  decision      String
+  actorId       String
+  actorRoleCode String
+  justification String
+  evidenceIds   Json
+  clientIp      String?
+  createdAt     DateTime @default(now())
+  assessment    AiAssessmentRound @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  task          WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+
+  @@unique([assessmentId, kind])
+  @@map("ai_risk_assessment_decisions")
 }
 
 model AiTreatmentAction {

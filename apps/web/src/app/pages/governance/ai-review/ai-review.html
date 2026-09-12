@@ -21,6 +21,7 @@
           <button type="button" [class.active]="tab() === 'triage'" (click)="setTab('triage')">{{ t('aiReview.tab.triage') }} <span>{{ triageCases().length }}</span></button>
           <button type="button" [class.active]="tab() === 'classification'" (click)="setTab('classification')">{{ t('aiReview.tab.classification') }} <span>{{ classificationCases().length }}</span></button>
           <button type="button" [class.active]="tab() === 'verification'" (click)="setTab('verification')">{{ t('aiReview.tab.verification') }} <span>{{ verificationCases().length }}</span></button>
+          <button type="button" [class.active]="tab() === 'specialist'" (click)="setTab('specialist')">{{ t('aiReview.tab.specialist') }} <span>{{ specialistCases().length }}</span></button>
         </div>
         <div class="queue-list">
           @for (item of activeCases(); track item.id) {
@@ -64,7 +65,7 @@
               }
             </section>
             <section class="ds-card assessment-actions"><div><strong>{{ t('aiReview.assessment.review') }}</strong><p>{{ t('aiReview.assessment.reviewBody') }}</p></div><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !configuration()?.ready || !assessmentComplete()" (click)="assess()"><app-icon name="shield" />{{ t('aiReview.assessment.submit') }}</button></section>
-          } @else {
+          } @else if (tab() === 'verification') {
             <section class="classification-result classification-result--ready verification-summary">
               <div><span>{{ t('aiReview.calculated') }}</span><strong>{{ assessmentResult()['scoreMax'] ?? '—' }}</strong></div>
               <div><span>{{ t('aiReview.proposedTier') }}</span><strong>{{ assessmentProposedTier() ? optionLabel(assessmentProposedTier()!) : '—' }}</strong></div>
@@ -92,6 +93,36 @@
                 </div>
               }
               <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification().trim()" (click)="returnForReassessment()">{{ t('aiReview.verification.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !decisionReady()" (click)="recordVerification()"><app-icon name="shield" />{{ decisionIsOverride() ? t('aiReview.verification.recordDecision') : t('aiReview.verification.verify') }}</button></div>
+            </section>
+          } @else {
+            <section class="classification-result classification-result--ready specialist-summary">
+              <div><span>{{ t('aiReview.specialist.stage') }}</span><strong>{{ specialistStageLabel() }}</strong></div>
+              <div><span>{{ t('aiReview.specialist.tier') }}</span><strong>{{ specialistTier() }}</strong></div>
+              <div><span>{{ t('aiReview.specialist.due') }}</span><strong>{{ specialistDueDate() }}</strong></div>
+            </section>
+            <section class="ds-card specialist-context">
+              <header class="section-head"><span><app-icon name="shield" /></span><div><small>{{ t('aiReview.specialist.context') }}</small><h2>{{ t('aiReview.specialist.contextTitle') }}</h2></div></header>
+              <div class="specialist-facts">
+                <div><small>{{ fieldLabel('personal_data_flag') }}</small><strong>{{ renderValue(payload()['personal_data_flag']) }}</strong></div>
+                <div><small>{{ fieldLabel('data_classification') }}</small><strong>{{ renderValue(payload()['data_classification']) }}</strong></div>
+                <div><small>{{ t('aiReview.calculated') }}</small><strong>{{ assessmentResult()['scoreMax'] ?? '—' }}</strong></div>
+              </div>
+              <p>{{ t('aiReview.specialist.readonly') }}</p>
+            </section>
+            <section class="criterion-grid criterion-grid--readonly">
+              @for (criterion of criteria; track criterion; let index = $index) {
+                <article class="ds-card criterion-card criterion-card--readonly">
+                  <header><span>{{ index + 1 }}</span><h2>{{ criterionLabel(criterion) }}</h2><strong class="score-badge">{{ assessedCriterion(criterion).score ?? '—' }}</strong></header>
+                  <p>{{ assessedCriterion(criterion).justification || t('aiReview.notProvided') }}</p>
+                </article>
+              }
+            </section>
+            <section class="ds-card decision-card specialist-decision">
+              <div><span class="eyebrow">{{ t('aiReview.specialist.decision') }}</span><h2>{{ t('aiReview.specialist.title') }}</h2><p>{{ t('aiReview.specialist.body') }}</p></div>
+              <label><span>{{ t('aiReview.justification') }} <b>*</b></span><textarea rows="3" [ngModel]="justification()" (ngModelChange)="justification.set($event)" [placeholder]="t('aiReview.specialist.justificationHint')"></textarea></label>
+              <label><span>{{ t('aiReview.verification.evidenceIds') }} <b>*</b></span><textarea rows="3" [ngModel]="decisionEvidenceIds()" (ngModelChange)="decisionEvidenceIds.set($event)" [placeholder]="t('aiReview.verification.evidenceHint')"></textarea></label>
+              <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiReview.specialist.mergeGate') }}</span></div>
+              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !specialistDecisionReady()" (click)="recordSpecialistReview('approve')">{{ t('aiReview.specialist.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !specialistDecisionReady()" (click)="recordSpecialistReview('return')">{{ t('aiReview.specialist.return') }}</button><button type="button" class="ds-btn danger-action" [disabled]="working() || !specialistDecisionReady()" (click)="recordSpecialistReview('reject')">{{ t('aiReview.specialist.reject') }}</button></div>
             </section>
           }
         } @else {

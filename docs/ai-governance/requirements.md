@@ -28,7 +28,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-26 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-27 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-29 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-29 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented for AIUC Ethics review — Phase 2E; owner recusal is system-blocked and audit-recorded |
 | GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-31 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -165,22 +165,22 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-04 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B; publication gate open |
 | UC-05 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-06 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
-| UC-07 | 2 | AIUC intake / classification / handoff | Partial — conditions/warnings implemented; co-signature pending |
+| UC-07 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B/2E; personal-data condition creates the mandatory Privacy co-signature and blocks decision until completion |
 | UC-08 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-09 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; publication gate open |
 | UC-10 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; governed band metadata required |
-| UC-11 | 3 | AIUC intake / classification / handoff | Partial — engine exclusion, evidence-backed manual Unacceptable decision, immutable audit, and Steering routing implemented; downstream Steering decision pending |
+| UC-11 | 3 | AIUC intake / classification / handoff | Partial — engine exclusion, evidence-backed manual Unacceptable decision, immutable audit, mandatory Ethics gate, and configured Steering routing implemented; downstream Steering decision pending |
 | UC-12 | 3 | AIUC intake / classification / handoff | Partial — verify/override operations preserve proposed and approved tiers, evidence, authority reference, actor role/IP, and immutable history; reversal and final higher-authority approval pending |
-| UC-13 | 3 | AIUC intake / classification / handoff | Partial — Minimal/Limited route to officer adoption, High to Ethics review, and Unacceptable to Steering; downstream decision screens pending |
+| UC-13 | 3 | AIUC intake / classification / handoff | Partial — configured Minimal/Limited, High, and Unacceptable routes create the correct decision authority after all review gates; downstream decision screen pending |
 | UC-14 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-15 | 3 | AIUC intake / classification / handoff | Partial — stages 1–4 tasks implemented; BPMN registration pending |
-| UC-16 | 3 | AIUC intake / classification / handoff | Partial — existing task/decision types reused in implemented stages |
+| UC-15 | 3 | AIUC intake / classification / handoff | Partial — managed `AIUC_APPROVAL_V1` template registered and stages 1–6 bound at runtime; stage-6 completion and stages 7–8 runtime remain |
+| UC-16 | 3 | AIUC intake / classification / handoff | Partial — existing task and decision types reused across the registered template; final decision/asset/closure operations remain |
 | UC-17 | 3 | AIUC intake / classification / handoff | Partial — five-day task implemented; SLA warning/escalation pending |
 | UC-18 | 3 | AIUC intake / classification / handoff | Partial — five-day return/resubmit implemented; warning/closure pending |
-| UC-19 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-20 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-21 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-22 | 3 | AIUC intake / classification / handoff | Not implemented |
+| UC-19 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2E; every High or manual Unacceptable tier instantiates an Ethics task before decision |
+| UC-20 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2E; conditional Privacy/Security/Ethics tasks run in one all-instantiated merge gate |
+| UC-21 | 3 | AIUC intake / classification / handoff | Implemented for initial AIUC routing — Phase 2E; AR-AIUC-01..05 are active template configuration data evaluated by priority |
+| UC-22 | 3 | AIUC intake / classification / handoff | Partial — tier-dependent stage-6 tasks are configured and created; decision permission and requester/owner SoD complete in Phase 2F |
 | UC-23 | 4 | AIUC intake / classification / handoff | Not implemented |
 | UC-24 | 4 | AIUC intake / classification / handoff | Implemented — Phase 2B |
 | UC-25 | 4 | AIUC intake / classification / handoff | Not implemented |
@@ -193,7 +193,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | WF-03 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-04 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-05 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-06 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-06 | 3,6,8 | Workflow gate and SoD negative tests | Implemented for AIUC — Phase 2E; personal-data Privacy co-signature blocks tier decision until complete |
 | WF-07 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-08 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-09 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |

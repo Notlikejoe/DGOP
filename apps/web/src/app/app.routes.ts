@@ -97,7 +97,7 @@ export const routes: Routes = [
       },
       {
         path: 'governance/ai-review',
-        canActivate: [permissionGuard('aiuc.classify.assess')],
+        canActivate: [permissionGuard('case.view.aiuc.org')],
         loadComponent: () =>
           import('./pages/governance/ai-review/ai-review').then((m) => m.AiReviewPage),
       },

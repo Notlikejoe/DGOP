@@ -371,6 +371,10 @@ export const WORKFLOW_DEFAULT_VARIABLES = [
   { code: 'actor.roles', nameEn: 'Actor roles', variableType: 'list', scope: 'actor', source: 'runtime', required: false },
   { code: 'task.formRequiredComplete', nameEn: 'Required form complete', variableType: 'boolean', scope: 'task', source: 'runtime', required: false },
   { code: 'task.slaDueDate', nameEn: 'Task SLA due date', variableType: 'date', scope: 'task', source: 'system', required: false },
+  { code: 'aiuc.personalDataInvolved', nameEn: 'AI use case personal-data flag', variableType: 'boolean', scope: 'case', source: 'system', required: false },
+  { code: 'aiuc.sensitiveDataInvolved', nameEn: 'AI use case sensitive-data flag', variableType: 'boolean', scope: 'case', source: 'system', required: false },
+  { code: 'aiuc.proposedTier', nameEn: 'AI use case proposed SDAIA tier', variableType: 'text', scope: 'case', source: 'system', required: false },
+  { code: 'aiuc.approvedTier', nameEn: 'AI use case approved SDAIA tier', variableType: 'text', scope: 'case', source: 'system', required: false },
 ] as const;
 
 export const WORKFLOW_ACCEPTANCE_CRITERIA = [
@@ -560,7 +564,83 @@ export type WorkflowSlaTemplateItem = {
   status: WorkflowConfigurationStatus;
 };
 
+export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
+  code: 'AIUC_APPROVAL_V1',
+  caseType: 'AIUC',
+  trigger: 'aiuc_submission',
+  nameEn: 'AI use-case adoption and classification',
+  nameAr: 'تبنّي وتصنيف حالة استخدام الذكاء الاصطناعي',
+  description: 'Governed AIUC intake, triage, classification, conditional specialist reviews, tier decision, asset registration, and closure.',
+  defaultSlaDays: 5,
+  stages: [
+    stage('aiuc-intake', 'AIUC intake', 'استقبال طلب حالة استخدام الذكاء الاصطناعي', 'Capture and submit the governed 28-field intake.', 'intake', 'information', undefined, 0, { isStart: true }),
+    stage('aiuc-triage', 'AIUC completeness check and triage', 'فحص اكتمال الطلب وقرار الفرز', 'Review completeness and decide whether classification can start.', 'review', 'review', 'AI_WORKING_GROUP', 5, {
+      isDecision: true,
+      assignmentConfigJson: { ruleId: 'AR-AIUC-01', priority: 100, condition: { variablePath: 'case.type', operator: 'equals', value: 'AIUC' } },
+    }),
+    stage('aiuc-completion', 'Complete returned AIUC intake', 'استكمال طلب حالة الاستخدام المعاد', 'Requester completes returned information and resubmits.', 'intake', 'information', undefined, 5),
+    stage('aiuc-classification', 'Six-criterion SDAIA classification assessment', 'تقييم تصنيف سدايا بالمعايير الستة', 'Working group records the governed six-criterion assessment and officer verification.', 'review', 'review', 'AI_WORKING_GROUP', 10, {
+      assignmentConfigJson: { ruleId: 'AR-AIUC-01', priority: 100, condition: { variablePath: 'case.type', operator: 'equals', value: 'AIUC' } },
+    }),
+    stage('aiuc-review-split', 'Conditional specialist review split', 'تقسيم المراجعات التخصصية المشروطة', 'Instantiate only the Privacy, Security, and Ethics branches whose governed rules match.', 'routing', 'routing', undefined, 0, {
+      nodeType: 'parallel_gateway', parallelGroup: 'aiuc-specialist-reviews',
+      gatewayConfigJson: { mode: 'conditional_parallel', join: 'aiuc-review-merge', ruleIds: ['AR-AIUC-02', 'AR-AIUC-03', 'AR-AIUC-04'] },
+    }),
+    stage('aiuc-privacy-review', 'Privacy co-signature', 'التوقيع المشترك للخصوصية', 'DPO confirms the privacy basis and impact controls for personal-data use cases.', 'review', 'review', 'privacy_officer', 5, {
+      parallelGroup: 'aiuc-specialist-reviews',
+      assignmentConfigJson: { ruleId: 'AR-AIUC-02', priority: 50, activation: { variablePath: 'aiuc.personalDataInvolved', operator: 'equals', value: true } },
+      evidenceRequirementsJson: [{ name: 'Privacy co-signature evidence', required: true, evidenceTypes: ['attachment'] }],
+    }),
+    stage('aiuc-security-review', 'Security review', 'مراجعة الأمن السيبراني', 'Cybersecurity confirms controls for sensitive-data use cases.', 'review', 'review', 'security_reviewer', 5, {
+      parallelGroup: 'aiuc-specialist-reviews',
+      assignmentConfigJson: { ruleId: 'AR-AIUC-03', priority: 50, activation: { variablePath: 'aiuc.sensitiveDataInvolved', operator: 'equals', value: true } },
+      evidenceRequirementsJson: [{ name: 'Security review evidence', required: true, evidenceTypes: ['attachment'] }],
+    }),
+    stage('aiuc-ethics-review', 'AI Ethics Committee review', 'مراجعة لجنة أخلاقيات الذكاء الاصطناعي', 'Independently review High and manual Unacceptable classifications.', 'review', 'review', 'AI_ETHICS_COMMITTEE', 10, {
+      parallelGroup: 'aiuc-specialist-reviews',
+      assignmentConfigJson: { ruleId: 'AR-AIUC-04', priority: 10, activation: { variablePath: 'aiuc.approvedTier', operator: 'in', values: ['HIGH', 'UNACCEPTABLE'] } },
+      evidenceRequirementsJson: [{ name: 'Ethics review evidence', required: true, evidenceTypes: ['attachment'] }],
+    }),
+    stage('aiuc-review-merge', 'Merge specialist reviews', 'دمج المراجعات التخصصية', 'Wait until every instantiated specialist review is complete.', 'routing', 'routing', undefined, 0, {
+      nodeType: 'merge_gateway', parallelGroup: 'aiuc-specialist-reviews',
+      gatewayConfigJson: { mode: 'all_instantiated_complete', incoming: ['aiuc-privacy-review', 'aiuc-security-review', 'aiuc-ethics-review'] },
+    }),
+    stage('aiuc-decision', 'Decision and tier adoption', 'القرار واعتماد التصنيف', 'Adopt, reject, return, delegate, or escalate under the approved-tier authority.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, {
+      isDecision: true,
+      assignmentStrategy: 'dynamic',
+      assignmentConfigJson: {
+        rules: [
+          { ruleId: 'AR-AIUC-05', priority: 1, condition: { variablePath: 'aiuc.approvedTier', operator: 'equals', value: 'UNACCEPTABLE' }, assigneeRoleCode: 'STEERING_COMMITTEE' },
+          { ruleId: 'AR-AIUC-04', priority: 10, condition: { variablePath: 'aiuc.approvedTier', operator: 'equals', value: 'HIGH' }, assigneeRoleCode: 'AI_EXECUTIVE_TEAM' },
+          { ruleId: 'AR-AIUC-01', priority: 100, condition: { variablePath: 'case.type', operator: 'equals', value: 'AIUC' }, assigneeRoleCode: 'AI_GOVERNANCE_OFFICER' },
+        ],
+      },
+      evidenceRequirementsJson: [{ name: 'AIUC tier decision evidence', required: true, evidenceTypes: ['attachment'] }],
+    }),
+    stage('aiuc-asset-registration', 'AI asset registration and handover', 'تسجيل أصل الذكاء الاصطناعي والتسليم', 'Create or link the AI Data Product and prepare the AIRS handover.', 'implementation', 'information', 'AI_WORKING_GROUP', 5),
+    stage('aiuc-closure', 'AIUC closure', 'إغلاق طلب حالة استخدام الذكاء الاصطناعي', 'Record the final resolution and close the governed case.', 'closure', 'review', undefined, 0, { isFinal: true }),
+  ],
+  transitions: [
+    link('aiuc-intake', 'aiuc-triage', 'Submit for triage', 'إرسال للفرز'),
+    link('aiuc-triage', 'aiuc-classification', 'Accepted for classification', 'مقبول للتصنيف', 'approved'),
+    link('aiuc-triage', 'aiuc-completion', 'Return for completion', 'إعادة للاستكمال', 'rejected', false),
+    link('aiuc-completion', 'aiuc-triage', 'Resubmit', 'إعادة الإرسال'),
+    link('aiuc-classification', 'aiuc-review-split', 'Evaluate governed routing rules', 'تقييم قواعد التوجيه المحوكمة'),
+    link('aiuc-review-split', 'aiuc-privacy-review', 'AR-AIUC-02', 'قاعدة AR-AIUC-02', undefined, true, 'parallel_split'),
+    link('aiuc-review-split', 'aiuc-security-review', 'AR-AIUC-03', 'قاعدة AR-AIUC-03', undefined, true, 'parallel_split'),
+    link('aiuc-review-split', 'aiuc-ethics-review', 'AR-AIUC-04', 'قاعدة AR-AIUC-04', undefined, true, 'parallel_split'),
+    link('aiuc-privacy-review', 'aiuc-review-merge', 'Privacy review complete', 'اكتملت مراجعة الخصوصية', undefined, true, 'merge_join'),
+    link('aiuc-security-review', 'aiuc-review-merge', 'Security review complete', 'اكتملت مراجعة الأمن', undefined, true, 'merge_join'),
+    link('aiuc-ethics-review', 'aiuc-review-merge', 'Ethics review complete', 'اكتملت مراجعة الأخلاقيات', undefined, true, 'merge_join'),
+    link('aiuc-review-merge', 'aiuc-decision', 'All instantiated reviews complete', 'اكتملت جميع المراجعات المنشأة'),
+    link('aiuc-decision', 'aiuc-asset-registration', 'Adopted', 'تم الاعتماد', 'approved'),
+    link('aiuc-decision', 'aiuc-classification', 'Return for reassessment', 'إعادة للتقييم', 'rejected', false),
+    link('aiuc-asset-registration', 'aiuc-closure', 'Handover complete', 'اكتمل التسليم'),
+  ],
+};
+
 export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplateSeed[] = [
+  AIUC_WORKFLOW_TEMPLATE,
   {
     code: 'WF-GEN-GOV-REVIEW',
     caseType: 'general',

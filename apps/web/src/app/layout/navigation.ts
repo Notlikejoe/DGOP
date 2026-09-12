@@ -152,7 +152,7 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: 'AR',
         iconName: 'fileCheck',
         link: '/governance/ai-review',
-        permission: 'aiuc.classify.assess',
+        permission: 'case.view.aiuc.org',
         groupKey: 'hub.group.review',
         featured: true,
       },

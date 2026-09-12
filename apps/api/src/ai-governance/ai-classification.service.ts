@@ -3,6 +3,7 @@ import { CaseStatus, Prisma, TaskDecision, TaskStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiAuthorizationService } from './ai-authorization.service';
+import { AIUC_STAGE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import {
   AI_CLASSIFICATION_CRITERIA,
   AiCalculationInputV1,
@@ -11,9 +12,6 @@ import {
 
 const CLASSIFICATION_TASK_TITLE = 'Six-criterion SDAIA classification assessment';
 const OFFICER_TASK_TITLE = 'Verify proposed SDAIA classification';
-const ETHICS_TASK_TITLE = 'Review High-tier AI use case ethics';
-const ADOPTION_TASK_TITLE = 'Adopt verified SDAIA classification';
-const STEERING_TASK_TITLE = 'Decide restriction or stop for Unacceptable AI use case';
 const ENGINE_VERSION = 'AIUC_CLASSIFICATION_MAX_V1';
 const DECISION_ENGINE_VERSION = 'AIUC_CLASSIFICATION_DECISION_V1';
 
@@ -96,6 +94,7 @@ export class AiClassificationService {
     private readonly prisma: PrismaService,
     private readonly authorization: AiAuthorizationService,
     private readonly audit: AuditService,
+    private readonly routing: AiWorkflowRoutingService,
   ) {}
 
   private async published(listCode: string, at: Date, client: PrismaService | Prisma.TransactionClient = this.prisma) {
@@ -192,7 +191,7 @@ export class AiClassificationService {
         workflowCase: {
           is: {
             status: CaseStatus.under_review,
-            tasks: { some: { status: TaskStatus.pending, assigneeRoleCode: 'AI_WORKING_GROUP', title: CLASSIFICATION_TASK_TITLE } },
+            tasks: { some: { assigneeRoleCode: 'AI_WORKING_GROUP', ...this.routing.pendingStageWhere(AIUC_STAGE.classification, CLASSIFICATION_TASK_TITLE) } },
           },
         },
       },
@@ -214,7 +213,7 @@ export class AiClassificationService {
         workflowCase: {
           is: {
             status: CaseStatus.under_review,
-            tasks: { some: { status: TaskStatus.pending, assigneeRoleCode: 'AI_GOVERNANCE_OFFICER', title: OFFICER_TASK_TITLE } },
+            tasks: { some: { assigneeRoleCode: 'AI_GOVERNANCE_OFFICER', ...this.routing.pendingStageWhere(AIUC_STAGE.classification, OFFICER_TASK_TITLE) } },
           },
         },
         assessments: { some: { kind: 'classification' } },
@@ -245,9 +244,8 @@ export class AiClassificationService {
       const task = await tx.workflowTask.findFirst({
         where: {
           caseId: current.workflowCaseId,
-          status: TaskStatus.pending,
           assigneeRoleCode: 'AI_WORKING_GROUP',
-          title: CLASSIFICATION_TASK_TITLE,
+          ...this.routing.pendingStageWhere(AIUC_STAGE.classification, CLASSIFICATION_TASK_TITLE),
         },
       });
       if (!task) throw new ConflictException('No active AIUC classification task exists');
@@ -275,6 +273,7 @@ export class AiClassificationService {
       const result = {
         scoreMax,
         proposedTierCode: tier.code,
+        routingFacts: this.routing.routingFacts(task.formDataJson),
         criteria: AI_CLASSIFICATION_CRITERIA.map((criterion, index) => ({ criterion, score: input.scores[index].value })),
         referenceVersions: { R_SDAIA_SCORE: config.scoreVersionId, R_SDAIA_TIER: config.tierVersionId },
       };
@@ -305,14 +304,9 @@ export class AiClassificationService {
           formSubmittedBy: userId,
         },
       });
-      await tx.workflowTask.create({
-        data: {
-          caseId: current.workflowCaseId,
-          title: OFFICER_TASK_TITLE,
-          type: 'review',
-          status: TaskStatus.pending,
-          assigneeRoleCode: 'AI_GOVERNANCE_OFFICER',
-        },
+      await this.routing.createStageTask(tx, current.workflowCaseId, AIUC_STAGE.classification, now, {
+        assigneeRoleCode: 'AI_GOVERNANCE_OFFICER',
+        formDataJson: { routingFacts: result.routingFacts, verificationTask: true },
       });
       const updated = await tx.aiUseCase.updateMany({
         where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
@@ -387,9 +381,8 @@ export class AiClassificationService {
       const task = await tx.workflowTask.findFirst({
         where: {
           caseId: current.workflowCaseId,
-          status: TaskStatus.pending,
           assigneeRoleCode: 'AI_GOVERNANCE_OFFICER',
-          title: OFFICER_TASK_TITLE,
+          ...this.routing.pendingStageWhere(AIUC_STAGE.classification, OFFICER_TASK_TITLE),
         },
       });
       if (!task) throw new ConflictException('No active Responsible AI Officer verification task exists');
@@ -493,21 +486,10 @@ export class AiClassificationService {
         },
       });
 
-      const isHigh = approvedTier.meta['automatic'] === true && approvedTier.value.code.toUpperCase() === 'HIGH';
-      const nextTask = mode === 'unacceptable'
-        ? { title: STEERING_TASK_TITLE, type: 'decision', role: 'STEERING_COMMITTEE' }
-        : isHigh
-          ? { title: ETHICS_TASK_TITLE, type: 'review', role: 'AI_ETHICS_COMMITTEE' }
-          : { title: ADOPTION_TASK_TITLE, type: 'decision', role: 'AI_GOVERNANCE_OFFICER' };
-      await tx.workflowTask.create({
-        data: {
-          caseId: current.workflowCaseId,
-          title: nextTask.title,
-          type: nextTask.type,
-          status: TaskStatus.pending,
-          assigneeRoleCode: nextTask.role,
-        },
-      });
+      const routingFacts = this.routing.routingFacts({ routingFacts: sourceResult['routingFacts'] });
+      const route = await this.routing.openPostClassificationGate(
+        tx, current.workflowCaseId, decisionRound.id, approvedTier.value.code, routingFacts, now,
+      );
       const updated = await tx.aiUseCase.updateMany({
         where: { id, version: options.expectedVersion, workflowCaseId: current.workflowCaseId },
         data: { version: { increment: 1 } },
@@ -522,7 +504,7 @@ export class AiClassificationService {
           action,
           fromStatus: CaseStatus.under_review,
           toStatus: CaseStatus.under_review,
-          comment: `${calculated.proposedTierCode} -> ${approvedTier.value.code}; next ${nextTask.role}`,
+          comment: `${calculated.proposedTierCode} -> ${approvedTier.value.code}; next ${route.nextRoles.join(', ')}`,
         },
       });
       await this.audit.logRequired({
@@ -544,7 +526,8 @@ export class AiClassificationService {
           justification: justification ?? null,
           evidenceIds,
           authorityReference: authorityReference ?? null,
-          nextRole: nextTask.role,
+          nextRoles: route.nextRoles,
+          conditionalReviewTaskCount: route.reviewTaskCount,
         },
       }, tx);
       return tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: classificationCase });
@@ -564,7 +547,7 @@ export class AiClassificationService {
       }
       if (current.version !== expectedVersion) throw new ConflictException('AI use case changed; reload before returning classification');
       const task = await tx.workflowTask.findFirst({
-        where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeRoleCode: 'AI_GOVERNANCE_OFFICER', title: OFFICER_TASK_TITLE },
+        where: { caseId: current.workflowCaseId, assigneeRoleCode: 'AI_GOVERNANCE_OFFICER', ...this.routing.pendingStageWhere(AIUC_STAGE.classification, OFFICER_TASK_TITLE) },
       });
       if (!task) throw new ConflictException('No active Responsible AI Officer verification task exists');
       const source = current.assessments[0];
@@ -583,14 +566,8 @@ export class AiClassificationService {
           formSubmittedBy: actor.id,
         },
       });
-      await tx.workflowTask.create({
-        data: {
-          caseId: current.workflowCaseId,
-          title: CLASSIFICATION_TASK_TITLE,
-          type: 'review',
-          status: TaskStatus.pending,
-          assigneeRoleCode: 'AI_WORKING_GROUP',
-        },
+      await this.routing.createStageTask(tx, current.workflowCaseId, AIUC_STAGE.classification, now, {
+        formDataJson: { routingFacts: this.routing.routingFacts({ routingFacts: metadata(source.result)['routingFacts'] }) },
       });
       const updated = await tx.aiUseCase.updateMany({
         where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
@@ -623,6 +600,192 @@ export class AiClassificationService {
           scoreMax: calculated.scoreMax,
           justification,
           nextRole: 'AI_WORKING_GROUP',
+        },
+      }, tx);
+      return tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: classificationCase });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async reviewQueue(userId: string) {
+    const actor = await this.authorization.authorize(userId, 'case.view.aiuc.org');
+    const reviewRoles = actor.roles.filter(role => ['privacy_officer', 'security_reviewer', 'AI_ETHICS_COMMITTEE'].includes(role));
+    if (!reviewRoles.length) return [];
+    const stageCodes = [AIUC_STAGE.privacy, AIUC_STAGE.security, AIUC_STAGE.ethics];
+    return this.prisma.aiUseCase.findMany({
+      where: {
+        deletedAt: null,
+        useCaseRef: { not: null },
+        workflowCase: {
+          is: {
+            status: CaseStatus.under_review,
+            tasks: {
+              some: {
+                status: TaskStatus.pending,
+                assigneeRoleCode: { in: reviewRoles },
+                templateStage: { is: { code: { in: stageCodes }, template: { is: { code: 'AIUC_APPROVAL_V1' } } } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 100,
+      select: {
+        ...classificationCase,
+        workflowCase: {
+          select: {
+            id: true, code: true, status: true,
+            tasks: {
+              where: {
+                status: TaskStatus.pending,
+                assigneeRoleCode: { in: reviewRoles },
+                templateStage: { is: { code: { in: stageCodes } } },
+              },
+              orderBy: { createdAt: 'asc' },
+              select: {
+                id: true, title: true, assigneeRoleCode: true, dueDate: true, approvalGroupId: true, formDataJson: true,
+                templateStage: { select: { code: true, nameEn: true, nameAr: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async reviewGate(
+    userId: string,
+    id: string,
+    taskId: string,
+    expectedVersion: number,
+    decision: 'approve' | 'return' | 'reject',
+    justificationValue: string,
+    evidenceValues: string[],
+    clientIp?: string,
+  ) {
+    const justification = requiredText(justificationValue, 'Review justification');
+    const evidenceIds = [...new Set(evidenceValues.map(value => value.trim()).filter(Boolean))];
+    if (!evidenceIds.length) throw new BadRequestException('At least one DGOP evidence identifier is required');
+    return this.prisma.$transaction(async tx => {
+      const actor = await this.authorization.authorize(userId, 'case.view.aiuc.org', tx);
+      const current = await tx.aiUseCase.findFirst({
+        where: { id, deletedAt: null },
+        select: {
+          ...classificationCase,
+          owner: { select: { userId: true } },
+        },
+      });
+      if (!current || !current.workflowCaseId || current.workflowCase?.status !== CaseStatus.under_review) {
+        throw new NotFoundException('AI use case is not available for specialist review');
+      }
+      if (current.version !== expectedVersion) throw new ConflictException('AI use case changed; reload before recording specialist review');
+      const task = await tx.workflowTask.findFirst({
+        where: {
+          id: taskId,
+          caseId: current.workflowCaseId,
+          status: TaskStatus.pending,
+          templateStage: { is: { code: { in: [AIUC_STAGE.privacy, AIUC_STAGE.security, AIUC_STAGE.ethics] } } },
+        },
+        include: { templateStage: { select: { code: true, nameEn: true } } },
+      });
+      if (!task || !task.assigneeRoleCode || !actor.roles.includes(task.assigneeRoleCode)) {
+        throw new ForbiddenException('The specialist review task is not assigned to an active actor role');
+      }
+      if (task.templateStage?.code === AIUC_STAGE.ethics) {
+        await this.authorization.enforceDuty(actor, 'ethics_review', {
+          requesterId: current.requesterUserId,
+          useCaseOwnerId: current.owner?.userId ?? undefined,
+        }, id);
+      }
+      const evidenceCount = await tx.ndiEvidence.count({ where: { id: { in: evidenceIds }, deletedAt: null } });
+      if (evidenceCount !== evidenceIds.length) {
+        throw new BadRequestException('Every review evidence identifier must exist in the DGOP evidence store');
+      }
+      const now = new Date();
+      await tx.workflowTask.update({
+        where: { id: task.id },
+        data: {
+          status: TaskStatus.completed,
+          decision: decision === 'approve' ? TaskDecision.approved : TaskDecision.rejected,
+          decisionComment: justification,
+          completedAt: now,
+          formSubmittedAt: now,
+          formSubmittedBy: actor.id,
+          formDataJson: {
+            ...metadata(task.formDataJson as Prisma.JsonValue),
+            reviewDecision: decision,
+            justification,
+            evidenceIds,
+          } as Prisma.InputJsonObject,
+        },
+      });
+      const form = metadata(task.formDataJson as Prisma.JsonValue);
+      const approvedTierCode = requiredText(typeof form['approvedTierCode'] === 'string' ? form['approvedTierCode'] : undefined, 'Approved tier code');
+      const decisionRoundId = requiredText(typeof form['classificationDecisionId'] === 'string' ? form['classificationDecisionId'] : undefined, 'Classification decision identifier');
+      const routingFacts = this.routing.routingFacts(task.formDataJson);
+      let nextRoles: string[] = [];
+      let nextStatus: CaseStatus = CaseStatus.under_review;
+      if (decision === 'approve') {
+        const openPeers = task.approvalGroupId ? await tx.workflowTask.count({
+          where: { caseId: current.workflowCaseId, approvalGroupId: task.approvalGroupId, status: TaskStatus.pending, id: { not: task.id } },
+        }) : 0;
+        if (openPeers === 0) {
+          const next = await this.routing.createDecisionTask(
+            tx, current.workflowCaseId, decisionRoundId, approvedTierCode, routingFacts, now,
+          );
+          if (next.assigneeRoleCode) nextRoles = [next.assigneeRoleCode];
+        }
+      } else {
+        if (task.approvalGroupId) {
+          await tx.workflowTask.updateMany({
+            where: { caseId: current.workflowCaseId, approvalGroupId: task.approvalGroupId, status: TaskStatus.pending },
+            data: { status: TaskStatus.cancelled, completedAt: now, decisionComment: `Cancelled after ${task.templateStage?.code} ${decision}` },
+          });
+        }
+        if (decision === 'return') {
+          await this.routing.createStageTask(tx, current.workflowCaseId, AIUC_STAGE.classification, now, {
+            formDataJson: { routingFacts },
+          });
+          nextRoles = ['AI_WORKING_GROUP'];
+        } else {
+          nextStatus = CaseStatus.rejected;
+          await tx.workflowCase.update({ where: { id: current.workflowCaseId }, data: { status: nextStatus } });
+        }
+      }
+      const updated = await tx.aiUseCase.updateMany({
+        where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
+        data: { version: { increment: 1 } },
+      });
+      if (updated.count !== 1) throw new ConflictException('AI use case changed; reload before recording specialist review');
+      const action = `aiuc.review.${task.templateStage?.code}.${decision}`;
+      await tx.workflowEvent.create({
+        data: {
+          caseId: current.workflowCaseId,
+          taskId: task.id,
+          actor: actor.id,
+          action,
+          fromStatus: CaseStatus.under_review,
+          toStatus: nextStatus,
+          comment: justification,
+        },
+      });
+      await this.audit.logRequired({
+        actor: actor.id,
+        action,
+        entityType: 'ai_use_case',
+        entityId: id,
+        metadata: {
+          actorRoles: actor.roles,
+          reviewerRole: task.assigneeRoleCode,
+          stageCode: task.templateStage?.code,
+          taskId: task.id,
+          decision,
+          justification,
+          evidenceIds,
+          clientIp: clientIp ?? null,
+          approvedTierCode,
+          classificationDecisionId: decisionRoundId,
+          nextRoles,
         },
       }, tx);
       return tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: classificationCase });

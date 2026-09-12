@@ -1,7 +1,7 @@
 # AI governance implementation checkpoint
 
-Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, Phase 2A AIUC intake API, Phase 2B requester UI/stages 1–3 triage loop, Phase 2C six-criterion assessment, and Phase 2D Responsible AI Officer verification/override (2026-09-12). Phase 1B production seed reconciliation and release gates remain open.
-Next: register the remaining `AIUC_APPROVAL_V1` stages and assignment rules, then implement the conditional privacy/security co-signatures and High-tier Ethics review while keeping source-list publication blocked until workbook differences are approved. See phase-1b.md through phase-2d.md for exact boundaries.
+Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, Phase 2A AIUC intake API, Phase 2B requester UI/stages 1–3 triage loop, Phase 2C six-criterion assessment, Phase 2D Responsible AI Officer verification/override, and Phase 2E `AIUC_APPROVAL_V1` routing with conditional Privacy/Security/Ethics review gates (2026-09-12). Phase 1B production seed reconciliation and release gates remain open.
+Next: Phase 2F implements the evidence-backed stage-6 tier decision, requester/owner segregation, `case.approve.aiuc`, and universal decision-state transitions. Asset registration and AIRS handover follow in a separate bounded packet. Keep source-list publication blocked until workbook differences are approved. See phase-1b.md through phase-2e.md for exact boundaries.
 Branch: codex/ai-governance-phase2a
 Upstream baseline: f32c796
 Preserved active UI baseline: d15743f

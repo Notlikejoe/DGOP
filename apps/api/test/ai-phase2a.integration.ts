@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuditService } from '../src/audit/audit.service';
 import { AiAuthorizationService } from '../src/ai-governance/ai-authorization.service';
 import { AiIdentifiersService } from '../src/ai-governance/ai-identifiers.service';
 import { AiIntakeService } from '../src/ai-governance/ai-intake.service';
 import { AiClassificationService } from '../src/ai-governance/ai-classification.service';
+import { AIUC_STAGE, AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
 import { AI_CLASSIFICATION_CRITERIA } from '../src/ai-governance/ai-governance.contracts';
+import { AIUC_WORKFLOW_TEMPLATE } from '../src/workflow/workflow.logic';
 import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ValidationPipe } from '@nestjs/common';
@@ -16,8 +18,48 @@ export async function testPhase2A(db: PrismaClient) {
   const prisma = db as PrismaService;
   const audit = new AuditService(prisma);
   const authorization = new AiAuthorizationService(prisma, audit);
-  const service = new AiIntakeService(prisma, authorization, new AiIdentifiersService(), audit);
-  const classification = new AiClassificationService(prisma, authorization, audit);
+  const routing = new AiWorkflowRoutingService(prisma);
+  const service = new AiIntakeService(prisma, authorization, new AiIdentifiersService(), audit, routing);
+  const classification = new AiClassificationService(prisma, authorization, audit, routing);
+
+  if (!await db.workflowTemplate.findUnique({ where: { code: AIUC_WORKFLOW_TEMPLATE.code } })) {
+    await db.workflowTemplate.create({
+      data: {
+        code: AIUC_WORKFLOW_TEMPLATE.code,
+        caseType: AIUC_WORKFLOW_TEMPLATE.caseType,
+        trigger: AIUC_WORKFLOW_TEMPLATE.trigger,
+        nameEn: AIUC_WORKFLOW_TEMPLATE.nameEn,
+        nameAr: AIUC_WORKFLOW_TEMPLATE.nameAr,
+        description: AIUC_WORKFLOW_TEMPLATE.description,
+        defaultSlaDays: AIUC_WORKFLOW_TEMPLATE.defaultSlaDays,
+        isSystem: true,
+        createdBy: 'system',
+        stages: {
+          create: AIUC_WORKFLOW_TEMPLATE.stages.map((stage, index) => ({
+            code: stage.code,
+            nameEn: stage.nameEn,
+            nameAr: stage.nameAr,
+            description: stage.description,
+            kind: stage.kind,
+            nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+            taskType: stage.taskType,
+            assignmentStrategy: stage.assignmentStrategy ?? 'role',
+            assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            assigneeRoleCode: stage.assigneeRoleCode,
+            dueDays: stage.dueDays,
+            formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            gatewayConfigJson: (stage.gatewayConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            parallelGroup: stage.parallelGroup,
+            sortOrder: index + 1,
+            isStart: stage.isStart ?? false,
+            isDecision: stage.isDecision ?? false,
+            isFinal: stage.isFinal ?? false,
+          })),
+        },
+      },
+    });
+  }
 
   async function createActor(label: string, roleCode: string) {
     const role = await db.role.findUniqueOrThrow({ where: { code: roleCode } });
@@ -39,6 +81,9 @@ export async function testPhase2A(db: PrismaClient) {
   const sponsor = await createActor('intake-sponsor', 'AI_EXECUTIVE_TEAM');
   const triageReviewer = await createActor('intake-triage', 'AI_WORKING_GROUP');
   const officer = await createActor('intake-officer', 'AI_GOVERNANCE_OFFICER');
+  const privacyReviewer = await createActor('intake-privacy', 'privacy_officer');
+  const securityReviewer = await createActor('intake-security', 'security_reviewer');
+  const ethicsReviewer = await createActor('intake-ethics', 'AI_ETHICS_COMMITTEE');
 
   const lists: Record<string, Array<[string, string, string]>> = {
     L_STREAMS: [['STREAM_1', 'Stream 1', 'المسار الأول']],
@@ -48,7 +93,7 @@ export async function testPhase2A(db: PrismaClient) {
     L_MODEL: [['INTERNAL', 'Internal', 'تطوير داخلي']],
     L_AVAIL: [['AVAILABLE', 'Available', 'متاحة']],
     R_YN: [['YES', 'Yes', 'نعم'], ['NO', 'No', 'لا']],
-    L_CLASS: [['RESTRICTED', 'Restricted', 'مقيدة'], ['UNKNOWN', 'Unknown', 'غير معروف']],
+    L_CLASS: [['RESTRICTED', 'Restricted', 'مقيدة'], ['CONFIDENTIAL', 'Confidential', 'سرية'], ['UNKNOWN', 'Unknown', 'غير معروف']],
     L_BUDGET: [['FUNDED', 'Funded', 'معتمدة']],
   };
   for (const [code, values] of Object.entries(lists)) {
@@ -164,6 +209,8 @@ export async function testPhase2A(db: PrismaClient) {
   const submitted = await service.submit(requester.id, draft.id, 2);
   assert.match(submitted.workflowCase!.code, /^AIUC-\d{4}-\d{6}$/u);
   assert.equal(submitted.workflowCase!.status, 'submitted');
+  const boundWorkflow = await db.workflowCase.findUniqueOrThrow({ where: { id: submitted.workflowCase!.id }, include: { template: true } });
+  assert.equal(boundWorkflow.template?.code, AIUC_WORKFLOW_TEMPLATE.code);
   assert.equal(submitted.useCaseRef, null, 'AI-### must wait for triage acceptance');
   assert.equal(submitted.version, 3);
   assert.equal(submitted.intakeRevisions[0].revision, 3);
@@ -225,9 +272,26 @@ export async function testPhase2A(db: PrismaClient) {
   assert.deepEqual(overrideResult.officerDecision.evidenceIds, [decisionEvidence.id]);
   assert.equal(overrideResult.officerDecision.authorityReference, 'RAIO-P2D-001');
   assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: draft.id, kind: 'classification' } }), 2);
+  const privacyTask = await db.workflowTask.findFirstOrThrow({ where: {
+    caseId: accepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'privacy_officer',
+    templateStage: { is: { code: AIUC_STAGE.privacy } },
+  } });
+  assert.equal((privacyTask.formDataJson as { assignmentRuleId: string }).assignmentRuleId, 'AR-AIUC-02');
   assert.equal(await db.workflowTask.count({ where: {
-    caseId: accepted.workflowCase!.id, status: 'pending', title: 'Adopt verified SDAIA classification', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER',
-  } }), 1);
+    caseId: accepted.workflowCase!.id, status: 'pending', templateStage: { is: { code: AIUC_STAGE.decision } },
+  } }), 0, 'tier decision must wait for every instantiated specialist review');
+  assert.equal((await classification.reviewQueue(privacyReviewer.id)).length, 1);
+  assert.equal((await classification.reviewQueue(securityReviewer.id)).length, 0);
+  const privacyApproved = await classification.reviewGate(
+    privacyReviewer.id, draft.id, privacyTask.id, 9, 'approve',
+    'Privacy basis and controls are supported by the attached decision evidence', [decisionEvidence.id], '127.0.0.4',
+  );
+  assert.equal(privacyApproved.version, 10);
+  const limitedDecisionTask = await db.workflowTask.findFirstOrThrow({ where: {
+    caseId: accepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER',
+    templateStage: { is: { code: AIUC_STAGE.decision } },
+  } });
+  assert.equal((limitedDecisionTask.formDataJson as { assignmentRuleId: string }).assignmentRuleId, 'AR-AIUC-01');
   assert.equal((await classification.verificationQueue(officer.id)).length, 0);
   const overrideAudit = await db.auditLog.findFirstOrThrow({ where: { entityId: draft.id, action: 'aiuc.classification.overridden' } });
   assert.equal((overrideAudit.metadata as { clientIp: string }).clientIp, '127.0.0.1');
@@ -242,7 +306,12 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal((await service.getOwn(requester.id, draft.id)).id, draft.id);
 
   const manualDraft = await service.createDraft(requester.id, { usecase_name: 'Automated eligibility', proposed_owner: owner.id });
-  await service.updateDraft(requester.id, manualDraft.id, 1, { ...complete, usecase_name: 'Automated eligibility' });
+  await service.updateDraft(requester.id, manualDraft.id, 1, {
+    ...complete,
+    usecase_name: 'Automated eligibility',
+    personal_data_flag: 'NO',
+    data_classification: 'CONFIDENTIAL',
+  });
   const manualSubmitted = await service.submit(requester.id, manualDraft.id, 2);
   const manualAccepted = await service.triage(triageReviewer.id, manualDraft.id, 3, 'accept');
   const manualAssessed = await classification.assess(triageReviewer.id, manualDraft.id, 4, {
@@ -269,10 +338,48 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal(unacceptableResult.proposedTierCode, 'LIMITED');
   assert.equal(unacceptableResult.approvedTierCode, 'UNACCEPTABLE');
   assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: manualDraft.id, kind: 'classification' } }), 3);
+  const conditionalTasks = await db.workflowTask.findMany({
+    where: {
+      caseId: manualAccepted.workflowCase!.id,
+      status: 'pending',
+      templateStage: { is: { code: { in: [AIUC_STAGE.privacy, AIUC_STAGE.security, AIUC_STAGE.ethics] } } },
+    },
+    include: { templateStage: true },
+  });
+  assert.deepEqual(conditionalTasks.map(task => task.templateStage!.code).sort(), [AIUC_STAGE.ethics, AIUC_STAGE.security].sort());
+  assert.equal((await classification.reviewQueue(securityReviewer.id)).length, 1);
+  assert.equal((await classification.reviewQueue(ethicsReviewer.id)).length, 1);
+  const securityTask = conditionalTasks.find(task => task.templateStage!.code === AIUC_STAGE.security)!;
+  const ethicsTask = conditionalTasks.find(task => task.templateStage!.code === AIUC_STAGE.ethics)!;
+  const securityApproved = await classification.reviewGate(
+    securityReviewer.id, manualDraft.id, securityTask.id, 8, 'approve',
+    'Security controls and confidential-data handling were reviewed', [decisionEvidence.id], '127.0.0.5',
+  );
+  assert.equal(securityApproved.version, 9);
   assert.equal(await db.workflowTask.count({ where: {
-    caseId: manualAccepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'STEERING_COMMITTEE',
-    title: 'Decide restriction or stop for Unacceptable AI use case',
+    caseId: manualAccepted.workflowCase!.id, status: 'pending', templateStage: { is: { code: AIUC_STAGE.decision } },
+  } }), 0, 'decision must remain blocked while the Ethics review is open');
+  const ethicsRole = await db.role.findUniqueOrThrow({ where: { code: 'AI_ETHICS_COMMITTEE' } });
+  await db.userRole.create({ data: { userId: owner.id, roleId: ethicsRole.id } });
+  await assert.rejects(classification.reviewGate(
+    owner.id, manualDraft.id, ethicsTask.id, 9, 'approve',
+    'An owner must be recused from the Ethics review', [decisionEvidence.id], '127.0.0.7',
+  ));
+  assert.equal(await db.auditLog.count({ where: {
+    entityId: manualDraft.id,
+    action: 'ai.sod.blocked',
+    metadata: { path: ['recusal'], equals: true },
   } }), 1);
+  const ethicsApproved = await classification.reviewGate(
+    ethicsReviewer.id, manualDraft.id, ethicsTask.id, 9, 'approve',
+    'The committee independently reviewed the prohibited-risk evidence', [decisionEvidence.id], '127.0.0.6',
+  );
+  assert.equal(ethicsApproved.version, 10);
+  const steeringTask = await db.workflowTask.findFirstOrThrow({ where: {
+    caseId: manualAccepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'STEERING_COMMITTEE',
+    templateStage: { is: { code: AIUC_STAGE.decision } },
+  } });
+  assert.equal((steeringTask.formDataJson as { assignmentRuleId: string }).assignmentRuleId, 'AR-AIUC-05');
 
   const incomplete = await service.createDraft(requester.id, { usecase_name: 'Incomplete request', proposed_owner: owner.id });
   await assert.rejects(service.submit(requester.id, incomplete.id, 1));
@@ -297,6 +404,10 @@ export async function testPhase2A(db: PrismaClient) {
       authorization: `Bearer ${jwt.sign({ sub: officer.id, tokenVersion: 0, roles: ['AI_GOVERNANCE_OFFICER'] })}`,
       'content-type': 'application/json',
     };
+    const privacyHeaders = {
+      authorization: `Bearer ${jwt.sign({ sub: privacyReviewer.id, tokenVersion: 0, roles: ['privacy_officer'] })}`,
+      'content-type': 'application/json',
+    };
     assert.equal((await fetch(`${base}/api/ai/use-cases`)).status, 401);
     const httpCreate = await fetch(`${base}/api/ai/use-cases`, {
       method: 'POST', headers,
@@ -310,6 +421,8 @@ export async function testPhase2A(db: PrismaClient) {
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/queue`, { headers: reviewerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: reviewerHeaders })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: officerHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers: privacyHeaders })).status, 200);
     const lookups = await fetch(`${base}/api/ai/use-cases/lookups`, { headers });
     assert.equal(lookups.status, 200);
     assert.equal((await lookups.json() as { ready: boolean }).ready, true);
@@ -322,5 +435,5 @@ export async function testPhase2A(db: PrismaClient) {
     await app.close();
   }
 
-  console.log('Phase 2 integration passed: intake revisions, triage, governed classification, officer return, evidence-backed tier override, manual Unacceptable routing, immutable rounds and HTTP authorization.');
+  console.log('Phase 2 integration passed: intake, governed classification, workflow-template binding, conditional Privacy/Security/Ethics reviews, all-instantiated merge, evidence-backed decisions and HTTP authorization.');
 }

@@ -7,7 +7,7 @@ import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
 
-type ReviewTab = 'triage' | 'classification' | 'verification';
+type ReviewTab = 'triage' | 'classification' | 'verification' | 'specialist';
 type CriterionCode = 'individual_impact' | 'affected_scope' | 'harm_likelihood' | 'decision_autonomy'
   | 'data_fairness_transparency' | 'technical_resilience';
 
@@ -18,7 +18,20 @@ interface AiReviewCase {
   description?: string | null;
   version: number;
   updatedAt: string;
-  workflowCase: { id: string; code: string; status: string };
+  workflowCase: {
+    id: string;
+    code: string;
+    status: string;
+    tasks?: Array<{
+      id: string;
+      title: string;
+      assigneeRoleCode?: string | null;
+      dueDate?: string | null;
+      approvalGroupId?: string | null;
+      formDataJson?: Record<string, unknown> | null;
+      templateStage?: { code: string; nameEn: string; nameAr: string } | null;
+    }>;
+  };
   intakeRevisions: Array<{ payload: Record<string, unknown>; revision: number }>;
   assessments: Array<{
     id: string;
@@ -89,6 +102,7 @@ export class AiReviewPage implements OnInit {
   protected readonly triageCases = signal<AiReviewCase[]>([]);
   protected readonly classificationCases = signal<AiReviewCase[]>([]);
   protected readonly verificationCases = signal<AiReviewCase[]>([]);
+  protected readonly specialistCases = signal<AiReviewCase[]>([]);
   protected readonly selected = signal<AiReviewCase | null>(null);
   protected readonly configuration = signal<ClassificationConfiguration | null>(null);
   protected readonly justification = signal('');
@@ -124,6 +138,8 @@ export class AiReviewPage implements OnInit {
     if (!this.decisionIsOverride()) return true;
     return !!this.justification().trim() && !!this.authorityReference().trim() && this.evidenceIdList().length > 0;
   });
+  protected readonly selectedReviewTask = computed(() => this.selected()?.workflowCase.tasks?.[0] ?? null);
+  protected readonly specialistDecisionReady = computed(() => !!this.justification().trim() && this.evidenceIdList().length > 0);
 
   ngOnInit(): void { void this.load(); }
 
@@ -134,17 +150,26 @@ export class AiReviewPage implements OnInit {
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
-      const [triage, classification, verification, configuration] = await Promise.all([
+      const [triage, classification, verification, specialist, configuration] = await Promise.all([
         this.loadQueue('/api/ai/use-cases/triage'),
         this.loadQueue('/api/ai/use-cases/classification/queue'),
         this.loadQueue('/api/ai/use-cases/classification/verification/queue'),
-        firstValueFrom(this.http.get<ClassificationConfiguration>('/api/ai/use-cases/classification/configuration')),
+        this.loadQueue('/api/ai/use-cases/classification/reviews/queue'),
+        this.loadConfiguration(),
       ]);
       this.triageCases.set(triage);
       this.classificationCases.set(classification);
       this.verificationCases.set(verification);
+      this.specialistCases.set(specialist);
       this.configuration.set(configuration);
-      const rows = this.rowsFor(this.tab(), triage, classification, verification);
+      const queues: Array<[ReviewTab, AiReviewCase[]]> = [
+        ['triage', triage], ['classification', classification], ['verification', verification], ['specialist', specialist],
+      ];
+      const activeTab = this.rowsFor(this.tab(), triage, classification, verification, specialist).length
+        ? this.tab()
+        : queues.find(([, rows]) => rows.length)?.[0] ?? this.tab();
+      this.tab.set(activeTab);
+      const rows = this.rowsFor(activeTab, triage, classification, verification, specialist);
       this.select(rows.find(row => row.id === preferredId) ?? rows[0] ?? null);
       this.state.set('ok');
     } catch (error) {
@@ -174,8 +199,8 @@ export class AiReviewPage implements OnInit {
   protected tabLabel(tab = this.tab()): string { return this.t(`aiReview.tab.${tab}`); }
 
   private rowsFor(tab: ReviewTab, triage = this.triageCases(), classification = this.classificationCases(),
-    verification = this.verificationCases()): AiReviewCase[] {
-    return tab === 'triage' ? triage : tab === 'classification' ? classification : verification;
+    verification = this.verificationCases(), specialist = this.specialistCases()): AiReviewCase[] {
+    return tab === 'triage' ? triage : tab === 'classification' ? classification : tab === 'verification' ? verification : specialist;
   }
 
   private async loadQueue(url: string): Promise<AiReviewCase[]> {
@@ -183,6 +208,15 @@ export class AiReviewPage implements OnInit {
       return await firstValueFrom(this.http.get<AiReviewCase[]>(url));
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 403) return [];
+      throw error;
+    }
+  }
+
+  private async loadConfiguration(): Promise<ClassificationConfiguration | null> {
+    try {
+      return await firstValueFrom(this.http.get<ClassificationConfiguration>('/api/ai/use-cases/classification/configuration'));
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 403) return null;
       throw error;
     }
   }
@@ -273,6 +307,26 @@ export class AiReviewPage implements OnInit {
     return [...new Set(this.decisionEvidenceIds().split(/[\s,;]+/u).map(value => value.trim()).filter(Boolean))];
   }
 
+  protected specialistStageLabel(): string {
+    const task = this.selectedReviewTask();
+    if (!task) return this.t('aiReview.tab.specialist');
+    const stage = task.templateStage;
+    return this.i18n.lang() === 'ar' ? stage?.nameAr ?? task.title : stage?.nameEn ?? task.title;
+  }
+
+  protected specialistTier(): string {
+    const code = this.assessmentResult()['approvedTierCode'] ?? this.assessmentResult()['proposedTierCode'];
+    if (typeof code !== 'string') return '—';
+    const option = this.configuration()?.tiers.find(tier => tier.code === code);
+    return option ? this.optionLabel(option) : code;
+  }
+
+  protected specialistDueDate(): string {
+    const value = this.selectedReviewTask()?.dueDate;
+    if (!value) return this.t('aiReview.notProvided');
+    return new Intl.DateTimeFormat(this.i18n.lang() === 'ar' ? 'ar-SA' : 'en-GB', { dateStyle: 'medium' }).format(new Date(value));
+  }
+
   protected async assess(): Promise<void> {
     const item = this.selected();
     const configuration = this.configuration();
@@ -341,6 +395,27 @@ export class AiReviewPage implements OnInit {
       await this.load(item.id);
     } catch (error) {
       this.toast.errorFrom(error, this.t('aiReview.error.verification'));
+    } finally {
+      this.working.set(false);
+    }
+  }
+
+  protected async recordSpecialistReview(decision: 'approve' | 'return' | 'reject'): Promise<void> {
+    const item = this.selected();
+    const task = this.selectedReviewTask();
+    if (!item || !task || !this.specialistDecisionReady() || this.working()) return;
+    this.working.set(true);
+    try {
+      await firstValueFrom(this.http.post(`/api/ai/use-cases/classification/${item.id}/reviews/${task.id}`, {
+        expectedVersion: item.version,
+        decision,
+        justification: this.justification().trim(),
+        evidenceIds: this.evidenceIdList(),
+      }));
+      this.toast.success(this.t(`aiReview.specialist.${decision}.saved`));
+      await this.load();
+    } catch (error) {
+      this.toast.errorFrom(error, this.t('aiReview.error.specialist'));
     } finally {
       this.working.set(false);
     }

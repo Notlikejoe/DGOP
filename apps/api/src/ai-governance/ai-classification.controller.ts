@@ -6,6 +6,7 @@ import { AiClassificationService } from './ai-classification.service';
 import {
   CreateAiClassificationDto,
   OverrideAiClassificationDto,
+  ReviewAiClassificationGateDto,
   ReturnAiClassificationDto,
   UnacceptableAiClassificationDto,
   VerifyAiClassificationDto,
@@ -31,6 +32,12 @@ export class AiClassificationController {
   @RequirePermissions('aiuc.classify.assess')
   verificationQueue(@CurrentUser() user: AuthUser) {
     return this.service.verificationQueue(user.id);
+  }
+
+  @Get('reviews/queue')
+  @RequirePermissions('case.view.aiuc.org')
+  reviewQueue(@CurrentUser() user: AuthUser) {
+    return this.service.reviewQueue(user.id);
   }
 
   @Post(':id/assess')
@@ -87,5 +94,19 @@ export class AiClassificationController {
   ) {
     return this.service.unacceptable(user.id, id, dto.expectedVersion, dto.justification,
       dto.evidenceIds, dto.authorityReference, req.ip ?? req.socket?.remoteAddress);
+  }
+
+
+  @Post(':id/reviews/:taskId')
+  @RequirePermissions('case.view.aiuc.org')
+  reviewGate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: ReviewAiClassificationGateDto,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.service.reviewGate(user.id, id, taskId, dto.expectedVersion, dto.decision,
+      dto.justification, dto.evidenceIds, req.ip ?? req.socket?.remoteAddress);
   }
 }

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreateAiClassificationDto {
   @Type(() => Number)
@@ -57,4 +57,15 @@ export class UnacceptableAiClassificationDto extends ReturnAiClassificationDto {
   @IsString()
   @IsNotEmpty()
   authorityReference!: string;
+}
+
+export class ReviewAiClassificationGateDto extends ReturnAiClassificationDto {
+  @IsIn(['approve', 'return', 'reject'])
+  decision!: 'approve' | 'return' | 'reject';
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @IsUUID('4', { each: true })
+  evidenceIds!: string[];
 }

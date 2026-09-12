@@ -18,7 +18,7 @@ import {
   assertAiIntakeDraftPayload,
   assertAiIntakeSubmission,
 } from './ai-intake.validation';
-import { addKsaBusinessDays, dateKey } from '../governance-operations/governance-operations.logic';
+import { AIUC_STAGE, AiWorkflowRoutingService, AiucRoutingFacts } from './ai-workflow-routing.service';
 
 type IntakeClient = PrismaService | Prisma.TransactionClient;
 type IntakeWarning = { field: AiIntakeField; code: string; message: string };
@@ -77,6 +77,7 @@ export class AiIntakeService {
     private readonly authorization: AiAuthorizationService,
     private readonly identifiers: AiIdentifiersService,
     private readonly audit: AuditService,
+    private readonly routing: AiWorkflowRoutingService,
   ) {}
 
   private badRequest(error: unknown): never {
@@ -193,26 +194,9 @@ export class AiIntakeService {
     return duplicate ? [{ field: 'usecase_name', code: 'DUPLICATE_NAME_WARNING', message: 'An active AI use case already uses this name' }] : [];
   }
 
-  private async ksaDueDate(client: IntakeClient, start: Date, days: number): Promise<Date> {
-    const holidays = await client.ksaHoliday.findMany({ orderBy: { date: 'asc' } });
-    return addKsaBusinessDays(
-      start,
-      days,
-      holidays.filter(row => !row.isRecurring).map(row => dateKey(row.date)),
-      holidays.filter(row => row.isRecurring).map(row => row.date.toISOString().slice(5, 10)),
-    );
-  }
-
-  private async createTriageTask(client: Prisma.TransactionClient, caseId: string, actor: string, now: Date) {
-    const task = await client.workflowTask.create({
-      data: {
-        caseId,
-        title: 'AIUC completeness check and triage',
-        type: 'review',
-        status: TaskStatus.pending,
-        assigneeRoleCode: 'AI_WORKING_GROUP',
-        dueDate: await this.ksaDueDate(client, now, 5),
-      },
+  private async createTriageTask(client: Prisma.TransactionClient, caseId: string, actor: string, now: Date, facts: AiucRoutingFacts) {
+    const task = await this.routing.createStageTask(client, caseId, AIUC_STAGE.triage, now, {
+      formDataJson: { routingFacts: facts },
     });
     await client.workflowEvent.create({ data: { caseId, taskId: task.id, actor, action: 'aiuc.triage.assigned', toStatus: TaskStatus.pending } });
     return task;
@@ -340,6 +324,7 @@ export class AiIntakeService {
       const references = await this.currentReferences(tx, payload, now);
       const directory = await this.directoryReferences(tx, userId, payload);
       const caseCode = await this.identifiers.nextCaseCode(tx, 'AIUC', yearInRiyadh(now));
+      const template = await this.routing.binding(tx);
       const workflowCase = await tx.workflowCase.create({
         data: {
           code: caseCode,
@@ -347,6 +332,8 @@ export class AiIntakeService {
           description: payload.problem_desc.trim(),
           type: 'AIUC',
           status: CaseStatus.submitted,
+          templateId: template.id,
+          templateVersion: template.designerVersion,
           createdBy: userId,
         },
         select: { id: true, code: true, status: true, type: true },
@@ -354,7 +341,7 @@ export class AiIntakeService {
       await tx.workflowEvent.create({
         data: { caseId: workflowCase.id, actor: userId, action: 'aiuc.intake.submitted', toStatus: CaseStatus.submitted },
       });
-      const triageTask = await this.createTriageTask(tx, workflowCase.id, userId, now);
+      const triageTask = await this.createTriageTask(tx, workflowCase.id, userId, now, this.conditions(references.selected));
       const revision = (current.intakeRevisions[0]?.revision ?? 0) + 1;
       await tx.aiIntakeRevision.create({
         data: {
@@ -431,7 +418,8 @@ export class AiIntakeService {
         where: { id: current.workflowCaseId },
         data: { status: CaseStatus.submitted, title: payload.usecase_name.trim(), description: payload.problem_desc.trim() },
       });
-      const triageTask = await this.createTriageTask(tx, current.workflowCaseId, userId, now);
+      await this.routing.bindExistingCase(tx, current.workflowCaseId);
+      const triageTask = await this.createTriageTask(tx, current.workflowCaseId, userId, now, this.conditions(references.selected));
       const updated = await tx.aiUseCase.updateMany({
         where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
         data: { ownerPersonId: directory.ownerPersonId, name: payload.usecase_name.trim(), description: payload.problem_desc.trim(), version: { increment: 1 } },
@@ -477,7 +465,7 @@ export class AiIntakeService {
         throw new BadRequestException('Return and reject decisions require justification');
       }
       const task = await tx.workflowTask.findFirst({
-        where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeRoleCode: 'AI_WORKING_GROUP' },
+        where: { caseId: current.workflowCaseId, assigneeRoleCode: 'AI_WORKING_GROUP', ...this.routing.pendingStageWhere(AIUC_STAGE.triage, 'AIUC completeness check and triage') },
       });
       if (!task) throw new ConflictException('No active AIUC triage task exists');
       const now = new Date();
@@ -498,26 +486,13 @@ export class AiIntakeService {
       let useCaseRef = current.useCaseRef;
       if (decision === 'accept') {
         useCaseRef = useCaseRef ?? await this.identifiers.nextUseCaseRef(tx);
-        await tx.workflowTask.create({
-          data: {
-            caseId: current.workflowCaseId,
-            title: 'Six-criterion SDAIA classification assessment',
-            type: 'review',
-            status: TaskStatus.pending,
-            assigneeRoleCode: 'AI_WORKING_GROUP',
-            dueDate: await this.ksaDueDate(tx, now, 10),
-          },
+        await this.routing.createStageTask(tx, current.workflowCaseId, AIUC_STAGE.classification, now, {
+          formDataJson: task.formDataJson as Prisma.InputJsonObject,
         });
       } else if (decision === 'return') {
-        await tx.workflowTask.create({
-          data: {
-            caseId: current.workflowCaseId,
-            title: 'Complete returned AIUC intake',
-            type: 'information',
-            status: TaskStatus.pending,
-            assigneeUserId: current.requesterUserId,
-            dueDate: await this.ksaDueDate(tx, now, 5),
-          },
+        await this.routing.createStageTask(tx, current.workflowCaseId, AIUC_STAGE.completion, now, {
+          assigneeUserId: current.requesterUserId,
+          formDataJson: task.formDataJson as Prisma.InputJsonObject,
         });
       }
       const updated = await tx.aiUseCase.updateMany({

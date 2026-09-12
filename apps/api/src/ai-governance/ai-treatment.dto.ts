@@ -1,4 +1,4 @@
-import { IsArray, ArrayMaxSize, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsArray, ArrayMaxSize, IsIn, IsInt, Min, Max, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { AiRiskVersionDto } from './ai-risk-intake.dto';
 export const ACTION_TYPES = ['PREVENTIVE','DETECTIVE','CORRECTIVE','IMPROVEMENT'] as const;
 export class SaveTreatmentActionDto extends AiRiskVersionDto {
@@ -12,4 +12,9 @@ export class SaveTreatmentActionDto extends AiRiskVersionDto {
  @IsString() @MaxLength(5000) evidenceRequired!: string;
  @IsArray() @ArrayMaxSize(20) @IsUUID('4',{each:true}) evidenceIds!: string[];
  @IsIn(['investigation','evidence_upload','information']) taskType!: string;
+}
+export class RecordTreatmentProgressDto extends AiRiskVersionDto {
+ @IsInt() @Min(0) @Max(100) completionPct!: number;
+ @IsString() @MaxLength(5000) justification!: string;
+ @IsArray() @ArrayMaxSize(20) @IsUUID('4',{each:true}) evidenceIds!: string[];
 }

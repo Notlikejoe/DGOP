@@ -11,7 +11,7 @@ import { ReviewRiskAssessmentDto } from './ai-risk-adoption.dto';
 import { AiRiskResponseService } from './ai-risk-response.service';
 import { ProposeRiskResponseDto } from './ai-risk-response.dto';
 import { AiTreatmentService } from './ai-treatment.service';
-import { SaveTreatmentActionDto } from './ai-treatment.dto';
+import { RecordTreatmentProgressDto, SaveTreatmentActionDto } from './ai-treatment.dto';
 
 @Controller('ai/risks')
 export class AiRiskIntakeController {
@@ -27,6 +27,8 @@ export class AiRiskIntakeController {
   editAction(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('actionId', ParseUUIDPipe) actionId: string, @Body() dto: SaveTreatmentActionDto, @Req() req: Request) { return this.treatment.save(user.id,id,dto,actionId,req.ip); }
   @Post(':id/treatment/submit') @RequirePermissions('airs.risk.assess')
   submitPlan(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) { return this.treatment.submit(user.id,id,dto.expectedVersion,req.ip); }
+  @Post(':id/actions/:actionId/progress') @RequirePermissions('airs.risk.assess')
+  progress(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('actionId', ParseUUIDPipe) actionId: string, @Body() dto: RecordTreatmentProgressDto, @Req() req: Request) { return this.treatment.execute(user.id,id,actionId,dto,req.ip); }
   @Post(':id/treatment/tasks/:taskId')
   reviewPlan(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string, @Body() dto: ReviewRiskAssessmentDto, @Req() req: Request) { return this.treatment.review(user.id,id,taskId,dto,req.ip); }
   @Get(':id/response') responseContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.responses.context(user.id, id); }

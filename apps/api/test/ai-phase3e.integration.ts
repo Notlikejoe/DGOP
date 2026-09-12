@@ -14,6 +14,7 @@ import { AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routi
 import { AiTreatmentService } from '../src/ai-governance/ai-treatment.service';
 import { ACTION_TYPES } from '../src/ai-governance/ai-treatment.dto';
 import { jsonRecord } from '../src/ai-governance/ai-risk-scoring';
+import { testPhase3F1 } from './ai-phase3f1.integration';
 export async function testPhase3E(db: PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;otherRiskOwnerId:string;auditorId:string}) {
  const prisma=db as PrismaService,audit=new AuditService(prisma),scope=new ScopeService(prisma),auth=new AiAuthorizationService(prisma,audit),routing=new AiWorkflowRoutingService(prisma),ids=new AiIdentifiersService();
  const risks=new AiRiskIntakeService(prisma,auth,scope,routing,ids,audit),service=new AiTreatmentService(prisma,auth,risks,routing,ids,scope,audit);
@@ -94,6 +95,8 @@ export async function testPhase3E(db: PrismaClient,f:{riskId:string;riskOwnerId:
  const app=await NestFactory.create(AppModule,{logger:false});try{app.setGlobalPrefix('api');app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));await app.listen(0,'127.0.0.1');const base=await app.getUrl(),jwt=app.get(JwtService),headers={authorization:`Bearer ${jwt.sign({sub:f.riskOwnerId,tokenVersion:0,roles:['system_admin']})}`,'content-type':'application/json'};
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/treatment`)).status,401);assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/treatment`,{headers})).status,200);
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/actions`,{method:'POST',headers,body:JSON.stringify({...action(version),actionRef:'ACT-999',completionPct:100,actorId:f.officerId})})).status,400);
+  assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/actions/${first.id}/progress`,{method:'POST',headers,body:JSON.stringify({expectedVersion:version,completionPct:100,justification:'Injected computed fields',evidenceIds:[evidence.id],closureDate:'2026-01-01',planApproverId:f.riskOwnerId})})).status,400);
  }finally{await app.close();}
+ await testPhase3F1(db,f);
  console.log('Phase 3E passed: governed ACT records, date/evidence/executor/scope validation, immutable submitted plans, returns/reference retirement, GEN-28/WF-05/Auditor blocks, required-audit rollback, concurrent exactly-once action/approval, one-to-one assigned tasks with KSA target deadlines and HTTP protection.');
 }

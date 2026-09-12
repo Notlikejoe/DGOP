@@ -3,6 +3,14 @@ export type Dict = Record<string, { en: string; ar: string }>;
 
 /** Minimal in-app i18n for Sprint 0. Replaced by a full i18n pipeline later. */
 export const DICT: Dict = {
+  'aiExecution.total': { en: 'Overall action completion', ar: 'الإنجاز الإجمالي للإجراءات' },
+  'aiExecution.progress': { en: 'Action completion', ar: 'إنجاز الإجراء' },
+  'aiExecution.overdue': { en: 'Overdue', ar: 'متأخر' },
+  'aiExecution.completed': { en: 'Completed', ar: 'مكتمل' },
+  'aiExecution.evidence': { en: 'Execution evidence identifiers', ar: 'معرفات أدلة التنفيذ' },
+  'aiExecution.evidenceHelp': { en: 'Preventive and corrective completion requires existing execution evidence.', ar: 'يتطلب إكمال الإجراءات الوقائية والتصحيحية أدلة تنفيذ موجودة.' },
+  'aiExecution.complete': { en: 'Complete action', ar: 'إكمال الإجراء' },
+  'aiExecution.save': { en: 'Record progress', ar: 'تسجيل التقدم' },
   'aiTreatment.title': { en: 'Treatment plan', ar: 'خطة المعالجة' },
   'aiTreatment.subtitle': { en: 'Prepare accountable actions for independent approval.', ar: 'أعد إجراءات محددة المسؤولية للاعتماد المستقل.' },
   'aiTreatment.references': { en: 'Approved action types and priority mappings must be published first.', ar: 'يجب نشر أنواع الإجراءات وربط الأولويات المعتمد أولاً.' },

@@ -904,6 +904,7 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  treatmentProgress AiTreatmentProgress[]
   treatmentPlan AiTreatmentPlan?
   treatmentPlanDecision AiTreatmentPlanDecision?
   riskResponseProposal AiRiskResponse?
@@ -4987,6 +4988,7 @@ model AiRiskResponseDecision {
 }
 
 model AiTreatmentAction {
+  progress AiTreatmentProgress[]
   responseId String?
   response AiRiskResponse? @relation(fields: [responseId], references: [id], onDelete: Restrict)
   planData Json?
@@ -5038,6 +5040,23 @@ model AiTreatmentPlanDecision {
   plan AiTreatmentPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
   task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
   @@map("ai_treatment_plan_decisions")
+}
+
+model AiTreatmentProgress {
+  id String @id @default(uuid())
+  actionId String
+  taskId String
+  round Int
+  completionPct Int
+  justification String
+  evidenceIds Json
+  actorId String
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  action AiTreatmentAction @relation(fields: [actionId], references: [id], onDelete: Restrict)
+  task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  @@unique([actionId, round])
+  @@map("ai_treatment_progress")
 }
 
 /// Conditions remain separate obligations rather than disappearing into a note.

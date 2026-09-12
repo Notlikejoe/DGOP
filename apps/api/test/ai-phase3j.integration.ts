@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaClient } from '@prisma/client';
+import { AppModule } from '../src/app.module';
+import { AuditService } from '../src/audit/audit.service';
+import { ScopeService } from '../src/access/scope.service';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { AiAuthorizationService } from '../src/ai-governance/ai-authorization.service';
+import { AiIdentifiersService } from '../src/ai-governance/ai-identifiers.service';
+import { AiRiskIntakeService } from '../src/ai-governance/ai-risk-intake.service';
+import { AiRiskAssessmentService } from '../src/ai-governance/ai-risk-assessment.service';
+import { AiRiskAdoptionService } from '../src/ai-governance/ai-risk-adoption.service';
+import { AiRiskResponseService } from '../src/ai-governance/ai-risk-response.service';
+import { AiResidualAssessmentService } from '../src/ai-governance/ai-residual-assessment.service';
+import { AiResidualDecisionService } from '../src/ai-governance/ai-residual-decision.service';
+import { AiRiskReviewService, aiReviewDue } from '../src/ai-governance/ai-risk-review.service';
+import { AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
+import { REASSESSMENT_TRIGGERS } from '../src/ai-governance/ai-risk-review.dto';
+
+export async function testPhase3J(db:PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;auditorId:string}) {
+ const prisma=db as PrismaService,audit=new AuditService(prisma),auth=new AiAuthorizationService(prisma,audit),routing=new AiWorkflowRoutingService(prisma),risks=new AiRiskIntakeService(prisma,auth,new ScopeService(prisma),routing,new AiIdentifiersService(),audit),scoring=new AiRiskAssessmentService(prisma,auth,risks,routing,audit),adoption=new AiRiskAdoptionService(prisma,auth,risks,routing,audit),responses=new AiRiskResponseService(prisma,auth,risks,routing,audit),residual=new AiResidualAssessmentService(prisma,auth,risks,scoring,routing,audit),decisions=new AiResidualDecisionService(prisma,auth,risks,residual,scoring,routing,audit),service=new AiRiskReviewService(prisma,auth,risks,decisions,routing,audit),failed=new AiRiskReviewService(prisma,auth,risks,decisions,routing,{logRequired:async()=>{throw new Error('Injected reassessment audit failure');}} as unknown as AuditService);
+ const risk=await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId},include:{useCase:{include:{owner:true}}}}),ownerId=risk.useCase.owner!.userId!,evidence=await db.ndiEvidence.findFirstOrThrow({where:{deletedAt:null}}),priorRounds=await db.aiAssessmentRound.findMany({where:{riskId:f.riskId},orderBy:{id:'asc'}});
+ const dto=(expectedVersion:number)=>({expectedVersion,triggerCode:'provider_change' as const,justification:'Provider changed; fresh assessment required before continued monitoring',evidenceIds:[evidence.id]});
+ const c=await service.context(f.officerId,f.riskId),old=c.history[0];assert.equal(c.canReassess,true);assert.equal(REASSESSMENT_TRIGGERS.length,7);assert.ok(old.dueAt>new Date(),'Calendar must not block an off-cycle trigger');
+ await assert.rejects(service.reassess(f.officerId,f.riskId,{...dto(c.version),triggerCode:'POSTED_CODE' as never}),/Recognized PRC/);
+ await assert.rejects(service.reassess(f.officerId,f.riskId,{...dto(c.version),evidenceIds:[]}),/evidence/);
+ await assert.rejects(service.reassess(f.officerId,f.riskId,dto(c.version-1)),/gate\/version/);
+ await assert.rejects(service.reassess(f.auditorId,f.riskId,dto(c.version)),/explicit eligible/);
+ const officerRole=await db.role.findUniqueOrThrow({where:{code:'AI_GOVERNANCE_OFFICER'}}),excluded=await db.roleDataScope.create({data:{roleId:officerRole.id,scopeType:'org_unit',refId:'excluded-off-cycle',includeDescendants:false}});await assert.rejects(service.reassess(f.officerId,f.riskId,dto(c.version)),/not found/);await db.roleDataScope.delete({where:{id:excluded.id}});
+ await assert.rejects(failed.reassess(f.officerId,f.riskId,dto(c.version)),/Injected reassessment/);assert.equal(await db.aiRiskReassessment.count({where:{riskId:f.riskId}}),0);assert.equal((await service.context(f.officerId,f.riskId)).history[0].status,'scheduled');
+ const started=await Promise.allSettled([service.reassess(f.officerId,f.riskId,dto(c.version)),service.reassess(f.officerId,f.riskId,dto(c.version))]);assert.equal(started.filter(v=>v.status==='fulfilled').length,1);
+ const entry=await db.aiRiskReassessment.findFirstOrThrow({where:{riskId:f.riskId}}),cancel=await db.aiRiskReviewCancellation.findUniqueOrThrow({where:{reviewId:old.id}});assert.equal(cancel.reassessmentId,entry.id);
+ assert.equal((await db.workflowCase.findUniqueOrThrow({where:{id:risk.workflowCaseId!}})).status,'under_review');assert.equal((await service.context(f.officerId,f.riskId)).history[0].status,'superseded');assert.equal((await decisions.context(f.officerId,f.riskId)).riskAccepted,false);assert.equal((await residual.context(f.riskOwnerId,f.riskId)).canStart,false);assert.equal((await service.processSignals(new Date(old.dueAt.getTime()+86400000),f.riskId)).created,0);
+ await assert.rejects(db.aiRiskReassessment.update({where:{id:entry.id},data:{triggerCode:'incident'}}),/append-only/);await assert.rejects(db.aiRiskReviewCancellation.delete({where:{id:cancel.id}}),/append-only/);
+ await assert.rejects(db.workflowTask.update({where:{id:old.taskId},data:{status:'pending',completedAt:null}}),/protected/);
+ let ac=await scoring.context(f.riskOwnerId,f.riskId);assert.equal(ac.canStart,true);await scoring.start(f.riskOwnerId,f.riskId,ac.version);ac=await scoring.context(f.riskOwnerId,f.riskId);assert.equal(ac.tasks.length,8);assert.ok(ac.tasks.every(t=>t.score===null));
+ async function actor(role:string) {return (await db.user.findFirstOrThrow({where:{isActive:true,id:{not:f.officerId},userRoles:{some:{role:{code:role,isActive:true}}}},orderBy:{email:'asc'}})).id;}
+ async function contribute(kind:'inherent'|'residual') {
+  const svc=kind==='inherent'?scoring:residual;let ctx=await svc.context(f.riskOwnerId,f.riskId),version=ctx.version;
+  for(const t of ctx.tasks){const actual=await db.workflowTask.findUniqueOrThrow({where:{id:t.id}}),user=actual.assigneeUserId??await actor(t.assessorRoleCode!);await svc.contribute(user,f.riskId,t.id,{expectedVersion:version++,value:1,justification:'Fresh evidence reviewed for this change'});}
+  return version;
+ }
+ let version=await contribute('inherent');await scoring.complete(f.riskOwnerId,f.riskId,{expectedVersion:version,likelihood:1,justification:'Fresh probability after provider change'});
+ let gate=await adoption.context(f.officerId,f.riskId);if(gate.ethicsRequired){const ethics=(await db.user.findFirstOrThrow({where:{isActive:true,id:{notIn:[f.riskOwnerId,ownerId]},userRoles:{some:{role:{code:'AI_ETHICS_COMMITTEE'}}}},orderBy:{email:'asc'}})).id;await adoption.review(ethics,f.riskId,gate.tasks.find(t=>t.kind==='ethics')!.id,{expectedVersion:gate.version,decision:'approve',justification:'Fresh independent ethics review',evidenceIds:[evidence.id]});gate=await adoption.context(f.officerId,f.riskId);}
+ await adoption.review(f.officerId,f.riskId,gate.tasks.find(t=>t.kind==='adoption')!.id,{expectedVersion:gate.version,decision:'approve',justification:'Independent adoption of fresh inherent assessment',evidenceIds:[evidence.id]});
+ let rc=await responses.context(f.riskOwnerId,f.riskId);await responses.propose(f.riskOwnerId,f.riskId,{expectedVersion:rc.version,strategyCode:'ACCEPT',justification:'Fresh Low strategy after change',evidenceIds:[evidence.id],offshoreProcessing:false});rc=await responses.context(f.officerId,f.riskId);await responses.decide(f.officerId,f.riskId,rc.tasks.find(t=>t.kind==='officer')!.id,{expectedVersion:rc.version,decision:'approve',justification:'Independent fresh response decision',evidenceIds:[evidence.id]});
+ let res=await residual.context(f.riskOwnerId,f.riskId);assert.equal(res.canStart,true);await residual.start(f.riskOwnerId,f.riskId,res.version);version=await contribute('residual');res=await residual.context(f.riskOwnerId,f.riskId);await residual.complete(f.riskOwnerId,f.riskId,{expectedVersion:version,likelihood:1,justification:'Fresh residual likelihood',currentControls:'Controls reverified for new provider',controlEffectivenessCode:res.controlReference.values[0].code});
+ let dc=await decisions.context(f.officerId,f.riskId);await decisions.decide(f.officerId,f.riskId,dc.tasks.find(t=>t.kind==='adoption')!.id,{expectedVersion:dc.version,decision:'approve',justification:'Independent adoption of fresh residual evidence',evidenceIds:[evidence.id]});dc=await decisions.context(ownerId,f.riskId);assert.equal(dc.bandCode,'LOW');assert.equal(dc.riskAccepted,false);await decisions.decide(ownerId,f.riskId,dc.tasks.find(t=>t.kind==='accept_owner')!.id,{expectedVersion:dc.version,decision:'accept',justification:'Actual owner accepts newly assessed Low risk',evidenceIds:[evidence.id]});
+ const ready=await service.context(f.officerId,f.riskId);assert.equal(ready.canRegister,true);await assert.rejects(failed.register(f.officerId,f.riskId,ready.version),/Injected reassessment/);assert.equal((await service.context(f.officerId,f.riskId)).history[0].status,'superseded');
+ await service.register(f.officerId,f.riskId,ready.version);const next=(await service.context(f.officerId,f.riskId)).history[0];assert.equal(next.round,old.round+1);assert.equal(next.intervalDays,366);assert.equal(next.calendarTemplateId,old.calendarTemplateId);assert.notEqual(next.acceptanceDecisionId,old.acceptanceDecisionId);assert.equal(next.dueAt.toISOString(),aiReviewDue(next.anchorAt,366).toISOString());assert.notEqual(next.anchorAt.toISOString(),old.anchorAt.toISOString());assert.deepEqual(await db.aiAssessmentRound.findMany({where:{id:{in:priorRounds.map(r=>r.id)}},orderBy:{id:'asc'}}),priorRounds);
+ const final=await service.context(f.riskOwnerId,f.riskId);assert.equal(final.history[0].canComplete,true);await service.complete(f.riskOwnerId,f.riskId,next.id,{expectedVersion:final.version,justification:'Reviewed renewed monitoring evidence',evidenceIds:[evidence.id]});
+ const app=await NestFactory.create(AppModule,{logger:false});try{app.setGlobalPrefix('api');app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));await app.listen(0,'127.0.0.1');const base=await app.getUrl(),jwt=app.get(JwtService),headers={authorization:`Bearer ${jwt.sign({sub:f.officerId,tokenVersion:0,roles:['system_admin']})}`,'content-type':'application/json'};assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/reviews/reassess`,{method:'POST',headers,body:JSON.stringify({...dto(0),dueAt:'2026-01-01',inherentRound:1,actorId:f.officerId})})).status,400);}finally{await app.close();}
+ console.log('Phases 3J1/3J2 passed: evidenced procedure triggers, live scope/grants/Auditor/version gates, rollback/concurrent exactly-once entry, immutable supersession and old-history protection, fresh eight-dimension inherent/response/residual decisions with no carried acceptance, renewed authority-based cadence rebase and next completion, HTTP protected inputs.');
+}

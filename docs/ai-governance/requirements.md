@@ -9,7 +9,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | BR-01 | 3 | Deterministic rule and negative-input tests | Not implemented |
 | BR-02 | 5 | Deterministic rule and negative-input tests | Not implemented |
 | BR-03 | 5 | Deterministic rule and negative-input tests | Not implemented |
-| BR-04 | 8 | Deterministic rule and negative-input tests | Partial — engine-only pinned interval/anchor/deadline and completion-next calculation protected in API/SQL; off-cycle acceptance rebasing remains |
+| BR-04 | 8 | Deterministic rule and negative-input tests | Partial — engine-only published cadence/anchor/deadline, completion-next and renewed-authority rebase protected in API/SQL; annual/comprehensive register integration remains |
 | BR-05 | 6,8 | Deterministic rule and negative-input tests | Partial — scoped reads derive overdue from preserved KSA target deadline and completion; automatic governed status updates/reporting remain |
 | BR-06 | 8 | Deterministic rule and negative-input tests | Partial — computed review status and protected task/evidence lifecycle implemented; complete governed status/register mapping remains |
 | BR-07 | 6,10 | Deterministic rule and negative-input tests | Partial — current approved-plan mean completion derived from immutable execution rounds; reporting/KPI persistence and full model remain |
@@ -76,7 +76,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-122 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-123 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-124 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — periodic review instances/completion/next scheduling and cadence snapshots implemented; full notification/status reporting remains |
-| GEN-125 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-125 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — evidence-backed off-cycle procedure trigger and new residual authority-based monitoring regeneration implemented; full event/reporting integration and active-round trigger aggregation remain |
 | GEN-126 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — native review threshold warnings/breach, EN/AR plans, escalation and timeline events implemented; provider delivery and full KPI dashboards remain |
 | GEN-127 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-128 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -84,7 +84,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
-| INT-03 | 4 | Identifier-gated pipeline integration | Partial — identifier-gated AIUC/AIRS assessment/decision/treatment and periodic review loop implemented; off-cycle/closure integration remains |
+| INT-03 | 4 | Identifier-gated pipeline integration | Partial — identifier-gated AIUC/AIRS assessment/decision/treatment, periodic reviews and off-cycle reassessment/monitoring rebase implemented; annual/closure integration remains |
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
 | INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — native AIUC/AIRS states, guarded Critical suspension/archive and periodic review Implemented state integrated; other terminal paths/full integration certification remain |
@@ -150,7 +150,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-26 | 8 | AIRS assessment / decision / operations | Implemented — current residual authority decision/monitoring entry opens an actual-owner review; evidence-backed completion records last review and schedules exactly one next governed occurrence |
 | RM-27 | 8 | AIRS assessment / decision / operations | Partial — computed overdue/due-soon within seven days/upcoming/completed review panel and actual-owner task implemented; governed register projection and approved due-soon notification templates remain |
 | RM-28 | 8 | AIRS assessment / decision / operations | Partial — existing scheduler emits deduplicated 50/80/95 warnings and deadline breach, bilingual native alerts/planned channels, council escalation and completion resolution; provider delivery/full PRC-05 KPIs remain |
-| RM-29 | 8 | AIRS assessment / decision / operations | Not implemented |
+| RM-29 | 8 | AIRS assessment / decision / operations | Partial — seven PRC-05 off-cycle trigger entry, immutable review supersession, fresh assessment/authority progression and new acceptance-based calendar rebase implemented; additional triggers during an active assessment/full register reporting remain |
 | RM-30 | 8 | AIRS assessment / decision / operations | Not implemented |
 | RM-31 | 9 | AIRS assessment / decision / operations | Not implemented |
 | RM-32 | 9 | AIRS assessment / decision / operations | Not implemented |
@@ -208,3 +208,5 @@ Phase 2A/2B update: UC-01 through UC-08 have tested API and requester-screen sup
 Phase 2C update: UC-09 and UC-10 have tested API and reviewer-screen support for six justified governed scores, inline anchors, the server-side maximum rule, governed automatic tier bands, immutable version-pinned rounds and officer-verification task creation. The manual Unacceptable and override paths, full template/assignment-rule registration, conditional reviews and tier approval remain open; see phase-2c.md.
 
 Phase 3H/3I update (2026-09-12): periodic review registration/completion and future-version cadence pins, Saudi dates/status, actual-owner tasks, existing-scheduler warning/breach signals and native escalation are implemented locally. Planned channels/local timeline events do not establish external delivery, CloudEvents integration, approved template publication or complete KPI reporting. RM-29/GEN-125 off-cycle reassessment and RM-30 annual comprehensive review remain open. See phase-3h.md and phase-3i.md.
+
+Phase 3J1/3J2 update: seven recognized PRC-05 trigger entry and immutable supersession now lead through fresh assessment/authority to renewed monitoring pinned to the new decision/current cadence. No carry-forward acceptance, reopening of superseded reviews or operational use-case reactivation. Annual comprehensive review remains RM-30/Phase 3K; additional triggers within an active reassessment and complete reporting/release certification remain open. See phase-3j1.md and phase-3j2.md.

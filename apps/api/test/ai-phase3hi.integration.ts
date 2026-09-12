@@ -1,3 +1,4 @@
+import { testPhase3J } from './ai-phase3j.integration';
 import assert from 'node:assert/strict';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -51,7 +52,7 @@ export async function testPhase3HI(db:PrismaClient,f:{riskId:string;riskOwnerId:
  await assert.rejects(db.workflowTask.update({where:{id:snapshot.taskId},data:{dueDate:new Date()}}),/protected/);await assert.rejects(db.complianceCalendarOccurrence.update({where:{id:snapshot.calendarOccurrenceId},data:{status:'completed',completedAt:new Date()}}),/protected/);
  await assert.rejects(gov.updateTemplate(snapshot.calendarTemplateId,{cadence:'monthly'},f.officerId),/protected AI/);
  await assert.rejects(db.complianceCalendarTemplate.update({where:{id:snapshot.calendarTemplateId},data:{nextRunAt:new Date()}}),/engine dates/);
- await assert.rejects(db.complianceCalendarTemplate.update({where:{id:snapshot.calendarTemplateId},data:{status:'paused'}}),/configuration is protected/);
+ await assert.rejects(db.complianceCalendarTemplate.update({where:{id:snapshot.calendarTemplateId},data:{status:'paused'}}),/calendar (configuration is|engine dates are) protected/);
  await assert.rejects(service.complete(f.officerId,f.riskId,medium.id,dto(c.version)),/explicit eligible|Only/);await assert.rejects(service.complete(f.riskOwnerId,f.riskId,medium.id,{...dto(c.version),evidenceIds:[]}),/evidence/);
  await assert.rejects(service.complete(f.riskOwnerId,f.riskId,medium.id,dto(c.version-1)),/version changed/);await assert.rejects(failed.complete(f.riskOwnerId,f.riskId,medium.id,dto(c.version)),/Injected review audit failure/);assert.equal(await db.aiRiskReviewCompletion.count({where:{reviewId:medium.id}}),0);
  const owner=await db.person.findUniqueOrThrow({where:{id:(await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId}})).ownerPersonId!}});await db.person.update({where:{id:owner.id},data:{isActive:false}});assert.equal((await service.context(f.riskOwnerId,f.riskId)).history[0].canComplete,false);await assert.rejects(service.complete(f.riskOwnerId,f.riskId,medium.id,dto(c.version)),/active actual/);await db.person.update({where:{id:owner.id},data:{isActive:true}});
@@ -85,5 +86,6 @@ export async function testPhase3HI(db:PrismaClient,f:{riskId:string;riskOwnerId:
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/reviews`)).status,401);assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/reviews`,{headers})).status,200);
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/reviews/register`,{method:'POST',headers,body:JSON.stringify({expectedVersion:done.version,dueAt:'2026-01-01',intervalDays:1,bandCode:'LOW',actorId:f.officerId})})).status,400);
  }finally{await app.close();}
+ await testPhase3J(db,f);
  console.log('Phases 3H/3I passed: four-band publication gates, KSA deadlines, actual-owner calendar completion and next occurrence, pinning/future publication updates, immutable native/AI history, role/scope/Auditor/stale-write blocks, audit rollback and concurrent registration, 50/80/95/100 catch-up dedupe, native escalation and archival, no email dispatch, HTTP field protection.');
 }

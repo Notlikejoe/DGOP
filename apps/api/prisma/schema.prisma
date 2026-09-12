@@ -904,6 +904,7 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  reassessment AiRiskReassessment?
   aiRiskReview AiRiskReview?
   treatmentProgress AiTreatmentProgress[]
   treatmentPlan AiTreatmentPlan?
@@ -4876,6 +4877,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  reassessments AiRiskReassessment[]
   reviews AiRiskReview[]
   responses AiRiskResponse[]
   intakeData     Json?
@@ -4938,6 +4940,7 @@ model AiAssessmentRound {
 
 /// Append-only specialist review/adoption evidence; calculated rounds remain unchanged.
 model AiRiskAssessmentDecision {
+  reassessment AiRiskReassessment?
   reviews AiRiskReview[]
   restrictedUseCases AiUseCase[]
   conditions Json @default("[]")
@@ -4961,6 +4964,7 @@ model AiRiskAssessmentDecision {
 
 /// Immutable review basis; completion and SLA events are separate ledgers.
 model AiRiskReview {
+  cancellation AiRiskReviewCancellation?
   id String @id @default(uuid())
   riskId String
   acceptanceDecisionId String
@@ -5015,6 +5019,38 @@ model AiRiskReviewSignal {
   escalation GovernanceEscalation? @relation(fields: [escalationId], references: [id], onDelete: Restrict)
   @@unique([reviewId, threshold])
   @@map("ai_risk_review_signals")
+}
+
+/// Procedure-triggered fresh assessment, never a mutation of accepted history.
+model AiRiskReassessment {
+  id String @id @default(uuid())
+  riskId String
+  previousAcceptanceDecisionId String @unique
+  coordinatorTaskId String @unique
+  sourceIntakeTaskId String
+  inherentRound Int
+  triggerCode String
+  justification String
+  evidenceIds Json
+  actorId String
+  clientIp String?
+  createdAt DateTime @default(now())
+  risk AiRisk @relation(fields: [riskId], references: [id], onDelete: Restrict)
+  previousAcceptanceDecision AiRiskAssessmentDecision @relation(fields: [previousAcceptanceDecisionId], references: [id], onDelete: Restrict)
+  coordinatorTask WorkflowTask @relation(fields: [coordinatorTaskId], references: [id], onDelete: Restrict)
+  cancellations AiRiskReviewCancellation[]
+  @@index([riskId, inherentRound])
+  @@map("ai_risk_reassessments")
+}
+
+model AiRiskReviewCancellation {
+  id String @id @default(uuid())
+  reviewId String @unique
+  reassessmentId String
+  createdAt DateTime @default(now())
+  review AiRiskReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  reassessment AiRiskReassessment @relation(fields: [reassessmentId], references: [id], onDelete: Restrict)
+  @@map("ai_risk_review_cancellations")
 }
 
 /// Immutable response proposals tied to an adopted inherent assessment.

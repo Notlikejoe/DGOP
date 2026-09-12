@@ -1,0 +1,13 @@
+# Phase 3J1 — Off-cycle reassessment entry
+
+Local packet following checkpoint 6bf3726, developed with Phase 3J2 on 2026-09-12. The 22% remaining five-hour quota warranted splitting reassessment into entry and renewed-monitoring packets; annual comprehensive review remains Phase 3K.
+
+The existing monitoring panel adds bilingual PRC-05 trigger capture: material, provider or data change; incident; non-conformity; regulatory change; detected deviation. A scoped Working Group/Responsible AI Officer with `airs.cadence.manage`, or the actual active Risk Owner with `airs.risk.assess`, may initiate from a current residual authority decision in Decision Made/Implemented. Written justification and existing evidence are mandatory. The calendar does not delay this action.
+
+Entry creates an immutable reassessment record and one fresh inherent-assessment coordinator using the matching original completed intake. It preserves risk/use-case/asset/case identifiers and all previous assessment, response, treatment, acceptance and review snapshots. Outstanding reviews receive immutable cancellation records: native tasks become Cancelled, occurrences Archived and their calendar Paused. Their alerts are archived and unresolved SLA escalations resolved; this denotes supersession rather than successful review completion.
+
+The case returns to Under Review. Current residual prerequisites exclude inherent rounds older than the reassessment's required round, so prior acceptance cannot appear as renewed acceptance or provide a residual shortcut. The Risk Owner starts eight fresh competent-role contributions through the existing scoring service; prior scores/approvals are not copied. Suspended/archived use-case state remains protected and is not cleared by reassessment.
+
+Migration `20260913000000_ai_off_cycle_reassessment` adds reassessment/cancellation ledgers, parent/source/evidence guards, unique source acceptance/coordinator keys and append-only protection. Deferred native task/calendar guards now distinguish completed and superseded history. Authorization, data scope, active directory eligibility, optimistic versioning and required-audit transactions retain existing DGOP controls. Concurrent entry commits one record/coordinator; audit failure rolls back all entry/supersession writes.
+
+Same existing NestJS/Prisma/PostgreSQL/workflow/calendar and Angular dictionary/card/form components; no scheduler, dependency, source import or production publication added. Multiple additional triggers during an already active reassessment, complete register/KPI reporting, annual comprehensive review and external delivery remain later work. See phase-3j2.md for renewed-monitoring behavior and verification.

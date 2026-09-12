@@ -26,7 +26,8 @@ export class AiResidualAssessmentService {
  async gate(tx:Prisma.TransactionClient,userId:string,id:string){
   const access=await this.risks.visibility(userId,tx),risk=await tx.aiRisk.findFirst({where:{AND:[access.where,{id}]},select:riskSelect});
   if(!risk)throw new NotFoundException('AI risk not found');
-  const inherent=risk.assessments[0],adopted=inherent?.decisions.some(d=>d.kind==='adoption'&&d.decision==='approve');
+  const reassessment=await tx.aiRiskReassessment.findFirst({where:{riskId:id},orderBy:{inherentRound:'desc'}});
+  const inherent=risk.assessments[0]&&risk.assessments[0].round>=(reassessment?.inherentRound??0)?risk.assessments[0]:undefined,adopted=inherent?.decisions.some(d=>d.kind==='adoption'&&d.decision==='approve');
   const response=inherent?await tx.aiRiskResponse.findFirst({where:{riskId:id,assessmentId:inherent.id,decisions:{some:{kind:'officer',decision:'approve'}}},orderBy:{round:'desc'},include:{decisions:true}}):null;
   const plan=response?await tx.aiTreatmentPlan.findFirst({where:{responseId:response.id,decision:{is:{decision:'approve'}}},include:{decision:true},orderBy:{round:'desc'}}):null;
   const actions=response?await tx.aiTreatmentAction.findMany({where:{responseId:response.id,deletedAt:null},include:{workflowTask:{include:{templateStage:{select:{code:true,templateId:true,isActive:true}}}},progress:{orderBy:{round:'desc'},take:1}}}):[];

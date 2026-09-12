@@ -488,7 +488,7 @@ export class AiClassificationService {
 
       const routingFacts = this.routing.routingFacts({ routingFacts: sourceResult['routingFacts'] });
       const route = await this.routing.openPostClassificationGate(
-        tx, current.workflowCaseId, decisionRound.id, approvedTier.value.code, routingFacts, now,
+        tx, current.workflowCaseId, decisionRound.id, approvedTier.value.code, calculated.proposedTierCode, routingFacts, now,
       );
       const updated = await tx.aiUseCase.updateMany({
         where: { id, version: options.expectedVersion, workflowCaseId: current.workflowCaseId },
@@ -503,7 +503,7 @@ export class AiClassificationService {
           actor: actor.id,
           action,
           fromStatus: CaseStatus.under_review,
-          toStatus: CaseStatus.under_review,
+          toStatus: route.nextStatus,
           comment: `${calculated.proposedTierCode} -> ${approvedTier.value.code}; next ${route.nextRoles.join(', ')}`,
         },
       });
@@ -733,6 +733,7 @@ export class AiClassificationService {
           const next = await this.routing.createDecisionTask(
             tx, current.workflowCaseId, decisionRoundId, approvedTierCode, routingFacts, now,
           );
+          nextStatus = CaseStatus.decision_made;
           if (next.assigneeRoleCode) nextRoles = [next.assigneeRoleCode];
         }
       } else {

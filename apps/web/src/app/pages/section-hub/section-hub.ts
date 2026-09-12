@@ -53,7 +53,8 @@ export class SectionHubPage {
   protected readonly items = computed<NavItem[]>(() =>
     this.config()
       .sectionIds.flatMap((sectionId) => NAV_SECTIONS.find((section) => section.id === sectionId)?.items ?? [])
-      .filter((item) => !item.permission || this.auth.hasPermission(item.permission)),
+      .filter((item) => !item.permission || (typeof item.permission === 'string'
+        ? this.auth.hasPermission(item.permission) : item.permission.some(value => this.auth.hasPermission(value)))),
   );
 
   protected readonly featuredItems = computed<NavItem[]>(() => {

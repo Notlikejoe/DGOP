@@ -1,7 +1,7 @@
 # AI governance implementation checkpoint
 
-Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, Phase 2A AIUC intake API, Phase 2B requester UI/stages 1–3 triage loop, Phase 2C six-criterion assessment, Phase 2D Responsible AI Officer verification/override, and Phase 2E `AIUC_APPROVAL_V1` routing with conditional Privacy/Security/Ethics review gates (2026-09-12). Phase 1B production seed reconciliation and release gates remain open.
-Next: Phase 2F implements the evidence-backed stage-6 tier decision, requester/owner segregation, `case.approve.aiuc`, and universal decision-state transitions. Asset registration and AIRS handover follow in a separate bounded packet. Keep source-list publication blocked until workbook differences are approved. See phase-1b.md through phase-2e.md for exact boundaries.
+Completed: Phase 0, Phase 1A, Phase 1B backend security/publication, Phase 2A AIUC intake API, Phase 2B requester UI/stages 1–3 triage loop, Phase 2C six-criterion assessment, Phase 2D Responsible AI Officer verification/override, Phase 2E `AIUC_APPROVAL_V1` routing with conditional Privacy/Security/Ethics review gates, and Phase 2F evidence-backed tier adoption decisions with requester/owner segregation (2026-09-12). Phase 1B production seed reconciliation and release gates remain open.
+Next: Phase 2G implements independent asset registration approval and exactly-one asset/AIRS handover, linking approval obligations to the resulting governed records. Stage 7 is currently a handover task only; no asset or AIRS entry is created by Phase 2F. Keep source-list publication blocked until workbook differences are approved. See phase-1b.md through phase-2f.md for exact boundaries.
 Branch: codex/ai-governance-phase2a
 Upstream baseline: f32c796
 Preserved active UI baseline: d15743f
@@ -9,9 +9,9 @@ Prior checkpoint commits: b12e471, b35ae7a
 
 User requirements: retain the existing DGOP technology stack; add technology only if necessary; match existing screens UX/UI. Preserve source tools and checkpoints. Develop in quota-sized packets.
 
-Read phase-1a.md for implemented contracts, migration behavior, tests and limitations; phase-0.md remains the integration/UI design record. requirements.md retains the 194-ID ledger without falsely marking complete business requirements on the basis of foundation tables.
+Read phase-2f.md first when resuming; earlier packet notes below are historical and their pending items may have been completed by later packets. phase-0.md remains the integration/UI design record. requirements.md retains the 194-ID ledger without falsely marking complete business requirements on the basis of foundation tables.
 
-Nine additive tables, AI module registration, transactional numbering, intake/assessment contracts and shared governed-reference reads are implemented. No new endpoints, workflow templates or screens are available in this packet. Existing application and live database remain untouched; no push or deployment.
+The original foundation added nine tables. Subsequent packets implement AIUC intake, assessment, verification, specialist reviews and final decisions in the existing stack. Existing active application source and live database remain untouched by AI packets; no push or deployment.
 
 Dependencies installed from the existing local npm cache. Prisma client generated at locked 6.19.3. Isolated PostgreSQL test storage is storage/ai-test, port 55438; configuration is ignored .env.ai-test. Never substitute the live database URL. scripts/test-ai-foundation.mjs creates uniquely named test databases and never drops databases. Baseline-upgrade test preserves a pre-existing DGOP user. Both clean and upgrade paths passed integrity, numbering, history and full Nest application context startup checks.
 
@@ -51,3 +51,7 @@ Phase 2D checkpoint: the reviewer screen now has a Responsible AI Officer verifi
 Phase 2D quota observation after the completed slice: five-hour used 51%, weekly used 77% (account-wide). Two reset credits remain unused.
 
 About DGOP follow-up: the desktop page now uses the full available viewport height while retaining all panels on one screen. Verified at a 1440×1300 browser viewport: page top 91px, bottom 1276px, with no document overflow. Saved after Phase 1B; carry this UI commit forward.
+
+Phase 2F checkpoint: stage-6 configured-authority adoption decisions, mandatory evidence, requester/owner exclusions, structured approval obligations, Unacceptable restrict/stop, and reassessment returns are implemented in the fifth bilingual AI Review tab. Proposed High always requires Ethics even if lowered; the managed seed revision reconciles this correction. Generic workflow mutations cannot bypass AIUC controls, and maintenance leaves AIUC role queues unassigned. Approved decisions create only the configured stage-7 task. API/web production builds, 88/88 shared workflow checks, and real clean/upgrade database/HTTP integration tests pass, including required-audit rollback and managed-seed upgrade. This supersedes the earlier Phase 2D/2E isolated-database test limitation. No live deployment, production publication or workbook change. Next: Phase 2G independent asset approval and exactly-one asset/AIRS handover.
+
+Phase 2F runtime/quota: isolated test PostgreSQL cluster stopped after verification; storage and ignored configuration retained for reuse. Account-wide five-hour usage was 1% at start and 29% at completion; weekly 85% to 90%. No reset credits consumed; two remain available. Commit locally with per-command Codex identity; do not push or deploy as part of this packet.

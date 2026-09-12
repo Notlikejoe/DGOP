@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Prisma, TaskStatus } from '@prisma/client';
+import { CaseStatus, Prisma, TaskStatus } from '@prisma/client';
 import { addKsaBusinessDays, dateKey } from '../governance-operations/governance-operations.logic';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,6 +12,7 @@ export const AIUC_STAGE = {
   security: 'aiuc-security-review',
   ethics: 'aiuc-ethics-review',
   decision: 'aiuc-decision',
+  assetRegistration: 'aiuc-asset-registration',
 } as const;
 
 export type AiucRoutingFacts = {
@@ -111,23 +112,11 @@ export class AiWorkflowRoutingService {
     caseId: string,
     decisionRoundId: string,
     approvedTierCode: string,
+    proposedTierCode: string,
     facts: AiucRoutingFacts,
     now: Date,
   ) {
-    const template = await this.binding(client);
-    const context: ConfigRecord = {
-      'aiuc.personalDataInvolved': facts.personalDataInvolved,
-      'aiuc.sensitiveDataInvolved': facts.sensitiveDataInvolved,
-      'aiuc.approvedTier': approvedTierCode.toUpperCase(),
-      'case.type': 'AIUC',
-    };
-    const reviewStageCodes = [AIUC_STAGE.privacy, AIUC_STAGE.security, AIUC_STAGE.ethics];
-    const matched = reviewStageCodes.flatMap(stageCode => {
-      const stage = template.stages.find(candidate => candidate.code === stageCode);
-      if (!stage) throw new ConflictException(`${AIUC_TEMPLATE_CODE} stage ${stageCode} is unavailable`);
-      const config = record(stage.assignmentConfigJson);
-      return this.matches(record(config['activation']), context) ? [{ stageCode, ruleId: String(config['ruleId'] ?? '') }] : [];
-    });
+    const matched = await this.requiredReviews(client, approvedTierCode, proposedTierCode, facts);
     const approvalGroupId = `aiuc-review:${decisionRoundId}`;
     for (const match of matched) {
       await this.createStageTask(client, caseId, match.stageCode, now, {
@@ -135,6 +124,7 @@ export class AiWorkflowRoutingService {
         formDataJson: {
           classificationDecisionId: decisionRoundId,
           approvedTierCode,
+          proposedTierCode,
           routingFacts: facts,
           assignmentRuleId: match.ruleId,
         },
@@ -142,10 +132,27 @@ export class AiWorkflowRoutingService {
     }
     if (!matched.length) {
       const decision = await this.createDecisionTask(client, caseId, decisionRoundId, approvedTierCode, facts, now);
-      return { reviewTaskCount: 0, nextRoles: [decision.assigneeRoleCode].filter((value): value is string => !!value) };
+      return { reviewTaskCount: 0, nextStatus: CaseStatus.decision_made, nextRoles: [decision.assigneeRoleCode].filter((value): value is string => !!value) };
     }
-    const roles = matched.map(match => template.stages.find(stage => stage.code === match.stageCode)?.assigneeRoleCode).filter((value): value is string => !!value);
-    return { reviewTaskCount: matched.length, nextRoles: roles };
+    return { reviewTaskCount: matched.length, nextStatus: CaseStatus.under_review, nextRoles: matched.map(match => match.role).filter((value): value is string => !!value) };
+  }
+
+  async requiredReviews(client: RoutingClient, approvedTierCode: string, proposedTierCode: string, facts: AiucRoutingFacts) {
+    const template = await this.binding(client);
+    const context: ConfigRecord = {
+      'aiuc.personalDataInvolved': facts.personalDataInvolved,
+      'aiuc.sensitiveDataInvolved': facts.sensitiveDataInvolved,
+      'aiuc.approvedTier': approvedTierCode.toUpperCase(),
+      'aiuc.proposedTier': proposedTierCode.toUpperCase(),
+      'case.type': 'AIUC',
+    };
+    const reviewStageCodes = [AIUC_STAGE.privacy, AIUC_STAGE.security, AIUC_STAGE.ethics];
+    return reviewStageCodes.flatMap(stageCode => {
+      const stage = template.stages.find(candidate => candidate.code === stageCode);
+      if (!stage) throw new ConflictException(`${AIUC_TEMPLATE_CODE} stage ${stageCode} is unavailable`);
+      const config = record(stage.assignmentConfigJson);
+      return this.matches(record(config['activation']), context) ? [{ stageCode, ruleId: String(config['ruleId'] ?? ''), role: stage.assigneeRoleCode }] : [];
+    });
   }
 
   async createDecisionTask(
@@ -156,6 +163,27 @@ export class AiWorkflowRoutingService {
     facts: AiucRoutingFacts,
     now: Date,
   ) {
+    const assignment = await this.decisionAssignment(client, approvedTierCode);
+    const task = await this.createStageTask(client, caseId, AIUC_STAGE.decision, now, {
+      assigneeRoleCode: assignment.role,
+      formDataJson: {
+        classificationDecisionId: decisionRoundId,
+        approvedTierCode,
+        routingFacts: facts,
+        assignmentRuleId: assignment.ruleId,
+      },
+    });
+    const current = await client.workflowCase.findUniqueOrThrow({ where: { id: caseId }, select: { status: true } });
+    await client.workflowCase.update({ where: { id: caseId }, data: { status: CaseStatus.decision_made } });
+    await client.workflowEvent.create({ data: {
+      caseId, taskId: task.id, actor: 'system', action: 'aiuc.decision.opened',
+      fromStatus: current.status, toStatus: CaseStatus.decision_made,
+      comment: `Tier ${approvedTierCode}; ${assignment.ruleId}; ${assignment.role}`,
+    } });
+    return task;
+  }
+
+  async decisionAssignment(client: RoutingClient, approvedTierCode: string) {
     const template = await this.binding(client);
     const stage = template.stages.find(candidate => candidate.code === AIUC_STAGE.decision);
     if (!stage) throw new ConflictException(`${AIUC_TEMPLATE_CODE} decision stage is unavailable`);
@@ -167,18 +195,11 @@ export class AiWorkflowRoutingService {
       .sort((left, right) => Number(left['priority'] ?? 999) - Number(right['priority'] ?? 999))[0];
     const role = typeof matched?.['assigneeRoleCode'] === 'string' ? matched['assigneeRoleCode'] : '';
     if (!role) throw new ConflictException(`No governed AIUC decision assignment rule matched ${approvedTierCode}`);
-    return this.createStageTask(client, caseId, AIUC_STAGE.decision, now, {
-      assigneeRoleCode: role,
-      formDataJson: {
-        classificationDecisionId: decisionRoundId,
-        approvedTierCode,
-        routingFacts: facts,
-        assignmentRuleId: String(matched['ruleId'] ?? ''),
-      },
-    });
+    return { role, ruleId: String(matched['ruleId'] ?? '') };
   }
 
   private matches(condition: ConfigRecord, context: ConfigRecord): boolean {
+    if (Array.isArray(condition['any'])) return condition['any'].some(item => this.matches(record(item), context));
     const variablePath = typeof condition['variablePath'] === 'string' ? condition['variablePath'] : '';
     if (!variablePath) return false;
     const actual = context[variablePath];

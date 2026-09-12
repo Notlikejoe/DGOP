@@ -15,7 +15,7 @@ export interface NavItem {
   icon: string;
   iconName: AppIconName;
   link: string;
-  permission?: string;
+  permission?: string | readonly string[];
   groupKey?: string;
   featured?: boolean;
   /** When true, the shell shows the user's open-task count as a badge. */
@@ -152,7 +152,7 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: 'AR',
         iconName: 'fileCheck',
         link: '/governance/ai-review',
-        permission: 'case.view.aiuc.org',
+        permission: ['case.view.aiuc.org', 'case.approve.aiuc'],
         groupKey: 'hub.group.review',
         featured: true,
       },

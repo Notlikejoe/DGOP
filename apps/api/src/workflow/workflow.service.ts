@@ -142,7 +142,8 @@ const WORKFLOW_TEST_RUN_DEFAULT_PAGE_SIZE = 10;
 const WORKFLOW_TEST_RUN_CREATE_ATTEMPTS = 5;
 const WORKFLOW_REPORT_CASE_LIMIT = 2_000;
 const SYSTEM_ROUTE_GRAPH_REVISIONS: Readonly<Record<string, string>> = Object.fromEntries(
-  DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code, 'v6-volume2-complete-3']),
+  DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code,
+    seed.code === 'AIUC_APPROVAL_V1' ? 'aiuc-approval-phase2f-1' : 'v6-volume2-complete-3']),
 );
 const WORKFLOW_ROUTE_TYPE_PRIORITY = [
   'owner_assignment_approval',
@@ -396,6 +397,15 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ---------- templates / routing ----------
+  private async assertGovernedAiucMutation(type: string | undefined | null, actor: string, entityId?: string): Promise<void> {
+    if (type !== 'AIUC') return;
+    await this.audit.logRequired({
+      actor, action: 'aiuc.generic_mutation.blocked', entityType: 'workflow_case', entityId,
+      metadata: { caseType: type, requiredEntryPoint: 'AI Governance' },
+    });
+    throw new ForbiddenException('AIUC changes must use the AI Governance actions to enforce evidence, routing, and segregation of duties');
+  }
+
   private async ensureDefaultTemplates(): Promise<void> {
     for (const seed of DEFAULT_WORKFLOW_TEMPLATES) {
       const existing = await this.prisma.workflowTemplate.findUnique({
@@ -993,7 +1003,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           { assigneeRoleCode: { not: null } },
           { templateStage: { is: { assigneeRoleCode: { not: null }, isActive: true } } },
         ],
-        case: { templateId: { not: null }, status: { notIn: [...FINAL_CASE_STATUSES] } },
+        case: { type: { not: 'AIUC' }, templateId: { not: null }, status: { notIn: [...FINAL_CASE_STATUSES] } },
       },
       select: {
         id: true,
@@ -1019,13 +1029,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             assigneeUserId: true,
             assigneeRoleCode: true,
             status: true,
-            case: { select: { assetId: true, status: true } },
+            case: { select: { type: true, assetId: true, status: true } },
             templateStage: { select: { nameEn: true, assigneeRoleCode: true } },
           },
         });
         const targetRoleCode = current?.assigneeRoleCode ?? current?.templateStage?.assigneeRoleCode;
         if (
           !current ||
+          current.case.type === 'AIUC' ||
           current.assigneeUserId ||
           (current.status !== TaskStatus.pending && current.status !== TaskStatus.in_progress) ||
           FINAL_CASE_STATUSES.includes(current.case.status) ||
@@ -5190,6 +5201,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       initialTaskTitle?: string | null;
     },
   ) {
+    await this.assertGovernedAiucMutation(input.type, input.actor);
     if (input.assetId) {
       const asset = await client.dataAsset.findFirst({
         where: { id: input.assetId, deletedAt: null },
@@ -5208,6 +5220,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       throw err;
     }
     if (!route) throw new BadRequestException('No workflow route template is available for this request');
+    await this.assertGovernedAiucMutation(route.template.caseType, input.actor);
     const code = await this.nextCaseCodeForClient(client, input.preferredCode);
     const wfCase = await client.workflowCase.create({
       data: {
@@ -5289,6 +5302,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   async updateCase(id: string, dto: UpdateCaseDto, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const existing = await this.prisma.workflowCase.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('workflow case not found');
+    await this.assertGovernedAiucMutation(existing.type, viewer?.id ?? actor, id);
     await this.assertCaseVisible(roleCodes, existing, viewer ?? actor);
     this.assertCaseCanChange(existing.status);
     if (dto.status !== undefined) {
@@ -5324,6 +5338,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   async controlCase(id: string, action: 'suspend' | 'resume' | 'cancel', dto: WorkflowCaseControlDto, user: AuthUser) {
     const existing = await this.prisma.workflowCase.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('workflow case not found');
+    await this.assertGovernedAiucMutation(existing.type, user.id, id);
     await this.assertCaseVisible(user.roles, existing, user);
     const currentStatus = existing.status as CaseStatus;
     const reason = dto.reason?.trim() ?? '';
@@ -5591,6 +5606,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       include: { tasks: true },
     });
     if (!existing) throw new NotFoundException('workflow case not found');
+    await this.assertGovernedAiucMutation(existing.type, viewer?.id ?? actor, id);
     await this.assertCaseVisible(roleCodes, existing, viewer ?? actor);
     if (existing.status !== CaseStatus.draft) {
       throw new BadRequestException('Only a draft case can be submitted');
@@ -5621,6 +5637,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   async addTask(caseId: string, dto: AddTaskDto, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const wfCase = await this.prisma.workflowCase.findUnique({ where: { id: caseId } });
     if (!wfCase) throw new NotFoundException('workflow case not found');
+    await this.assertGovernedAiucMutation(wfCase.type, viewer?.id ?? actor, caseId);
     await this.assertCaseVisible(roleCodes, wfCase, viewer ?? actor);
     this.assertCaseCanChange(wfCase.status);
     if (dto.assigneeUserId) await this.assertUser(dto.assigneeUserId);
@@ -5646,6 +5663,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   async updateTask(id: string, dto: UpdateTaskDto, roleCodes: string[], actor: string, viewer?: AuthUser) {
     const existing = await this.prisma.workflowTask.findUnique({ where: { id }, include: { case: true } });
     if (!existing) throw new NotFoundException('workflow task not found');
+    await this.assertGovernedAiucMutation(existing.case.type, viewer?.id ?? actor, existing.caseId);
     await this.assertCaseVisible(roleCodes, existing.case, viewer ?? actor);
     this.assertCaseCanChange(existing.case.status);
     if (existing.status === TaskStatus.completed || existing.status === TaskStatus.cancelled) {
@@ -5676,6 +5694,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       include: { case: true, templateStage: { select: decisionStageSelect } },
     });
     if (!task) throw new NotFoundException('workflow task not found');
+    await this.assertGovernedAiucMutation(task.case.type, user.id, task.caseId);
     await this.assertCaseVisible(user.roles, task.case, user);
     this.assertCaseCanChange(task.case.status);
     if (task.status === TaskStatus.completed || task.status === TaskStatus.cancelled) {
@@ -6548,6 +6567,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       },
     });
     if (!task) throw new NotFoundException('workflow task not found');
+    await this.assertGovernedAiucMutation(task.case.type, user.id, task.caseId);
     await this.assertCaseVisible(user.roles, task.case, user);
     this.assertCaseCanChange(task.case.status);
     if (task.status === TaskStatus.completed || task.status === TaskStatus.cancelled) {

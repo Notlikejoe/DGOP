@@ -598,7 +598,10 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     }),
     stage('aiuc-ethics-review', 'AI Ethics Committee review', 'مراجعة لجنة أخلاقيات الذكاء الاصطناعي', 'Independently review High and manual Unacceptable classifications.', 'review', 'review', 'AI_ETHICS_COMMITTEE', 10, {
       parallelGroup: 'aiuc-specialist-reviews',
-      assignmentConfigJson: { ruleId: 'AR-AIUC-04', priority: 10, activation: { variablePath: 'aiuc.approvedTier', operator: 'in', values: ['HIGH', 'UNACCEPTABLE'] } },
+      assignmentConfigJson: { ruleId: 'AR-AIUC-04', priority: 10, activation: { any: [
+        { variablePath: 'aiuc.proposedTier', operator: 'equals', value: 'HIGH' },
+        { variablePath: 'aiuc.approvedTier', operator: 'in', values: ['HIGH', 'UNACCEPTABLE'] },
+      ] } },
       evidenceRequirementsJson: [{ name: 'Ethics review evidence', required: true, evidenceTypes: ['attachment'] }],
     }),
     stage('aiuc-review-merge', 'Merge specialist reviews', 'دمج المراجعات التخصصية', 'Wait until every instantiated specialist review is complete.', 'routing', 'routing', undefined, 0, {

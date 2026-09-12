@@ -7,7 +7,7 @@ import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
 
-type ReviewTab = 'triage' | 'classification' | 'verification' | 'specialist';
+type ReviewTab = 'triage' | 'classification' | 'verification' | 'specialist' | 'decision';
 type CriterionCode = 'individual_impact' | 'affected_scope' | 'harm_likelihood' | 'decision_autonomy'
   | 'data_fairness_transparency' | 'technical_resilience';
 
@@ -18,6 +18,8 @@ interface AiReviewCase {
   description?: string | null;
   version: number;
   updatedAt: string;
+  approvedTier?: TierOption | null;
+  allowedDecisions?: string[];
   workflowCase: {
     id: string;
     code: string;
@@ -103,6 +105,7 @@ export class AiReviewPage implements OnInit {
   protected readonly classificationCases = signal<AiReviewCase[]>([]);
   protected readonly verificationCases = signal<AiReviewCase[]>([]);
   protected readonly specialistCases = signal<AiReviewCase[]>([]);
+  protected readonly decisionCases = signal<AiReviewCase[]>([]);
   protected readonly selected = signal<AiReviewCase | null>(null);
   protected readonly configuration = signal<ClassificationConfiguration | null>(null);
   protected readonly justification = signal('');
@@ -110,6 +113,8 @@ export class AiReviewPage implements OnInit {
   protected readonly decisionTierCode = signal('');
   protected readonly decisionEvidenceIds = signal('');
   protected readonly authorityReference = signal('');
+  protected readonly adoptionOutcome = signal('');
+  protected readonly approvalConditions = signal('');
   protected readonly working = signal(false);
   protected readonly scoreMax = computed(() => {
     const values = CRITERIA.map(criterion => this.scores()[criterion]?.value).filter((value): value is number => typeof value === 'number');
@@ -140,6 +145,8 @@ export class AiReviewPage implements OnInit {
   });
   protected readonly selectedReviewTask = computed(() => this.selected()?.workflowCase.tasks?.[0] ?? null);
   protected readonly specialistDecisionReady = computed(() => !!this.justification().trim() && this.evidenceIdList().length > 0);
+  protected readonly adoptionReady = computed(() => !!this.adoptionOutcome() && this.specialistDecisionReady()
+    && (this.adoptionOutcome() !== 'approve_with_conditions' || this.conditionList().length > 0));
 
   ngOnInit(): void { void this.load(); }
 
@@ -150,26 +157,29 @@ export class AiReviewPage implements OnInit {
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
-      const [triage, classification, verification, specialist, configuration] = await Promise.all([
+      const [triage, classification, verification, specialist, decision, configuration] = await Promise.all([
         this.loadQueue('/api/ai/use-cases/triage'),
         this.loadQueue('/api/ai/use-cases/classification/queue'),
         this.loadQueue('/api/ai/use-cases/classification/verification/queue'),
         this.loadQueue('/api/ai/use-cases/classification/reviews/queue'),
+        this.loadQueue('/api/ai/use-cases/decisions/queue'),
         this.loadConfiguration(),
       ]);
       this.triageCases.set(triage);
       this.classificationCases.set(classification);
       this.verificationCases.set(verification);
       this.specialistCases.set(specialist);
+      this.decisionCases.set(decision);
       this.configuration.set(configuration);
       const queues: Array<[ReviewTab, AiReviewCase[]]> = [
         ['triage', triage], ['classification', classification], ['verification', verification], ['specialist', specialist],
+        ['decision', decision],
       ];
-      const activeTab = this.rowsFor(this.tab(), triage, classification, verification, specialist).length
+      const activeTab = this.rowsFor(this.tab(), triage, classification, verification, specialist, decision).length
         ? this.tab()
         : queues.find(([, rows]) => rows.length)?.[0] ?? this.tab();
       this.tab.set(activeTab);
-      const rows = this.rowsFor(activeTab, triage, classification, verification, specialist);
+      const rows = this.rowsFor(activeTab, triage, classification, verification, specialist, decision);
       this.select(rows.find(row => row.id === preferredId) ?? rows[0] ?? null);
       this.state.set('ok');
     } catch (error) {
@@ -192,6 +202,8 @@ export class AiReviewPage implements OnInit {
     this.decisionTierCode.set(typeof proposed === 'string' ? proposed : '');
     this.decisionEvidenceIds.set('');
     this.authorityReference.set('');
+    this.adoptionOutcome.set('');
+    this.approvalConditions.set('');
   }
 
   protected activeCases(): AiReviewCase[] { return this.rowsFor(this.tab()); }
@@ -199,8 +211,9 @@ export class AiReviewPage implements OnInit {
   protected tabLabel(tab = this.tab()): string { return this.t(`aiReview.tab.${tab}`); }
 
   private rowsFor(tab: ReviewTab, triage = this.triageCases(), classification = this.classificationCases(),
-    verification = this.verificationCases(), specialist = this.specialistCases()): AiReviewCase[] {
-    return tab === 'triage' ? triage : tab === 'classification' ? classification : tab === 'verification' ? verification : specialist;
+    verification = this.verificationCases(), specialist = this.specialistCases(), decision = this.decisionCases()): AiReviewCase[] {
+    return tab === 'triage' ? triage : tab === 'classification' ? classification : tab === 'verification' ? verification
+      : tab === 'specialist' ? specialist : decision;
   }
 
   private async loadQueue(url: string): Promise<AiReviewCase[]> {
@@ -315,10 +328,43 @@ export class AiReviewPage implements OnInit {
   }
 
   protected specialistTier(): string {
+    const pinnedTier = this.selected()?.approvedTier;
+    if (pinnedTier) return this.optionLabel(pinnedTier);
     const code = this.assessmentResult()['approvedTierCode'] ?? this.assessmentResult()['proposedTierCode'];
     if (typeof code !== 'string') return '—';
     const option = this.configuration()?.tiers.find(tier => tier.code === code);
     return option ? this.optionLabel(option) : code;
+  }
+
+  protected authorityLabel(): string {
+    const role = this.selectedReviewTask()?.assigneeRoleCode;
+    return role ? this.t(`aiReview.adoption.authority.${role}`) : '—';
+  }
+
+  protected conditionList(): string[] {
+    return [...new Set(this.approvalConditions().split(/\r?\n/u).map(value => value.trim()).filter(Boolean))];
+  }
+
+  protected async recordAdoption(): Promise<void> {
+    const item = this.selected();
+    const task = this.selectedReviewTask();
+    if (!item || !task || !this.adoptionReady() || this.working()) return;
+    this.working.set(true);
+    try {
+      await firstValueFrom(this.http.post(`/api/ai/use-cases/decisions/${item.id}/${task.id}`, {
+        expectedVersion: item.version,
+        decision: this.adoptionOutcome(),
+        justification: this.justification().trim(),
+        evidenceIds: this.evidenceIdList(),
+        ...(this.adoptionOutcome() === 'approve_with_conditions' ? { conditions: this.conditionList() } : {}),
+      }));
+      this.toast.success(this.t('aiReview.adoption.saved'));
+      await this.load();
+    } catch (error) {
+      this.toast.errorFrom(error, this.t('aiReview.error.adoption'));
+    } finally {
+      this.working.set(false);
+    }
   }
 
   protected specialistDueDate(): string {

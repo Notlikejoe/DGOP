@@ -382,6 +382,9 @@ function makeService(over: Over): WorkflowService {
     },
   };
   const audit = {
+    logRequired: async (entry: any) => {
+      (over.auditEntries ??= []).push(entry);
+    },
     log: async (entry: any) => {
       (over.auditEntries ??= []).push(entry);
     },
@@ -1737,6 +1740,19 @@ test('assignUnownedRoutedTasks uses DMO admin as controlled fallback queue owner
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_task.auto_assign'));
 });
 
+test('assignUnownedRoutedTasks preserves governed AIUC role queues', async () => {
+  const task = {
+    id: 'aiuc-task', caseId: 'aiuc-case', status: 'pending', assigneeUserId: null,
+    assigneeRoleCode: 'responsible_ai_officer',
+    case: { type: 'AIUC', assetId: null, status: 'decision_made' },
+  };
+  const over: Over = { task, tasks: [task] };
+  const count = await (makeService(over) as any).assignUnownedRoutedTasks();
+  assert.strictEqual(count, 0);
+  assert.strictEqual(over.taskUpdates?.length ?? 0, 0);
+  assert.strictEqual(over.events?.length ?? 0, 0);
+});
+
 test('dueDateForStage keeps zero-day urgent tasks due through the current day', () => {
   const svc = makeService({});
   const due = (svc as any).dueDateForStage({
@@ -3073,6 +3089,30 @@ test('enterprise workflow runtime: invalid timer schedules fail closed', () => {
     () => (svc as any).executionScheduleForStage({ nodeType: 'timer_event', slaConfigJson: { label: 'later' } }),
     /requires a valid due date, duration, timeout, or SLA expiration/,
   );
+});
+
+test('AIUC governance: generic workflow writes cannot bypass evidence, tier authority, or routing facts', async () => {
+  const aiCase = { id: 'ai-case', type: 'AIUC', status: 'decision_made' };
+  const over: Over = { case: aiCase, task: { id: 'ai-task', caseId: aiCase.id, case: aiCase, status: 'pending' } };
+  const svc = makeService(over);
+  const admin = { id: 'generic-admin', email: 'admin@test.local', roles: ['system_admin'] };
+  const operations = [
+    () => svc.createCase({ title: 'Bypass intake', type: 'AIUC' }, admin.roles, admin.email),
+    () => svc.updateCase(aiCase.id, { status: 'approved' as never }, admin.roles, admin.email, admin),
+    () => svc.controlCase(aiCase.id, 'cancel', { reason: 'Bypass governed resolution' }, admin),
+    () => svc.submitCase(aiCase.id, admin.roles, admin.email, admin),
+    () => svc.addTask(aiCase.id, { title: 'Bypass rule assignment' }, admin.roles, admin.email, admin),
+    () => svc.updateTask('ai-task', { assigneeUserId: admin.id }, admin.roles, admin.email, admin),
+    () => svc.saveTaskFormDraft('ai-task', { data: { routingFacts: { personalDataInvolved: false } } }, admin),
+    () => svc.submitTaskForm('ai-task', { data: { approvedTierCode: 'MINIMAL' } }, admin),
+    () => svc.decideTask('ai-task', { decision: 'approved' as never }, admin),
+  ];
+  for (const operation of operations) await assert.rejects(operation, /AI Governance actions/);
+  (svc as any).resolveRouteTemplate = async () => ({ template: { caseType: 'AIUC' } });
+  await assert.rejects(svc.createCase({ title: 'Hidden AIUC template', type: 'general', templateId: 'ai-template' }, admin.roles, admin.email), /AI Governance actions/);
+  assert.equal(over.auditEntries?.length, 10);
+  assert.equal(over.taskUpdates?.length ?? 0, 0);
+  assert.equal(over.caseUpdates?.length ?? 0, 0);
 });
 
 (async () => {

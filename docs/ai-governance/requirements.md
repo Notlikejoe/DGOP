@@ -25,12 +25,12 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-23 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-24 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-25 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-26 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-26 | 1,3,6 | AIUC final-decision segregation | Implemented — requester/linked owner excluded from decision queues and blocked at recording; configured tier role, claimed assignee and live permission enforced; generic task assignment/decision bypass blocked |
 | GEN-27 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-28 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-29 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented for AIUC Ethics review — Phase 2E; owner recusal is system-blocked and audit-recorded |
 | GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-31 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-31 | 1,3,6 | Evidence-backed authority decisions | Partial — AIUC Executive Team/Steering final decisions require justification, existing evidence and transactional audit; AIRS acceptance and higher-authority reversal remain |
 | GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-72 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-73 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -169,24 +169,24 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | UC-08 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
 | UC-09 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; publication gate open |
 | UC-10 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2C; governed band metadata required |
-| UC-11 | 3 | AIUC intake / classification / handoff | Partial — engine exclusion, evidence-backed manual Unacceptable decision, immutable audit, mandatory Ethics gate, and configured Steering routing implemented; downstream Steering decision pending |
-| UC-12 | 3 | AIUC intake / classification / handoff | Partial — verify/override operations preserve proposed and approved tiers, evidence, authority reference, actor role/IP, and immutable history; reversal and final higher-authority approval pending |
-| UC-13 | 3 | AIUC intake / classification / handoff | Partial — configured Minimal/Limited, High, and Unacceptable routes create the correct decision authority after all review gates; downstream decision screen pending |
+| UC-11 | 3 | AIUC intake / classification / handoff | Partial — manual Unacceptable verification, Ethics gate and Steering restrict/stop with no adoption/downstream task implemented; operational AIRS handling and direct Ethics manual-tier proposal remain |
+| UC-12 | 3 | AIUC intake / classification / handoff | Partial — override evidence, authority reference, pinned source and proposed/approved values preserved through final configured-authority endorsement; higher-authority reversal remains |
+| UC-13 | 3 | AIUC intake / classification / handoff | Partial — configured tier authorities record final decisions after all gates; Unacceptable adoption prohibited; asset/AIRS effects, cadence and High-tier Steering notification remain |
 | UC-14 | 3 | AIUC intake / classification / handoff | Not implemented |
-| UC-15 | 3 | AIUC intake / classification / handoff | Partial — managed `AIUC_APPROVAL_V1` template registered and stages 1–6 bound at runtime; stage-6 completion and stages 7–8 runtime remain |
+| UC-15 | 3 | AIUC intake / classification / handoff | Partial — stages 1–6 implemented and bound; approval creates configured stage-7 handover task; independent registration approval and stages 7–8 completion remain |
 | UC-16 | 3 | AIUC intake / classification / handoff | Partial — existing task and decision types reused across the registered template; final decision/asset/closure operations remain |
 | UC-17 | 3 | AIUC intake / classification / handoff | Partial — five-day task implemented; SLA warning/escalation pending |
 | UC-18 | 3 | AIUC intake / classification / handoff | Partial — five-day return/resubmit implemented; warning/closure pending |
-| UC-19 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2E; every High or manual Unacceptable tier instantiates an Ethics task before decision |
+| UC-19 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2F corrects proposed-High coverage even when lowered; approved High/Unacceptable also require Ethics; managed seed upgraded and final decision revalidates the gate |
 | UC-20 | 3 | AIUC intake / classification / handoff | Implemented — Phase 2E; conditional Privacy/Security/Ethics tasks run in one all-instantiated merge gate |
 | UC-21 | 3 | AIUC intake / classification / handoff | Implemented for initial AIUC routing — Phase 2E; AR-AIUC-01..05 are active template configuration data evaluated by priority |
-| UC-22 | 3 | AIUC intake / classification / handoff | Partial — tier-dependent stage-6 tasks are configured and created; decision permission and requester/owner SoD complete in Phase 2F |
+| UC-22 | 3 | AIUC intake / classification / handoff | Partial — stage-6 live permission, configured authority, requester/owner exclusion, Ethics recusal and generic bypass protection implemented; broader AIRS duties from GEN-27/28/31 remain |
 | UC-23 | 4 | AIUC intake / classification / handoff | Not implemented |
 | UC-24 | 4 | AIUC intake / classification / handoff | Implemented — Phase 2B |
 | UC-25 | 4 | AIUC intake / classification / handoff | Not implemented |
-| UC-26 | 4 | AIUC intake / classification / handoff | Not implemented |
-| UC-27 | 4 | AIUC intake / classification / handoff | Partial — triage reject/return paths implemented |
-| UC-28 | 4 | AIUC intake / classification / handoff | Not implemented |
+| UC-26 | 4 | AIUC intake / classification / handoff | Partial — conditional adoption creates structured obligations atomically; linkage to asset/AIRS and discharge visibility remain |
+| UC-27 | 4 | AIUC intake / classification / handoff | Partial — triage and final reject/return paths implemented; final rejection retains AI identifier and creates no asset/AIRS; withdrawal/escalation/noncompletion closure and notifications remain |
+| UC-28 | 4 | AIUC intake / classification / handoff | Partial — specialist and final decisions require existing DGOP evidence; remaining stage-specific checklists/upload requirements remain |
 | UC-29 | 4 | AIUC intake / classification / handoff | Not implemented |
 | WF-01 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
 | WF-02 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |

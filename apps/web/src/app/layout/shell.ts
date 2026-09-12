@@ -301,7 +301,8 @@ export class Shell implements OnDestroy {
   }
 
   private canSeeNavItem(item: NavItem): boolean {
-    return !item.permission || this.auth.hasPermission(item.permission);
+    return !item.permission || (typeof item.permission === 'string'
+      ? this.auth.hasPermission(item.permission) : item.permission.some(value => this.auth.hasPermission(value)));
   }
 
   protected isWorkspaceSection(section: NavSection): boolean {

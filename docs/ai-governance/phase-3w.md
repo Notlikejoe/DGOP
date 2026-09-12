@@ -1,0 +1,11 @@
+# Phase 3W — Current classification Ethics coverage
+
+Implemented locally, 2026-09-13, with 3V, using existing AIUC classification rounds and stage-five Ethics tasks. GEN-101 denominator is submitted eligible cases whose current officer-approved SDAIA tier is exactly HIGH. Proposed HIGH alone does not inflate this canonical cohort; register GEN-98 and pipeline GEN-101 retain their explicitly different populations.
+
+Numerator requires a completed stage-five outcome tied to the current classificationDecisionId, recorded by its assigned AI_ETHICS_COMMITTEE reviewer independent of the requester and use-case owner, with non-empty justification and evidence identifiers. Approve, return and reject all count as reviewed outcomes; coverage is not approval. Historical reviews attached to another classification decision cannot carry forward. The caller binds tasks to their own case and template. Existing native review recording validates evidence and writes audit transactionally; later committee membership changes do not erase legitimate historical reviews.
+
+A separate clearly labelled mandatory-review population includes approved HIGH, verified proposed-HIGH cases lowered to another approved tier, and approved UNACCEPTABLE cases. It reports reviewed/mandatory counts and a separate gap list, without changing GEN-101. Unverified proposed HIGH is not yet an officer-verified gate. Samples/deleted cases/drafts are excluded, linked assets require current active scope, and unlinked cases fail closed when domain/classification restrictions exist. Complete populations drive ratios independently of gap pagination. Empty HIGH denominator returns null.
+
+Existing bilingual Angular/PrimeNG dashboard navigation, card/table patterns and read-only endpoints are reused. Governance/Auditor audiences receive coverage; executive aggregate subset and actual-owner operational subset do not gain these cohorts or records. All 21 KPI definitions now have live current-scope computations; design frequency tags do not claim automatic scheduled period reports.
+
+Validation is recorded in checkpoint.md. Next bounded packet is 3X scoped dashboard snapshot/reporting scheduling design and local implementation; preserve release approval/source metadata gates and do not automatically activate production dispatch or synchronization.

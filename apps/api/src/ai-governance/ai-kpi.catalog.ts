@@ -1,4 +1,4 @@
-// FD §8.1: canonical KPI definitions. Coverage never manufactures a value for deferred cohorts.
+// FD §8.1: live current scoped KPI definitions; scheduled period snapshots remain separate.
 export const AI_KPI_CATALOG = [
   {
     "id": "GEN-81",
@@ -274,11 +274,11 @@ export const AI_KPI_CATALOG = [
     "unit": "percent",
     "frequency": "Monthly",
     "owner": "AI_GOVERNANCE_OFFICER",
-    "formulaEn": "Assessments with eight justified dimensions / all assessments due.",
-    "formulaAr": "التقييمات المكتملة الأبعاد الثمانية والمبررات ÷ التقييمات المستحقة.",
-    "filter": null,
-    "coverage": "deferred",
-    "coverageNote": "Due-assessment cohort and monthly denominator require a dedicated packet."
+    "formulaEn": "Current non-cancelled native assessment rounds with eight verified justified dimensions / current rounds due by server as-of time. Missing deadlines are reported separately.",
+    "formulaAr": "جولات التقييم الحالية غير الملغاة المكتملة بالأبعاد الثمانية الموثقة ومبرراتها ÷ الجولات المستحقة حتى وقت التقرير؛ تُعرض المواعيد المفقودة منفصلة.",
+    "filter": "assessment_gaps",
+    "coverage": "live",
+    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
   },
   {
     "id": "GEN-101",
@@ -288,10 +288,10 @@ export const AI_KPI_CATALOG = [
     "unit": "percent",
     "frequency": "Monthly",
     "owner": "AI_ETHICS_COMMITTEE",
-    "formulaEn": "High-tier cases with current stage-five outcome / all High-tier cases.",
-    "formulaAr": "حالات الاستخدام المرتفعة ذات نتيجة حالية للمرحلة الخامسة ÷ جميع الحالات المرتفعة.",
-    "filter": null,
-    "coverage": "deferred",
-    "coverageNote": "Current High-tier versus proposed-High ethics cohort requires a dedicated packet."
+    "formulaEn": "Approved SDAIA HIGH cases with an evidenced independent stage-five outcome for the current classification decision / all approved HIGH submitted cases. Approve, return and reject are reviewed outcomes.",
+    "formulaAr": "طلبات التبني المقدمة ذات تصنيف سدايا العالي المعتمد ونتيجة موثقة مستقلة للمرحلة الخامسة مرتبطة بقرار التصنيف الحالي ÷ جميع الطلبات المقدمة ذات التصنيف العالي المعتمد؛ تشمل النتائج القبول والإعادة والرفض.",
+    "filter": "ethics_gaps",
+    "coverage": "live",
+    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
   }
 ] as const;

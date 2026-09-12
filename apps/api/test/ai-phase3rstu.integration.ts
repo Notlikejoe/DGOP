@@ -6,6 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { AiDashboardService, percentage, average, projectRisk } from '../src/ai-governance/ai-dashboard.service';
+import { testPhase3VW } from './ai-phase3vw.integration';
 import { AI_KPI_CATALOG } from '../src/ai-governance/ai-kpi.catalog';
 
 export async function testPhase3RSTU(db:PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;auditorId:string}){
@@ -14,7 +15,7 @@ export async function testPhase3RSTU(db:PrismaClient,f:{riskId:string;riskOwnerI
   app.setGlobalPrefix('api');app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));await app.listen(0,'127.0.0.1');
   const service=app.get(AiDashboardService),risk=await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId},include:{useCase:true}}),before=await service.summary(f.officerId);
   const kpi=(s:Awaited<ReturnType<AiDashboardService['summary']>>,id:string)=>s.cards.find(k=>k.id===id)!;
-  assert.equal(AI_KPI_CATALOG.length,21);assert.equal(new Set(AI_KPI_CATALOG.map(k=>k.id)).size,21);assert.equal(before.cards.length,19);assert.ok(before.catalog.filter(k=>k.coverage==='deferred').every(k=>!before.cards.some(c=>c.id===k.id)));
+  assert.equal(AI_KPI_CATALOG.length,21);assert.equal(new Set(AI_KPI_CATALOG.map(k=>k.id)).size,21);assert.equal(before.cards.length,21);assert.ok(before.catalog.every(k=>k.coverage==='live'));
   assert.equal(percentage(0,0),null);assert.equal(percentage(1,3),33.33);assert.equal(average([]),null);assert.equal(average([-50,25]),-12.5);
   const fixture={id:randomUUID(),riskRef:'AIR-900000',title:'Projection contract',ownerPersonId:null,workflowCase:{status:'under_review'},reassessments:[],responses:[],actions:[],assessments:[{id:'i2',riskId:'x',kind:'inherent',round:2,inputs:{},result:{score:8,bandCode:'HIGH'}},{id:'r1',riskId:'x',kind:'residual',round:1,inputs:{inherentAssessmentId:'i1'},result:{score:2,bandCode:'LOW',likelihood:1,impactFinal:2}}]} as Parameters<typeof projectRisk>[0];
   let p=projectRisk(fixture,new Date());assert.equal(p.residualScore,null);assert.equal(p.reduction,null);assert.equal(p.completionPct,0);
@@ -50,6 +51,7 @@ export async function testPhase3RSTU(db:PrismaClient,f:{riskId:string;riskOwnerI
   const officerRole=await db.role.findUniqueOrThrow({where:{code:'AI_GOVERNANCE_OFFICER'}}),excluded=await db.roleDataScope.create({data:{roleId:officerRole.id,scopeType:'org_unit',refId:randomUUID()}});s=await service.summary(f.officerId);assert.equal(kpi(s,'GEN-85').value,0);assert.equal(kpi(s,'GEN-86').value,0);assert.equal(kpi(s,'GEN-82').value,null);assert.equal((await service.drilldown(f.officerId,'registered')).total,0);await db.roleDataScope.delete({where:{id:excluded.id}});
   await db.dataAsset.update({where:{id:assetIds[0]},data:{isActive:false}});s=await service.summary(f.officerId);assert.equal(kpi(s,'GEN-85').value,kpi(baseline,'GEN-85').value!-1);await db.dataAsset.update({where:{id:assetIds[0]},data:{isActive:true}});await db.user.update({where:{id:f.officerId},data:{isActive:false}});await assert.rejects(service.summary(f.officerId),/active|eligible/);await db.user.update({where:{id:f.officerId},data:{isActive:true}});
   const base=await app.getUrl(),jwt=app.get(JwtService),headers={authorization:'Bearer '+jwt.sign({sub:f.officerId,tokenVersion:0,roles:['system_admin']})};assert.equal((await fetch(base+'/api/ai/dashboard',{headers})).status,200);assert.equal((await fetch(base+'/api/ai/dashboard/drilldown?filter=registered&page=0',{headers})).status,400);assert.equal((await fetch(base+'/api/ai/dashboard/drilldown?filter=raw_sql',{headers})).status,400);assert.equal((await fetch(base+'/api/ai/dashboard',{method:'POST',headers})).status,404);assert.equal((await fetch(base+'/api/ai/dashboard')).status,401);
-  console.log('Phases 3R/3S/3T/3U passed: exact approved-SDAIA counts/reconciliation beyond 100 rows, sample/scope/live-identity exclusion, current residual pairing and 4x4 matrix, approved-plan completion/overdue contracts, 19 live KPIs/21 explicit definitions, stable scoped drilldown and executive/Auditor/owner HTTP privacy.');
+  await testPhase3VW(db,service,f);
+  console.log('Phases 3R/3S/3T/3U passed: exact approved-SDAIA counts/reconciliation beyond 100 rows, sample/scope/live-identity exclusion, current residual pairing and 4x4 matrix, approved-plan completion/overdue contracts, 21 live KPIs/21 explicit definitions, stable scoped drilldown and executive/Auditor/owner HTTP privacy.');
  }finally{await app.close();}
 }

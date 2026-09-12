@@ -1,5 +1,20 @@
 # AI governance implementation checkpoint
 
+## Latest two-packet checkpoint — 2026-09-13 (3V–3W)
+
+Completed locally from 8044fc2: 3V GEN-100 due/current native dimension-assessment completeness and 3W GEN-101 exact current approved-SDAIA-HIGH Ethics coverage. All 21 design KPIs now have live current-scope computations for the governance/Auditor audience. Existing Nest/Prisma/PostgreSQL and bilingual Angular/PrimeNG dashboard patterns retained; no migration, dependency, permission expansion, workflow graph or About DGOP changes.
+
+GEN-100 denominator is the latest non-cancelled inherent/residual coordinator per eligible identified risk/stage with native deadline due by server time. Missing deadlines are separately counted, without invented dates. Eight justified contributions require exact current coordinator/case/template/round, pinned competent-role mapping, valid score and actual submitter provenance. Active reassessment requirements and current inherent pairing exclude obsolete sources. Complete contributions do not imply calculation, adoption or acceptance. GEN-101 uses only approved HIGH submitted cases, and current-decision independent evidenced stage-five approve/return/reject outcomes. Mandatory-review coverage separately includes verified proposed HIGH lowered to another tier and approved UNACCEPTABLE. Older decision reviews do not carry forward. Complete scoped populations drive ratios; empty denominator is null. Read-only stable gap lists retain current scope and sample exclusions. Executive/actual-owner outputs contain no governance cohort/details; Auditor remains read-only.
+
+Verification: complete isolated clean-install and baseline-upgrade PostgreSQL/Nest/HTTP harness passes all earlier phases plus 3V/3W. API and Angular production builds and focused AI security checks pass. Meaningful new contracts cover invalid/missing/duplicate/cancelled/wrong-source/wrong-round/wrong-role/unjustified dimension contributions, pending coordinator completeness, current supersession, missing deadlines, HIGH versus mandatory cohorts, all three evidenced review outcomes, independence, old review invalidation, pagination/empty scopes and audience privacy. Browser visual/load acceptance is not claimed. Native engine baselines preserved.
+
+Runtime/quota: 77% five-hour usage at entry; 86% during verification and 92% at final checkpoint, weekly 44%/45%. Two reset credits unused. Isolated test cluster on 55438 stopped normally after final checks; ignored configuration/storage retained. No active-app AI synchronization, live database change, provider dispatch, original workbook edit/import/publication, push or deployment. Sources and About DGOP baseline retained. Branch codex/ai-governance-phase2a; use git log for the final checkpoint commit.
+
+Next bounded packet: 3X scoped dashboard snapshots/reporting scheduling, using existing reporting mechanisms and explicit closed-period/current-scope contracts. Design frequency labels remain explanatory until implemented. Remaining lifecycle/initiation/source/release gates from earlier checkpoints remain open. Read phase-3v.md and phase-3w.md first; original R_IMPD reconciliation and approved cadence metadata are not bypassed.
+
+Older pending-cohort notes below are historical and superseded by 3V–3W.
+
+
 ## Latest four-packet checkpoint — 2026-09-13 (3R–3U)
 
 Completed locally from 46b1cca: 3R use-case dashboard and repaired approved-SDAIA High/unclassified indicators with register reconciliation; 3S current risk posture, current-pair residual 4×4 matrix and top-ten scoped summaries; 3T current approved-plan treatment completion/overdue/completeness measures; 3U adoption-pipeline ratios and explicit bilingual 21-KPI definitions. Nineteen live KPI computations have values. GEN-100 due-assessment completeness and GEN-101 current High/proposed-High Ethics cohorts remain explicitly pending. Existing Nest/Prisma/PostgreSQL and Angular/PrimeNG DGOP screen/navigation patterns retained. No dependency, schema migration, workflow graph or production seed changes.

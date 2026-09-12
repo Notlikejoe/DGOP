@@ -5,6 +5,7 @@ import { ScopeService } from '../access/scope.service';
 import { AiReviewReportService, aggregateReviewMeasures } from './ai-review-report.service';
 import { aiRoleMayHold, AiPermission, splitAiPermission } from './ai-permissions';
 import { jsonRecord } from './ai-risk-scoring';
+import { CoverageTask, dimensionCoverage, ethicsCoverage } from './ai-governance-coverage';
 import { AI_KPI_CATALOG } from './ai-kpi.catalog';
 
 export function percentage(n:number,d:number){return d?Math.round(n/d*10000)/100:null;}
@@ -36,7 +37,7 @@ export function projectRisk(r:Risk,asOf:Date){
   reduction:i!==null&&s!==null?(i-s)/i*100:null,hasPlan:!!plan,treated:!!plan&&actions.length>0&&actions.every(a=>a.completed),
   completionPct:actions.length?average(actions.map(a=>a.completionPct)):0,actions};
 }
-export const DASHBOARD_FILTERS=['registered','sdaia_high','unclassified','identified','residual_high','open','without_owner','with_plan','treated','overdue_actions','plan_incomplete'] as const;
+export const DASHBOARD_FILTERS=['registered','sdaia_high','unclassified','identified','residual_high','open','without_owner','with_plan','treated','overdue_actions','plan_incomplete','assessment_gaps','ethics_gaps','mandatory_ethics_gaps'] as const;
 @Injectable()
 export class AiDashboardService {
  constructor(private readonly prisma:PrismaService,private readonly reports:AiReviewReportService,private readonly scope:ScopeService){}
@@ -60,10 +61,40 @@ export class AiDashboardService {
   const risks=rows.map(r=>projectRisk({...r,assessments:byRisk.get(r.id)??[]},asOf));
   const register=a.canUseCases?await tx.aiUseCase.findMany({where:a.registerWhere,select:{id:true,useCaseRef:true,name:true,organizationUnitId:true,organizationUnit:{select:{nameEn:true,nameAr:true}},assessments:{where:{kind:'classification',riskId:null},orderBy:{round:'desc'},take:1,select:{result:true}}}}):[];
   const useCases=register.map(r=>({...r,assessments:undefined,approvedTier:jsonRecord(r.assessments[0]?.result)['approvedTierCode']??null}));
-  return {a,asOf,risks,useCases};
+  return {a,asOf,risks,useCases,sourceRisks:rows,latest};
+ }
+ private async governance(tx:Prisma.TransactionClient,p:Awaited<ReturnType<AiDashboardService['population']>>){
+  if(!p.a.canPipeline)return null;
+  const ids=p.sourceRisks.map(r=>r.id);
+  type Coordinator=CoverageTask&{riskId:string;templateId:string};
+  const coordinators=ids.length?await tx.$queryRaw<Coordinator[]>`SELECT DISTINCT ON (r.id,s.code)
+   t.id,t."caseId",s.code AS "stageCode",t.status,t."assigneeRoleCode",t."assigneeUserId",t."formSubmittedBy",t."completedAt",t."dueDate",t."createdAt",t."formDataJson",r.id AS "riskId",s."templateId"
+   FROM ai_risks r JOIN workflow_cases c ON c.id=r."workflowCaseId"
+   JOIN workflow_tasks t ON t."caseId"=c.id JOIN workflow_template_stages s ON s.id=t."templateStageId" AND s."templateId"=c."templateId"
+   WHERE r.id IN (${Prisma.join(ids)}) AND s.code IN ('airs-inherent-assessment','airs-residual-assessment')
+   AND t.status::text<>'cancelled' AND NOT coalesce(t."formDataJson",'{}'::jsonb)?'dimension'
+   AND NOT coalesce(t."formDataJson",'{}'::jsonb)?'coordinatorTaskId'
+   ORDER BY r.id,s.code,t."createdAt" DESC,t.id DESC`:[];
+  const children=coordinators.length?await tx.workflowTask.findMany({where:{caseId:{in:coordinators.map(c=>c.caseId)},status:{not:'cancelled'},templateStage:{is:{code:{in:['airs-inherent-assessment','airs-residual-assessment']}}}},select:{id:true,caseId:true,status:true,assigneeRoleCode:true,assigneeUserId:true,formSubmittedBy:true,completedAt:true,dueDate:true,createdAt:true,formDataJson:true,templateStage:{select:{code:true,templateId:true}}}}):[];
+  const assessments=coordinators.flatMap(c=>{
+   const r=p.sourceRisks.find(r=>r.id===c.riskId)!,required=Math.max(r.reassessments[0]?.inherentRound??0,r.reassessments[0]?.additionalTriggers[0]?.requiredInherentRound??0),f=jsonRecord(c.formDataJson);
+   const inherent=p.latest.find(a=>a.riskId===r.id&&a.kind==='inherent');
+   if(c.stageCode==='airs-inherent-assessment'&&Number(f['assessmentRound']??0)<required)return [];
+   if(c.stageCode==='airs-residual-assessment'&&(!inherent||inherent.round<required||f['inherentAssessmentId']!==inherent.id))return [];
+   const covered=dimensionCoverage(c,children.filter(t=>t.templateStage?.templateId===c.templateId).map(t=>({...t,stageCode:t.templateStage!.code})),p.asOf);
+   return [{id:c.id,reference:r.riskRef,title:r.title,kind:c.stageCode==='airs-inherent-assessment'?'inherent':'residual',dueAt:c.dueDate,...covered}];
+  });
+  const due=assessments.filter(r=>r.dueAt&&r.dueAt<=p.asOf);
+  const cases=await tx.aiUseCase.findMany({where:p.a.pipelineWhere,select:{id:true,useCaseRef:true,name:true,requesterUserId:true,owner:{select:{userId:true}},assessments:{where:{kind:'classification',riskId:null},orderBy:[{round:'desc'},{id:'desc'}],take:1,select:{id:true,result:true}},workflowCase:{select:{id:true,templateId:true,tasks:{where:{status:'completed',templateStage:{is:{code:'aiuc-ethics-review'}}},select:{id:true,caseId:true,status:true,assigneeRoleCode:true,assigneeUserId:true,formSubmittedBy:true,completedAt:true,dueDate:true,createdAt:true,formDataJson:true,templateStage:{select:{code:true,templateId:true}}}}}}}});
+  const ethics=cases.flatMap(c=>{const d=c.assessments[0];if(!d)return [];
+   const covered=ethicsCoverage(d.id,d.result,(c.workflowCase?.tasks??[]).filter(t=>t.caseId===c.workflowCase!.id&&t.templateStage?.templateId===c.workflowCase!.templateId).map(t=>({...t,stageCode:t.templateStage!.code})),p.asOf,c.requesterUserId,c.owner?.userId??null);
+   return [{id:c.id,reference:c.useCaseRef??c.id,title:c.name,approvedTier:jsonRecord(d.result)['approvedTierCode']??null,...covered}];
+  });
+  const high=ethics.filter(c=>c.high),mandatory=ethics.filter(c=>c.mandatory);
+  return {assessments:due,ethics,measures:{assessmentDue:due.length,assessmentComplete:due.filter(r=>r.complete).length,assessmentMissingDeadline:assessments.filter(r=>!r.dueAt).length,high:high.length,highReviewed:high.filter(c=>c.reviewed).length,mandatory:mandatory.length,mandatoryReviewed:mandatory.filter(c=>c.reviewed).length}};
  }
  async summary(userId:string){return this.prisma.$transaction(async tx=>{
-  const {a,asOf,risks,useCases}=await this.population(tx,userId),reviews=await aggregateReviewMeasures(tx,risks.map(r=>r.id),asOf);
+  const population=await this.population(tx,userId),{a,asOf,risks,useCases}=population,governance=await this.governance(tx,population),reviews=await aggregateReviewMeasures(tx,risks.map(r=>r.id),asOf);
   const high=useCases.filter(u=>u.approvedTier==='HIGH').length,unclassified=useCases.filter(u=>u.approvedTier===null||u.approvedTier==='').length,other=useCases.filter(u=>u.approvedTier!==null&&u.approvedTier!==''&&u.approvedTier!=='HIGH').length;
   const highInherent=risks.filter(r=>['HIGH','CRITICAL'].includes(String(r.inherentBand))),planned=risks.filter(r=>r.hasPlan),treated=planned.filter(r=>r.treated);
   const actions=risks.flatMap(r=>r.actions),inherent=risks.flatMap(r=>r.inherentScore===null?[]:[r.inherentScore]),residual=risks.flatMap(r=>r.residualScore===null?[]:[r.residualScore]),reduction=risks.flatMap(r=>r.reduction===null?[]:[r.reduction]);
@@ -82,21 +113,24 @@ export class AiDashboardService {
    const onTime=triage.filter(t=>!!t.completedAt&&!!t.dueDate&&t.completedAt<=t.dueDate).length,returns=new Set(events.map(e=>e.taskId)).size;
    Object.assign(values,{'GEN-81':{value:cases.length},'GEN-82':{value:percentage(accepted.length,closed.length),numerator:accepted.length,denominator:closed.length},'GEN-83':{value:percentage(onTime,triage.length),numerator:onTime,denominator:triage.length},'GEN-84':{value:percentage(returns,triage.length),numerator:returns,denominator:triage.length}});
   }
+  if(governance){const g=governance.measures;Object.assign(values,{'GEN-100':{value:percentage(g.assessmentComplete,g.assessmentDue),numerator:g.assessmentComplete,denominator:g.assessmentDue},'GEN-101':{value:percentage(g.highReviewed,g.high),numerator:g.highReviewed,denominator:g.high}});}
   const executive=new Set(['GEN-85','GEN-86','GEN-87','GEN-90','GEN-91','GEN-92','GEN-95','GEN-98','GEN-99']);
   const operational=new Set(['GEN-88','GEN-94','GEN-95','GEN-97']);
   const cards=AI_KPI_CATALOG.filter(k=>k.id in values&&(!a.aggregateOnly||executive.has(k.id))&&(a.mode!=='risk_owner'||operational.has(k.id))).map(k=>({...k,...values[k.id]}));
   const distribution=a.canUseCases&&!a.aggregateOnly?Array.from(new Set(useCases.map(u=>u.organizationUnitId))).map(id=>{const group=useCases.filter(u=>u.organizationUnitId===id);return {nameEn:group[0].organizationUnit?.nameEn??null,nameAr:group[0].organizationUnit?.nameAr??null,count:group.length};}):[];
   return {asOf,projection:'live_current_scope',mode:a.mode,aggregateOnly:a.aggregateOnly,cards,catalog:AI_KPI_CATALOG,
    reconciliation:a.canUseCases?{total:useCases.length,high,unclassified,otherClassified:other,sum:high+unclassified+other,balanced:high+unclassified+other===useCases.length}:null,
+   governance:governance?.measures??null,
    matrix:a.mode==='risk_owner'?null:{cells:matrix,assessed:matrixCount,unassessed:risks.length-matrixCount},distribution,
    topRisks:a.aggregateOnly||a.mode==='risk_owner'?[]:risks.filter(r=>r.residualScore!==null).sort((l,r)=>r.residualScore!-l.residualScore!||l.id.localeCompare(r.id)).slice(0,10).map(({actions,...r})=>r)};
  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:20000});}
  async drilldown(userId:string,filter:string,page=1,pageSize=20){
   if(!(DASHBOARD_FILTERS as readonly string[]).includes(filter)||!Number.isInteger(page)||page<1||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new BadRequestException('Use a supported dashboard filter, positive page and page size 1–100');
   return this.prisma.$transaction(async tx=>{
-   const {a,asOf,risks,useCases}=await this.population(tx,userId);if(a.aggregateOnly)throw new ForbiddenException('Executive dashboard is aggregate only');
+   const population=await this.population(tx,userId),{a,asOf,risks,useCases}=population;if(a.aggregateOnly)throw new ForbiddenException('Executive dashboard is aggregate only');
    let rows:Array<Record<string,unknown>>;
-   if(['registered','sdaia_high','unclassified'].includes(filter)){if(!a.canUseCases)throw new ForbiddenException('Use-case dashboard authority required');rows=useCases.filter(u=>filter==='registered'||filter==='sdaia_high'&&u.approvedTier==='HIGH'||filter==='unclassified'&&(u.approvedTier===null||u.approvedTier==='')).map(u=>({id:u.id,reference:u.useCaseRef,title:u.name,approvedTier:u.approvedTier}));}
+   if(['assessment_gaps','ethics_gaps','mandatory_ethics_gaps'].includes(filter)){if(!a.canPipeline)throw new ForbiddenException('Governance dashboard authority required');const g=(await this.governance(tx,population))!;rows=filter==='assessment_gaps'?g.assessments.filter(r=>!r.complete):g.ethics.filter(c=>(filter==='ethics_gaps'?c.high:c.mandatory)&&!c.reviewed).map(({high,mandatory,reviewed,...r})=>r);}
+   else if(['registered','sdaia_high','unclassified'].includes(filter)){if(!a.canUseCases)throw new ForbiddenException('Use-case dashboard authority required');rows=useCases.filter(u=>filter==='registered'||filter==='sdaia_high'&&u.approvedTier==='HIGH'||filter==='unclassified'&&(u.approvedTier===null||u.approvedTier==='')).map(u=>({id:u.id,reference:u.useCaseRef,title:u.name,approvedTier:u.approvedTier}));}
    else {const chosen=risks.filter(r=>filter==='identified'||filter==='overdue_actions'&&r.actions.some(a=>a.overdue)||filter==='residual_high'&&['HIGH','CRITICAL'].includes(String(r.residualBand))||filter==='open'&&!['closed','cancelled'].includes(r.status)||filter==='without_owner'&&r.withoutOwner||filter==='with_plan'&&r.hasPlan||filter==='treated'&&r.treated||filter==='plan_incomplete'&&['HIGH','CRITICAL'].includes(String(r.inherentBand))&&!r.actions.some(a=>a.completed));
     rows=filter==='overdue_actions'?chosen.flatMap(r=>r.actions.filter(a=>a.overdue).map(a=>({id:a.id,reference:a.actionRef,title:a.title,riskRef:r.riskRef,dueAt:a.dueAt,completionPct:a.completionPct}))):chosen.map(({actions,...r})=>({...r,reference:r.riskRef}));}
    rows.sort((l,r)=>String(l['reference']).localeCompare(String(r['reference']))||String(l['id']).localeCompare(String(r['id'])));

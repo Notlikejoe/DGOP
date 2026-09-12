@@ -4,6 +4,8 @@ import { addKsaBusinessDays, dateKey } from '../governance-operations/governance
 import { PrismaService } from '../prisma/prisma.service';
 
 export const AIUC_TEMPLATE_CODE = 'AIUC_APPROVAL_V1';
+export const AIRS_TEMPLATE_CODE = 'AIRS_LIFECYCLE_V1';
+export const AIRS_STAGE = { identification: 'airs-identification', inherent: 'airs-inherent-assessment' } as const;
 export const AIUC_STAGE = {
   triage: 'aiuc-triage',
   completion: 'aiuc-completion',
@@ -32,9 +34,9 @@ function record(value: unknown): ConfigRecord {
 export class AiWorkflowRoutingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async binding(client: RoutingClient = this.prisma) {
+  async binding(client: RoutingClient = this.prisma, templateCode: string = AIUC_TEMPLATE_CODE) {
     const template = await client.workflowTemplate.findFirst({
-      where: { code: AIUC_TEMPLATE_CODE, isActive: true, deletedAt: null },
+      where: { code: templateCode, isActive: true, deletedAt: null },
       select: {
         id: true,
         designerVersion: true,
@@ -47,12 +49,12 @@ export class AiWorkflowRoutingService {
         },
       },
     });
-    if (!template) throw new ConflictException(`${AIUC_TEMPLATE_CODE} workflow configuration is unavailable`);
+    if (!template) throw new ConflictException(`${templateCode} workflow configuration is unavailable`);
     return template;
   }
 
-  async bindExistingCase(client: Prisma.TransactionClient, caseId: string) {
-    const template = await this.binding(client);
+  async bindExistingCase(client: Prisma.TransactionClient, caseId: string, templateCode: string = AIUC_TEMPLATE_CODE) {
+    const template = await this.binding(client, templateCode);
     await client.workflowCase.update({
       where: { id: caseId },
       data: { templateId: template.id, templateVersion: template.designerVersion },
@@ -66,15 +68,16 @@ export class AiWorkflowRoutingService {
     stageCode: string,
     now: Date,
     options: {
+      templateCode?: string;
       assigneeUserId?: string;
       assigneeRoleCode?: string;
       approvalGroupId?: string;
       formDataJson?: Prisma.InputJsonObject;
     } = {},
   ) {
-    const template = await this.binding(client);
+    const template = await this.binding(client, options.templateCode ?? AIUC_TEMPLATE_CODE);
     const stage = template.stages.find(candidate => candidate.code === stageCode);
-    if (!stage) throw new ConflictException(`${AIUC_TEMPLATE_CODE} stage ${stageCode} is unavailable`);
+    if (!stage) throw new ConflictException(`${options.templateCode ?? AIUC_TEMPLATE_CODE} stage ${stageCode} is unavailable`);
     return client.workflowTask.create({
       data: {
         caseId,

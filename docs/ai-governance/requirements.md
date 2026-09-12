@@ -84,7 +84,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
-| INT-03 | 4 | Identifier-gated pipeline integration | Partial — approved AIUC atomically links the existing AI asset model and one AIRS draft by platform identifiers; operational AIRS stages follow |
+| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC asset/AIRS handoff and assigned AIRS identification/submission stages implemented; scoring and downstream gates remain |
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
 | INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — AIUC approved/implemented/closed transitions and AIRS draft use existing case states; risk lifecycle/other terminal paths remain |
@@ -123,12 +123,12 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | NFR-18 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
 | NFR-19 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
 | RM-01 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-02 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-03 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-04 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-02 | 5 | AIRS initiation paths | Partial — automatic AIUC handoff discovery and assigned intake implemented; manual/workshop, library and reassessment starts remain |
+| RM-03 | 5 | AIRS numbering | Partial — AIR business reference allocated atomically on risk submission; automatic workflow case number remains reserved on handoff, manual submission numbering remains |
+| RM-04 | 5 | Risk source facts and sample handling | Partial — department/source handoff preserved and third-party involvement confirmed at intake; sample reporting exclusions and other computed fields remain |
 | RM-05 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-06 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-07 | 5 | AIRS assessment / decision / operations | Not implemented |
+| RM-06 | 5 | Risk record fields | Partial — assigned owner, title, causal triple, controls, seven governed classifications, third-party flag, evidence and notes implemented; full assessment/treatment fields remain |
+| RM-07 | 5 | Mandatory causal triple | Implemented — draft submission rejects missing cause/event/effect with field-specific issues; no AIR reference or assessment task created on rejection |
 | RM-08 | 5 | AIRS assessment / decision / operations | Not implemented |
 | RM-09 | 5 | AIRS assessment / decision / operations | Not implemented |
 | RM-10 | 5 | AIRS assessment / decision / operations | Not implemented |

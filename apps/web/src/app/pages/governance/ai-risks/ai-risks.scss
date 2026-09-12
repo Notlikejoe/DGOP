@@ -1,0 +1,8 @@
+.risk-intake, .risk-intake fieldset { display: grid; gap: var(--space-4); }
+.risk-intake { padding: var(--space-5); }
+.risk-intake h2 { margin: 0; }
+.risk-intake label { display: grid; gap: var(--space-2); color: var(--command-muted); font-weight: 750; }
+.risk-intake fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.risk-intake b { color: var(--danger); }
+.risk-check { display: flex !important; align-items: center; gap: var(--space-2); }
+.risk-check input { width: auto; }

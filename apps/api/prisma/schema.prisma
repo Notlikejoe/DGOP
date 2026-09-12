@@ -4860,6 +4860,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  intakeData     Json?
   /// Stable source key for the one automatic AIUC handoff; manual risks remain null.
   aiucHandoffSourceId String? @unique
   handoffPayload     Json?

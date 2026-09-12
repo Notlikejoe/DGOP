@@ -645,8 +645,36 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
+// Phase 3A executes identification and opens inherent assessment only. Later AI services
+// implement the downstream gates; generic workflow mutations are blocked for AIRS.
+export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
+  code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
+  nameEn: 'AI Risk Lifecycle', nameAr: 'دورة حياة مخاطر الذكاء الاصطناعي', defaultSlaDays: 5,
+  description: 'Governed AI risk identification, assessment, response, treatment and monitoring.',
+  stages: [
+    stage('airs-identification', 'Risk identification and registration', 'تحديد الخطر وتسجيله', 'Record the causal description, current controls and risk owner.', 'intake', 'information', 'AI_RISK_OWNER', 5, { isStart: true }),
+    stage('airs-inherent-assessment', 'Inherent risk assessment', 'تقييم الخطر المتأصل', 'Assess likelihood and the eight justified impact dimensions.', 'review', 'review', 'AI_RISK_OWNER', 5),
+    stage('airs-assessment-adoption', 'Assessment adoption', 'اعتماد تقييم الخطر', 'Approve the assessment with the required independent reviews.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
+    stage('airs-response', 'Response strategy approval', 'اعتماد استراتيجية الاستجابة', 'Approve the response strategy and segregated treatment plan.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
+    stage('airs-treatment', 'Treatment implementation', 'تنفيذ المعالجة', 'Complete assigned treatment actions with evidence.', 'implementation', 'review', 'AI_WORKING_GROUP', 5),
+    stage('airs-residual-assessment', 'Residual risk assessment', 'تقييم الخطر المتبقي', 'Reassess risk after treatment before authority acceptance.', 'review', 'review', 'AI_RISK_OWNER', 5),
+    stage('airs-monitoring', 'Risk acceptance and monitoring', 'قبول الخطر ومتابعته', 'Apply the governed acceptance authority and recurring review cadence.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
+    stage('airs-closure', 'Risk case closure', 'إغلاق حالة الخطر', 'Retain the risk identity and final resolution.', 'closure', 'review', undefined, 0, { isFinal: true }),
+  ],
+  transitions: [
+    link('airs-identification', 'airs-inherent-assessment', 'Submitted risk', 'تقديم الخطر'),
+    link('airs-inherent-assessment', 'airs-assessment-adoption', 'Assessment recorded', 'تسجيل التقييم'),
+    link('airs-assessment-adoption', 'airs-response', 'Assessment approved', 'اعتماد التقييم', 'approved'),
+    link('airs-response', 'airs-treatment', 'Plan approved', 'اعتماد الخطة', 'approved'),
+    link('airs-treatment', 'airs-residual-assessment', 'Treatment completed', 'اكتمال المعالجة'),
+    link('airs-residual-assessment', 'airs-monitoring', 'Residual assessment recorded', 'تسجيل التقييم المتبقي'),
+    link('airs-monitoring', 'airs-closure', 'Monitoring completed', 'اكتمال المتابعة'),
+  ],
+};
+
 export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplateSeed[] = [
   AIUC_WORKFLOW_TEMPLATE,
+  AIRS_WORKFLOW_TEMPLATE,
   {
     code: 'WF-GEN-GOV-REVIEW',
     caseType: 'general',

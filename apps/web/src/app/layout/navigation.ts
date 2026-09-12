@@ -157,6 +157,11 @@ export const NAV_SECTIONS: NavSection[] = [
         featured: true,
       },
       {
+        labelKey: 'nav.aiRisks', descriptionKey: 'nav.desc.aiRisks', icon: 'AI', iconName: 'shield',
+        link: '/governance/ai-risks', permission: ['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'],
+        groupKey: 'hub.group.review', featured: true,
+      },
+      {
         labelKey: 'nav.dataQuality',
         descriptionKey: 'nav.desc.dataQuality',
         icon: 'DQ',
@@ -532,6 +537,7 @@ export const CRUMB_MAP: Record<string, string> = {
   '/governance/workflow': 'nav.workflow',
   '/governance/ai-use-cases': 'nav.aiUseCases',
   '/governance/ai-review': 'nav.aiReview',
+  '/governance/ai-risks': 'nav.aiRisks',
   '/governance/access': 'nav.accessGrants',
   '/governance/ndi/readiness': 'nav.ndiReadiness',
   '/governance/ndi/gaps': 'nav.ndiGaps',

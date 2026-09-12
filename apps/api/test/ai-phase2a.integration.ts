@@ -8,6 +8,7 @@ import { AiIntakeService } from '../src/ai-governance/ai-intake.service';
 import { AiClassificationService } from '../src/ai-governance/ai-classification.service';
 import { AiDecisionService } from '../src/ai-governance/ai-decision.service';
 import { AiRegistrationService } from '../src/ai-governance/ai-registration.service';
+import { AiRiskIntakeService } from '../src/ai-governance/ai-risk-intake.service';
 import { AiAssetFacade } from '../src/ai-governance/ai-asset.facade';
 import { ScopeService } from '../src/access/scope.service';
 import { AIUC_STAGE, AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
@@ -689,5 +690,105 @@ export async function testPhase2A(db: PrismaClient) {
   await assert.rejects(db.aiUseCase.update({ where: { id: draft.id }, data: { assetId: existingProduct.id, version: { increment: 1 } } }));
   await assert.rejects(db.dataAsset.update({ where: { id: registeredAsset.id }, data: { typeMetadataJson: {} } }));
   await assert.rejects(db.aiApprovalObligation.update({ where: { id: handedCondition.id }, data: { assetId: existingProduct.id, version: { increment: 1 } } }));
-  console.log('Phase 2 integration passed: governed intake/reviews/decisions, independent asset registration/return, atomic create/link AIRS handoff, conditions, mapping blocks, audit rollback, concurrent exactly-one spawn and HTTP authorization.');
+  const risks = new AiRiskIntakeService(prisma, authorization, scope, routing, new AiIdentifiersService(), audit);
+  const riskOwner = await createActor('risk-owner', 'AI_RISK_OWNER');
+  const otherRiskOwner = await createActor('other-risk-owner', 'AI_RISK_OWNER');
+  const preservedHandoff = JSON.stringify(handedOver.handoffPayload);
+  assert.ok((await risks.list(triageReviewer.id)).some(item => item.id === handedOver.id));
+  assert.ok(!(await risks.list(riskOwner.id)).some(item => item.id === handedOver.id));
+  const assignment = { expectedVersion: 1, ownerUserId: riskOwner.id, justification: 'Assign the eligible product risk owner' };
+  const brokenAudit = { logRequired: async () => { throw new Error('Injected risk audit failure'); } } as unknown as AuditService;
+  const failingRisks = new AiRiskIntakeService(prisma, authorization, scope, routing, new AiIdentifiersService(), brokenAudit);
+  await assert.rejects(failingRisks.assign(triageReviewer.id, handedOver.id, assignment), /Injected risk audit failure/);
+  assert.equal((await db.aiRisk.findUniqueOrThrow({ where: { id: handedOver.id } })).ownerPersonId, null);
+  await risks.assign(triageReviewer.id, handedOver.id, assignment);
+  assert.equal((await risks.get(riskOwner.id, handedOver.id)).canEdit, true);
+  const identificationTask = await db.workflowTask.findFirstOrThrow({ where: { caseId: handedOver.workflowCaseId!, status: 'pending' }, include: { templateStage: true } });
+  assert.equal(identificationTask.templateStage!.code, 'airs-identification');
+  assert.equal(identificationTask.assigneeUserId, riskOwner.id);
+  assert.ok(identificationTask.dueDate);
+  await assert.rejects(risks.assign(riskOwner.id, handedOver.id, { ...assignment, expectedVersion: 2 }), /working group/);
+  await assert.rejects(risks.save(otherRiskOwner.id, handedOver.id, 2, { title: 'Unauthorized edit' }));
+  await assert.rejects(failingRisks.save(riskOwner.id, handedOver.id, 2, { title: 'Rolled back title' }), /Injected risk audit failure/);
+  assert.equal((await db.aiRisk.findUniqueOrThrow({ where: { id: handedOver.id } })).version, 2);
+  await risks.save(riskOwner.id, handedOver.id, 2, { title: 'Bias in assisted matching', cause: 'Unrepresentative source data' });
+  await assert.rejects(risks.submit(riskOwner.id, handedOver.id, 3), error => {
+    const response = (error as { getResponse(): { issues: Array<{ field: string }> } }).getResponse();
+    return ['event', 'effect', 'current_controls'].every(field => response.issues.some(issue => issue.field === field));
+  });
+  assert.equal((await db.aiRisk.findUniqueOrThrow({ where: { id: handedOver.id } })).riskRef, null);
+  await assert.rejects(risks.save(riskOwner.id, handedOver.id, 2, { title: 'Stale edit' }), /changed/);
+  await assert.rejects(risks.save(riskOwner.id, handedOver.id, 3, { inherentScore: 16 }), /validation/);
+  await assert.rejects(risks.save(riskOwner.id, handedOver.id, 3, { risk_category: 'UNPUBLISHED' }), /references/);
+  await assert.rejects(risks.save(riskOwner.id, handedOver.id, 3, { evidence: ['00000000-0000-4000-8000-000000000099'] }), /references/);
+  const classifications = { risk_category: 'FAIRNESS', ethics_principle: 'FAIRNESS', dev_stage: 'PILOT',
+    control_effectiveness: 'PARTIAL', risk_source: 'SYSTEM', risk_intent: 'UNINTENDED', risk_timing: 'BEFORE_LAUNCH' };
+  for (const [listCode, code] of [['R_RISKCAT', 'FAIRNESS'], ['R_ETHICS', 'FAIRNESS'], ['R_CTRLEFF', 'PARTIAL'],
+    ['R_SOURCE', 'SYSTEM'], ['R_INTENT', 'UNINTENDED'], ['R_TIMING', 'BEFORE_LAUNCH']]) {
+    await publishHandoffMapping(listCode, [{ code, metadata: {} }]);
+  }
+  assert.equal((await risks.lookups(riskOwner.id)).ready, true);
+  await risks.save(riskOwner.id, handedOver.id, 3, { ...classifications, event: 'Unequal recommendations',
+    effect: 'Unfair allocation', current_controls: 'Human review and sampling', third_party_involved: false, evidence: [decisionEvidence.id] });
+  await assert.rejects(failingRisks.submit(riskOwner.id, handedOver.id, 4), /Injected risk audit failure/);
+  const rolledBackRisk = await db.aiRisk.findUniqueOrThrow({ where: { id: handedOver.id }, include: { workflowCase: true } });
+  assert.equal(rolledBackRisk.version, 4); assert.equal(rolledBackRisk.riskRef, null); assert.equal(rolledBackRisk.workflowCase!.status, 'draft');
+  assert.equal((await db.workflowTask.findUniqueOrThrow({ where: { id: identificationTask.id } })).status, 'pending');
+  assert.equal(await db.workflowTask.count({ where: { caseId: handedOver.workflowCaseId!, templateStage: { code: 'airs-inherent-assessment' } } }), 0);
+  const submissions = await Promise.allSettled([risks.submit(riskOwner.id, handedOver.id, 4), risks.submit(riskOwner.id, handedOver.id, 4)]);
+  assert.equal(submissions.filter(result => result.status === 'fulfilled').length, 1);
+  const submittedRisk = await db.aiRisk.findUniqueOrThrow({ where: { id: handedOver.id }, include: { workflowCase: true } });
+  assert.match(submittedRisk.riskRef!, /^AIR-\d{3,}$/); assert.equal(submittedRisk.version, 5);
+  assert.equal(submittedRisk.workflowCase!.code, handedOver.workflowCase!.code); assert.equal(submittedRisk.workflowCase!.status, 'under_review');
+  assert.equal(await db.aiAssessmentRound.count({ where: { riskId: handedOver.id } }), 0);
+  assert.equal(JSON.stringify(submittedRisk.handoffPayload), preservedHandoff);
+  const submittedIntake = submittedRisk.intakeData as { referenceVersionIds: Record<string, string>; resolvedValues: Record<string, { code: string }> };
+  assert.equal(Object.keys(submittedIntake.referenceVersionIds).length, 7);
+  assert.equal(submittedIntake.resolvedValues.risk_category.code, 'FAIRNESS');
+  assert.equal((await db.workflowTask.findUniqueOrThrow({ where: { id: identificationTask.id } })).status, 'completed');
+  const assessmentTask = await db.workflowTask.findFirstOrThrow({ where: { caseId: handedOver.workflowCaseId!, status: 'pending' }, include: { templateStage: true } });
+  assert.equal(assessmentTask.templateStage!.code, 'airs-inherent-assessment'); assert.equal(assessmentTask.assigneeUserId, riskOwner.id);
+  assert.equal(await db.workflowTask.count({ where: { caseId: handedOver.workflowCaseId!, status: 'pending' } }), 1);
+  assert.equal((await risks.get(riskOwner.id, handedOver.id)).canEdit, false);
+  await assert.rejects(risks.save(riskOwner.id, handedOver.id, 5, { title: 'Edit after submission' }));
+  await assert.rejects(risks.submit(riskOwner.id, handedOver.id, 4));
+  await assert.rejects(risks.assign(triageReviewer.id, handedOver.id, { ...assignment, expectedVersion: 5, ownerUserId: otherRiskOwner.id }));
+  assert.equal((await db.aiApprovalObligation.findUniqueOrThrow({ where: { id: handedCondition.id } })).riskId, handedOver.id);
+
+  const linkedRisk = await db.aiRisk.findUniqueOrThrow({ where: { aiucHandoffSourceId: highApproved.id } });
+  await risks.assign(triageReviewer.id, linkedRisk.id, assignment);
+  const oldAssignmentTask = await db.workflowTask.findFirstOrThrow({ where: { caseId: linkedRisk.workflowCaseId!, status: 'pending' } });
+  await risks.assign(triageReviewer.id, linkedRisk.id, { ...assignment, expectedVersion: 2, ownerUserId: otherRiskOwner.id });
+  assert.equal((await db.workflowTask.findUniqueOrThrow({ where: { id: oldAssignmentTask.id } })).status, 'cancelled');
+  await assert.rejects(risks.save(riskOwner.id, linkedRisk.id, 3, { title: 'Former owner edit' }));
+  await db.user.update({ where: { id: riskOwner.id }, data: { isActive: false } });
+  await assert.rejects(risks.assign(triageReviewer.id, linkedRisk.id, { ...assignment, expectedVersion: 3 }));
+  await db.user.update({ where: { id: riskOwner.id }, data: { isActive: true } });
+  const riskOwnerRole = await db.role.findUniqueOrThrow({ where: { code: 'AI_RISK_OWNER' } });
+  const excludedOrg = await db.organizationUnit.create({ data: { code: 'AI-P3A-EXCLUDED', nameEn: 'Other department', nameAr: 'إدارة أخرى' } });
+  const restrictedScope = await db.roleDataScope.create({ data: { roleId: riskOwnerRole.id, scopeType: 'org_unit', refId: excludedOrg.id, includeDescendants: false } });
+  await assert.rejects(risks.get(riskOwner.id, handedOver.id), /not found/);
+  await assert.rejects(risks.assign(triageReviewer.id, linkedRisk.id, { ...assignment, expectedVersion: 3 }), /scope/);
+  await db.roleDataScope.delete({ where: { id: restrictedScope.id } });
+  const auditor = await createActor('risk-auditor', 'auditor');
+  assert.ok((await risks.list(auditor.id)).some(item => item.id === handedOver.id));
+  await assert.rejects(risks.save(auditor.id, linkedRisk.id, 3, { title: 'Auditor edit' }));
+  const riskApp = await NestFactory.create(AppModule, { logger: false });
+  try {
+    riskApp.setGlobalPrefix('api');
+    riskApp.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    await riskApp.listen(0, '127.0.0.1');
+    const base = await riskApp.getUrl(), jwt = riskApp.get(JwtService);
+    const riskHeaders = { authorization: `Bearer ${jwt.sign({ sub: otherRiskOwner.id, tokenVersion: 0, roles: ['system_admin'] })}`, 'content-type': 'application/json' };
+    assert.equal((await fetch(`${base}/api/ai/risks`)).status, 401);
+    assert.equal((await fetch(`${base}/api/ai/risks`, { headers: riskHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/risks/${handedOver.id}`, { headers: riskHeaders })).status, 404);
+    assert.equal((await fetch(`${base}/api/ai/risks/${linkedRisk.id}/intake`, { method: 'PATCH', headers: riskHeaders,
+      body: JSON.stringify({ expectedVersion: 3, input: { inherentScore: 16 } }) })).status, 400);
+    assert.equal((await fetch(`${base}/api/ai/risks/${linkedRisk.id}/intake`, { method: 'PATCH', headers: riskHeaders,
+      body: JSON.stringify({ expectedVersion: 3, input: {}, injectedOwner: riskOwner.id }) })).status, 400);
+    await assert.rejects(riskApp.get(WorkflowService).decideTask(assessmentTask.id, { decision: TaskDecision.approved },
+      { id: riskOwner.id, email: riskOwner.email, roles: ['system_admin'] }), /AI Governance actions/);
+  } finally { await riskApp.close(); }
+  console.log('Phase 2/3A integration passed: AIUC reviews/decisions/asset handoff; scoped risk ownership and reassignment, causal validation, published intake snapshots, audit rollback, exactly-one AIR allocation/assessment task and HTTP authorization.');
 }

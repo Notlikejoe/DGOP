@@ -1,0 +1,32 @@
+<section class="assessment-workspace" [attr.aria-busy]="working()">
+  <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiResponse.title') }}</h2><p>{{ t('aiResponse.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load()">{{ t('crud.retry') }}</button></header>
+  @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
+  @else if (state() === 'error') { <section class="ds-card state-card">{{ t('aiResponse.error') }}</section> }
+  @else if (context(); as context) {
+    @if (!context.references.ready && context.awaitingProposal) { <div class="override-notice" role="status"><p>{{ t('aiResponse.references') }}</p></div> }
+    @if (context.canPrepare) { <section class="ds-card decision-card"><p>{{ t('aiResponse.prepareHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="prepare()">{{ t('aiResponse.prepare') }}</button></section> }
+    @if (context.canPropose) {
+      <section class="ds-card decision-card specialist-decision"><h2>{{ t('aiResponse.proposal') }}</h2>
+        <label><span>{{ t('aiResponse.strategy') }} <b>*</b></span><select [ngModel]="strategy()" (ngModelChange)="strategy.set($event)"><option value="">{{ t('aiuc.select') }}</option>@for (choice of context.references.values; track choice.code) { <option [value]="choice.code">{{ label(choice) }}</option> }</select></label>
+        <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="justification()" (ngModelChange)="justification.set($event)"></textarea></label>
+        <label><span>{{ t('aiAdoption.evidence') }} <b>*</b></span><textarea rows="2" [ngModel]="evidence()" (ngModelChange)="evidence.set($event)"></textarea></label>
+        <label class="checkbox-field"><input type="checkbox" [ngModel]="offshore()" (ngModelChange)="offshore.set($event)" /><span>{{ t('aiResponse.offshore') }}</span></label>
+        @if (strategy() === 'TRANSFER') { <label><span>{{ t('aiResponse.provider') }} <b>*</b></span><input type="text" maxlength="400" [ngModel]="provider()" (ngModelChange)="provider.set($event)" /></label><label><span>{{ t('aiResponse.contracts') }} <b>*</b></span><textarea rows="2" [ngModel]="contracts()" (ngModelChange)="contracts.set($event)"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label> }
+        <p>{{ t('aiResponse.prerequisites') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !strategy() || !justification().trim() || !evidence().trim() || (strategy() === 'TRANSFER' && (!provider().trim() || !contracts().trim()))" (click)="propose()">{{ t('aiResponse.submit') }}</button>
+      </section>
+    }
+    @if (context.response; as response) {
+      <section class="ds-card decision-card"><h2>{{ label(response.payload.choice) }}</h2><p>{{ response.payload.justification }}</p>@if (response.strategyCode === 'TRANSFER') { <p>{{ t('aiResponse.provider') }}: {{ response.payload.provider }}</p><small>{{ t('aiResponse.contracts') }}: {{ response.payload.contractEvidenceIds.join(', ') }}</small> }</section>
+      @if (context.consultationRequired && !context.consulted) { <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiResponse.consultations') }}</span></div> }
+      @if (!context.referencesCurrent) { <div class="override-notice" role="status"><p>{{ t('aiResponse.changedReferences') }}</p></div> }
+    }
+    @for (task of context.tasks; track task.id) {
+      <section class="ds-card decision-card specialist-decision"><h2>{{ t('aiResponse.kind.' + task.kind) }}</h2>
+        @if (task.canReturn) { <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="drafts()[task.id].justification" (ngModelChange)="patch(task.id, 'justification', $event)"></textarea></label><label><span>{{ t('aiAdoption.evidence') }} <b>*</b></span><textarea rows="2" [ngModel]="drafts()[task.id].evidence" (ngModelChange)="patch(task.id, 'evidence', $event)"></textarea></label><div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !task.canApprove || !drafts()[task.id].justification.trim() || !drafts()[task.id].evidence.trim()" (click)="decide(task.id, 'approve')">{{ t('aiResponse.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !drafts()[task.id].justification.trim() || !drafts()[task.id].evidence.trim()" (click)="decide(task.id, 'return')">{{ t('aiResponse.return') }}</button></div> } @else { <p>{{ t('aiAdoption.waitingRole') }}</p> }
+      </section>
+    }
+    @for (round of context.history; track round.id) {
+      <section class="ds-card decision-card"><header class="assessment-result"><h2>{{ t('aiResponse.round') }} {{ round.round }} · {{ label(round.payload.choice) }}</h2></header><p>{{ round.payload.justification }}</p>@for (decision of round.decisions; track decision.id) { <article><strong>{{ t('aiResponse.kind.' + decision.kind) }}</strong> <app-status-chip [kind]="decision.decision === 'approve' ? 'success' : 'warning'" [label]="t('aiAdoption.decision.' + decision.decision)" /><p>{{ decision.justification }}</p></article> }<small>{{ t('aiResponse.prerequisites') }}</small></section>
+    }
+  }
+</section>

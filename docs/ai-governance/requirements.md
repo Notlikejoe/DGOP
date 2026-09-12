@@ -84,7 +84,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
-| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff, AIRS intake, inherent scoring, conditional independent review and officer adoption through pending response implemented; downstream authority gates remain |
+| INT-03 | 4 | Identifier-gated pipeline integration | Partial — AIUC handoff, AIRS intake, inherent scoring/adoption and response-strategy approval through protected pending prerequisites implemented; downstream execution/authority gates remain |
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
 | INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — AIUC approved/implemented/closed transitions and AIRS draft use existing case states; risk lifecycle/other terminal paths remain |
@@ -127,7 +127,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-03 | 5 | AIRS numbering | Partial — AIR business reference allocated atomically on risk submission; automatic workflow case number remains reserved on handoff, manual submission numbering remains |
 | RM-04 | 5 | Risk source facts and sample handling | Partial — department/source handoff preserved and third-party involvement confirmed at intake; sample reporting exclusions and other computed fields remain |
 | RM-05 | 5 | AIRS assessment / decision / operations | Not implemented |
-| RM-06 | 5 | Risk record fields | Partial — intake fields plus justified likelihood/eight impacts and immutable inherent score/band history implemented; full adoption/treatment/residual fields remain |
+| RM-06 | 5 | Risk record fields | Partial — intake, justified likelihood/eight impacts, immutable inherent/adoption and response/consultation history implemented; full treatment/residual fields remain |
 | RM-07 | 5 | Mandatory causal triple | Implemented — draft submission rejects missing cause/event/effect with field-specific issues; no AIR reference or assessment task created on rejection |
 | RM-08 | 5 | Competent-role impact assessment rounds | Partial — eight justified tasks, immutable inherent rounds, independent conditional Ethics review, officer adoption and fresh reassessment returns implemented; residual assessment remains |
 | RM-09 | 5 | Final impact and highest dimension | Implemented — read-only MAX of eight and highest dimension via pinned R_IMPD, with governed deterministic tie order and retained tied set |
@@ -143,8 +143,8 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-19 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-20 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-21 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-22 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-23 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-22 | 6 | AIRS assessment / decision / operations | Partial — five published strategies, owner proposal, transfer provider/contract evidence and applicable consultations, officer approval and protected prerequisite routing; real plans, avoidance closure, residual acceptance and escalation execution remain |
+| RM-23 | 6 | AIRS assessment / decision / operations | Partial — treatment-plan prerequisite task only; action records/ACT numbering, plan approval, action SLA and execution remain |
 | RM-24 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-25 | 8 | AIRS assessment / decision / operations | Not implemented |
 | RM-26 | 8 | AIRS assessment / decision / operations | Not implemented |

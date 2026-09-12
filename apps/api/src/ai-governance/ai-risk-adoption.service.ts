@@ -143,8 +143,8 @@ export class AiRiskAdoptionService {
             returnDecisionId: decision.id, returnJustification: justification } });
         nextTaskId = next.id;
       } else if (kind === 'adoption') {
-        const next = await this.routing.createStageTask(tx, risk.workflowCase!.id, AIRS_STAGE.response, now, { templateCode: AIRS_TEMPLATE_CODE,
-          formDataJson: { assessmentId: assessment.id, adoptionDecisionId: decision.id, riskRef: risk.riskRef } });
+        if (!risk.owner?.userId) throw new ConflictException('An assigned Risk Owner is required for response preparation');
+        const next = await this.routing.openResponseGate(tx, risk.workflowCase!.id, assessment.id, decision.id, risk.riskRef!, risk.owner.userId, now);
         nextTaskId = next.id;
       }
       const updated = await tx.aiRisk.updateMany({ where: { id, version: dto.expectedVersion }, data: { version: { increment: 1 } } });

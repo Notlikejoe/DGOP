@@ -16,11 +16,12 @@ import { AiRiskIntakeController } from './ai-risk-intake.controller';
 import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { AiRiskAssessmentService } from './ai-risk-assessment.service';
 import { AiRiskAdoptionService } from './ai-risk-adoption.service';
+import { AiRiskResponseService } from './ai-risk-response.service';
 
 @Module({
   imports: [AccessModule],
   controllers: [AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController],
-  providers: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService],
+  providers: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService],
   exports: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService],
 })
 export class AiGovernanceModule {}

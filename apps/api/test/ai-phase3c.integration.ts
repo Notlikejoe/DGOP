@@ -14,6 +14,7 @@ import { AiRiskAssessmentService } from '../src/ai-governance/ai-risk-assessment
 import { AiRiskAdoptionService } from '../src/ai-governance/ai-risk-adoption.service';
 import { AIRS_STAGE, AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
 import { computeInherentRisk, jsonRecord, RiskDimension, RiskScoringConfiguration } from '../src/ai-governance/ai-risk-scoring';
+import { testPhase3D } from './ai-phase3d.integration';
 
 export async function testPhase3C(db: PrismaClient, f: { riskId: string; riskOwnerId: string; useCaseOwnerId: string;
   otherRiskOwnerId: string; privacyId: string; securityId: string; auditorId: string; officerId: string }) {
@@ -151,12 +152,13 @@ export async function testPhase3C(db: PrismaClient, f: { riskId: string; riskOwn
   try {
     app.setGlobalPrefix('api'); app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.listen(0, '127.0.0.1');
-    assert.equal(jsonRecord((await db.workflowTemplate.findUniqueOrThrow({ where: { id: template.id } })).designerJson)['seedRevision'], 'airs-lifecycle-phase3c-1');
+    assert.equal(jsonRecord((await db.workflowTemplate.findUniqueOrThrow({ where: { id: template.id } })).designerJson)['seedRevision'], 'airs-lifecycle-phase3d-1');
     const base = await app.getUrl(), jwt = app.get(JwtService), headers = { authorization: `Bearer ${jwt.sign({ sub: f.officerId, tokenVersion: 0, roles: ['system_admin'] })}`, 'content-type': 'application/json' };
     assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/assessment/adoption`)).status, 401);
     assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/assessment/adoption`, { headers })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/assessment/reviews/${finalAdoption.id}`, { method: 'POST', headers,
       body: JSON.stringify({ ...decision(version), score: 16, recused: false, actorId: reviewer.id }) })).status, 400);
   } finally { await app.close(); }
+  await testPhase3D(db, f);
   console.log('Phase 3C passed: independent Ethics/owner recusal, live role/scope/Auditor blocks, evidence, immutable decisions, audit rollback, legacy preparation, concurrent adoption, fresh rounds without carried approvals, all-band gating and managed-seed/HTTP checks.');
 }

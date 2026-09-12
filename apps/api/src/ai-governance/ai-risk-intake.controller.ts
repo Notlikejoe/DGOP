@@ -8,13 +8,28 @@ import { AiRiskAssessmentService } from './ai-risk-assessment.service';
 import { CompleteRiskAssessmentDto, RestartRiskAssessmentDto, RiskDimensionScoreDto } from './ai-risk-assessment.dto';
 import { AiRiskAdoptionService } from './ai-risk-adoption.service';
 import { ReviewRiskAssessmentDto } from './ai-risk-adoption.dto';
+import { AiRiskResponseService } from './ai-risk-response.service';
+import { ProposeRiskResponseDto } from './ai-risk-response.dto';
 
 @Controller('ai/risks')
 export class AiRiskIntakeController {
-  constructor(private readonly service: AiRiskIntakeService, private readonly assessments: AiRiskAssessmentService, private readonly adoption: AiRiskAdoptionService) {}
+  constructor(private readonly service: AiRiskIntakeService, private readonly assessments: AiRiskAssessmentService, private readonly adoption: AiRiskAdoptionService,
+    private readonly responses: AiRiskResponseService) {}
   // Authenticated reads enforce own/org/all alternatives with live grants and data scope.
   @Get() list(@CurrentUser() user: AuthUser) { return this.service.list(user.id); }
   @Get('lookups') lookups(@CurrentUser() user: AuthUser) { return this.service.lookups(user.id); }
+  @Get(':id/response') responseContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.responses.context(user.id, id); }
+  @Post(':id/response/prepare') @RequirePermissions('airs.risk.assess')
+  prepareResponse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) {
+    return this.responses.prepare(user.id, id, dto.expectedVersion, req.ip ?? req.socket?.remoteAddress);
+  }
+  @Post(':id/response/propose') @RequirePermissions('airs.risk.assess')
+  proposeResponse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ProposeRiskResponseDto, @Req() req: Request) {
+    return this.responses.propose(user.id, id, dto, req.ip ?? req.socket?.remoteAddress);
+  }
+  @Post(':id/response/tasks/:taskId')
+  decideResponse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Body() dto: ReviewRiskAssessmentDto, @Req() req: Request) { return this.responses.decide(user.id, id, taskId, dto, req.ip ?? req.socket?.remoteAddress); }
   @Get(':id') get(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.service.get(user.id, id); }
   @Get(':id/assessment') assessment(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.assessments.context(user.id, id); }
   @Get(':id/assessment/adoption') adoptionContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.adoption.context(user.id, id); }

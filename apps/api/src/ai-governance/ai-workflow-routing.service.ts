@@ -6,7 +6,8 @@ import { PrismaService } from '../prisma/prisma.service';
 export const AIUC_TEMPLATE_CODE = 'AIUC_APPROVAL_V1';
 export const AIRS_TEMPLATE_CODE = 'AIRS_LIFECYCLE_V1';
 export const AIRS_STAGE = { identification: 'airs-identification', inherent: 'airs-inherent-assessment',
-  ethics: 'airs-ethics-review', adoption: 'airs-assessment-adoption', response: 'airs-response' } as const;
+  ethics: 'airs-ethics-review', adoption: 'airs-assessment-adoption', response: 'airs-response', proposal: 'airs-response-proposal',
+  consultation: 'airs-transfer-consultation' } as const;
 export const AIUC_STAGE = {
   triage: 'aiuc-triage',
   completion: 'aiuc-completion',
@@ -34,6 +35,15 @@ function record(value: unknown): ConfigRecord {
 @Injectable()
 export class AiWorkflowRoutingService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async openResponseGate(client: Prisma.TransactionClient, caseId: string, assessmentId: string, adoptionDecisionId: string, riskRef: string,
+    ownerId: string, now: Date, returnedResponseId?: string) {
+    const formDataJson = { assessmentId, adoptionDecisionId, riskRef, ...(returnedResponseId ? { returnedResponseId } : {}) };
+    const coordinator = await this.createStageTask(client, caseId, AIRS_STAGE.response, now, { templateCode: AIRS_TEMPLATE_CODE, formDataJson });
+    await this.createStageTask(client, caseId, AIRS_STAGE.proposal, now, { templateCode: AIRS_TEMPLATE_CODE, assigneeUserId: ownerId,
+      formDataJson: { ...formDataJson, coordinatorTaskId: coordinator.id } });
+    return coordinator;
+  }
 
   async openRiskAssessmentGate(client: Prisma.TransactionClient, caseId: string, assessmentId: string, ethicsReviewRequired: boolean, riskRef: string, now: Date) {
     const formDataJson = { assessmentId, ethicsReviewRequired, riskRef };

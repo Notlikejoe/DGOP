@@ -645,7 +645,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
-// Phase 3C executes inherent assessment, independent review and officer adoption. Later AI services
+// Phase 3D executes inherent review/adoption and response proposals/consultations/strategy approval. Later AI services
 // implement the downstream gates; generic workflow mutations are blocked for AIRS.
 export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
@@ -662,7 +662,14 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-assessment-adoption', 'Assessment adoption', 'اعتماد تقييم الخطر', 'Approve the assessment with the required independent reviews.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, {
       isDecision: true, gatewayConfigJson: { requiredReviewStage: 'airs-ethics-review', mode: 'conditional_review_complete' },
     }),
-    stage('airs-response', 'Response strategy approval', 'اعتماد استراتيجية الاستجابة', 'Approve the response strategy and segregated treatment plan.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
+    stage('airs-response', 'Response strategy approval', 'اعتماد استراتيجية الاستجابة', 'Approve the proposed response strategy after required consultations.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
+    stage('airs-response-proposal', 'Response strategy proposal', 'اقتراح استراتيجية الاستجابة', 'Propose a justified response with evidence and processing-location confirmation.', 'review', 'information', 'AI_RISK_OWNER', 5),
+    stage('airs-transfer-consultation', 'Transfer consultation', 'استشارة نقل الخطر', 'Complete required privacy and security consultations for this transfer proposal.', 'review', 'review', 'privacy_officer', 5),
+    stage('airs-treatment-plan', 'Treatment plan preparation', 'إعداد خطة المعالجة', 'Prepare real actions and independent plan approval before implementation.', 'review', 'information', 'AI_RISK_OWNER', 5),
+    stage('airs-avoidance-review', 'Avoidance prerequisites', 'متطلبات تجنب الخطر', 'Review scope-change or stop and closure prerequisites.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
+    stage('airs-acceptance-gate', 'Risk acceptance prerequisites', 'متطلبات قبول الخطر', 'Require actual residual assessment and its governed acceptance authority.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
+    stage('airs-escalation-gate', 'Governance escalation preparation', 'إعداد التصعيد الحوكمي', 'Prepare routing through the existing DGOP escalation ladder; no plain risk acceptance.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5,
+      { gatewayConfigJson: { allowedOutcomes: ['escalate', 'return'] } }),
     stage('airs-treatment', 'Treatment implementation', 'تنفيذ المعالجة', 'Complete assigned treatment actions with evidence.', 'implementation', 'review', 'AI_WORKING_GROUP', 5),
     stage('airs-residual-assessment', 'Residual risk assessment', 'تقييم الخطر المتبقي', 'Reassess risk after treatment before authority acceptance.', 'review', 'review', 'AI_RISK_OWNER', 5),
     stage('airs-monitoring', 'Risk acceptance and monitoring', 'قبول الخطر ومتابعته', 'Apply the governed acceptance authority and recurring review cadence.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
@@ -675,8 +682,20 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('airs-ethics-review', 'airs-assessment-adoption', 'Independent review approved', 'اعتماد المراجعة المستقلة', 'approved'),
     link('airs-ethics-review', 'airs-inherent-assessment', 'Return for reassessment', 'إعادة التقييم', 'rejected', false),
     link('airs-assessment-adoption', 'airs-inherent-assessment', 'Return for reassessment', 'إعادة التقييم', 'rejected', false),
-    link('airs-assessment-adoption', 'airs-response', 'Assessment approved', 'اعتماد التقييم', 'approved'),
-    link('airs-response', 'airs-treatment', 'Plan approved', 'اعتماد الخطة', 'approved'),
+    link('airs-assessment-adoption', 'airs-response-proposal', 'Assessment approved', 'اعتماد التقييم', 'approved'),
+    link('airs-response-proposal', 'airs-response', 'Response proposed', 'اقتراح الاستجابة'),
+    link('airs-response', 'airs-treatment-plan', 'Mitigate/Transfer strategy approved', 'اعتماد استراتيجية التخفيف أو النقل', 'approved'),
+    link('airs-response', 'airs-response-proposal', 'Return response proposal', 'إعادة اقتراح الاستجابة', 'rejected', false),
+    link('airs-response', 'airs-transfer-consultation', 'Required transfer consultations', 'استشارات النقل المطلوبة', 'consult'),
+    link('airs-transfer-consultation', 'airs-response', 'Consultations complete', 'اكتمال الاستشارات', 'approved'),
+    link('airs-transfer-consultation', 'airs-response-proposal', 'Return transfer proposal', 'إعادة اقتراح النقل', 'rejected', false),
+    link('airs-response', 'airs-avoidance-review', 'Avoidance strategy approved', 'اعتماد التجنب', 'avoid'),
+    link('airs-response', 'airs-acceptance-gate', 'Acceptance strategy approved', 'اعتماد استراتيجية القبول', 'accept'),
+    link('airs-response', 'airs-escalation-gate', 'Escalation strategy approved', 'اعتماد استراتيجية التصعيد', 'escalate'),
+    link('airs-treatment-plan', 'airs-treatment', 'Plan prerequisites complete', 'اكتمال متطلبات الخطة'),
+    link('airs-avoidance-review', 'airs-closure', 'Avoidance and closure prerequisites complete', 'اكتمال متطلبات التجنب والإغلاق'),
+    link('airs-acceptance-gate', 'airs-residual-assessment', 'Residual assessment prerequisites complete', 'اكتمال متطلبات تقييم الخطر المتبقي'),
+    link('airs-escalation-gate', 'airs-response-proposal', 'Return from escalation preparation', 'إعادة من إعداد التصعيد'),
     link('airs-treatment', 'airs-residual-assessment', 'Treatment completed', 'اكتمال المعالجة'),
     link('airs-residual-assessment', 'airs-monitoring', 'Residual assessment recorded', 'تسجيل التقييم المتبقي'),
     link('airs-monitoring', 'airs-closure', 'Monitoring completed', 'اكتمال المتابعة'),

@@ -904,6 +904,8 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  riskResponseProposal AiRiskResponse?
+  riskResponseDecision AiRiskResponseDecision?
   riskAssessmentDecision AiRiskAssessmentDecision?
   aiTreatmentAction       AiTreatmentAction?
   id                      String                    @id @default(uuid())
@@ -4783,6 +4785,7 @@ model GovernedReferenceVersion {
   list          GovernedReferenceList    @relation(fields: [listCode], references: [code], onDelete: Restrict)
   values        GovernedReferenceValue[]
   assessments   AiAssessmentRound[]
+  riskResponses AiRiskResponse[]
 
   @@unique([listCode, version])
   @@index([listCode, state, effectiveFrom])
@@ -4861,6 +4864,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  responses AiRiskResponse[]
   intakeData     Json?
   /// Stable source key for the one automatic AIUC handoff; manual risks remain null.
   aiucHandoffSourceId String? @unique
@@ -4896,6 +4900,7 @@ model AiRisk {
 /// Immutable calculation history; no default/fabricated scores. An optional
 /// composite risk FK ensures risk assessments belong to the same use case.
 model AiAssessmentRound {
+  responses AiRiskResponse[]
   id                     String                   @id @default(uuid())
   useCaseId              String
   riskId                 String?
@@ -4936,6 +4941,45 @@ model AiRiskAssessmentDecision {
 
   @@unique([assessmentId, kind])
   @@map("ai_risk_assessment_decisions")
+}
+
+/// Immutable response proposals tied to an adopted inherent assessment.
+model AiRiskResponse {
+  id String @id @default(uuid())
+  riskId String
+  assessmentId String
+  round Int
+  proposalTaskId String @unique
+  referenceVersionId String
+  strategyCode String
+  payload Json
+  submittedBy String
+  submittedAt DateTime @default(now())
+  risk AiRisk @relation(fields: [riskId], references: [id], onDelete: Restrict)
+  assessment AiAssessmentRound @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  proposalTask WorkflowTask @relation(fields: [proposalTaskId], references: [id], onDelete: Restrict)
+  referenceVersion GovernedReferenceVersion @relation(fields: [referenceVersionId], references: [id], onDelete: Restrict)
+  decisions AiRiskResponseDecision[]
+  @@unique([riskId, round])
+  @@map("ai_risk_responses")
+}
+
+model AiRiskResponseDecision {
+  id String @id @default(uuid())
+  responseId String
+  taskId String @unique
+  kind String
+  decision String
+  actorId String
+  actorRoleCode String
+  justification String
+  evidenceIds Json
+  clientIp String?
+  createdAt DateTime @default(now())
+  response AiRiskResponse @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  @@unique([responseId, kind])
+  @@map("ai_risk_response_decisions")
 }
 
 model AiTreatmentAction {

@@ -7,6 +7,9 @@ import { AiIdentifiersService } from '../src/ai-governance/ai-identifiers.servic
 import { AiIntakeService } from '../src/ai-governance/ai-intake.service';
 import { AiClassificationService } from '../src/ai-governance/ai-classification.service';
 import { AiDecisionService } from '../src/ai-governance/ai-decision.service';
+import { AiRegistrationService } from '../src/ai-governance/ai-registration.service';
+import { AiAssetFacade } from '../src/ai-governance/ai-asset.facade';
+import { ScopeService } from '../src/access/scope.service';
 import { AIUC_STAGE, AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
 import { AI_CLASSIFICATION_CRITERIA } from '../src/ai-governance/ai-governance.contracts';
 import { AIUC_WORKFLOW_TEMPLATE } from '../src/workflow/workflow.logic';
@@ -24,6 +27,9 @@ export async function testPhase2A(db: PrismaClient) {
   const service = new AiIntakeService(prisma, authorization, new AiIdentifiersService(), audit, routing);
   const classification = new AiClassificationService(prisma, authorization, audit, routing);
   const decisions = new AiDecisionService(prisma, authorization, audit, routing);
+  const scope = new ScopeService(prisma);
+  const assetFacade = new AiAssetFacade(scope);
+  const registrations = new AiRegistrationService(prisma, authorization, routing, assetFacade, new AiIdentifiersService(), audit, scope);
 
   if (!await db.workflowTemplate.findUnique({ where: { code: AIUC_WORKFLOW_TEMPLATE.code } })) {
     await db.workflowTemplate.create({
@@ -94,6 +100,11 @@ export async function testPhase2A(db: PrismaClient) {
   const requester = await createActor('intake-requester', 'business_steward');
   const owner = await createActor('intake-owner', 'AI_USECASE_OWNER');
   const dataOwner = await createActor('intake-data-owner', 'data_owner');
+  const assetOrg = await db.organizationUnit.create({ data: { code: 'AI-P2G-DEPT', nameEn: 'AI department', nameAr: 'إدارة الذكاء الاصطناعي' } });
+  const assetDomain = await db.dataDomain.create({ data: { code: 'AI-P2G-DOMAIN', nameEn: 'AI products', nameAr: 'منتجات الذكاء الاصطناعي' } });
+  const assetClass = await db.classification.create({ data: { code: 'AI_P2G_RESTRICTED', nameEn: 'Restricted', nameAr: 'مقيدة', rank: 2, color: '#ff9900' } });
+  const assetOwnerRoleType = await db.roleType.upsert({ where: { code: 'data_owner' }, create: { code: 'data_owner', nameEn: 'Data Owner', nameAr: 'مالك البيانات' }, update: {} });
+  await db.person.update({ where: { id: owner.person.id }, data: { organization: assetOrg.code } });
   const sponsor = await createActor('intake-sponsor', 'AI_EXECUTIVE_TEAM');
   const triageReviewer = await createActor('intake-triage', 'AI_WORKING_GROUP');
   const officer = await createActor('intake-officer', 'AI_GOVERNANCE_OFFICER');
@@ -119,7 +130,10 @@ export async function testPhase2A(db: PrismaClient) {
     });
     const version = await db.governedReferenceVersion.create({ data: { listCode: code, version: 1, createdBy: 'phase2a-fixture' } });
     await db.governedReferenceValue.createMany({
-      data: values.map(([valueCode, labelEn, labelAr], sortOrder) => ({ versionId: version.id, code: valueCode, labelEn, labelAr, sortOrder })),
+      data: values.map(([valueCode, labelEn, labelAr], sortOrder) => ({ versionId: version.id, code: valueCode, labelEn, labelAr, sortOrder,
+        metadata: code === 'L_STAGE' ? { airsLifecycleCode: 'PILOT' } : code === 'L_MODEL' ? { thirdParty: false }
+          : code === 'L_CLASS' && valueCode === 'RESTRICTED' ? { assetClassificationCode: assetClass.code } : {},
+      })),
     });
     await db.governedReferenceVersion.update({
       where: { id: version.id },
@@ -190,9 +204,9 @@ export async function testPhase2A(db: PrismaClient) {
   const tierVersion = await db.governedReferenceVersion.create({ data: { listCode: 'R_SDAIA_TIER', version: tierVersionNumber + 1, createdBy: 'phase2a-fixture' } });
   await db.governedReferenceValue.createMany({
     data: [
-      { code: 'MINIMAL', labelEn: 'Minimal or none', labelAr: 'مخاطر قليلة أو معدومة', metadata: { automatic: true, minScore: 1, maxScore: 2 } },
-      { code: 'LIMITED', labelEn: 'Limited', labelAr: 'مخاطر محدودة', metadata: { automatic: true, minScore: 3, maxScore: 3 } },
-      { code: 'HIGH', labelEn: 'High', labelAr: 'مخاطر عالية', metadata: { automatic: true, minScore: 4, maxScore: 5 } },
+      { code: 'MINIMAL', labelEn: 'Minimal or none', labelAr: 'مخاطر قليلة أو معدومة', metadata: { automatic: true, minScore: 1, maxScore: 2, cadenceLevelCode: 'LOW' } },
+      { code: 'LIMITED', labelEn: 'Limited', labelAr: 'مخاطر محدودة', metadata: { automatic: true, minScore: 3, maxScore: 3, cadenceLevelCode: 'MEDIUM' } },
+      { code: 'HIGH', labelEn: 'High', labelAr: 'مخاطر عالية', metadata: { automatic: true, minScore: 4, maxScore: 5, cadenceLevelCode: 'HIGH' } },
       { code: 'UNACCEPTABLE', labelEn: 'Unacceptable', labelAr: 'مخاطر غير مقبولة', metadata: { automatic: false } },
     ].map((value, sortOrder) => ({ ...value, sortOrder, versionId: tierVersion.id })),
   });
@@ -564,6 +578,12 @@ export async function testPhase2A(db: PrismaClient) {
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers: privacyHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/decisions/queue`, { headers })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/decisions/queue`, { headers: officerHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/registration/queue`, { headers })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/registration/queue`, { headers: reviewerHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/registration/lookups`, { headers: reviewerHeaders })).status, 200);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/registration/${draft.id}/${handoverTask.id}/propose`, {
+      method: 'POST', headers: reviewerHeaders, body: JSON.stringify({ expectedVersion: 12, justification: 'Injected mapping', mode: 'create', domainId: assetDomain.id, classificationId: assetClass.id, injectedTier: 'MINIMAL' }),
+    })).status, 400);
     const badDecision = await fetch(`${base}/api/ai/use-cases/decisions/${draft.id}/${limitedDecisionTask.id}`, {
       method: 'POST', headers: officerHeaders,
       body: JSON.stringify({ ...approval, injectedTier: 'MINIMAL' }),
@@ -581,5 +601,93 @@ export async function testPhase2A(db: PrismaClient) {
     await app.close();
   }
 
-  console.log('Phase 2 integration passed: intake, classification, High-proposal Ethics coverage, parallel gates, tier authority/SoD, evidence-backed adoption/conditions, return/reassessment, rejection, prohibited-use stop and HTTP authorization.');
+  const proposal = { expectedVersion: 12, justification: 'Register the approved supervised matching product', mode: 'create' as const,
+    nameEn: 'Assisted matching product', nameAr: 'منتج المطابقة المساعدة', assetSubtype: 'recommendation_system',
+    domainId: assetDomain.id, classificationId: assetClass.id };
+  assert.ok((await registrations.queue(triageReviewer.id)).some(value => value.id === draft.id));
+  await assert.rejects(registrations.propose(officer.id, draft.id, handoverTask.id, proposal));
+  const workingGroupRole = await db.role.findUniqueOrThrow({ where: { code: 'AI_WORKING_GROUP' } });
+  await db.userRole.create({ data: { userId: dataOwner.id, roleId: workingGroupRole.id } });
+  await assert.rejects(registrations.propose(dataOwner.id, draft.id, handoverTask.id, proposal), /independent/i,
+    'a Data Owner with a working-group role cannot prepare their own approval');
+  await db.userRole.delete({ where: { userId_roleId: { userId: dataOwner.id, roleId: workingGroupRole.id } } });
+  const proposedAsset = await registrations.propose(triageReviewer.id, draft.id, handoverTask.id, proposal);
+  assert.equal(proposedAsset.version, 13);
+  assert.equal((await db.workflowTask.findUniqueOrThrow({ where: { id: proposedAsset.nextTaskId } })).assigneeUserId, dataOwner.id);
+  assert.ok((await registrations.queue(dataOwner.id)).some(value => value.id === draft.id));
+  const assetDecision = { expectedVersion: 13, decision: 'return' as const, justification: 'Please refine the registration names', evidenceIds: [decisionEvidence.id] };
+  await assert.rejects(registrations.decide(requester.id, draft.id, proposedAsset.nextTaskId, assetDecision));
+  await assert.rejects(registrations.decide(dataOwner.id, draft.id, proposedAsset.nextTaskId, { ...assetDecision, evidenceIds: [] }));
+  const returnedAsset = await registrations.decide(dataOwner.id, draft.id, proposedAsset.nextTaskId, assetDecision);
+  assert.equal(returnedAsset.version, 14);
+  assert.equal(await db.aiRisk.count({ where: { aiucHandoffSourceId: draft.id } }), 0);
+  assert.equal((await db.aiUseCase.findUniqueOrThrow({ where: { id: draft.id } })).assetId, null);
+  const resubmittedAsset = await registrations.propose(triageReviewer.id, draft.id, returnedAsset.nextTaskId!, { ...proposal, expectedVersion: 14 });
+  const finalAssetDecision = { ...assetDecision, expectedVersion: 15, decision: 'approve' as const, justification: 'The independent Data Owner approves registration and handover' };
+  await assert.rejects(registrations.decide(dataOwner.id, draft.id, resubmittedAsset.nextTaskId, finalAssetDecision), /mapping|metadata/i,
+    'unpublished handoff mappings must block without creating an asset');
+  assert.equal(await db.dataAsset.count({ where: { code: `AST-${accepted.useCaseRef}` } }), 0);
+  async function publishHandoffMapping(listCode: string, values: Array<{ code: string; metadata: Prisma.InputJsonObject }>) {
+    await db.governedReferenceList.upsert({ where: { code: listCode }, create: { code: listCode, nameEn: listCode, nameAr: listCode, ownerRoleCode: 'AI_GOVERNANCE_OFFICER' }, update: {} });
+    await db.governedReferenceVersion.updateMany({ where: { listCode, state: 'published' }, data: { state: 'retired', effectiveTo: new Date() } });
+    const versionNumber = (await db.governedReferenceVersion.aggregate({ where: { listCode }, _max: { version: true } }))._max.version ?? 0;
+    const version = await db.governedReferenceVersion.create({ data: { listCode, version: versionNumber + 1, createdBy: 'phase2g-fixture' } });
+    await db.governedReferenceValue.createMany({ data: values.map(value => ({ ...value, versionId: version.id, labelEn: value.code, labelAr: value.code })) });
+    await db.governedReferenceVersion.update({ where: { id: version.id }, data: { state: 'published', effectiveFrom: new Date('2020-01-01'), approvedBy: 'phase2g-fixture', approvedAt: new Date('2020-01-01') } });
+  }
+  await publishHandoffMapping('R_LEVEL_DAYS', [ { code: 'LOW', metadata: { days: 365 } }, { code: 'MEDIUM', metadata: { days: 180 } }, { code: 'HIGH', metadata: { days: 90 } } ]);
+  await publishHandoffMapping('R_LIFECYCLE', [{ code: 'PILOT', metadata: {} }]);
+  const failedHandoff = new AiRegistrationService(prisma, authorization, routing, assetFacade, new AiIdentifiersService(), {
+    logRequired: async () => { throw new Error('Injected handoff audit failure'); },
+  } as unknown as AuditService, scope);
+  await assert.rejects(failedHandoff.decide(dataOwner.id, draft.id, resubmittedAsset.nextTaskId, finalAssetDecision), /Injected handoff audit failure/);
+  assert.equal((await db.aiUseCase.findUniqueOrThrow({ where: { id: draft.id } })).version, 15);
+  assert.equal((await db.workflowCase.findUniqueOrThrow({ where: { id: accepted.workflowCase!.id } })).status, 'approved');
+  assert.equal((await db.workflowTask.findUniqueOrThrow({ where: { id: resubmittedAsset.nextTaskId } })).status, 'pending');
+  assert.equal(await db.dataAsset.count({ where: { code: `AST-${accepted.useCaseRef}` } }), 0);
+  assert.equal(await db.aiRisk.count({ where: { aiucHandoffSourceId: draft.id } }), 0);
+  const concurrentHandoffs = await Promise.allSettled([
+    registrations.decide(dataOwner.id, draft.id, resubmittedAsset.nextTaskId, finalAssetDecision, '127.0.0.10'),
+    registrations.decide(dataOwner.id, draft.id, resubmittedAsset.nextTaskId, finalAssetDecision, '127.0.0.10'),
+  ]);
+  assert.equal(concurrentHandoffs.filter(value => value.status === 'fulfilled').length, 1, 'exactly one concurrent handoff commits');
+  assert.equal(await db.aiRisk.count({ where: { aiucHandoffSourceId: draft.id } }), 1);
+  const handedOver = await db.aiRisk.findUniqueOrThrow({ where: { aiucHandoffSourceId: draft.id }, include: { workflowCase: true } });
+  const handoffPayload = handedOver.handoffPayload as { relatedAssetId: string; nextReviewBasisDays: number; personalDataInvolved: boolean; sensitiveDataInvolved: boolean; ownerPersonId: string; organizationUnitId: string };
+  assert.equal(handedOver.riskRef, null, 'AIR identifier is allocated only on later risk submission');
+  assert.equal(handedOver.workflowCase!.type, 'AIRS'); assert.equal(handedOver.workflowCase!.status, 'draft');
+  assert.equal(handedOver.workflowCase!.assetId, handoffPayload.relatedAssetId);
+  assert.equal(handoffPayload.nextReviewBasisDays, 180); assert.equal(handoffPayload.personalDataInvolved, true); assert.equal(handoffPayload.sensitiveDataInvolved, false);
+  assert.equal(handoffPayload.ownerPersonId, owner.person.id); assert.equal(handoffPayload.organizationUnitId, assetOrg.id);
+  const registeredAsset = await db.dataAsset.findUniqueOrThrow({ where: { id: handoffPayload.relatedAssetId } });
+  assert.equal(registeredAsset.assetType, 'ai_data_product'); assert.equal(registeredAsset.assetSubtype, 'recommendation_system');
+  assert.equal((await db.stewardshipAssignment.findFirstOrThrow({ where: { targetType: 'asset', targetId: registeredAsset.id,
+    roleTypeId: assetOwnerRoleType.id, approvalStatus: 'approved', isPrimary: true } })).personId, dataOwner.person.id);
+  assert.equal((registeredAsset.typeMetadataJson as { aiUseCaseRef: string }).aiUseCaseRef, accepted.useCaseRef);
+  assert.equal((await db.aiUseCase.findUniqueOrThrow({ where: { id: draft.id } })).assetId, registeredAsset.id);
+  assert.equal((await db.workflowCase.findUniqueOrThrow({ where: { id: accepted.workflowCase!.id } })).status, 'closed');
+  const handedCondition = await db.aiApprovalObligation.findFirstOrThrow({ where: { useCaseId: draft.id } });
+  assert.equal(handedCondition.assetId, registeredAsset.id); assert.equal(handedCondition.riskId, handedOver.id);
+  await assert.rejects(registrations.decide(dataOwner.id, draft.id, resubmittedAsset.nextTaskId, finalAssetDecision));
+  await assert.rejects(db.aiRisk.update({ where: { id: handedOver.id }, data: { handoffPayload: {}, version: { increment: 1 } } }));
+  await assert.rejects(db.aiRisk.create({ data: { useCaseId: draft.id, aiucHandoffSourceId: draft.id, handoffPayload: {}, createdBy: 'duplicate-fixture' } }));
+
+  const existingProduct = await db.dataAsset.create({ data: { code: 'AST-AI-P2G-EXISTING', nameEn: 'Existing prediction service', nameAr: 'خدمة تنبؤ قائمة',
+    assetType: 'ai_data_product', assetSubtype: 'prediction_service', orgUnitId: assetOrg.id, domainId: assetDomain.id, classificationId: assetClass.id } });
+  const linkedProposal = { expectedVersion: 8, justification: 'Link the existing governed prediction product', mode: 'link' as const,
+    existingAssetId: existingProduct.id, domainId: assetDomain.id, classificationId: assetClass.id };
+  await assert.rejects(registrations.propose(triageReviewer.id, highApproved.id, executiveApproved.nextTaskId!, linkedProposal), /primary approved Data Owner/i);
+  await assert.rejects(registrations.propose(triageReviewer.id, highApproved.id, executiveApproved.nextTaskId!, { ...linkedProposal, existingAssetId: registeredAsset.id }), /another AI use-case identity/i);
+  await db.stewardshipAssignment.create({ data: { targetType: 'asset', targetId: existingProduct.id, roleTypeId: assetOwnerRoleType.id, personId: dataOwner.person.id, approvalStatus: 'approved' } });
+  const linkedSubmission = await registrations.propose(triageReviewer.id, highApproved.id, executiveApproved.nextTaskId!, linkedProposal);
+  const beforeLinkCount = await db.dataAsset.count();
+  const linkedHandoff = await registrations.decide(dataOwner.id, highApproved.id, linkedSubmission.nextTaskId, {
+    expectedVersion: 9, decision: 'approve', justification: 'Data Owner independently approves the existing-product handover', evidenceIds: [decisionEvidence.id],
+  });
+  assert.equal(linkedHandoff.assetId, existingProduct.id); assert.equal(await db.dataAsset.count(), beforeLinkCount);
+  assert.equal(await db.aiRisk.count({ where: { aiucHandoffSourceId: highApproved.id } }), 1);
+  await assert.rejects(db.aiUseCase.update({ where: { id: draft.id }, data: { assetId: existingProduct.id, version: { increment: 1 } } }));
+  await assert.rejects(db.dataAsset.update({ where: { id: registeredAsset.id }, data: { typeMetadataJson: {} } }));
+  await assert.rejects(db.aiApprovalObligation.update({ where: { id: handedCondition.id }, data: { assetId: existingProduct.id, version: { increment: 1 } } }));
+  console.log('Phase 2 integration passed: governed intake/reviews/decisions, independent asset registration/return, atomic create/link AIRS handoff, conditions, mapping blocks, audit rollback, concurrent exactly-one spawn and HTTP authorization.');
 }

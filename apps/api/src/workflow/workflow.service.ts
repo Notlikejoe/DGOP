@@ -143,7 +143,7 @@ const WORKFLOW_TEST_RUN_CREATE_ATTEMPTS = 5;
 const WORKFLOW_REPORT_CASE_LIMIT = 2_000;
 const SYSTEM_ROUTE_GRAPH_REVISIONS: Readonly<Record<string, string>> = Object.fromEntries(
   DEFAULT_WORKFLOW_TEMPLATES.map((seed) => [seed.code,
-    seed.code === 'AIUC_APPROVAL_V1' ? 'aiuc-approval-phase2f-1' : 'v6-volume2-complete-3']),
+    seed.code === 'AIUC_APPROVAL_V1' ? 'aiuc-approval-phase2g-1' : 'v6-volume2-complete-3']),
 );
 const WORKFLOW_ROUTE_TYPE_PRIORITY = [
   'owner_assignment_approval',
@@ -398,12 +398,12 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
 
   // ---------- templates / routing ----------
   private async assertGovernedAiucMutation(type: string | undefined | null, actor: string, entityId?: string): Promise<void> {
-    if (type !== 'AIUC') return;
+    if (!type || !['AIUC', 'AIRS'].includes(type)) return;
     await this.audit.logRequired({
-      actor, action: 'aiuc.generic_mutation.blocked', entityType: 'workflow_case', entityId,
+      actor, action: `${type.toLowerCase()}.generic_mutation.blocked`, entityType: 'workflow_case', entityId,
       metadata: { caseType: type, requiredEntryPoint: 'AI Governance' },
     });
-    throw new ForbiddenException('AIUC changes must use the AI Governance actions to enforce evidence, routing, and segregation of duties');
+    throw new ForbiddenException(`${type} changes must use the AI Governance actions to enforce evidence, routing, and segregation of duties`);
   }
 
   private async ensureDefaultTemplates(): Promise<void> {
@@ -923,7 +923,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       where: {
         templateId: null,
         status: { notIn: [...FINAL_CASE_STATUSES] },
-        type: { in: [...WORKFLOW_CASE_TYPES] },
+        type: { in: [...WORKFLOW_CASE_TYPES], notIn: ['AIUC', 'AIRS'] },
       },
       select: {
         id: true,
@@ -944,6 +944,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     });
     let backfilled = 0;
     for (const wfCase of cases) {
+      if (['AIUC', 'AIRS'].includes(wfCase.type)) continue;
       const selected = selectWorkflowTemplate(
         { caseType: wfCase.type, domainId: wfCase.asset?.domainId ?? null },
         candidates,
@@ -1003,7 +1004,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           { assigneeRoleCode: { not: null } },
           { templateStage: { is: { assigneeRoleCode: { not: null }, isActive: true } } },
         ],
-        case: { type: { not: 'AIUC' }, templateId: { not: null }, status: { notIn: [...FINAL_CASE_STATUSES] } },
+        case: { type: { notIn: ['AIUC', 'AIRS'] }, templateId: { not: null }, status: { notIn: [...FINAL_CASE_STATUSES] } },
       },
       select: {
         id: true,
@@ -1036,7 +1037,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         const targetRoleCode = current?.assigneeRoleCode ?? current?.templateStage?.assigneeRoleCode;
         if (
           !current ||
-          current.case.type === 'AIUC' ||
+          ['AIUC', 'AIRS'].includes(current.case.type) ||
           current.assigneeUserId ||
           (current.status !== TaskStatus.pending && current.status !== TaskStatus.in_progress) ||
           FINAL_CASE_STATUSES.includes(current.case.status) ||

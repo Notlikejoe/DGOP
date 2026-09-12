@@ -8,10 +8,15 @@ import { AiClassificationService } from './ai-classification.service';
 import { AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { AiDecisionController } from './ai-decision.controller';
 import { AiDecisionService } from './ai-decision.service';
+import { AccessModule } from '../access/access.module';
+import { AiAssetFacade } from './ai-asset.facade';
+import { AiRegistrationController } from './ai-registration.controller';
+import { AiRegistrationService } from './ai-registration.service';
 
 @Module({
-  controllers: [AiIntakeController, AiClassificationController, AiDecisionController],
-  providers: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService],
+  imports: [AccessModule],
+  controllers: [AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController],
+  providers: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService],
   exports: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService],
 })
 export class AiGovernanceModule {}

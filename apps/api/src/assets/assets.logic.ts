@@ -26,7 +26,7 @@ export const DATA_ASSET_SUBTYPES: Record<(typeof DATA_ASSET_TYPES)[number], read
   document_record: ['policy_record', 'case_record', 'contract_record', 'retention_record'],
   api_data_feed: ['rest_api', 'event_stream', 'batch_feed', 'integration_feed'],
   bi_report_dashboard: ['dashboard', 'certified_report', 'self_service_report', 'regulatory_report'],
-  ai_data_product: ['model', 'feature_set', 'training_dataset', 'prompt_library'],
+  ai_data_product: ['model', 'feature_set', 'training_dataset', 'prompt_library', 'ai_powered_application', 'prediction_service', 'recommendation_system'],
 };
 
 export const DATA_ASSET_TYPE_DEFINITIONS = DATA_ASSET_TYPES.map((code) => ({
@@ -204,7 +204,7 @@ const ASSET_TYPE_METADATA_FIELDS: Record<(typeof DATA_ASSET_TYPES)[number], read
   document_record: ['recordClass', 'retentionSchedule', 'dispositionRule', 'legalHold'],
   api_data_feed: ['endpointUrl', 'protocol', 'producerSystem', 'consumerCount', 'slaTier'],
   bi_report_dashboard: ['reportTool', 'metricOwner', 'refreshCadence', 'certifiedMetricSet'],
-  ai_data_product: ['modelCardUrl', 'modelRiskLevel', 'trainingDataCutoff', 'humanOversightOwner'],
+  ai_data_product: ['modelCardUrl', 'modelRiskLevel', 'trainingDataCutoff', 'humanOversightOwner', 'aiUseCaseRef'],
 };
 
 const V6_LIFECYCLE_TRANSITIONS: Record<(typeof V6_LIFECYCLE_STATES)[number], readonly string[]> = {

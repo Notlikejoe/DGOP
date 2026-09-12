@@ -621,6 +621,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
       evidenceRequirementsJson: [{ name: 'AIUC tier decision evidence', required: true, evidenceTypes: ['attachment'] }],
     }),
     stage('aiuc-asset-registration', 'AI asset registration and handover', 'تسجيل أصل الذكاء الاصطناعي والتسليم', 'Create or link the AI Data Product and prepare the AIRS handover.', 'implementation', 'information', 'AI_WORKING_GROUP', 5),
+    stage('aiuc-asset-approval', 'Independent AI asset approval', 'اعتماد مستقل لأصل الذكاء الاصطناعي', 'The Data Owner approves registration independently before the atomic asset and AIRS handover.', 'implementation', 'approval', 'data_owner', 5, { isDecision: true }),
     stage('aiuc-closure', 'AIUC closure', 'إغلاق طلب حالة استخدام الذكاء الاصطناعي', 'Record the final resolution and close the governed case.', 'closure', 'review', undefined, 0, { isFinal: true }),
   ],
   transitions: [
@@ -638,7 +639,9 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('aiuc-review-merge', 'aiuc-decision', 'All instantiated reviews complete', 'اكتملت جميع المراجعات المنشأة'),
     link('aiuc-decision', 'aiuc-asset-registration', 'Adopted', 'تم الاعتماد', 'approved'),
     link('aiuc-decision', 'aiuc-classification', 'Return for reassessment', 'إعادة للتقييم', 'rejected', false),
-    link('aiuc-asset-registration', 'aiuc-closure', 'Handover complete', 'اكتمل التسليم'),
+    link('aiuc-asset-registration', 'aiuc-asset-approval', 'Registration proposed', 'اقتراح التسجيل'),
+    link('aiuc-asset-approval', 'aiuc-closure', 'Approved handover', 'اعتماد التسليم', 'approved'),
+    link('aiuc-asset-approval', 'aiuc-asset-registration', 'Return registration', 'إعادة التسجيل', 'rejected', false),
   ],
 };
 

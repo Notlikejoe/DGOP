@@ -8,7 +8,7 @@ import { AiReferencePublicationService } from '../src/master-data/ai-reference-p
 import { GovernedReferenceService } from '../src/master-data/governed-reference.service';
 import { RolesService } from '../src/roles/roles.service';
 import { UsersService } from '../src/users/users.service';
-import { splitAiPermission } from '../src/ai-governance/ai-permissions';
+import { AI_PERMISSIONS, splitAiPermission } from '../src/ai-governance/ai-permissions';
 import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ValidationPipe } from '@nestjs/common';
@@ -21,7 +21,7 @@ export async function testPhase1B(db:PrismaClient) {
     await db.role.upsert({where:{code},create:{code,nameEn:code,nameAr:code,isSystem:true},update:{}});
   }
   const first=await db.$transaction(tx=>syncAiSecurityCatalog(tx,audit,'test-installer','Phase 1B integration fixture'),{timeout:30000});
-  assert.equal(first.roles,10);assert.equal(first.permissions,25);
+  assert.equal(first.roles,10);assert.equal(first.permissions,AI_PERMISSIONS.length);
   const second=await db.$transaction(tx=>syncAiSecurityCatalog(tx,audit,'test-installer','Idempotency verification'),{timeout:30000});
   assert.equal(second.grants,0);assert.equal(second.revocations,0);
   async function actor(label:string,codes:string[]) {

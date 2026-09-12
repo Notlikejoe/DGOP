@@ -13,6 +13,7 @@ export const AIUC_STAGE = {
   ethics: 'aiuc-ethics-review',
   decision: 'aiuc-decision',
   assetRegistration: 'aiuc-asset-registration',
+  assetApproval: 'aiuc-asset-approval',
 } as const;
 
 export type AiucRoutingFacts = {

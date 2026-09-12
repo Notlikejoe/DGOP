@@ -3115,6 +3115,19 @@ test('AIUC governance: generic workflow writes cannot bypass evidence, tier auth
   assert.equal(over.caseUpdates?.length ?? 0, 0);
 });
 
+test('AIRS handoff drafts cannot be changed or assigned through generic workflow operations', async () => {
+  const airsCase = { id: 'airs-case', type: 'AIRS', status: 'draft' };
+  const task = { id: 'airs-task', caseId: airsCase.id, case: airsCase, status: 'pending', assigneeUserId: null, assigneeRoleCode: 'AI_WORKING_GROUP' };
+  const over: Over = { case: airsCase, task, tasks: [task] };
+  const svc = makeService(over);
+  const actor = { id: 'admin', email: 'admin@test.local', roles: ['system_admin'] };
+  await assert.rejects(svc.updateCase(airsCase.id, { title: 'Bypass handoff' }, actor.roles, actor.email, actor), /AI Governance actions/);
+  await assert.rejects(svc.submitCase(airsCase.id, actor.roles, actor.email, actor), /AI Governance actions/);
+  await assert.rejects(svc.decideTask(task.id, { decision: 'approved' as never }, actor), /AI Governance actions/);
+  assert.equal(await (svc as any).assignUnownedRoutedTasks(), 0);
+  assert.equal(over.taskUpdates?.length ?? 0, 0); assert.equal(over.caseUpdates?.length ?? 0, 0);
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {

@@ -23,6 +23,7 @@
           <button type="button" [class.active]="tab() === 'verification'" (click)="setTab('verification')">{{ t('aiReview.tab.verification') }} <span>{{ verificationCases().length }}</span></button>
           <button type="button" [class.active]="tab() === 'specialist'" (click)="setTab('specialist')">{{ t('aiReview.tab.specialist') }} <span>{{ specialistCases().length }}</span></button>
           <button type="button" [class.active]="tab() === 'decision'" (click)="setTab('decision')">{{ t('aiReview.tab.decision') }} <span>{{ decisionCases().length }}</span></button>
+          <button type="button" [class.active]="tab() === 'registration'" (click)="setTab('registration')">{{ t('aiReview.tab.registration') }} <span>{{ registrationCases().length }}</span></button>
         </div>
         <div class="queue-list">
           @for (item of activeCases(); track item.id) {
@@ -94,6 +95,49 @@
                 </div>
               }
               <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification().trim()" (click)="returnForReassessment()">{{ t('aiReview.verification.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !decisionReady()" (click)="recordVerification()"><app-icon name="shield" />{{ decisionIsOverride() ? t('aiReview.verification.recordDecision') : t('aiReview.verification.verify') }}</button></div>
+            </section>
+          } @else if (tab() === 'registration') {
+            <section class="classification-result classification-result--ready specialist-summary">
+              <div><span>{{ t('aiReview.registration.stage') }}</span><strong>{{ specialistStageLabel() }}</strong></div>
+              <div><span>{{ t('aiReview.specialist.tier') }}</span><strong>{{ specialistTier() }}</strong></div>
+              <div><span>{{ t('aiReview.specialist.due') }}</span><strong>{{ specialistDueDate() }}</strong></div>
+            </section>
+            <section class="ds-card decision-card specialist-decision">
+              <div><span class="eyebrow">{{ t('aiReview.registration.stage') }}</span><h2>{{ t(assetApprovalStage() ? 'aiReview.registration.approvalTitle' : 'aiReview.registration.title') }}</h2><p>{{ t('aiReview.registration.body') }}</p></div>
+              @if (assetApprovalStage()) {
+                <div class="specialist-facts">
+                  <div><small>{{ t('aiReview.registration.mode') }}</small><strong>{{ t('aiReview.registration.' + registrationProposal()['mode']) }}</strong></div>
+                  <div><small>{{ t('aiReview.registration.nameEn') }}</small><strong>{{ registrationProposal()['nameEn'] || registrationProposal()['existingAssetId'] }}</strong></div>
+                  <div><small>{{ t('aiReview.registration.nameAr') }}</small><strong>{{ registrationProposal()['nameAr'] || '—' }}</strong></div>
+                  <div><small>{{ t('aiReview.registration.domain') }}</small><strong>{{ proposalLookupLabel('domainId') }}</strong></div>
+                  <div><small>{{ t('aiReview.registration.classification') }}</small><strong>{{ proposalLookupLabel('classificationId') }}</strong></div>
+                  <div><small>{{ t('aiReview.registration.justification') }}</small><strong>{{ registrationProposal()['justification'] }}</strong></div>
+                </div>
+                <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiReview.registration.independence') }}</span></div>
+              } @else {
+                <div class="verification-fields">
+                  <label><span>{{ t('aiReview.registration.mode') }}</span><select [ngModel]="registrationMode()" (ngModelChange)="registrationMode.set($event)"><option value="create">{{ t('aiReview.registration.create') }}</option><option value="link">{{ t('aiReview.registration.link') }}</option></select></label>
+                  @if (registrationMode() === 'link') {
+                    <label><span>{{ t('aiReview.registration.existing') }} <b>*</b></span><input type="text" [ngModel]="existingAssetId()" (ngModelChange)="existingAssetId.set($event)" /></label>
+                  } @else {
+                    <label><span>{{ t('aiReview.registration.subtype') }}</span><select [ngModel]="assetSubtype()" (ngModelChange)="assetSubtype.set($event)">@for (code of ['ai_powered_application', 'prediction_service', 'recommendation_system']; track code) { <option [value]="code">{{ t('aiReview.registration.subtype.' + code) }}</option> }</select></label>
+                    <label><span>{{ t('aiReview.registration.nameEn') }} <b>*</b></span><input type="text" maxlength="180" [ngModel]="assetNameEn()" (ngModelChange)="assetNameEn.set($event)" /></label>
+                    <label><span>{{ t('aiReview.registration.nameAr') }} <b>*</b></span><input type="text" maxlength="180" dir="rtl" [ngModel]="assetNameAr()" (ngModelChange)="assetNameAr.set($event)" /></label>
+                  }
+                  <label><span>{{ t('aiReview.registration.domain') }} <b>*</b></span><select [ngModel]="assetDomainId()" (ngModelChange)="assetDomainId.set($event)"><option value="">{{ t('aiuc.select') }}</option>@for (value of assetLookups().domains; track value.id) { <option [value]="value.id">{{ assetLookupLabel(value) }}</option> }</select></label>
+                  <label><span>{{ t('aiReview.registration.classification') }} <b>*</b></span><select [ngModel]="assetClassificationId()" (ngModelChange)="assetClassificationId.set($event)"><option value="">{{ t('aiuc.select') }}</option>@for (value of assetLookups().classifications; track value.id) { <option [value]="value.id">{{ assetLookupLabel(value) }}</option> }</select></label>
+                </div>
+              }
+              @if (item.obligations?.length) {
+                <div><strong>{{ t('aiReview.adoption.conditions') }}</strong><ul>@for (condition of item.obligations || []; track condition.id) { <li>{{ condition.description }}</li> }</ul></div>
+              }
+              <label><span>{{ t('aiReview.justification') }} <b>*</b></span><textarea rows="3" [ngModel]="justification()" (ngModelChange)="justification.set($event)"></textarea></label>
+              @if (assetApprovalStage()) {
+                <label><span>{{ t('aiReview.verification.evidenceIds') }} <b>*</b></span><textarea rows="2" [ngModel]="decisionEvidenceIds()" (ngModelChange)="decisionEvidenceIds.set($event)"></textarea></label>
+                <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !specialistDecisionReady()" (click)="saveRegistration('return')">{{ t('aiReview.registration.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !specialistDecisionReady()" (click)="saveRegistration('approve')"><app-icon name="shield" />{{ t('aiReview.registration.approve') }}</button></div>
+              } @else {
+                <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !registrationReady()" (click)="saveRegistration()">{{ t('aiReview.registration.submit') }}</button>
+              }
             </section>
           } @else {
             <section class="classification-result classification-result--ready specialist-summary">

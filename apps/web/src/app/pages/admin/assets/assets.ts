@@ -207,7 +207,7 @@ const ASSET_SUBTYPES: Record<string, string[]> = {
   document_record: ['policy_record', 'case_record', 'contract_record', 'retention_record'],
   api_data_feed: ['rest_api', 'event_stream', 'batch_feed', 'integration_feed'],
   bi_report_dashboard: ['dashboard', 'certified_report', 'self_service_report', 'regulatory_report'],
-  ai_data_product: ['model', 'feature_set', 'training_dataset', 'prompt_library'],
+  ai_data_product: ['model', 'feature_set', 'training_dataset', 'prompt_library', 'ai_powered_application', 'prediction_service', 'recommendation_system'],
 };
 const V6_LIFECYCLE_STATES = [
   'registered',

@@ -34,6 +34,8 @@ export const AI_PERMISSION_ROLES = {
   'case.view.airs.org': [...org,'technical_steward'],
   'case.view.airs.all': all,
   'case.approve.aiuc': [RAIO,ET,SC],
+  'aiuc.asset.register': [WG],
+  'aiuc.asset.approve': ['data_owner'],
   'case.approve.airs': [RAIO,SC],
   'aiuc.classify.assess': [WG,RAIO],
   'aiuc.classify.override': [RAIO,ET,SC],

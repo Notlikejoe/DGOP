@@ -7,7 +7,8 @@ import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
 
-type ReviewTab = 'triage' | 'classification' | 'verification' | 'specialist' | 'decision';
+type ReviewTab = 'triage' | 'classification' | 'verification' | 'specialist' | 'decision' | 'registration';
+type AssetLookup = { id: string; nameEn: string; nameAr: string };
 type CriterionCode = 'individual_impact' | 'affected_scope' | 'harm_likelihood' | 'decision_autonomy'
   | 'data_fairness_transparency' | 'technical_resilience';
 
@@ -20,6 +21,7 @@ interface AiReviewCase {
   updatedAt: string;
   approvedTier?: TierOption | null;
   allowedDecisions?: string[];
+  obligations?: Array<{ id: string; description: string }>;
   workflowCase: {
     id: string;
     code: string;
@@ -106,6 +108,18 @@ export class AiReviewPage implements OnInit {
   protected readonly verificationCases = signal<AiReviewCase[]>([]);
   protected readonly specialistCases = signal<AiReviewCase[]>([]);
   protected readonly decisionCases = signal<AiReviewCase[]>([]);
+  protected readonly registrationCases = signal<AiReviewCase[]>([]);
+  protected readonly assetLookups = signal<{ domains: AssetLookup[]; classifications: AssetLookup[] }>({ domains: [], classifications: [] });
+  protected readonly registrationMode = signal('create');
+  protected readonly existingAssetId = signal('');
+  protected readonly assetNameEn = signal('');
+  protected readonly assetNameAr = signal('');
+  protected readonly assetSubtype = signal('ai_powered_application');
+  protected readonly assetDomainId = signal('');
+  protected readonly assetClassificationId = signal('');
+  protected readonly assetApprovalStage = computed(() => this.selectedReviewTask()?.templateStage?.code === 'aiuc-asset-approval');
+  protected readonly registrationReady = computed(() => !!this.justification().trim() && !!this.assetDomainId() && !!this.assetClassificationId()
+    && (this.registrationMode() === 'link' ? !!this.existingAssetId().trim() : !!this.assetNameEn().trim() && !!this.assetNameAr().trim()));
   protected readonly selected = signal<AiReviewCase | null>(null);
   protected readonly configuration = signal<ClassificationConfiguration | null>(null);
   protected readonly justification = signal('');
@@ -157,12 +171,14 @@ export class AiReviewPage implements OnInit {
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
-      const [triage, classification, verification, specialist, decision, configuration] = await Promise.all([
+      const [triage, classification, verification, specialist, decision, registration, assetLookups, configuration] = await Promise.all([
         this.loadQueue('/api/ai/use-cases/triage'),
         this.loadQueue('/api/ai/use-cases/classification/queue'),
         this.loadQueue('/api/ai/use-cases/classification/verification/queue'),
         this.loadQueue('/api/ai/use-cases/classification/reviews/queue'),
         this.loadQueue('/api/ai/use-cases/decisions/queue'),
+        this.loadQueue('/api/ai/use-cases/registration/queue'),
+        this.loadAssetLookups(),
         this.loadConfiguration(),
       ]);
       this.triageCases.set(triage);
@@ -170,16 +186,18 @@ export class AiReviewPage implements OnInit {
       this.verificationCases.set(verification);
       this.specialistCases.set(specialist);
       this.decisionCases.set(decision);
+      this.registrationCases.set(registration);
+      this.assetLookups.set(assetLookups);
       this.configuration.set(configuration);
       const queues: Array<[ReviewTab, AiReviewCase[]]> = [
         ['triage', triage], ['classification', classification], ['verification', verification], ['specialist', specialist],
-        ['decision', decision],
+        ['decision', decision], ['registration', registration],
       ];
-      const activeTab = this.rowsFor(this.tab(), triage, classification, verification, specialist, decision).length
+      const activeTab = this.rowsFor(this.tab(), triage, classification, verification, specialist, decision, registration).length
         ? this.tab()
         : queues.find(([, rows]) => rows.length)?.[0] ?? this.tab();
       this.tab.set(activeTab);
-      const rows = this.rowsFor(activeTab, triage, classification, verification, specialist, decision);
+      const rows = this.rowsFor(activeTab, triage, classification, verification, specialist, decision, registration);
       this.select(rows.find(row => row.id === preferredId) ?? rows[0] ?? null);
       this.state.set('ok');
     } catch (error) {
@@ -204,6 +222,9 @@ export class AiReviewPage implements OnInit {
     this.authorityReference.set('');
     this.adoptionOutcome.set('');
     this.approvalConditions.set('');
+    this.registrationMode.set('create'); this.existingAssetId.set('');
+    this.assetNameEn.set(item?.name.slice(0, 180) ?? ''); this.assetNameAr.set('');
+    this.assetDomainId.set(''); this.assetClassificationId.set('');
   }
 
   protected activeCases(): AiReviewCase[] { return this.rowsFor(this.tab()); }
@@ -211,9 +232,40 @@ export class AiReviewPage implements OnInit {
   protected tabLabel(tab = this.tab()): string { return this.t(`aiReview.tab.${tab}`); }
 
   private rowsFor(tab: ReviewTab, triage = this.triageCases(), classification = this.classificationCases(),
-    verification = this.verificationCases(), specialist = this.specialistCases(), decision = this.decisionCases()): AiReviewCase[] {
+    verification = this.verificationCases(), specialist = this.specialistCases(), decision = this.decisionCases(), registration = this.registrationCases()): AiReviewCase[] {
     return tab === 'triage' ? triage : tab === 'classification' ? classification : tab === 'verification' ? verification
-      : tab === 'specialist' ? specialist : decision;
+      : tab === 'specialist' ? specialist : tab === 'decision' ? decision : registration;
+  }
+
+  private async loadAssetLookups(): Promise<{ domains: AssetLookup[]; classifications: AssetLookup[] }> {
+    try { return await firstValueFrom(this.http.get<{ domains: AssetLookup[]; classifications: AssetLookup[] }>('/api/ai/use-cases/registration/lookups')); }
+    catch (error) { if (error instanceof HttpErrorResponse && error.status === 403) return { domains: [], classifications: [] }; throw error; }
+  }
+
+  protected assetLookupLabel(value: AssetLookup): string { return this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn; }
+  protected registrationProposal(): Record<string, unknown> { return this.selectedReviewTask()?.formDataJson?.['registrationProposal'] as Record<string, unknown> ?? {}; }
+  protected proposalLookupLabel(field: 'domainId' | 'classificationId'): string {
+    const values = field === 'domainId' ? this.assetLookups().domains : this.assetLookups().classifications;
+    const value = values.find(value => value.id === this.registrationProposal()[field]);
+    return value ? this.assetLookupLabel(value) : '—';
+  }
+  protected async saveRegistration(decision?: 'approve' | 'return'): Promise<void> {
+    const item = this.selected(), task = this.selectedReviewTask();
+    if (!item || !task || this.working() || (decision ? !this.specialistDecisionReady() : !this.registrationReady())) return;
+    this.working.set(true);
+    try {
+      const result = await firstValueFrom(this.http.post<{ assetId?: string; airsCaseId?: string }>(`/api/ai/use-cases/registration/${item.id}/${task.id}/${decision ? 'decide' : 'propose'}`, {
+        expectedVersion: item.version, justification: this.justification().trim(),
+        ...(decision ? { decision, evidenceIds: this.evidenceIdList() } : {
+          mode: this.registrationMode(), domainId: this.assetDomainId(), classificationId: this.assetClassificationId(),
+          ...(this.registrationMode() === 'link' ? { existingAssetId: this.existingAssetId().trim() }
+            : { nameEn: this.assetNameEn().trim(), nameAr: this.assetNameAr().trim(), assetSubtype: this.assetSubtype() }),
+        }),
+      }));
+      this.toast.success(this.t(result.airsCaseId ? 'aiReview.registration.handedOff' : 'aiReview.registration.saved'));
+      await this.load();
+    } catch (error) { this.toast.errorFrom(error, this.t('aiReview.registration.error')); }
+    finally { this.working.set(false); }
   }
 
   private async loadQueue(url: string): Promise<AiReviewCase[]> {

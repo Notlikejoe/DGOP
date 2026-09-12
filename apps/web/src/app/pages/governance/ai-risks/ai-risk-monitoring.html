@@ -3,6 +3,13 @@
   @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button></section> }
   @else if (context(); as c) {
     <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiMonitoring.title') }}</h2><p>{{ t('aiMonitoring.subtitle') }}</p></div></header>
+    @if (summary(); as s) {
+      <dl class="review-summary" [attr.aria-label]="t('aiMonitoring.summary')">
+        <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.currentStatus') }}</dt><dd><app-status-chip [kind]="s.current?.status === 'overdue' ? 'danger' : s.current?.status === 'due_soon' ? 'warning' : s.current ? 'info' : 'muted'" [label]="t(s.current ? 'aiMonitoring.status.' + s.current.status : 'aiMonitoring.noActiveReview')" /></dd></div>
+        <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.nextDue') }}</dt><dd>@if (s.current) { {{ s.current.dueAt | date:'medium':'+0300' }} } @else { {{ t('aiMonitoring.notScheduled') }} }</dd></div>
+        <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.completedReviews') }}</dt><dd>{{ s.completed }}</dd></div>
+      </dl>
+    }
     @if (!c.cadenceReady) { <div class="override-notice" role="status">{{ t('aiMonitoring.referenceRequired') }}</div> }
     @if (c.canRegister) { <button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="act('register')">{{ t('aiMonitoring.register') }}</button> }
     @if (c.canRecalculate) { <button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="act('recalculate')">{{ t('aiMonitoring.recalculate') }}</button> }

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -12,11 +12,15 @@ interface ReviewContext {
   history:Array<{id:string;round:number;bandCode:string;intervalDays:number;dueAt:string;anchorAt:string;referenceVersionId:string;cadenceLabelEn:string;cadenceLabelAr:string;status:'scheduled'|'due_soon'|'overdue'|'completed'|'superseded';canComplete:boolean;signals:Array<{threshold:number;createdAt:string}>;completion:{justification:string;evidenceIds:string[];completedAt:string}|null}>;
 }
 @Component({selector:'app-ai-risk-monitoring',standalone:true,imports:[FormsModule,DatePipe,AppIcon,StatusChip],templateUrl:'./ai-risk-monitoring.html',
-  styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+  styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss','./ai-risk-monitoring.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiRiskMonitoring {
   readonly riskId=input.required<string>();readonly updated=output<void>();
   private readonly http=inject(HttpClient);private readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
   protected readonly context=signal<ReviewContext|null>(null);protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly working=signal(false);
+  protected readonly summary=computed(()=>{
+    const history=this.context()?.history??[];
+    return {current:history.find(r=>['scheduled','due_soon','overdue'].includes(r.status))??null,completed:history.filter(r=>!!r.completion).length};
+  });
   protected triggerCode='material_change';protected readonly triggers=['material_change','provider_change','data_change','incident','nonconformity','regulatory_change','detected_deviation'];
   protected justification='';protected evidence='';private sequence=0;
   constructor(){effect(()=>{void this.load(this.riskId());});}

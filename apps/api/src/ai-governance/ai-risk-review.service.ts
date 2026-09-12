@@ -11,6 +11,7 @@ import { AiResidualDecisionService } from './ai-residual-decision.service';
 import { AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { jsonRecord } from './ai-risk-scoring';
 import { CompleteAiRiskReviewDto, ReassessAiRiskDto, REASSESSMENT_TRIGGERS } from './ai-risk-review.dto';
+import { AiReviewDisplayService } from './ai-review-display.service';
 
 const options={isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:15000,maxWait:15000};
 const KSA=10800000;
@@ -38,7 +39,8 @@ const reviewInclude={completion:true,cancellation:{include:{reassessment:true}},
 export class AiRiskReviewService {
   constructor(private readonly prisma:PrismaService,private readonly authorization:AiAuthorizationService,
     private readonly risks:AiRiskIntakeService,private readonly decisions:AiResidualDecisionService,
-    private readonly routing:AiWorkflowRoutingService,private readonly audit:AuditService){}
+    private readonly routing:AiWorkflowRoutingService,private readonly audit:AuditService,
+    private readonly display:AiReviewDisplayService=new AiReviewDisplayService(prisma)){}
 
   private terminal(g:Gate) {
     if(!g.parentCurrent||!g.assessment||g.assessment.decisions.some(d=>d.decision==='return'))return undefined;
@@ -71,7 +73,7 @@ export class AiRiskReviewService {
     const occurrence=await tx.complianceCalendarOccurrence.create({data:{templateId:template.id,code:`${template.code}-${round}`,title:template.title,dueAt,workflowCaseId:g.risk.workflowCase!.id,createdBy:actorId}});
     const task=await this.routing.createStageTask(tx,g.risk.workflowCase!.id,'airs-periodic-review',new Date(),{templateCode:AIRS_TEMPLATE_CODE,assigneeRoleCode:'AI_RISK_OWNER',assigneeUserId:assignedOwnerId,formDataJson:{reviewId:id,acceptanceDecisionId:terminal.id,referenceVersionId:cadence.id,bandCode,intervalDays}});
     await tx.workflowTask.update({where:{id:task.id},data:{dueDate:dueAt}});
-    return tx.aiRiskReview.create({data:{id,riskId:g.risk.id,acceptanceDecisionId:terminal.id,referenceVersionId:cadence.id,calendarTemplateId:template.id,calendarOccurrenceId:occurrence.id,taskId:task.id,round,bandCode,intervalDays,cadenceLabelEn:value.labelEn,cadenceLabelAr:value.labelAr,anchorAt:anchor,dueAt,assignedOwnerId,createdBy:actorId}});
+    return tx.aiRiskReview.create({data:{...(await this.display.pin(tx,bandCode,intervalDays,cadence.id)),id,riskId:g.risk.id,acceptanceDecisionId:terminal.id,referenceVersionId:cadence.id,calendarTemplateId:template.id,calendarOccurrenceId:occurrence.id,taskId:task.id,round,bandCode,intervalDays,cadenceLabelEn:value.labelEn,cadenceLabelAr:value.labelAr,anchorAt:anchor,dueAt,assignedOwnerId,createdBy:actorId}});
   }
   async context(userId:string,id:string) {return this.prisma.$transaction(async tx=>{
     const g=await this.decisions.gate(tx,userId,id),history=await tx.aiRiskReview.findMany({where:{riskId:id},include:reviewInclude,orderBy:{round:'desc'}}),cadence=await this.cadence(tx);

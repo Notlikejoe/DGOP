@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../access/scope.service';
@@ -17,6 +17,21 @@ export function reviewMeasures(rows:ReviewMeasure[],asOf:Date) {
     dueSoon:active.filter(r=>!r.completion&&aiReviewStatus(false,r.dueAt,asOf)==='due_soon').length};
 }
 const reportPermissions:AiPermission[]=['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'];
+export const REVIEW_FILTERS=['next30','all','overdue','due_soon','scheduled','completed','superseded'] as const;
+export async function aggregateReviewMeasures(tx:Prisma.TransactionClient,riskIds:string[],asOf:Date,window?:{start:Date;end:Date}) {
+  if(!riskIds.length)return reviewMeasures([],asOf);
+  const [m]=await tx.$queryRaw<Array<Omit<ReturnType<typeof reviewMeasures>,'onTimePercent'>>>`
+    SELECT count(*)::int AS total,
+      count(*) FILTER(WHERE x."reviewId" IS NOT NULL)::int AS superseded,
+      count(*) FILTER(WHERE x."reviewId" IS NULL AND c."completedAt"<=${asOf})::int AS completed,
+      count(*) FILTER(WHERE x."reviewId" IS NULL AND r."dueAt"<=${asOf} AND (c."reviewId" IS NULL OR c."completedAt">${asOf}))::int AS overdue,
+      count(*) FILTER(WHERE x."reviewId" IS NULL AND r."dueAt"<=${asOf})::int AS due,
+      count(*) FILTER(WHERE x."reviewId" IS NULL AND r."dueAt"<=${asOf} AND c."completedAt"<=r."dueAt")::int AS "closedOnTime",
+      count(*) FILTER(WHERE x."reviewId" IS NULL AND r."dueAt">${asOf} AND r."dueAt"<=${new Date(asOf.getTime()+7*86400000)} AND (c."reviewId" IS NULL OR c."completedAt">${asOf}))::int AS "dueSoon"
+    FROM ai_risk_reviews r LEFT JOIN ai_risk_review_completions c ON c."reviewId"=r.id LEFT JOIN ai_risk_review_cancellations x ON x."reviewId"=r.id
+    WHERE r."riskId" IN (${Prisma.join(riskIds)}) ${window?Prisma.sql`AND r."dueAt">=${window.start} AND r."dueAt"<=${window.end}`:Prisma.empty}`;
+  return {...m,onTimePercent:m.due?Math.round(m.closedOnTime/m.due*10000)/100:null};
+}
 
 @Injectable()
 export class AiReviewReportService {
@@ -47,17 +62,26 @@ export class AiReviewReportService {
     where={AND:[where,{isSampleData:false,riskRef:{not:null},useCase:{is:{isSampleData:false}}}]};
     return {actor,where,aggregateOnly,mode};
   }
-  async report(userId:string,page=1,pageSize=20) {
+  async report(userId:string,page=1,pageSize=20,filter='next30') {
     if(!Number.isInteger(page)||page<1||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new BadRequestException('Use a positive page and page size 1–100');
+    if(!(REVIEW_FILTERS as readonly string[]).includes(filter))throw new BadRequestException('Unknown review filter');
     return this.prisma.$transaction(async tx=>{
       const access=await this.access(tx,userId),asOf=new Date();
       // Measures use the complete scoped population, independent of UI pagination.
-      const rows=await tx.aiRiskReview.findMany({where:{risk:{is:access.where}},select:{dueAt:true,completion:{select:{completedAt:true}},cancellation:{select:{id:true}}}});
-      const next30=new Date(asOf.getTime()+30*86400000),calendarWhere:Prisma.AiRiskReviewWhereInput={risk:{is:access.where},completion:{is:null},cancellation:{is:null},dueAt:{gte:asOf,lte:next30}};
+      const members=await tx.aiRisk.findMany({where:access.where,select:{id:true}}),periodic=await aggregateReviewMeasures(tx,members.map(m=>m.id),asOf);
+      const open:Prisma.AiRiskReviewWhereInput={completion:{is:null},cancellation:{is:null}};
+      const statusWhere:Record<string,Prisma.AiRiskReviewWhereInput>={all:{},next30:{...open,dueAt:{gte:asOf,lte:new Date(asOf.getTime()+30*86400000)}},overdue:{...open,dueAt:{lte:asOf}},due_soon:{...open,dueAt:{gt:asOf,lte:new Date(asOf.getTime()+7*86400000)}},scheduled:{...open,dueAt:{gt:new Date(asOf.getTime()+7*86400000)}},completed:{completion:{isNot:null},cancellation:{is:null}},superseded:{cancellation:{isNot:null}}};
+      const calendarWhere:Prisma.AiRiskReviewWhereInput={risk:{is:access.where},...statusWhere[filter]};
       const calendarTotal=access.aggregateOnly?0:await tx.aiRiskReview.count({where:calendarWhere});
       const calendar=access.aggregateOnly?[]:await tx.aiRiskReview.findMany({where:calendarWhere,orderBy:[{dueAt:'asc'},{id:'asc'}],skip:(page-1)*pageSize,take:pageSize,
-        select:{id:true,riskId:true,dueAt:true,bandCode:true,risk:{select:{riskRef:true,title:true}}}});
-      return {asOf,mode:access.mode,aggregateOnly:access.aggregateOnly,periodic:reviewMeasures(rows,asOf),calendar:calendar.map(r=>({...r,status:aiReviewStatus(false,r.dueAt,asOf)})),calendarTotal,page,pageSize};
+        select:{id:true,riskId:true,dueAt:true,bandCode:true,completion:{select:{completedAt:true}},cancellation:{select:{id:true}},risk:{select:{riskRef:true,title:true}}}});
+      return {asOf,mode:access.mode,aggregateOnly:access.aggregateOnly,periodic,filter,calendar:calendar.map(r=>({...r,completion:undefined,cancellation:undefined,status:r.cancellation?'superseded':aiReviewStatus(!!r.completion,r.dueAt,asOf)})),calendarTotal,page,pageSize};
     },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:15000});
   }
+  async detail(userId:string,reviewId:string){return this.prisma.$transaction(async tx=>{
+    const a=await this.access(tx,userId);if(a.aggregateOnly)throw new ForbiddenException('Executive report authority provides aggregate measures only');
+    const review=await tx.aiRiskReview.findFirst({where:{id:reviewId,risk:{is:a.where}},select:{id:true,round:true,riskId:true,dueAt:true,anchorAt:true,bandCode:true,intervalDays:true,referenceVersionId:true,cadenceReferenceVersionId:true,cadenceCode:true,displayCadenceLabelEn:true,displayCadenceLabelAr:true,
+      risk:{select:{riskRef:true,title:true}},completion:{select:{completedAt:true,justification:true,evidenceIds:true}},cancellation:{select:{createdAt:true,reassessment:{select:{triggerCode:true,justification:true}}}},signals:{orderBy:{threshold:'asc'},select:{threshold:true,createdAt:true}}}});
+    if(!review)throw new NotFoundException('Scoped review not found');return {...review,readOnly:true,status:review.cancellation?'superseded':aiReviewStatus(!!review.completion,review.dueAt)};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:15000});}
 }

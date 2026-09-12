@@ -9,13 +9,13 @@ import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 interface ReviewContext {
   version:number;cadenceReady:boolean;canRegister:boolean;canRecalculate:boolean;canReassess:boolean;canAddTrigger:boolean;reassessments:Array<{id:string;triggerCode:string;justification:string;evidenceIds:string[];createdAt:string;additionalTriggers:Array<{id:string;triggerCode:string;justification:string;evidenceIds:string[];createdAt:string}>}>;
-  history:Array<{id:string;round:number;bandCode:string;intervalDays:number;dueAt:string;anchorAt:string;referenceVersionId:string;cadenceLabelEn:string;cadenceLabelAr:string;status:'scheduled'|'due_soon'|'overdue'|'completed'|'superseded';canComplete:boolean;signals:Array<{threshold:number;createdAt:string}>;completion:{justification:string;evidenceIds:string[];completedAt:string}|null}>;
+  history:Array<{id:string;round:number;bandCode:string;intervalDays:number;dueAt:string;anchorAt:string;referenceVersionId:string;cadenceLabelEn:string;cadenceLabelAr:string;cadenceReferenceVersionId:string|null;displayCadenceLabelEn:string|null;displayCadenceLabelAr:string|null;status:'scheduled'|'due_soon'|'overdue'|'completed'|'superseded';canComplete:boolean;signals:Array<{threshold:number;createdAt:string}>;completion:{justification:string;evidenceIds:string[];completedAt:string}|null}>;
 }
 @Component({selector:'app-ai-risk-monitoring',standalone:true,imports:[FormsModule,DatePipe,AppIcon,StatusChip],templateUrl:'./ai-risk-monitoring.html',
   styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss','./ai-risk-monitoring.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiRiskMonitoring {
   readonly riskId=input.required<string>();readonly updated=output<void>();
-  private readonly http=inject(HttpClient);private readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
+  private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
   protected readonly context=signal<ReviewContext|null>(null);protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly working=signal(false);
   protected readonly summary=computed(()=>{
     const history=this.context()?.history??[];

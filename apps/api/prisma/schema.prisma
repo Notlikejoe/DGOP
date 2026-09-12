@@ -197,6 +197,7 @@ model Classification {
 
 /// Organizational hierarchy (entities, departments, sections).
 model OrganizationUnit {
+  aiMonthlyReviewReports AiMonthlyReviewReport[]
   aiAnnualReviews AiAnnualReview[]
   aiUseCases AiUseCase[]
   id         String             @id @default(uuid())
@@ -4784,6 +4785,7 @@ model GovernedReferenceList {
 }
 
 model GovernedReferenceVersion {
+  aiReviewCadenceLabels AiRiskReview[] @relation("AiReviewCadenceLabels")
   aiRiskReviews AiRiskReview[]
   id            String                   @id @default(uuid())
   listCode      String
@@ -4971,6 +4973,11 @@ model AiRiskAssessmentDecision {
 
 /// Immutable review basis; completion and SLA events are separate ledgers.
 model AiRiskReview {
+  cadenceReferenceVersionId String?
+  cadenceCode String?
+  displayCadenceLabelEn String?
+  displayCadenceLabelAr String?
+  cadenceReferenceVersion GovernedReferenceVersion? @relation("AiReviewCadenceLabels", fields:[cadenceReferenceVersionId], references:[id], onDelete:Restrict)
   cancellation AiRiskReviewCancellation?
   id String @id @default(uuid())
   riskId String
@@ -5214,6 +5221,7 @@ model AiReassessmentTrigger {
 }
 /// One immutable yearly review instance for a native organization-unit register.
 model AiAnnualReview {
+  handovers AiAnnualReviewHandover[]
   id String @id @default(uuid())
   organizationUnitId String
   calendarTemplateId String
@@ -5250,4 +5258,36 @@ model AiAnnualReviewCompletion {
   createdAt DateTime @default(now())
   review AiAnnualReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
   @@map("ai_annual_review_completions")
+}
+
+model AiAnnualReviewHandover {
+ id String @id @default(uuid())
+ reviewId String
+ round Int
+ fromOfficerId String
+ toOfficerId String
+ actorId String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ clientIp String?
+ review AiAnnualReview @relation(fields:[reviewId], references:[id], onDelete:Restrict)
+ @@unique([reviewId, round])
+ @@map("ai_annual_review_handovers")
+}
+model AiMonthlyReviewReport {
+ id String @id @default(uuid())
+ organizationUnitId String
+ periodMonth String
+ periodStart DateTime
+ periodEnd DateTime
+ capturedAt DateTime
+ createdBy String
+ members Json
+ measures Json
+ clientIp String?
+ createdAt DateTime @default(now())
+ organizationUnit OrganizationUnit @relation(fields:[organizationUnitId], references:[id], onDelete:Restrict)
+ @@unique([organizationUnitId, periodMonth])
+ @@map("ai_monthly_review_reports")
 }

@@ -1,5 +1,20 @@
 # AI governance implementation checkpoint
 
+## Latest four-packet checkpoint — 2026-09-13
+
+Completed locally from ca93542: 3N governed cadence/status display with immutable approved bilingual label pins; 3O evidence-backed annual officer handover and inactive-incumbent recovery; 3P server-filtered review history, SQL aggregate measures and scoped read-only drilldown; 3Q immutable closed-Saudi-month periodic-review capture/archive. Existing DGOP Nest/Prisma/PostgreSQL and Angular/PrimeNG UX/UI retained; no dependencies added or upgraded.
+
+Review reporting keeps complete-population counts independent of pages/filters and executive aggregate-only privacy. Annual transfers preserve original assignment/deadline/snapshot and require eligible current officers, evidence, expected ledger round and atomic native reassignment/audit. Monthly capture uses current eligible membership/completion state at capture time for reviews due in the selected closed month; it is not a historical month-end population reconstruction or automatic scheduler. Archived report reads fail closed if a stored member is outside current visibility. Legacy cadence labels stay unmodified; missing approved matching metadata shows an explicit pending state.
+
+Verification: API and Angular production builds pass; focused AI security contracts and 30/30 native governance checks pass. The complete real isolated PostgreSQL clean-install and baseline-upgrade Nest/HTTP harness passes including all prior phases, cadence publication/version history, immutable handovers and reports, inactive-incumbent recovery, stale/current-officer completion, concurrent exactly-once operations, required-audit rollback, SQL versus reference aggregates, pagination/filter independence, scoped/executive/Auditor privacy, Saudi leap-year/December month boundaries and rejected injected fields. Native workflow graph/seed did not change; prior 89/89 workflow baseline remains ca93542. No browser visual acceptance claimed.
+
+Runtime/quota: test cluster on port 55438 stopped normally after verification; ignored configuration/storage retained. Account-wide five-hour usage 31% at entry, 39% after backend slice and 48% after integrated UI/checks and 50% at final checkpoint; weekly 35%,36%,38%. Two reset credits remain unused. No active-app AI synchronization, live database changes, provider dispatch, external messages, workbook edit/import/publication, push or deployment. About DGOP and original source copies preserved. This batch is the next local commit (use git log for its identifier), branch codex/ai-governance-phase2a.
+
+Next bounded packet: 3R scoped AI dashboard baseline beyond periodic review measures, with explicit KPI formulas/coverage rather than claiming the full 21-KPI dashboard. Read phase-3n.md through phase-3q.md first. Remaining work includes full dashboards, approved risk-library/manual intake, higher-authority reversal, AVOID closure, separate ESCALATE execution, automatic reporting/external delivery and release certification. Preserve R_IMPD source-range reconciliation and approved cadence metadata gates. Never substitute the live database.
+
+The older checkpoints below are historical and their pending items are superseded by the latest completed packets.
+
+
 ## Latest three-packet checkpoint — 2026-09-12
 
 3K: one protected native annual calendar and Review task per organization register, full-register officer authority, immutable source history and trends/control-effectiveness/non-conformity findings with evidence, Saudi server deadlines, completion-to-next 365-day cycle and scoped Auditor read-only visibility. Historical snapshots fail closed when a member is outside current scope. Annual identity is pinned; handover remains later work.

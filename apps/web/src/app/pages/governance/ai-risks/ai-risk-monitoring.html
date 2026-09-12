@@ -26,6 +26,8 @@
     @for (r of c.history; track r.id) {
       <section class="ds-card decision-card specialist-decision"><header class="assessment-result"><h2>{{ t('aiAssessment.round') }} {{ r.round }} · {{ r.bandCode }} · {{ r.intervalDays }} {{ t('aiMonitoring.days') }}</h2><app-status-chip [kind]="r.status === 'overdue' ? 'danger' : 'info'" [label]="t('aiMonitoring.status.' + r.status)" /></header>
         <p>{{ t('aiMonitoring.due') }}: <strong>{{ r.dueAt | date:'medium':'+0300' }}</strong></p>
+        <p>{{ t('aiReviews.cadence') }}: {{ (i18n.lang() === 'ar' ? r.displayCadenceLabelAr : r.displayCadenceLabelEn) || t('aiReviews.unpinned') }}</p>
+        @if(r.cadenceReferenceVersionId){<small>{{ t('aiReviews.labelVersion') }}: {{ r.cadenceReferenceVersionId }}</small>}
         <small>{{ t('aiMonitoring.reference') }}: {{ r.referenceVersionId }}</small>
         @for (s of r.signals; track s.threshold) { <p>{{ s.threshold }}% · {{ t(s.threshold === 100 ? 'aiMonitoring.breach' : 'aiMonitoring.warning') }} · {{ s.createdAt | date:'short':'+0300' }}</p> }
         @if (r.canComplete) {

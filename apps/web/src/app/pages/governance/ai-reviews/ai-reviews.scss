@@ -8,3 +8,5 @@
 p-table td p {margin:.3rem 0;color:var(--command-muted)}
 @media(max-width:1100px){.review-kpis {grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.review-kpis,.annual-findings {grid-template-columns:1fr}}
+
+.review-detail {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-4);margin:0}.review-detail dt {font-weight:750}.review-detail dd {margin:.4rem 0;font-size:1.1rem;overflow-wrap:anywhere}.decision-card small {display:block;overflow-wrap:anywhere}.monthly-capture {display:flex;align-items:end;gap:var(--space-4);flex-wrap:wrap}.handover-panel {padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-md)}.handover-panel summary {cursor:pointer;font-weight:750}.handover-history {border-inline-start:3px solid var(--primary);padding-inline-start:var(--space-3)}@media(max-width:650px){.review-detail {grid-template-columns:1fr}}

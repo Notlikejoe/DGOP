@@ -1,0 +1,9 @@
+# Phase 3P — Scoped filtered review reporting and read-only drilldown
+
+Implemented locally, 2026-09-13, with 3N/3O/3Q. The existing PrimeNG review table now filters open next-30-day, all history, overdue, due-soon, upcoming, completed and superseded reviews. Stable due-date/id pagination remains server-controlled. KPI measures use the full currently eligible scoped population independently of selected filters and page size.
+
+Measures now use parameterized PostgreSQL aggregation over scoped risk IDs instead of loading every review-history record into API memory. Active asset/case, actual Risk Owner operational ownership, organization/domain/classification, explicit live grants, non-sample and supersession exclusions remain unchanged. GEN-96 uses reviews closed by their pinned due date divided by unsuperseded reviews due as of server time; no due reviews returns null, shown as —. Annual findings remain separate.
+
+Authorized readers can open a read-only detail panel with pinned due/anchor/interval, display and engine versions, completion evidence, supersession rationale and native warning/breach signals. No review action is granted by a reporting drilldown. Executive dashboard-only access remains aggregate-only and denies detail reads; out-of-scope records are not found. Auditor details are read-only. Invalid status filters are rejected, not used as raw query fragments.
+
+Verification: real clean/upgrade PostgreSQL tests compare SQL measures with a complete-row reference calculation, verify page/filter independence and stable distinct pages, status selection, scoped missing records and executive/Auditor privacy. Nest HTTP rejects an invalid filter. API/web builds, AI security and 30 native governance checks pass. Whole 21-KPI dashboards, export and caching remain later work.

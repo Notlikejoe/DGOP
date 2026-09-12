@@ -1,5 +1,5 @@
 <section class="about-page" aria-labelledby="about-title">
-  <p-card styleClass="about-card about-hero-card">
+  <p-card class="about-card about-hero-card">
     <div class="about-hero">
       <div class="about-hero__heading">
         <span class="about-hero__mark" aria-hidden="true"><i class="pi pi-sparkles"></i></span>
@@ -29,7 +29,7 @@
   </p-card>
 
   <div class="about-overview-grid">
-    <p-card styleClass="about-card about-section-card about-principles-card">
+    <p-card class="about-card about-section-card about-principles-card">
       <div class="section-heading">
         <span class="section-heading__icon" aria-hidden="true"><i class="pi pi-compass"></i></span>
         <div>
@@ -51,7 +51,7 @@
       </div>
     </p-card>
 
-    <p-card styleClass="about-card about-section-card about-towers-card">
+    <p-card class="about-card about-section-card about-towers-card">
       <div class="section-heading">
         <span class="section-heading__icon" aria-hidden="true"><i class="pi pi-th-large"></i></span>
         <div>
@@ -66,15 +66,15 @@
             <span class="tower-card__icon" aria-hidden="true"><i [class]="tower.icon"></i></span>
             <div>
               <strong>{{ t(tower.titleKey) }}</strong>
-              <p>{{ t(tower.bodyKey) }}</p>
             </div>
+            <p>{{ t(tower.bodyKey) }}</p>
           </article>
         }
       </div>
     </p-card>
   </div>
 
-  <p-card styleClass="about-card about-section-card about-flow-card">
+  <p-card class="about-card about-section-card about-flow-card">
     <div class="section-heading section-heading--inline">
       <span class="section-heading__icon" aria-hidden="true"><i class="pi pi-share-alt"></i></span>
       <div>
@@ -90,15 +90,15 @@
           <span class="flow-step__icon" aria-hidden="true"><i [class]="step.icon"></i></span>
           <div>
             <strong>{{ t(step.titleKey) }}</strong>
-            <p>{{ t(step.bodyKey) }}</p>
           </div>
+          <p>{{ t(step.bodyKey) }}</p>
         </article>
       }
     </div>
   </p-card>
 
   <div class="about-footer-grid">
-    <p-card styleClass="about-card integration-card">
+    <p-card class="about-card integration-card">
       <div class="integration-summary">
         <span class="section-heading__icon" aria-hidden="true"><i class="pi pi-link"></i></span>
         <div>

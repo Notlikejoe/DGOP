@@ -5,8 +5,8 @@
 .about-page {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
-  gap: 12px;
-  min-height: calc(100dvh - 112px);
+  gap: 8px;
+  min-height: calc(100dvh - 116px);
   max-width: 1760px;
   margin: 0 auto;
   color: var(--command-on);
@@ -30,10 +30,10 @@
 .about-hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
-  gap: 12px 22px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.85fr);
+  gap: 8px 18px;
   min-height: 176px;
-  padding: 18px 20px;
+  padding: 14px 18px;
   overflow: hidden;
   color: #f8fafc;
   background:
@@ -88,7 +88,7 @@
 .section-kicker {
   margin: 0 0 3px;
   color: var(--command-accent);
-  font-size: 0.68rem;
+  font-size: 0.8125rem;
   font-weight: 850;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -101,7 +101,7 @@
 .about-hero h1 {
   margin: 0;
   color: #fff;
-  font-size: clamp(1.25rem, 1.75vw, 1.75rem);
+  font-size: clamp(1.5rem, 2.05vw, 2rem);
   font-weight: 850;
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -118,8 +118,8 @@
 .about-positioning p {
   margin: 0;
   color: #d7e2e8;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 1rem;
+  line-height: 1.4;
 }
 
 .alignment-tags,
@@ -133,7 +133,7 @@
   color: #dffcf7;
   background: rgba(15, 118, 110, 0.36);
   border: 1px solid rgba(94, 234, 212, 0.42);
-  font-size: 0.7rem;
+  font-size: 0.875rem;
   font-weight: 750;
 }
 
@@ -172,7 +172,7 @@
   display: block;
   margin-bottom: 4px;
   color: #fff;
-  font-size: 0.96rem;
+  font-size: 1.125rem;
   line-height: 1.3;
 }
 
@@ -192,7 +192,7 @@
   grid-template-columns: 36px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
-  padding: 14px 15px 10px;
+  padding: 10px 14px 8px;
   border-bottom: 1px solid var(--command-border);
 }
 
@@ -209,7 +209,7 @@
 .integration-summary h2 {
   margin: 0 0 3px;
   color: var(--command-on);
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 850;
 }
 
@@ -217,8 +217,8 @@
 .integration-summary > div > p:last-child {
   margin: 0;
   color: var(--command-muted);
-  font-size: 0.76rem;
-  line-height: 1.35;
+  font-size: 0.9375rem;
+  line-height: 1.4;
 }
 
 .principle-list {
@@ -266,7 +266,7 @@
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border-inline-start: 3px solid var(--tone);
 }
 
@@ -288,9 +288,9 @@
   display: block;
   margin-bottom: 2px;
   color: var(--command-on);
-  font-size: 0.78rem;
+  font-size: 1.0625rem;
   font-weight: 850;
-  line-height: 1.25;
+  line-height: 1.35;
 }
 
 .feature-row p,
@@ -298,8 +298,8 @@
 .flow-step p {
   margin: 0;
   color: var(--command-muted);
-  font-size: 0.71rem;
-  line-height: 1.32;
+  font-size: 0.9375rem;
+  line-height: 1.4;
 }
 
 .tower-grid {
@@ -312,16 +312,20 @@
 .tower-card {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
-  gap: 8px;
+  gap: 10px;
   align-items: start;
   min-height: 94px;
-  padding: 9px;
+  padding: 10px;
+}
+
+.tower-card p {
+  grid-column: 1 / -1;
 }
 
 .tower-card__icon {
   width: 30px;
   height: 30px;
-  font-size: 0.82rem;
+  font-size: 1rem;
 }
 
 .about-flow-card {
@@ -347,7 +351,7 @@
   gap: 7px;
   min-width: 0;
   min-height: 99px;
-  padding: 9px;
+  padding: 10px;
   background: var(--command-surface-2);
   border: 1px solid var(--command-border);
   border-radius: 9px;
@@ -372,12 +376,12 @@
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 15px;
-  height: 15px;
+  width: 19px;
+  height: 19px;
   color: var(--on-primary);
   background: var(--command-accent);
   border-radius: 999px;
-  font-size: 0.58rem;
+  font-size: 0.75rem;
   font-weight: 900;
 }
 
@@ -406,7 +410,7 @@
     var(--command-surface);
 }
 
-.integration-card {
+:host ::ng-deep .integration-card .p-card-content {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
   gap: 14px;
@@ -433,7 +437,7 @@
 }
 
 :host ::ng-deep .integration-tags .p-tag {
-  font-size: 0.66rem;
+  font-size: 0.875rem;
   font-weight: 750;
 }
 
@@ -449,7 +453,7 @@
   gap: 9px;
   align-items: center;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 6px 10px;
   color: var(--command-on);
   background: var(--command-surface);
   border: 1px solid var(--command-border);
@@ -473,21 +477,18 @@
 
 .quick-link__copy strong {
   color: var(--command-on);
-  font-size: 0.74rem;
+  font-size: 1rem;
 }
 
 .quick-link__copy small {
-  overflow: hidden;
   color: var(--command-muted);
-  font-size: 0.65rem;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.875rem;
+  line-height: 1.4;
 }
 
 .quick-link__arrow {
   color: var(--command-muted);
-  font-size: 0.72rem;
+  font-size: 0.9375rem;
 }
 
 [dir='rtl'] .quick-link__arrow {
@@ -511,7 +512,7 @@
 
 @media (max-width: 900px) {
   .about-hero,
-  .integration-card {
+  :host ::ng-deep .integration-card .p-card-content {
     grid-template-columns: 1fr;
   }
 

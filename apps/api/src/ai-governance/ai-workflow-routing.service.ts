@@ -69,6 +69,7 @@ export class AiWorkflowRoutingService {
     now: Date,
     options: {
       templateCode?: string;
+      title?: string;
       assigneeUserId?: string;
       assigneeRoleCode?: string;
       approvalGroupId?: string;
@@ -82,7 +83,7 @@ export class AiWorkflowRoutingService {
       data: {
         caseId,
         templateStageId: stage.id,
-        title: stage.nameEn,
+        title: options.title ?? stage.nameEn,
         type: stage.taskType,
         status: TaskStatus.pending,
         assigneeUserId: options.assigneeUserId,

@@ -1,0 +1,42 @@
+<section class="assessment-workspace" [attr.aria-busy]="working()">
+  <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiAssessment.title') }}</h2><p>{{ t('aiAssessment.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load()">{{ t('crud.retry') }}</button></header>
+  @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
+  @else if (state() === 'error') { <section class="ds-card state-card">{{ t('aiAssessment.error') }}</section> }
+  @else if (context(); as context) {
+    @if (!context.configuration.ready) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAssessment.references') }}</p></div> }
+    @if (context.canStart) { <section class="ds-card decision-card"><p>{{ t('aiAssessment.startHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="start()">{{ t('aiAssessment.start') }}</button></section> }
+    @if (context.started && context.tasks.length && !context.referencesCurrent) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAssessment.changedReferences') }}</p></div> }
+    @if (context.canRestart) { <details class="ds-card decision-card"><summary>{{ t('aiAssessment.restart') }}</summary><p>{{ t('aiAssessment.restartHelp') }}</p><label><span>{{ t('aiAssessment.justification') }}</span><textarea rows="2" maxlength="2000" [ngModel]="restartJustification()" (ngModelChange)="restartJustification.set($event)"></textarea></label><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !restartJustification().trim()" (click)="restart()">{{ t('aiAssessment.restart') }}</button></details> }
+    @if (context.started && context.tasks.length) {
+      <p class="assessment-progress">{{ t('aiAssessment.progress') }} · {{ context.tasks.length }} {{ t('aiAssessment.dimensions') }}</p>
+      <div class="criterion-grid">
+        @for (task of context.tasks; track task.id) {
+          <article class="ds-card criterion-card"><header><h2>{{ dimensionLabel(task.dimension) }}</h2><app-status-chip kind="info" [label]="t('aiAssessment.task.' + task.status)" /></header><small>{{ t('aiAssessment.role.' + task.assessorRoleCode) }}</small>
+            @if (task.canContribute) {
+              <label><span>{{ t('aiAssessment.impact') }} <b>*</b></span><select [ngModel]="drafts()[task.id].value" (ngModelChange)="patch(task.id, 'value', $event)"><option [ngValue]="null">{{ t('aiuc.select') }}</option>@for (score of context.configuration.scores; track score.score) { <option [ngValue]="score.score">{{ score.score }}</option> }</select></label>
+              @if (anchor(drafts()[task.id].value, 'impact'); as text) { <p class="anchor-text">{{ text }}</p> }
+              <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="drafts()[task.id].justification" (ngModelChange)="patch(task.id, 'justification', $event)"></textarea></label>
+              <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !drafts()[task.id].value || !drafts()[task.id].justification.trim()" (click)="contribute(task.id)">{{ t('aiAssessment.submitDimension') }}</button>
+            } @else if (task.score; as score) { <strong class="score-badge">{{ score.value }}</strong><p>{{ score.justification }}</p> }
+            @else { <p>{{ t('aiAssessment.waitingRole') }}</p> }
+          </article>
+        }
+      </div>
+    }
+    @if (context.canComplete) {
+      <section class="ds-card decision-card"><h2>{{ t('aiAssessment.likelihood') }}</h2><label><span>{{ t('aiAssessment.likelihood') }} <b>*</b></span><select [ngModel]="likelihood()" (ngModelChange)="likelihood.set($event)"><option [ngValue]="null">{{ t('aiuc.select') }}</option>@for (score of context.configuration.scores; track score.score) { <option [ngValue]="score.score">{{ score.score }}</option> }</select></label>
+        @if (anchor(likelihood(), 'likelihood'); as text) { <p class="anchor-text">{{ text }}</p> }
+        <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="justification()" (ngModelChange)="justification.set($event)"></textarea></label>
+        <p>{{ t('aiAssessment.formula') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !likelihood() || !justification().trim()" (click)="complete()">{{ t('aiAssessment.complete') }}</button>
+      </section>
+    }
+    @for (round of context.rounds; track round.id) {
+      <section class="ds-card decision-card"><header class="assessment-result"><div><span class="eyebrow">{{ t('aiAssessment.round') }} {{ round.round }}</span><h2>{{ round.result.score }} · {{ bilingual({ labelEn: round.result.bandLabelEn, labelAr: round.result.bandLabelAr }) }}</h2><p>{{ round.result.likelihood }} × {{ round.result.impactFinal }} · {{ round.result.severityCode }}</p></div><app-status-chip kind="info" [label]="t('aiAssessment.pendingAdoption')" /></header>
+        <p>{{ t('aiAssessment.highest') }}: {{ dimensionLabel(round.result.impactTopDimension) }}</p>
+        @if (round.result.tiedDimensions.length > 1) { <p>{{ t('aiAssessment.tieHelp') }}</p> }
+        @if (round.result.ethicsReviewRequired) { <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiAssessment.ethicsRequired') }}</span></div> }
+        <details><summary>{{ t('aiAssessment.history') }}</summary><p>{{ t('aiAssessment.likelihood') }}: {{ round.inputs.likelihood.value }} · {{ round.inputs.likelihood.justification }}</p>@for (dimension of round.inputs.dimensions; track dimension.dimension) { <p><strong>{{ dimensionLabel(dimension.dimension) }} · {{ dimension.value }}</strong><br />{{ dimension.justification }}</p> }</details>
+      </section>
+    }
+  }
+</section>

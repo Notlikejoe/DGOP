@@ -19,6 +19,7 @@ import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
+import { testPhase3B } from './ai-phase3b.integration';
 
 export async function testPhase2A(db: PrismaClient) {
   const prisma = db as PrismaService;
@@ -790,5 +791,7 @@ export async function testPhase2A(db: PrismaClient) {
     await assert.rejects(riskApp.get(WorkflowService).decideTask(assessmentTask.id, { decision: TaskDecision.approved },
       { id: riskOwner.id, email: riskOwner.email, roles: ['system_admin'] }), /AI Governance actions/);
   } finally { await riskApp.close(); }
+  await testPhase3B(db, { riskId: handedOver.id, riskOwnerId: riskOwner.id, useCaseOwnerId: owner.id, otherRiskOwnerId: otherRiskOwner.id,
+    privacyId: privacyReviewer.id, securityId: securityReviewer.id, auditorId: auditor.id, officerId: officer.id });
   console.log('Phase 2/3A integration passed: AIUC reviews/decisions/asset handoff; scoped risk ownership and reassignment, causal validation, published intake snapshots, audit rollback, exactly-one AIR allocation/assessment task and HTTP authorization.');
 }

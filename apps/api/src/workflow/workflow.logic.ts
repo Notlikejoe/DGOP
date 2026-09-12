@@ -645,7 +645,7 @@ export const AIUC_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   ],
 };
 
-// Phase 3A executes identification and opens inherent assessment only. Later AI services
+// Phase 3B executes identification and competent-role inherent assessment. Later AI services
 // implement the downstream gates; generic workflow mutations are blocked for AIRS.
 export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   code: 'AIRS_LIFECYCLE_V1', caseType: 'AIRS', trigger: 'manual',
@@ -653,7 +653,9 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
   description: 'Governed AI risk identification, assessment, response, treatment and monitoring.',
   stages: [
     stage('airs-identification', 'Risk identification and registration', 'تحديد الخطر وتسجيله', 'Record the causal description, current controls and risk owner.', 'intake', 'information', 'AI_RISK_OWNER', 5, { isStart: true }),
-    stage('airs-inherent-assessment', 'Inherent risk assessment', 'تقييم الخطر المتأصل', 'Assess likelihood and the eight justified impact dimensions.', 'review', 'review', 'AI_RISK_OWNER', 5),
+    stage('airs-inherent-assessment', 'Inherent risk assessment', 'تقييم الخطر المتأصل', 'Assess likelihood and the eight justified impact dimensions.', 'review', 'review', 'AI_RISK_OWNER', 5, {
+      assignmentConfigJson: { dimensionsReferenceList: 'R_IMPD', multiInstance: 'dimension', coordinatorRoleCode: 'AI_RISK_OWNER' },
+    }),
     stage('airs-assessment-adoption', 'Assessment adoption', 'اعتماد تقييم الخطر', 'Approve the assessment with the required independent reviews.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
     stage('airs-response', 'Response strategy approval', 'اعتماد استراتيجية الاستجابة', 'Approve the response strategy and segregated treatment plan.', 'decision', 'approval', 'AI_GOVERNANCE_OFFICER', 5, { isDecision: true }),
     stage('airs-treatment', 'Treatment implementation', 'تنفيذ المعالجة', 'Complete assigned treatment actions with evidence.', 'implementation', 'review', 'AI_WORKING_GROUP', 5),

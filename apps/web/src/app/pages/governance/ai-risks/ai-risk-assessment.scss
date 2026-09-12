@@ -1,0 +1,11 @@
+:host { display: block; }
+.assessment-workspace { display: grid; gap: var(--space-4); }
+.assessment-heading, .assessment-result { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.assessment-heading { padding: var(--space-4); }
+.assessment-heading h2, .assessment-heading p { margin: 0; }
+.assessment-heading p, .assessment-progress, .criterion-card small { color: var(--command-muted); }
+.criterion-card header { flex-wrap: wrap; }
+.assessment-progress { margin: 0; }
+details p { overflow-wrap: anywhere; }
+summary { cursor: pointer; font-weight: 750; }
+@media (max-width: 760px) { .assessment-heading, .assessment-result { flex-wrap: wrap; } }

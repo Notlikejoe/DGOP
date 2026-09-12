@@ -43,7 +43,7 @@ export class AiResidualDecisionService {
     private readonly risks:AiRiskIntakeService,private readonly residual:AiResidualAssessmentService,
     private readonly scoring:AiRiskAssessmentService,private readonly routing:AiWorkflowRoutingService,private readonly audit:AuditService){}
 
-  private async gate(tx:Prisma.TransactionClient,userId:string,id:string) {
+  async gate(tx:Prisma.TransactionClient,userId:string,id:string) {
     const access=await this.risks.visibility(userId,tx);
     const risk=await tx.aiRisk.findFirst({where:{AND:[access.where,{id}]},select:riskSelect});
     if(!risk)throw new NotFoundException('AI risk not found');

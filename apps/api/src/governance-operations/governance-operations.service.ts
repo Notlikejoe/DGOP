@@ -28,6 +28,8 @@ import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { AuthUser } from '../auth/auth.types';
 import { WorkflowService } from '../workflow/workflow.service';
+import { AiRiskReviewService } from '../ai-governance/ai-risk-review.service';
+import { escalationOwnerRole } from './governance-operations.logic';
 import {
   CreateComplianceCalendarTemplateDto,
   CreateGovernanceNotificationDto,
@@ -131,6 +133,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
     private readonly workflow?: WorkflowService,
+    private readonly aiReviews?: AiRiskReviewService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -160,6 +163,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       await this.withSchedulerLock(async () => {
         await this.recalculateSla(this.systemUser);
         await this.generateCalendarOccurrences(this.systemUser);
+        await this.aiReviews?.processSignals();
       });
     } catch (error) {
       this.logger.warn(
@@ -1562,7 +1566,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     await this.ensureDefaultCalendarTemplates();
     const { holidayDates, recurringHolidayDates } = await this.holidayConfig();
     const tasks = await this.prisma.workflowTask.findMany({
-      where: await this.scopedTaskWhere(user),
+      where: { AND: [await this.scopedTaskWhere(user), { OR: [{ templateStageId: null }, { templateStage: { is: { code: { not: 'airs-periodic-review' } } } }] }] },
       include: taskInclude,
       orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
       take: 100,
@@ -1699,7 +1703,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     const { holidayDates, recurringHolidayDates } = await this.holidayConfig();
     const now = new Date();
     const templates = await this.prisma.complianceCalendarTemplate.findMany({
-      where: { status: ComplianceCalendarStatus.active, nextRunAt: { lte: now } },
+      where: { status: ComplianceCalendarStatus.active, nextRunAt: { lte: now }, type: { not: ComplianceCalendarType.ai_risk_review } },
     });
     let created = 0;
     for (const template of templates) {
@@ -1758,6 +1762,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   async createTemplate(dto: CreateComplianceCalendarTemplateDto, actor: string) {
+    if (dto.type === ComplianceCalendarType.ai_risk_review) throw new ForbiddenException('Use the protected AI review registration operation');
     const nextRunAt = this.parseDate(dto.nextRunAt);
     const row = await this.prisma.complianceCalendarTemplate.create({
       data: {
@@ -1778,6 +1783,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   async updateTemplate(id: string, dto: UpdateComplianceCalendarTemplateDto, actor: string) {
     const existing = await this.prisma.complianceCalendarTemplate.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('compliance_calendar_template not found');
+    if (existing.type === ComplianceCalendarType.ai_risk_review) throw new ForbiddenException('Use the protected AI review cadence operation');
     const row = await this.prisma.complianceCalendarTemplate.update({
       where: { id },
       data: {
@@ -2384,10 +2390,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   private ownerRoleForLevel(level: GovernanceEscalationLevel): string {
-    if (level === GovernanceEscalationLevel.executive_steering_committee) return 'executive';
-    if (level === GovernanceEscalationLevel.data_governance_board) return 'dmo_admin';
-    if (level === GovernanceEscalationLevel.data_stewardship_council) return 'enterprise_data_steward';
-    return 'data_owner';
+    return escalationOwnerRole(level);
   }
 
   private nextCalendarRun(current: Date, cadence: string): Date {

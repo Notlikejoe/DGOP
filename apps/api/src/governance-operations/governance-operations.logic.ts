@@ -726,6 +726,13 @@ export function escalationPenalty(overdueBusinessDays: number): number {
   return Math.max(1, overdueBusinessDays) * 5;
 }
 
+export function escalationOwnerRole(level: GovernanceEscalationLevel): string {
+  if (level === GovernanceEscalationLevel.executive_steering_committee) return 'executive';
+  if (level === GovernanceEscalationLevel.data_governance_board) return 'dmo_admin';
+  if (level === GovernanceEscalationLevel.data_stewardship_council) return 'enterprise_data_steward';
+  return 'data_owner';
+}
+
 export function notificationSeverity(signal: SlaSignal, overdueBusinessDays = 0): GovernanceNotificationSeverity {
   if (signal === 'overdue' && overdueBusinessDays >= 6) return GovernanceNotificationSeverity.critical;
   if (signal === 'overdue' || signal === 'at_risk') return GovernanceNotificationSeverity.warning;

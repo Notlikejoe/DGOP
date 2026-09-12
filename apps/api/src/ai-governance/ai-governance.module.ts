@@ -20,11 +20,13 @@ import { AiRiskResponseService } from './ai-risk-response.service';
 import { AiTreatmentService } from './ai-treatment.service';
 import { AiResidualAssessmentService } from './ai-residual-assessment.service';
 import { AiResidualDecisionService } from './ai-residual-decision.service';
+import { AiRiskReviewService } from './ai-risk-review.service';
+import { AiRiskReviewController } from './ai-risk-review.controller';
 
 @Module({
   imports: [AccessModule],
-  controllers: [AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController],
-  providers: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService, AiTreatmentService, AiResidualAssessmentService, AiResidualDecisionService],
-  exports: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService],
+  controllers: [AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController, AiRiskReviewController],
+  providers: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService, AiTreatmentService, AiResidualAssessmentService, AiResidualDecisionService, AiRiskReviewService],
+  exports: [AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiRiskReviewService],
 })
 export class AiGovernanceModule {}

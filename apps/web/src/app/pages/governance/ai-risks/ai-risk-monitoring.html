@@ -1,0 +1,24 @@
+<section class="assessment-workspace" [attr.aria-busy]="working()">
+  @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
+  @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button></section> }
+  @else if (context(); as c) {
+    <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiMonitoring.title') }}</h2><p>{{ t('aiMonitoring.subtitle') }}</p></div></header>
+    @if (!c.cadenceReady) { <div class="override-notice" role="status">{{ t('aiMonitoring.referenceRequired') }}</div> }
+    @if (c.canRegister) { <button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="act('register')">{{ t('aiMonitoring.register') }}</button> }
+    @if (c.canRecalculate) { <button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="act('recalculate')">{{ t('aiMonitoring.recalculate') }}</button> }
+    @if (!c.history.length && !c.canRegister && c.cadenceReady) { <p>{{ t('aiMonitoring.awaitingDecision') }}</p> }
+    @for (r of c.history; track r.id) {
+      <section class="ds-card decision-card specialist-decision"><header class="assessment-result"><h2>{{ t('aiAssessment.round') }} {{ r.round }} · {{ r.bandCode }} · {{ r.intervalDays }} {{ t('aiMonitoring.days') }}</h2><app-status-chip [kind]="r.status === 'overdue' ? 'danger' : 'info'" [label]="t('aiMonitoring.status.' + r.status)" /></header>
+        <p>{{ t('aiMonitoring.due') }}: <strong>{{ r.dueAt | date:'medium':'+0300' }}</strong></p>
+        <small>{{ t('aiMonitoring.reference') }}: {{ r.referenceVersionId }}</small>
+        @for (s of r.signals; track s.threshold) { <p>{{ s.threshold }}% · {{ t(s.threshold === 100 ? 'aiMonitoring.breach' : 'aiMonitoring.warning') }} · {{ s.createdAt | date:'short':'+0300' }}</p> }
+        @if (r.canComplete) {
+          <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [(ngModel)]="justification"></textarea></label>
+          <label><span>{{ t('aiAdoption.evidence') }} <b>*</b></span><textarea rows="2" [(ngModel)]="evidence"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label>
+          <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('complete',r.id)">{{ t('aiMonitoring.complete') }}</button>
+        }
+        @if (r.completion; as completion) { <p>{{ completion.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ completion.evidenceIds.join(', ') }}</small><p>{{ completion.completedAt | date:'medium':'+0300' }}</p> }
+      </section>
+    }
+  }
+</section>

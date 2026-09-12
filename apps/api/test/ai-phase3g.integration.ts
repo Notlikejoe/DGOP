@@ -1,3 +1,4 @@
+import { testPhase3HI } from './ai-phase3hi.integration';
 import assert from 'node:assert/strict';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -111,5 +112,6 @@ export async function testPhase3G(db:PrismaClient,f:{riskId:string;riskOwnerId:s
  const app=await NestFactory.create(AppModule,{logger:false});try{app.setGlobalPrefix('api');app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));await app.listen(0,'127.0.0.1');const base=await app.getUrl(),jwt=app.get(JwtService),headers={authorization:`Bearer ${jwt.sign({sub:f.officerId,tokenVersion:0,roles:['STEERING_COMMITTEE']})}`,'content-type':'application/json'};
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/residual/review`)).status,401);assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/residual/review`,{headers})).status,200);assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/residual/decisions/${t.id}`,{method:'POST',headers,body:JSON.stringify({...dto(0),bandCode:'LOW',riskAccepted:true,actorRoleCode:'AI_EXECUTIVE_TEAM'})})).status,400);
  }finally{await app.close();}
+ await testPhase3HI(db,f);
  console.log('Phase 3G passed: residual officer review/return, fresh rounds without carried approvals, Low actual-owner acceptance, sequential independent Medium countersign, fresh independent High Ethics/Executive decisions, Critical restrict/stop with guarded use-case state, explicit grants/live scope/SoD/Auditor blocks, required-audit rollback, immutable decisions/conditions, exactly-once concurrency and protected HTTP inputs.');
 }

@@ -904,6 +904,7 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  aiRiskReview AiRiskReview?
   treatmentProgress AiTreatmentProgress[]
   treatmentPlan AiTreatmentPlan?
   treatmentPlanDecision AiTreatmentPlanDecision?
@@ -4259,6 +4260,7 @@ enum GovernanceEscalationStatus {
 }
 
 enum ComplianceCalendarType {
+  ai_risk_review
   processing_activity_review
   cross_border_transfer_monitoring
   annual_dpia_review
@@ -4368,6 +4370,7 @@ model GovernanceNotificationDeliveryAttempt {
 }
 
 model GovernanceEscalation {
+  aiReviewSignals AiRiskReviewSignal[]
   id             String                     @id @default(uuid())
   dedupeKey      String?                    @unique
   code           String                     @unique
@@ -4400,6 +4403,7 @@ model GovernanceEscalation {
 }
 
 model ComplianceCalendarTemplate {
+  aiRiskReviews AiRiskReview[]
   id                     String                         @id @default(uuid())
   code                   String                         @unique
   title                  String
@@ -4423,6 +4427,7 @@ model ComplianceCalendarTemplate {
 }
 
 model ComplianceCalendarOccurrence {
+  aiRiskReview AiRiskReview?
   id             String                     @id @default(uuid())
   templateId     String
   code           String                     @unique
@@ -4771,6 +4776,7 @@ model GovernedReferenceList {
 }
 
 model GovernedReferenceVersion {
+  aiRiskReviews AiRiskReview[]
   id            String                   @id @default(uuid())
   listCode      String
   version       Int
@@ -4870,6 +4876,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  reviews AiRiskReview[]
   responses AiRiskResponse[]
   intakeData     Json?
   /// Stable source key for the one automatic AIUC handoff; manual risks remain null.
@@ -4931,6 +4938,7 @@ model AiAssessmentRound {
 
 /// Append-only specialist review/adoption evidence; calculated rounds remain unchanged.
 model AiRiskAssessmentDecision {
+  reviews AiRiskReview[]
   restrictedUseCases AiUseCase[]
   conditions Json @default("[]")
   id            String @id @default(uuid())
@@ -4949,6 +4957,64 @@ model AiRiskAssessmentDecision {
 
   @@unique([assessmentId, kind])
   @@map("ai_risk_assessment_decisions")
+}
+
+/// Immutable review basis; completion and SLA events are separate ledgers.
+model AiRiskReview {
+  id String @id @default(uuid())
+  riskId String
+  acceptanceDecisionId String
+  referenceVersionId String
+  calendarTemplateId String
+  calendarOccurrenceId String @unique
+  taskId String @unique
+  round Int
+  bandCode String
+  intervalDays Int
+  cadenceLabelEn String
+  cadenceLabelAr String
+  anchorAt DateTime
+  dueAt DateTime
+  assignedOwnerId String
+  createdBy String
+  createdAt DateTime @default(now())
+  risk AiRisk @relation(fields: [riskId], references: [id], onDelete: Restrict)
+  acceptanceDecision AiRiskAssessmentDecision @relation(fields: [acceptanceDecisionId], references: [id], onDelete: Restrict)
+  referenceVersion GovernedReferenceVersion @relation(fields: [referenceVersionId], references: [id], onDelete: Restrict)
+  calendarTemplate ComplianceCalendarTemplate @relation(fields: [calendarTemplateId], references: [id], onDelete: Restrict)
+  calendarOccurrence ComplianceCalendarOccurrence @relation(fields: [calendarOccurrenceId], references: [id], onDelete: Restrict)
+  task WorkflowTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  completion AiRiskReviewCompletion?
+  signals AiRiskReviewSignal[]
+  @@unique([riskId, round])
+  @@index([dueAt])
+  @@map("ai_risk_reviews")
+}
+
+model AiRiskReviewCompletion {
+  id String @id @default(uuid())
+  reviewId String @unique
+  actorId String
+  justification String
+  evidenceIds Json
+  completedAt DateTime
+  clientIp String?
+  createdAt DateTime @default(now())
+  review AiRiskReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  @@map("ai_risk_review_completions")
+}
+
+model AiRiskReviewSignal {
+  id String @id @default(uuid())
+  reviewId String
+  threshold Int
+  notificationIds Json
+  escalationId String?
+  createdAt DateTime @default(now())
+  review AiRiskReview @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  escalation GovernanceEscalation? @relation(fields: [escalationId], references: [id], onDelete: Restrict)
+  @@unique([reviewId, threshold])
+  @@map("ai_risk_review_signals")
 }
 
 /// Immutable response proposals tied to an adopted inherent assessment.

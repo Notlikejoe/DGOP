@@ -683,6 +683,7 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-accept-high', 'High residual Executive decision', 'قرار الفريق التنفيذي للخطر المتبقي المرتفع', 'L3 Executive Team decides after independent Ethics approval.', 'decision', 'approval', 'AI_EXECUTIVE_TEAM', 5, { isDecision: true }),
     stage('airs-restrict-critical', 'Critical risk restrict or stop', 'تقييد أو إيقاف الخطر الكارثي', 'L4 Steering Committee restricts/stops the use case; plain acceptance is forbidden.', 'decision', 'approval', 'STEERING_COMMITTEE', 5, { isDecision: true, gatewayConfigJson: { allowedOutcomes: ['restrict','stop','return'] } }),
     stage('airs-monitoring', 'Risk monitoring preparation', 'إعداد متابعة الخطر', 'Register the next governed review cadence; authority decisions are already recorded.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
+    stage('airs-periodic-review', 'Periodic risk review', 'المراجعة الدورية للخطر', 'Complete the assigned governed review with evidence; retain prior assessment decisions.', 'review', 'review', 'AI_RISK_OWNER', 0),
     stage('airs-closure', 'Risk case closure', 'إغلاق حالة الخطر', 'Retain the risk identity and final resolution.', 'closure', 'review', undefined, 0, { isFinal: true }),
   ],
   transitions: [
@@ -726,7 +727,9 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('airs-restrict-critical','airs-monitoring','Use case restricted','تقييد حالة الاستخدام','restrict'),
     link('airs-restrict-critical','airs-monitoring','Use case stopped','إيقاف حالة الاستخدام','stop'),
     link('airs-restrict-critical','airs-residual-assessment','Return for fresh residual assessment','إعادة تقييم الخطر المتبقي','rejected',false),
-    link('airs-monitoring', 'airs-closure', 'Monitoring completed', 'اكتمال المتابعة'),
+    link('airs-monitoring', 'airs-periodic-review', 'Monitoring registered', 'تسجيل المتابعة'),
+    link('airs-periodic-review', 'airs-monitoring', 'Next governed review', 'المراجعة الدورية التالية', 'continue'),
+    { ...link('airs-periodic-review', 'airs-closure', 'Monitoring closed', 'إغلاق المتابعة'), isDefaultPath: true },
   ],
 };
 

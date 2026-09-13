@@ -2,6 +2,7 @@ import { IsArray, ArrayMaxSize, IsIn, IsInt, Min, Max, IsOptional, IsString, IsU
 import { AiRiskVersionDto } from './ai-risk-intake.dto';
 export const ACTION_TYPES = ['PREVENTIVE','DETECTIVE','CORRECTIVE','IMPROVEMENT'] as const;
 export class SaveTreatmentActionDto extends AiRiskVersionDto {
+ @IsOptional() @IsArray() @ArrayMaxSize(10) @IsUUID('4',{each:true}) controlVersionIds?:string[];
  @IsString() @MaxLength(200) title!: string;
  @IsString() @MaxLength(5000) description!: string;
  @IsIn(ACTION_TYPES) actionType!: typeof ACTION_TYPES[number];

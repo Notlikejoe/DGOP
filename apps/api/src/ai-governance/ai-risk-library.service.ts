@@ -1,3 +1,4 @@
+import { AiSourceCorrectionsService } from './ai-source-corrections.service';
 import { aiRoleMayHold, AiPermission } from './ai-permissions';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -16,7 +17,7 @@ type Version=Prisma.AiRiskLibraryVersionGetPayload<{include:{entry:true;publicat
 @Injectable()
 export class AiRiskLibraryService {
  constructor(private readonly prisma:PrismaService,private readonly authorization:AiAuthorizationService,private readonly risks:AiRiskIntakeService,
-  private readonly identifiers:AiIdentifiersService,private readonly audit:AuditService){}
+  private readonly identifiers:AiIdentifiersService,private readonly audit:AuditService,private readonly corrections?:AiSourceCorrectionsService){}
  async lookups(userId:string){
   const a=await this.risks.visibility(userId),now=new Date();
   const lists=await this.prisma.governedReferenceVersion.findMany({where:{listCode:{in:Object.values(LIBRARY_LISTS)},state:'published',effectiveFrom:{lte:now},OR:[{effectiveTo:null},{effectiveTo:{gt:now}}]},include:{values:true}});
@@ -60,6 +61,13 @@ export class AiRiskLibraryService {
    return {entryId:entry.id,versionId:version.id,libraryRef:entry.libraryRef,round:version.round};
   });
  }
+ async sourceProposal(tx:Prisma.TransactionClient,userId:string,libraryRef:string,value:Record<string,unknown>,justification:string,evidenceIds:string[]){
+  const actor=await this.authorization.authorize(userId,'refdata.propose.ai',tx);if(!actor.roles.includes('AI_GOVERNANCE_OFFICER'))throw new ForbiddenException('Officer source proposal required');
+  if(!/^AIRL-\d{3,}$/.test(libraryRef)||await tx.aiRiskLibraryEntry.findUnique({where:{libraryRef}}))throw new ConflictException('Source AIRL identifier collides with an existing target');
+  const content=this.content(value),referencePins=await this.pins(tx,content),entry=await tx.aiRiskLibraryEntry.create({data:{libraryRef,createdBy:userId}}),digest=governanceDigest({content,referencePins});
+  const v=await tx.aiRiskLibraryVersion.create({data:{entryId:entry.id,round:1,content:content as Prisma.InputJsonObject,referencePins:referencePins as Prisma.InputJsonObject,digest,proposedBy:userId,justification,evidenceIds}});
+  await this.audit.logRequired({actor:userId,action:'airs.library.source.propose',entityType:'ai_risk_library_version',entityId:v.id,metadata:{libraryRef,digest,justification,evidenceIds}},tx);return v;
+ }
  async publish(userId:string,id:string,justificationValue:string,evidenceValue:string[]){
   const justification=governanceText(justificationValue);
   return governanceTransaction(this.prisma,async tx=>{
@@ -72,6 +80,8 @@ export class AiRiskLibraryService {
    if(v.publication||latest?.id!==v.id)throw new ConflictException('Publish only the latest unpublished proposal');
    const pins=await this.pins(tx,this.content(v.content));
    if(governanceDigest({content:v.content,referencePins:v.referencePins})!==v.digest||governanceDigest(pins)!==governanceDigest(v.referencePins))throw new ConflictException('Reference publication changed; propose a fresh version');
+   const source=await tx.aiLibrarySourceItem.findUnique({where:{libraryVersionId:id}});
+   if(source){if(!this.corrections)throw new ConflictException('Source publication validator unavailable');await this.corrections.approvedSnapshot(tx,userId,source.snapshotId,'review');if(governanceDigest(v.content)!==source.projectionDigest||v.entry.libraryRef!==source.sourceRef)throw new ConflictException('Source target provenance differs');}
    const evidenceIds=await governanceEvidence(tx,evidenceValue);await governanceEvidence(tx,v.evidenceIds);
    const publication=await tx.aiRiskLibraryPublication.create({data:{versionId:id,publishedBy:userId,justification,evidenceIds,createdAt:new Date()}});
    await this.audit.logRequired({actor:userId,action:'airs.library.publish',entityType:'ai_risk_library_version',entityId:id,metadata:{libraryRef:v.entry.libraryRef,round:v.round,digest:v.digest,justification,evidenceIds,publicationId:publication.id}},tx);

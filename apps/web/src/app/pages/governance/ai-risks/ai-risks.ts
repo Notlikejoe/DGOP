@@ -1,3 +1,4 @@
+import { AiControlPicker, ControlTag } from './ai-control-picker';
 import { AiRiskInitiation } from './ai-risk-initiation';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -15,6 +16,7 @@ import { AiResidualReview } from './ai-residual-review';
 import { AiRiskMonitoring } from './ai-risk-monitoring';
 
 interface RiskItem {
+  controlPins:ControlTag[]|null;suggestedControlPins:{controlPins:ControlTag[]}|null;
   libraryVersion: {id:string;round:number;entry:{libraryRef:string}}|null;
   id: string; riskRef: string | null; version: number; title: string | null; cause: string | null; event: string | null; effect: string | null;
   canEdit: boolean; canAssignOwner: boolean; intakeData: Record<string, unknown> | null; handoffPayload: Record<string, unknown> | null;
@@ -29,7 +31,7 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment, AiResidualReview, AiRiskMonitoring],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment, AiResidualReview, AiRiskMonitoring],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);
@@ -40,6 +42,7 @@ export class AiRisksPage implements OnInit {
   protected readonly items = signal<RiskItem[]>([]);
   protected readonly selected = signal<RiskItem | null>(null);
   protected readonly lookups = signal<RiskLookups>({ ready: false, lists: [], riskOwners: [] });
+  protected readonly controls=signal<ControlTag[]>([]);
   protected readonly input = signal<Record<string, unknown>>({});
   protected readonly ownerUserId = signal('');
   protected readonly ownerJustification = signal('');
@@ -50,12 +53,14 @@ export class AiRisksPage implements OnInit {
   protected label(value: { nameEn: string; nameAr: string } | null): string { return value ? (this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn) : '—'; }
   protected ownerLabel(value: { fullNameEn: string; fullNameAr: string }): string { return this.i18n.lang() === 'ar' ? value.fullNameAr : value.fullNameEn; }
   protected optionLabel(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }
+  protected selectedControls():string[]{const v=this.input()['control_domain_version_ids'];return Array.isArray(v)?v:[];}
   protected patch(field: string, value: unknown): void { this.input.update(input => ({ ...input, [field]: value })); }
   protected select(item: RiskItem | null): void {
     this.selected.set(item); this.ownerUserId.set(item?.owner?.userId ?? ''); this.ownerJustification.set('');
     const stored = item?.intakeData ?? {};
     this.input.set(Object.fromEntries(['title', ...this.textFields, ...this.lookups().lists.map(list => list.field)].map(field => [field,
       stored[field] ?? (field === 'title' ? item?.title ?? '' : field === 'dev_stage' ? item?.handoffPayload?.['lifecycleStage'] ?? '' : '')])));
+    this.patch('control_domain_version_ids', stored['control_domain_version_ids']??[]);
     this.patch('third_party_involved', stored['third_party_involved'] ?? item?.handoffPayload?.['thirdPartyInvolved'] ?? false);
     this.evidenceText.set(Array.isArray(stored['evidence']) ? stored['evidence'].join('\n') : '');
   }
@@ -65,6 +70,7 @@ export class AiRisksPage implements OnInit {
       const [items, lookups] = await Promise.all([firstValueFrom(this.http.get<RiskItem[]>('/api/ai/risks')),
         firstValueFrom(this.http.get<RiskLookups>('/api/ai/risks/lookups'))]);
       if(preferredId&&!items.some(i=>i.id===preferredId))items.unshift(await firstValueFrom(this.http.get<RiskItem>(`/api/ai/risks/${preferredId}`)));
+      this.controls.set((await firstValueFrom(this.http.get<{rows:ControlTag[]}>('/api/ai/control-domains'))).rows);
       this.items.set(items); this.lookups.set(lookups); this.select(items.find(item => item.id === preferredId) ?? items[0] ?? null); this.state.set('ok');
     } catch (error) { this.state.set('error'); this.toast.errorFrom(error, this.t('aiRisk.error')); }
   }

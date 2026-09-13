@@ -184,6 +184,7 @@ model AiSourceCorrectionReview {
 }
 
 model AiCorrectedSourceSnapshot {
+  libraryImports AiLibrarySourceImport[]
   id String @id @default(uuid())
   correctionVersionId String @unique
   report Json
@@ -5018,6 +5019,8 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  suggestedControlPins Json?
+  controlPins Json?
   libraryVersionId String?
   initiationKey String? @unique
   libraryVersion AiRiskLibraryVersion? @relation(fields:[libraryVersionId],references:[id],onDelete:Restrict)
@@ -5490,6 +5493,8 @@ model AiRiskLibraryEntry {
  @@map("ai_risk_library_entries")
 }
 model AiRiskLibraryVersion {
+ sourceItem AiLibrarySourceItem?
+ controlLinks AiLibraryControlLinkVersion[]
  id String @id @default(uuid())
  entryId String
  round Int
@@ -5515,4 +5520,60 @@ model AiRiskLibraryPublication {
  createdAt DateTime @default(now())
  version AiRiskLibraryVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
  @@map("ai_risk_library_publications")
+}
+
+model AiLibrarySourceImport {
+ id String @id @default(uuid())
+ snapshotId String
+ requestKey String @unique
+ requestDigest String @db.VarChar(64)
+ rowKeys Json
+ createdBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ snapshot AiCorrectedSourceSnapshot @relation(fields:[snapshotId],references:[id],onDelete:Restrict)
+ items AiLibrarySourceItem[]
+ @@index([snapshotId,createdAt])
+ @@map("ai_library_source_imports")
+}
+model AiLibrarySourceItem {
+ id String @id @default(uuid())
+ batchId String
+ rowKey String
+ snapshotId String
+ libraryVersionId String @unique
+ sourceRef String
+ sourceDigest String @db.VarChar(64)
+ projectionDigest String @db.VarChar(64)
+ batch AiLibrarySourceImport @relation(fields:[batchId],references:[id],onDelete:Restrict)
+ version AiRiskLibraryVersion @relation(fields:[libraryVersionId],references:[id],onDelete:Restrict)
+ @@unique([snapshotId,rowKey])
+ @@map("ai_library_source_items")
+}
+model AiLibraryControlLinkVersion {
+ id String @id @default(uuid())
+ libraryVersionId String
+ round Int
+ controlPins Json
+ digest String @db.VarChar(64)
+ proposedBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ libraryVersion AiRiskLibraryVersion @relation(fields:[libraryVersionId],references:[id],onDelete:Restrict)
+ review AiLibraryControlLinkReview?
+ @@unique([libraryVersionId,round])
+ @@map("ai_library_control_link_versions")
+}
+model AiLibraryControlLinkReview {
+ id String @id @default(uuid())
+ versionId String @unique
+ outcome String
+ actorId String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ version AiLibraryControlLinkVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
+ @@map("ai_library_control_link_reviews")
 }

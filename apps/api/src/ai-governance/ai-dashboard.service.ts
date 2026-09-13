@@ -11,12 +11,13 @@ import { AI_KPI_CATALOG } from './ai-kpi.catalog';
 export function percentage(n:number,d:number){return d?Math.round(n/d*10000)/100:null;}
 export function average(values:number[]){return values.length?Math.round(values.reduce((a,b)=>a+b,0)/values.length*100)/100:null;}
 const score=(v:unknown)=>typeof v==='number'&&Number.isInteger(v)&&v>=1&&v<=16?v:null;
-const select={id:true,riskRef:true,title:true,ownerPersonId:true,workflowCase:{select:{status:true}},
+export const AI_RISK_REPORT_SELECT={id:true,riskRef:true,title:true,ownerPersonId:true,workflowCase:{select:{status:true}},
   reassessments:{orderBy:{inherentRound:'desc' as const},take:1,select:{inherentRound:true,additionalTriggers:{orderBy:{requiredInherentRound:'desc' as const},take:1,select:{requiredInherentRound:true}}}},
   responses:{orderBy:{round:'desc' as const},take:1,where:{strategyCode:{in:['MITIGATE','TRANSFER']},decisions:{some:{kind:'officer',decision:'approve'}}},select:{id:true,assessmentId:true,
     plans:{orderBy:{round:'desc' as const},take:1,select:{id:true,snapshot:true,decision:{select:{decision:true}}}}}},
   actions:{where:{deletedAt:null},select:{id:true,actionRef:true,title:true,responseId:true,planData:true,workflowTask:{select:{status:true,dueDate:true}},progress:{orderBy:{round:'desc' as const},take:1,select:{completionPct:true,completedAt:true}}}}
 } satisfies Prisma.AiRiskSelect;
+const select=AI_RISK_REPORT_SELECT;
 type Assessment={id:string;riskId:string;kind:string;round:number;result:Prisma.JsonValue;inputs:Prisma.JsonValue};
 type Risk=Prisma.AiRiskGetPayload<{select:typeof select}>&{assessments:Assessment[]};
 /** Only current calculation provenance contributes; old residuals never pair with new inherent rounds. */

@@ -1,3 +1,5 @@
+import { governanceDigest } from './ai-governance-ledger';
+import { AiControlDomainsService } from './ai-control-domains.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TaskStatus } from '@prisma/client';
 import { ScopeService } from '../access/scope.service';
@@ -14,6 +16,7 @@ export const RISK_INTAKE_LISTS = { risk_category: 'R_RISKCAT', ethics_principle:
 const VIEW: AiPermission[] = ['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'];
 const TEXT = { title: 200, cause: 5000, event: 5000, effect: 5000, current_controls: 5000, notes: 5000 };
 export const riskSelect = {
+  controlPins:true,suggestedControlPins:true,
   libraryVersion: {select:{id:true,round:true,entry:{select:{libraryRef:true}}}},
   id: true, riskRef: true, version: true, title: true, cause: true, event: true, effect: true,
   ownerPersonId: true, intakeData: true, handoffPayload: true, aiucHandoffSourceId: true,
@@ -33,10 +36,10 @@ function record(value: unknown): Record<string, unknown> { return value && typeo
 
 function validateInput(value: unknown, complete = false): Record<string, unknown> {
   const input = record(value), issues: Array<{ field: string; message: string }> = [];
-  const known = new Set([...Object.keys(TEXT), ...Object.keys(RISK_INTAKE_LISTS), 'evidence', 'third_party_involved']);
+  const known = new Set([...Object.keys(TEXT), ...Object.keys(RISK_INTAKE_LISTS), 'evidence', 'third_party_involved', 'control_domain_version_ids']);
   for (const [field, entry] of Object.entries(input)) {
     if (!known.has(field)) { issues.push({ field, message: 'Computed or unknown fields cannot be submitted' }); continue; }
-    if (field === 'evidence') {
+    if (field === 'evidence' || field === 'control_domain_version_ids') {
       if (!Array.isArray(entry) || entry.length > 20 || entry.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id))) issues.push({ field, message: 'Use up to 20 DGOP evidence identifiers' });
     } else if (field === 'third_party_involved') {
       if (typeof entry !== 'boolean') issues.push({ field, message: 'Confirm the third-party flag as Yes or No' });
@@ -56,7 +59,7 @@ function validateInput(value: unknown, complete = false): Record<string, unknown
 export class AiRiskIntakeService {
   constructor(private readonly prisma: PrismaService, private readonly authorization: AiAuthorizationService,
     private readonly scope: ScopeService, private readonly routing: AiWorkflowRoutingService,
-    private readonly identifiers: AiIdentifiersService, private readonly audit: AuditService) {}
+    private readonly identifiers: AiIdentifiersService, private readonly audit: AuditService, private readonly controls?:AiControlDomainsService) {}
 
   async visibility(userId: string, tx: Prisma.TransactionClient = this.prisma) {
     const actor = await this.authorization.authorizeAny(userId, VIEW, tx);
@@ -179,7 +182,8 @@ export class AiRiskIntakeService {
       const { actor, item } = await this.writable(tx, userId, id, version, true);
       const input = { ...record(item.intakeData), ...normalized };
       await this.validatedReferences(tx, input);
-      await tx.aiRisk.update({ where: { id }, data: { intakeData: input as Prisma.InputJsonObject,
+      const controlPins=this.controls?await this.controls.pins(tx,input['control_domain_version_ids']??[]):[];
+      await tx.aiRisk.update({ where: { id }, data: { controlPins:controlPins as unknown as Prisma.InputJsonArray,intakeData: input as Prisma.InputJsonObject,
         title: typeof input['title'] === 'string' ? input['title'] : item.title,
         cause: typeof input['cause'] === 'string' ? input['cause'] : item.cause,
         event: typeof input['event'] === 'string' ? input['event'] : item.event,
@@ -195,6 +199,8 @@ export class AiRiskIntakeService {
       const { actor, item } = await this.writable(tx, userId, id, version, true);
       const input = validateInput(record(item.intakeData), true);
       const references = await this.validatedReferences(tx, input);
+      const controlPins=this.controls?await this.controls.pins(tx,input['control_domain_version_ids']??[]):[];
+      if(governanceDigest(controlPins)!==governanceDigest(item.controlPins??[]))throw new ConflictException('Risk control pins changed; save the current selection');
       const task = await tx.workflowTask.findFirst({ where: { caseId: item.workflowCase!.id,
         status: { in: [TaskStatus.pending, TaskStatus.in_progress] }, assigneeUserId: actor.id, assigneeRoleCode: 'AI_RISK_OWNER',
         templateStage: { is: { code: AIRS_STAGE.identification, templateId: item.workflowCase!.templateId ?? '', isActive: true,

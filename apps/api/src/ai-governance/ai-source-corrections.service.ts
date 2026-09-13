@@ -149,6 +149,12 @@ export class AiSourceCorrectionsService {
   if(b.rule.kind==='control')return issue==='CONTROL_CODE_AND_MAPPING_REVIEW_REQUIRED';
   return ['UNKNOWN_LABEL:','AMBIGUOUS_LABEL:','REFERENCE_VERSION:'].some(p=>issue===p+b.rule.listCode+':'+b.rule.column)||issue==='MISSING_FIELD:'+b.field;
  }
+ async approvedSnapshot(tx:Prisma.TransactionClient,userId:string,id:string,operation:'propose'|'review'='propose'){
+  const snapshot=await tx.aiCorrectedSourceSnapshot.findUnique({where:{id},include:{correctionVersion:{include:correctionInclude}}});if(!snapshot)throw new NotFoundException('Corrected source snapshot not found');const v=snapshot.correctionVersion;
+  const base=await this.current(tx,userId,v,operation),latest=await tx.aiSourceCorrectionVersion.findFirst({where:{previewId:v.previewId,review:{is:{outcome:'approve'}}},orderBy:{round:'desc'}});
+  if(v.review?.outcome!=='approve'||latest?.id!==v.id||governanceDigest(snapshot.report)!==snapshot.digest)throw new ConflictException('Use the current independently approved corrected source snapshot');
+  await governanceEvidence(tx,v.evidenceIds);await governanceEvidence(tx,v.review.evidenceIds);await governanceEvidence(tx,snapshot.evidenceIds);return {snapshot,base};
+ }
  async snapshot(userId:string,id:string){const snapshot=await this.prisma.aiCorrectedSourceSnapshot.findUnique({where:{id},include:{correctionVersion:true}});if(!snapshot)throw new NotFoundException('Corrected source snapshot not found');await this.previews.mappingBase(this.prisma,userId,snapshot.correctionVersion.previewId);if(governanceDigest(snapshot.report)!==snapshot.digest)throw new ConflictException('Corrected source snapshot integrity differs');return {...snapshot,productionReady:false};}
  async export(userId:string,id:string,format:string){const s=await this.snapshot(userId,id);if(format==='json')return JSON.stringify(s,null,2);if(format!=='csv')throw new BadRequestException('Use JSON or CSV corrected-source exports');
   const correction=jsonRecord(jsonRecord(s.report)['correction']),changes=correction['changes'] as Array<Record<string,unknown>>;return '\uFEFF'+[['rowKey','field','originalSource','before','after','removedIssues','mode'],...changes.map(c=>[c['rowKey'],c['field'],JSON.stringify(c['source']),JSON.stringify(c['before']),JSON.stringify(c['after']),JSON.stringify(c['removedIssues']),'VALIDATE_ONLY'])].map(r=>r.map(reportCsvCell).join(',')).join('\r\n');

@@ -1,3 +1,4 @@
+import { AiLibraryControlLinksService } from './ai-library-control-links.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,7 +17,7 @@ import { jsonRecord } from './ai-risk-scoring';
 export class AiRiskInitiationService {
  constructor(private readonly prisma:PrismaService,private readonly scope:ScopeService,private readonly authorization:AiAuthorizationService,
   private readonly risks:AiRiskIntakeService,private readonly library:AiRiskLibraryService,private readonly identifiers:AiIdentifiersService,
-  private readonly routing:AiWorkflowRoutingService,private readonly audit:AuditService){}
+  private readonly routing:AiWorkflowRoutingService,private readonly audit:AuditService,private readonly controlLinks?:AiLibraryControlLinksService){}
  private async parentWhere(roles:string[]){
   const s=await this.scope.resolve(roles);
   return {deletedAt:null,isSampleData:false,useCaseRef:{not:null},OR:[{operationalStatusCode:null},{operationalStatusCode:{notIn:['SUSPENDED','ARCHIVED']}}],
@@ -44,8 +45,9 @@ export class AiRiskInitiationService {
    if(actor.roles.includes('AI_RISK_OWNER')&&!person)throw new ForbiddenException('Risk Owner requires an active directory identity');
    const binding=await this.routing.binding(tx,AIRS_TEMPLATE_CODE),now=new Date(),year=new Date(now.getTime()+10800000).getUTCFullYear();
    const wc=await tx.workflowCase.create({data:{code:await this.identifiers.nextCaseCode(tx,'AIRS',year),title:source?String(content['titleAr']):parent.name+' · Risk identification',type:'AIRS',status:'draft',assetId:parent.assetId,templateId:binding.id,templateVersion:binding.designerVersion,createdBy:userId}});
+   const suggestedControlPins=source&&this.controlLinks?await this.controlLinks.suggestions(tx,source.id):null;
    const intakeData=source?{title:content['titleAr'],cause:content['probable_causes'],event:'',effect:content['probable_impacts'],risk_category:content['risk_category'],ethics_principle:content['ethics_principle'],dev_stage:content['dev_stage'],current_controls:'',notes:content['example_controls']}:{};
-   const risk=await tx.aiRisk.create({data:{useCaseId:parent.id,workflowCaseId:wc.id,ownerPersonId:person?.id,libraryVersionId:source?.id,initiationKey:dto.initiationKey,title:source?String(content['titleAr']):null,cause:source?String(content['probable_causes']):null,effect:source?String(content['probable_impacts']):null,intakeData:intakeData as Prisma.InputJsonObject,createdBy:userId}});
+   const risk=await tx.aiRisk.create({data:{useCaseId:parent.id,workflowCaseId:wc.id,ownerPersonId:person?.id,libraryVersionId:source?.id,...(suggestedControlPins?{suggestedControlPins:suggestedControlPins as Prisma.InputJsonObject}:{}),initiationKey:dto.initiationKey,title:source?String(content['titleAr']):null,cause:source?String(content['probable_causes']):null,effect:source?String(content['probable_impacts']):null,intakeData:intakeData as Prisma.InputJsonObject,createdBy:userId}});
    let taskId:string|null=null;
    if(person){taskId=(await this.routing.createStageTask(tx,wc.id,AIRS_STAGE.identification,now,{templateCode:AIRS_TEMPLATE_CODE,assigneeUserId:userId,formDataJson:{sourceRiskId:risk.id,initiation:'manual',libraryVersionId:source?.id??null}})).id;}
    await tx.workflowEvent.create({data:{caseId:wc.id,taskId,actor:userId,action:source?'airs.library.instantiate':'airs.workshop.initiate',comment:justification}});

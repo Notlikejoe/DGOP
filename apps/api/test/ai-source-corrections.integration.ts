@@ -1,3 +1,4 @@
+import { testLibraryControlsAsset } from './ai-library-controls-asset.integration';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
@@ -48,4 +49,5 @@ export async function testSourceCorrections(db:PrismaClient,app:INestApplication
  const v3=await service.propose(f.officerId,previewId,{...dto,expectedRound:2,requestKey:randomUUID()});await service.review(f.dmoId,v3.id,{...digestDto,expectedDigest:v3.digest,outcome:'return'});await assert.rejects(service.capture(f.officerId,v3.id,{...digestDto,expectedDigest:v3.digest}),/independently approved/);
  const headers={authorization:'Bearer '+app.get(JwtService).sign({sub:f.officerId,tokenVersion:0,roles:['system_admin']}),'content-type':'application/json'},url=(await app.getUrl())+'/api/ai/source-corrections';assert.equal((await fetch(url+'/previews/'+previewId+'/context')).status,401);assert.equal((await fetch(url+'/previews/'+previewId+'/context',{headers})).status,200);assert.equal((await fetch(url+'/previews/'+previewId+'/versions',{method:'POST',headers,body:JSON.stringify({...dto,expectedRound:3,requestKey:randomUUID(),entries:[{...entries[0],sample:false}]})})).status,400);assert.equal((await fetch(url+'/snapshots/'+snapshot.id+'/export?format=csv',{headers})).headers.get('content-type'),'text/csv; charset=utf-8');
  assert.deepEqual({risks:await db.aiRisk.count(),library:await db.aiRiskLibraryEntry.count(),assets:await db.dataAsset.count(),cases:await db.workflowCase.count(),actions:await db.aiTreatmentAction.count()},baseline);console.log('AI source corrections: version replay, bindings, immutable raw data, audit rollback, independent review, ISO dimensions/publications, stale pins, collision quarantine and HTTP exports passed');
+ await testLibraryControlsAsset(db,app,previewId,f);
 }

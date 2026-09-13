@@ -1,3 +1,4 @@
+import { AiControlDomainsService } from './ai-control-domains.service';
 import { requiredInherentRound } from './ai-reassessment-state';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { isDeepStrictEqual } from 'node:util';
@@ -32,7 +33,7 @@ function ids(value: unknown, required = false): string[] {
 @Injectable()
 export class AiTreatmentService {
  constructor(private readonly prisma: PrismaService, private readonly authorization: AiAuthorizationService, private readonly risks: AiRiskIntakeService,
-  private readonly routing: AiWorkflowRoutingService, private readonly identifiers: AiIdentifiersService, private readonly scope: ScopeService, private readonly audit: AuditService) {}
+  private readonly routing: AiWorkflowRoutingService, private readonly identifiers: AiIdentifiersService, private readonly scope: ScopeService, private readonly audit: AuditService,private readonly controls?:AiControlDomainsService) {}
  private async gate(tx: Prisma.TransactionClient, userId: string, id: string) {
   const access = await this.risks.visibility(userId,tx), risk = await tx.aiRisk.findFirst({where:{AND:[access.where,{id}]},select:riskSelect});
   if (!risk) throw new NotFoundException('AI risk not found');
@@ -125,7 +126,9 @@ export class AiTreatmentService {
    const old=actionId?gate.actions.find(action=>action.id===actionId):null;
    if(actionId&&!old) throw new NotFoundException('Treatment action not found');
    if(!old&&gate.actions.length>=50) throw new BadRequestException('This plan supports up to 50 actions');
-   const planData={description,actionType:dto.actionType,typeLabel:{labelEn:type.labelEn,labelAr:type.labelAr},priorityCode:dto.priorityCode,priority:priority.metadata['dgopPriorityCode'],
+   const oldControls=jsonRecord(old?.planData)['controlDomains'];
+   const controlDomains=this.controls?await this.controls.pins(tx,dto.controlVersionIds??(Array.isArray(oldControls)?oldControls.map(p=>String(jsonRecord(p)['versionId'])):[])):[];
+   const planData={controlDomains,description,actionType:dto.actionType,typeLabel:{labelEn:type.labelEn,labelAr:type.labelAr},priorityCode:dto.priorityCode,priority:priority.metadata['dgopPriorityCode'],
     priorityLabel:{labelEn:priority.labelEn,labelAr:priority.labelAr},assigneeUserId:nominee.actor.id,executorRole:nominee.role,startDate:dto.startDate??null,evidenceRequired,evidenceIds,taskType:dto.taskType,
     referenceVersions:Object.fromEntries(refs.lists.map(list=>[list.listCode,list.versionId]))};
    const values={title,targetDate,assigneePersonId:nominee.person.id,planData:planData as Prisma.InputJsonObject};
@@ -138,6 +141,7 @@ export class AiTreatmentService {
   if(!gate.actions.length) throw new ConflictException('At least one planned ACT action is required');
   for(const action of gate.actions) {
    const data=jsonRecord(action.planData), refs=jsonRecord(data['referenceVersions']);
+   if(this.controls)await this.controls.verify(tx,data['controlDomains']??[]);
    await this.current(tx,refs['R_ACTTYPE']);await this.current(tx,refs['R_PRIORITY']);
    if(!action.targetDate||!action.assignee?.userId) throw new ConflictException('Action target and executor are required');
    const nominee=await this.executor(tx,action.assignee.userId,gate.risk.useCase.assetId!);

@@ -88,20 +88,20 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | INT-04 | 4 | Platform integration and legacy-case regression | Not implemented |
 | INT-05 | 1–7 | Case numbering and request date | Partial — AIUC submission and automatic AIRS spawn reserve unique numbers in the existing annual scheme; Hijri request-date defaults and manual AIRS submission remain |
 | INT-06 | 1–7 | Platform integration and legacy-case regression | Partial — native AIUC/AIRS states, guarded Critical suspension/archive and periodic review Implemented state integrated; other terminal paths/full integration certification remain |
-| MIG-01 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-02 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-03 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-04 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-05 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-06 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-07 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-08 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-09 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-10 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-11 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-12 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-13 | 11 | Import staging, source reconciliation and replay | Not implemented |
-| MIG-14 | 11 | Import staging, source reconciliation and replay | Not implemented |
+| MIG-01 | 11 | Import staging, source reconciliation and replay | Partial — immutable validate-only source preparation implemented; target phase promotion/order/closure remain gated and unimplemented |
+| MIG-02 | 11 | Import staging, source reconciliation and replay | Partial — exact published reference resolution, source-specific aliases, active Person/unit lookup and unknown/ambiguous quarantine implemented for previews; reviewed correction/target promotion remain |
+| MIG-03 | 11 | Import staging, source reconciliation and replay | Partial — original classification row and empty intake form preserved, six-score MAX/tier/date previews and approval-provenance quarantine implemented; full intake field promotion/Hijri/source-owner decomposition remain |
+| MIG-04 | 11 | Import staging, source reconciliation and replay | Partial — source use-case candidates, reference/identity/date/sample checks and linked-risk/highest-score previews implemented; target lifecycle/asset/approved-tier migration remains |
+| MIG-05 | 11 | Import staging, source reconciliation and replay | Partial — causal risk and eight-dimension source candidates, native inherent/residual preview comparisons and source branch quarantine implemented; independently evidenced target rounds/cases remain |
+| MIG-06 | 11 | Import staging, source reconciliation and replay | Partial — source action candidates, source-proven percent-unit conversion, dates/closure/parent/sample checks implemented; approved-plan/native ACT task promotion remains |
+| MIG-07 | 11 | Import staging, source reconciliation and replay | Partial — exact 66 library and 10 ISO source candidates staged with provenance and mapping issues; governed source publication/load remains gated |
+| MIG-08 | 11 | Import staging, source reconciliation and replay | Partial — named-range source aliases and exact existing published-list reconciliation implemented; no second source seed/publication path introduced |
+| MIG-09 | 11 | Import staging, source reconciliation and replay | Partial — immutable preview counts/quarantine reasons, exact decimal source checksum totals and documented dispositions implemented; loadedCount=0 and target comparison pending |
+| MIG-10 | 11 | Import staging, source reconciliation and replay | Partial — original formula/cache/numeric text plus separately prepared candidates and computed diff checks retained; target zero-diff is explicitly null until a genuine target load/comparison |
+| MIG-11 | 11 | Import staging, source reconciliation and replay | Partial — source AI/AIR/ACT identifiers, duplicates/orphans and dependent branch quarantine implemented; target collisions/linked library resolution and loaded-chain verification remain |
+| MIG-12 | 11 | Import staging, source reconciliation and replay | Partial — source samples conservatively propagated, computed cells preserved only as provenance and aggregate/engine previews calculated separately; sample-marked target promotion remains |
+| MIG-13 | 11 | Import staging, source reconciliation and replay | Partial — retained-source preparation identifies one filled register anchor and nineteen missing AI-001..020 anchors, with no fabricated rows; actual pilot load and acceptance remain |
+| MIG-14 | 11 | Import staging, source reconciliation and replay | Partial — independent evidenced preparation review implemented, explicitly distinct from pilot sign-off; production load remains unavailable |
 | MIG-15 | 12 | Import staging, source reconciliation and replay | Not implemented |
 | NFR-01 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
 | NFR-02 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
@@ -152,8 +152,8 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-28 | 8 | AIRS assessment / decision / operations | Partial — existing scheduler emits deduplicated 50/80/95 warnings and deadline breach, bilingual native alerts/planned channels, council escalation and completion resolution; provider delivery/full PRC-05 KPIs remain |
 | RM-29 | 8 | AIRS assessment / decision / operations | Implemented locally — seven evidenced off-cycle triggers, review supersession, active-reassessment additional triggers with pending-task cancellation/fresh scores, independent new authority and decision-based monitoring rebase |
 | RM-30 | 8 | AIRS assessment / decision / operations | Implemented locally — per-organization register annual Review task/calendar, pinned register history, officer trends/control-effectiveness/non-conformity findings plus existing evidence, 365-day next cycle and scoped Auditor read-only visibility |
-| RM-31 | 9 | AIRS assessment / decision / operations | Partial — separate governed AIRL entities, immutable content/publication versions, officer proposals, independent DMO publication and current-reference digest gates implemented; exact 66-row source import remains |
-| RM-32 | 9 | AIRS assessment / decision / operations | Not implemented |
+| RM-31 | 9 | AIRS assessment / decision / operations | Partial — governed stable AIRL entities/version proposals/independent publications and exact 66 source previews implemented; source mappings and source publication/import remain |
+| RM-32 | 9 | AIRS assessment / decision / operations | Partial — all 10 ISO control-area source candidates retain source dimensions/citations/control content; approved stable control identities/publication and risk/action tags remain |
 | RM-33 | 9 | AIRS assessment / decision / operations | Implemented locally — current published library version creates an editable risk draft with source/category/principle/lifecycle/title/cause/effect pins; no auto-submission, fabricated event, actual-control claim or score |
 | RM-34 | 6 | AIRS assessment / decision / operations | Not implemented |
 | RM-35 | 6 | AIRS assessment / decision / operations | Not implemented |
@@ -220,3 +220,6 @@ Phase 3R/3S/3T/3U update (2026-09-13): existing-stack bilingual AI dashboard wit
 Phase 3V/3W update (2026-09-13): GEN-100 current due assessment dimension completeness and GEN-101 current approved-HIGH Ethics coverage are implemented locally. Mandatory Ethics coverage is separately labelled. All 21 live scoped KPI computations are available, with current source/round/role provenance, null empty denominators and read-only gap views. Historical 3R–3U pending-cohort notes are superseded. Automatic dashboard period snapshots remain open. See phase-3v.md and phase-3w.md.
 
 Phase 3X–4G update (2026-09-13): seven reporting capabilities (immutable observations, daily slots, previous-closed-month slots, archive, comparison, safe CSV export and versioned schedule controls/retry history) plus three library/initiation capabilities (governed proposal/publication, published browsing and scoped idempotent workshop/library risk drafts) implemented locally. Complete isolated clean-install and baseline-upgrade tests pass with all earlier phases; API/Angular builds, AI security and 30 native governance checks pass. No live/production/source publication or deployment. Historical month-end cohorts, exact workbook/control-area import, authority reversal, avoidance/ESCALATE execution and release/Asset360 certification remain separate. See phase-3x-4g-plan.md and phase-3x.md through phase-4g.md.
+
+
+4H–4V update (2026-09-13): fifteen source-preparation packets implemented; see phase-4h-4v-plan.md. Preview acceptance never implies a target load, source publication, pilot sign-off or production authorization. Original source contradictions and pending wider workflow/Asset 360/release requirements remain explicit.

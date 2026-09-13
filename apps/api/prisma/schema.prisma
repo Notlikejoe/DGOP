@@ -118,6 +118,50 @@ model UserRole {
 }
 
 /// Directory of people (governance actors); optionally linked to a login account.
+/// Source previews never promote rows or alter business records. Review means preparation acceptance only.
+model AiMigrationPreview {
+  id String @id @default(uuid())
+  requestKey String @unique
+  requestDigest String @db.VarChar(64)
+  digest String @db.VarChar(64)
+  environmentDigest String @db.VarChar(64)
+  report Json
+  createdBy String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  dispositions AiMigrationDisposition[]
+  review AiMigrationPreviewReview?
+  @@index([createdAt, id])
+  @@map("ai_migration_previews")
+}
+
+model AiMigrationDisposition {
+  id String @id @default(uuid())
+  previewId String
+  rowKey String
+  outcome String @db.VarChar(20)
+  actorId String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  preview AiMigrationPreview @relation(fields:[previewId],references:[id],onDelete:Restrict)
+  @@unique([previewId, rowKey])
+  @@map("ai_migration_dispositions")
+}
+
+model AiMigrationPreviewReview {
+  id String @id @default(uuid())
+  previewId String @unique
+  outcome String @db.VarChar(20)
+  actorId String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  preview AiMigrationPreview @relation(fields:[previewId],references:[id],onDelete:Restrict)
+  @@map("ai_migration_preview_reviews")
+}
+
 model Person {
   aiOwnedUseCases               AiUseCase[]
   aiOwnedRisks                  AiRisk[]

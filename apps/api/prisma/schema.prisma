@@ -184,6 +184,8 @@ model AiSourceCorrectionReview {
 }
 
 model AiCorrectedSourceSnapshot {
+ nativeDrafts AiSourceNativeDraft[]
+ pilotCaptures AiMigrationPilotCapture[]
   libraryImports AiLibrarySourceImport[]
   id String @id @default(uuid())
   correctionVersionId String @unique
@@ -4967,6 +4969,7 @@ enum AiAssessmentKind {
 /// Full 28-field intake lives in append-only, schema-versioned revisions.
 /// Register projections/remaining business fields are added in the AIRS phase.
 model AiUseCase {
+ sourceDraft AiSourceNativeDraft?
   operationalStatusCode String?
   operationalDecisionId String?
   operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict)
@@ -5019,6 +5022,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+ sourceDraft AiSourceNativeDraft?
   suggestedControlPins Json?
   controlPins Json?
   libraryVersionId String?
@@ -5552,6 +5556,8 @@ model AiLibrarySourceItem {
  @@map("ai_library_source_items")
 }
 model AiLibraryControlLinkVersion {
+ categoryMappingVersionId String?
+ categoryMapping AiCategoryControlMappingVersion? @relation(fields:[categoryMappingVersionId],references:[id],onDelete:Restrict)
  id String @id @default(uuid())
  libraryVersionId String
  round Int
@@ -5576,4 +5582,82 @@ model AiLibraryControlLinkReview {
  createdAt DateTime @default(now())
  version AiLibraryControlLinkVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
  @@map("ai_library_control_link_reviews")
+}
+
+model AiCategoryControlMappingVersion {
+ id String @id @default(uuid())
+ categoryCode String
+ round Int
+ categoryPin Json
+ controlPins Json
+ digest String @db.VarChar(64)
+ proposedBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ review AiCategoryControlMappingReview?
+ libraryLinks AiLibraryControlLinkVersion[]
+ @@unique([categoryCode,round])
+ @@map("ai_category_control_mapping_versions")
+}
+model AiCategoryControlMappingReview {
+ id String @id @default(uuid())
+ versionId String @unique
+ version AiCategoryControlMappingVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
+ outcome String
+ actorId String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ @@map("ai_category_control_mapping_reviews")
+}
+model AiSourceNativeDraft {
+ id String @id @default(uuid())
+ snapshotId String
+ snapshot AiCorrectedSourceSnapshot @relation(fields:[snapshotId],references:[id],onDelete:Restrict)
+ rowKey String
+ sourceRef String
+ sourceDigest String @db.VarChar(64)
+ projectionDigest String @db.VarChar(64)
+ targetUseCaseId String? @unique
+ useCase AiUseCase? @relation(fields:[targetUseCaseId],references:[id],onDelete:Restrict)
+ targetRiskId String? @unique
+ risk AiRisk? @relation(fields:[targetRiskId],references:[id],onDelete:Restrict)
+ requestKey String @unique
+ requestDigest String @db.VarChar(64)
+ createdBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ @@unique([snapshotId,rowKey])
+ @@map("ai_source_native_drafts")
+}
+model AiMigrationPilotCapture {
+ id String @id @default(uuid())
+ snapshotId String
+ snapshot AiCorrectedSourceSnapshot @relation(fields:[snapshotId],references:[id],onDelete:Restrict)
+ round Int
+ bindings Json
+ report Json
+ digest String @db.VarChar(64)
+ requestKey String @unique
+ requestDigest String @db.VarChar(64)
+ createdBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ review AiMigrationPilotReview?
+ @@unique([snapshotId,round])
+ @@map("ai_migration_pilot_captures")
+}
+model AiMigrationPilotReview {
+ id String @id @default(uuid())
+ captureId String @unique
+ capture AiMigrationPilotCapture @relation(fields:[captureId],references:[id],onDelete:Restrict)
+ outcome String
+ actorId String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ @@map("ai_migration_pilot_reviews")
 }

@@ -31,10 +31,12 @@ export class AiRiskInitiationService {
   return {canCreate:canCreate&&(!a.actor.roles.includes('AI_RISK_OWNER')||!!owner),parents:parents.filter(p=>['MINIMAL','LIMITED','HIGH'].includes(String(jsonRecord(p.assessments[0]?.result)['approvedTierCode']))).map(({assessments,...p})=>p),librarySuggestionsOnly:true};
  }
  async create(userId:string,dto:CreateAiRiskDto){
+  return governanceTransaction(this.prisma,tx=>this.createInTransaction(tx,userId,dto));
+ }
+ async createInTransaction(tx:Prisma.TransactionClient,userId:string,dto:CreateAiRiskDto){
   const justification=governanceText(dto.justification);
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(dto.initiationKey))throw new BadRequestException('Use a stable UUID initiation key');
-  return governanceTransaction(this.prisma,async tx=>{
-   const actor=await this.authorization.authorize(userId,'case.create.airs',tx);
+  const actor=await this.authorization.authorize(userId,'case.create.airs',tx);
    if(!actor.roles.some(r=>['AI_RISK_OWNER','AI_WORKING_GROUP'].includes(r)))throw new ForbiddenException('Manual initiation requires a Risk Owner or Working Group role');
    const parent=await tx.aiUseCase.findFirst({where:{AND:[await this.parentWhere(actor.roles),{id:dto.useCaseId}]},select:{id:true,useCaseRef:true,name:true,assetId:true,assessments:{where:{kind:'classification',riskId:null},orderBy:{round:'desc'},take:1,select:{result:true}}}});
    if(!parent||!['MINIMAL','LIMITED','HIGH'].includes(String(jsonRecord(parent.assessments[0]?.result)['approvedTierCode'])))throw new NotFoundException('Active scoped registered AI use case not found');
@@ -53,6 +55,5 @@ export class AiRiskInitiationService {
    await tx.workflowEvent.create({data:{caseId:wc.id,taskId,actor:userId,action:source?'airs.library.instantiate':'airs.workshop.initiate',comment:justification}});
    await this.audit.logRequired({actor:userId,action:source?'airs.library.instantiate':'airs.workshop.initiate',entityType:'ai_risk',entityId:risk.id,metadata:{useCaseId:parent.id,assetId:parent.assetId,caseCode:wc.code,libraryRef:source?.entry.libraryRef??null,libraryVersionId:source?.id??null,libraryDigest:source?.digest??null,ownerPersonId:person?.id??null,justification,autoSubmitted:false}},tx);
    return {id:risk.id,created:true};
-  });
  }
 }

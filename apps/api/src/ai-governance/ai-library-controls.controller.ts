@@ -1,5 +1,5 @@
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
-import { IsArray, ArrayMaxSize, ArrayMinSize, IsInt, IsIn, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
+import { IsArray, ArrayMaxSize, ArrayMinSize, IsInt, IsIn, IsOptional, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
 import type { Response } from 'express';
 import { AuthUser } from '../auth/auth.types';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -9,7 +9,7 @@ import { AiLibraryControlLinksService } from './ai-library-control-links.service
 import { AiAssetRiskService } from './ai-asset-risk.service';
 class EvidenceDto {@IsString() @Length(1,5000) justification!:string;@IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsUUID('4',{each:true}) evidenceIds!:string[];}
 class SourceImportDto extends EvidenceDto {@IsUUID('4') requestKey!:string;@IsString() @Matches(/^[0-9a-f]{64}$/) expectedDigest!:string;@IsArray() @ArrayMinSize(1) @ArrayMaxSize(66) @IsString({each:true}) @Length(1,300,{each:true}) rowKeys!:string[];}
-class ControlLinkDto extends EvidenceDto {@IsInt() @Min(0) expectedRound!:number;@IsArray() @ArrayMaxSize(10) @IsUUID('4',{each:true}) controlVersionIds!:string[];}
+class ControlLinkDto extends EvidenceDto { @IsOptional() @IsUUID('4') categoryMappingVersionId?:string;@IsInt() @Min(0) expectedRound!:number;@IsArray() @ArrayMaxSize(10) @IsUUID('4',{each:true}) controlVersionIds!:string[];}
 class ReviewControlLinkDto extends EvidenceDto {@IsIn(['approve','return']) outcome!:string;@IsString() @Matches(/^[0-9a-f]{64}$/) expectedDigest!:string;}
 @Controller('ai/library-sources')
 export class AiLibrarySourceController {

@@ -34,7 +34,7 @@ export const riskSelect = {
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
-function validateInput(value: unknown, complete = false): Record<string, unknown> {
+export function validateInput(value: unknown, complete = false): Record<string, unknown> {
   const input = record(value), issues: Array<{ field: string; message: string }> = [];
   const known = new Set([...Object.keys(TEXT), ...Object.keys(RISK_INTAKE_LISTS), 'evidence', 'third_party_involved', 'control_domain_version_ids']);
   for (const [field, entry] of Object.entries(input)) {

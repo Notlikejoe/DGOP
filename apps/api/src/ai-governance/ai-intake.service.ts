@@ -228,7 +228,10 @@ export class AiIntakeService {
   }
 
   async createDraft(userId: string, supplied: Record<string, unknown>) {
-    return this.prisma.$transaction(async tx => {
+    return this.prisma.$transaction(tx => this.createDraftInTransaction(tx, userId, supplied), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  async createDraftInTransaction(tx: Prisma.TransactionClient, userId: string, supplied: Record<string, unknown>) {
       await this.authorization.authorize(userId, 'case.create.aiuc', tx);
       const now = new Date();
       const payload: unknown = { request_date: dateInRiyadh(now), requester: userId, ...supplied };
@@ -256,7 +259,6 @@ export class AiIntakeService {
         metadata: { revision: 1, referenceVersions: references.versionPins },
       }, tx);
       return { ...created, warnings, conditions: this.conditions(references.selected) };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   async updateDraft(userId: string, id: string, expectedVersion: number, changes: Record<string, unknown>) {

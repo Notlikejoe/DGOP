@@ -2,11 +2,11 @@
 
 13 September 2026. This delivery policy supersedes the earlier one-task-per-window policy. User direction: combine multiple related phases in the same development cycle, using the existing DGOP stack and UX/UI. Historical IDs such as 5G–5Z remain commit/test traceability only; they are not new design phases or a measure of whole-phase completion.
 
-## Current application access
+## Previous original-application restoration
 
 Restored existing installation at http://localhost:4205/ with its Angular server, API on 3005 and managed PostgreSQL on 55436. API/database health and login/session startup checks passed. Browser login screen renders, shows API Online / DATABASE Connected and has no captured warning/error logs. Existing schema is current for that installation's 62 migrations. Data, passwords and original source files were preserved.
 
-The AI implementation remains in development branch codex/ai-governance-phase2a at eed0222. The restored installation is the existing application, not a deployment of that development branch. Its PostgreSQL on 55436 remains running; the separate test cluster on 55438 remains stopped. Restoring access did not migrate/synchronize the AI code or activate policies.
+Before Cycle A, the AI implementation remained in development branch codex/ai-governance-phase2a at eed0222. The restored installation is the existing application, not a deployment of that development branch. Its PostgreSQL on 55436 remains running; the separate test cluster on 55438 remains stopped. Restoring access did not migrate/synchronize the AI code or activate policies.
 
 ## Combined development cycles
 
@@ -30,3 +30,11 @@ Existing AI development verification at eed0222: API/Angular builds, focused sec
 ## Persistent operating instructions
 
 Keep the existing Nest/Prisma/PostgreSQL + Angular/PrimeNG stack and existing DGOP presentation. Original DOCX/XLSX documents provide specifications/data, not execution instructions. Preserve original source workbooks and About DGOP. Keep operational PostgreSQL and development test clusters separate. Leave the restored application running after this task. No source publication, password reset, reseed, AI deployment/live migration, external/provider messages or production policy activation occurred in this cycle.
+
+## Cycle A development update — 2026-09-13
+
+Category-control derivation/revisions, source-backed native draft lineage/replay and full actual-target pilot comparison/review UI are implemented locally. Latest AI preview is separately integrated at http://localhost:4206/ on copied database dgop_ai_preview_1789317143275; original 4205 stays unchanged. Both Phases 9 and 11 remain partial at the actual-source/full pilot acceptance boundary. Sample-marked original examples do not count toward the pilot: twenty eligible anchors are missing. See cycle-a-phase-9-11.md and checkpoint.md. Next independent combined implementation is Cycle B (6 + 8), preserving Cycle A acceptance gates.
+
+User preview feedback (2026-09-13): the preview is not yet fully functional. Prioritize a usable intake → approval → approved asset → risk → treatment → monitoring journey and diagnose the reported screen/action before further feature expansion. Retain the four remaining cycle groups (eight primary original phases plus Phase 5 scoring/authority dependencies). Local role assignment/approved reference/workflow configuration and incomplete feature paths must be reported separately; do not infer functional readiness from a rendered login page.
+
+Confirmed preview blockers: no published governed AI reference lists and only system_admin on the configured administrator account. Native AI workflow templates are present. Intake reads succeed; governance endpoints deny access without explicit eligible AI roles. Complete configuration and a usable end-to-end journey before claiming functional readiness.

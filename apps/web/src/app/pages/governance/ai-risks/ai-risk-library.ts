@@ -1,3 +1,4 @@
+import { AiCategoryControls } from './ai-category-controls';
 import { AiLibraryControlLinks } from './ai-library-control-links';
 import { ChangeDetectionStrategy, Component, EventEmitter, inject, Input, OnInit, Output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -8,7 +9,7 @@ import { I18nService } from '../../../core/i18n.service';
 import { ToastService } from '../../../shared/toast.service';
 export interface LibraryRow {entryId:string;versionId:string;libraryRef:string;round:number;content:Record<string,string>;published:boolean;createdAt:string;justification:string}
 interface LibraryLookups {canPropose:boolean;canPublish:boolean;lists:Array<{field:string;ready:boolean;values:Array<{code:string;labelEn:string;labelAr:string}>}>}
-@Component({selector:'app-ai-risk-library',standalone:true,imports:[FormsModule,TableModule,AiLibraryControlLinks],templateUrl:'./ai-risk-library.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-risks.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-risk-library',standalone:true,imports:[AiCategoryControls,FormsModule,TableModule,AiLibraryControlLinks],templateUrl:'./ai-risk-library.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-risks.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiRiskLibrary implements OnInit {
  @Input() allowChoose=false;
  @Output() chosen=new EventEmitter<LibraryRow>();

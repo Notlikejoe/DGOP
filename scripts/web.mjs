@@ -110,9 +110,12 @@ if (!node) {
 }
 
 if (command === "start") {
+  const portArgument = extraArgs.find(value => value.startsWith("--port="));
+  const portIndex = extraArgs.indexOf("--port");
+  const bridgePort = portArgument?.slice(7) ?? (portIndex >= 0 ? extraArgs[portIndex + 1] : "4205");
   const proxy = spawn(
     node,
-    [join(root, "scripts", "loopback-proxy.mjs"), "4205"],
+    [join(root, "scripts", "loopback-proxy.mjs"), bridgePort],
     {
       cwd: root,
       env: process.env,

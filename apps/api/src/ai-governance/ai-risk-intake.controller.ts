@@ -1,3 +1,5 @@
+import { AiRiskInitiationService } from './ai-risk-initiation.service';
+import { CreateAiRiskDto } from './ai-risk-library.dto';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -19,8 +21,10 @@ import { RecordTreatmentProgressDto, SaveTreatmentActionDto } from './ai-treatme
 @Controller('ai/risks')
 export class AiRiskIntakeController {
   constructor(private readonly service: AiRiskIntakeService, private readonly assessments: AiRiskAssessmentService, private readonly adoption: AiRiskAdoptionService,
-    private readonly responses: AiRiskResponseService, private readonly treatment: AiTreatmentService, private readonly residual: AiResidualAssessmentService, private readonly residualDecisions: AiResidualDecisionService) {}
+    private readonly responses: AiRiskResponseService, private readonly treatment: AiTreatmentService, private readonly residual: AiResidualAssessmentService, private readonly residualDecisions: AiResidualDecisionService, private readonly initiation: AiRiskInitiationService) {}
   // Authenticated reads enforce own/org/all alternatives with live grants and data scope.
+  @Get('initiation') initiationContext(@CurrentUser() u:AuthUser){return this.initiation.context(u.id);}
+  @Post() create(@CurrentUser() u:AuthUser,@Body() dto:CreateAiRiskDto){return this.initiation.create(u.id,dto);}
   @Get() list(@CurrentUser() user: AuthUser) { return this.service.list(user.id); }
   @Get('lookups') lookups(@CurrentUser() user: AuthUser) { return this.service.lookups(user.id); }
   @Get(':id/residual') residualContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.residual.context(user.id,id); }

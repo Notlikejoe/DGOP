@@ -1,3 +1,4 @@
+import { AiDashboardReportsService } from '../ai-governance/ai-dashboard-reports.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
   CaseStatus,
@@ -134,6 +135,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     private readonly scope: ScopeService,
     private readonly workflow?: WorkflowService,
     private readonly aiReviews?: AiRiskReviewService,
+    private readonly aiReports?: AiDashboardReportsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -164,6 +166,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         await this.recalculateSla(this.systemUser);
         await this.generateCalendarOccurrences(this.systemUser);
         await this.aiReviews?.processSignals();
+        await this.aiReports?.processDue();
       });
     } catch (error) {
       this.logger.warn(

@@ -54,8 +54,12 @@ export class AiDashboardService {
    ...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}}),OR:[{asset:{is:asset}},...(scope.domains==='all'&&scope.maxClassRank===null?[{assetId:null}]:[])]};
   return {...a,canUseCases,canPipeline:canUseCases&&!a.aggregateOnly,registerWhere,pipelineWhere};
  }
- private async population(tx:Prisma.TransactionClient,userId:string){
-  const a=await this.access(tx,userId),asOf=new Date(),rows=await tx.aiRisk.findMany({where:a.where,select});
+ private async scopedAccess(tx:Prisma.TransactionClient,userId:string,unitId?:string){
+  const a=await this.access(tx,userId);if(!unitId)return a;
+  return {...a,where:{AND:[a.where,{useCase:{is:{organizationUnitId:unitId}}}]} satisfies Prisma.AiRiskWhereInput,registerWhere:{AND:[a.registerWhere,{organizationUnitId:unitId}]} satisfies Prisma.AiUseCaseWhereInput,pipelineWhere:{AND:[a.pipelineWhere,{organizationUnitId:unitId}]} satisfies Prisma.AiUseCaseWhereInput};
+ }
+ private async population(tx:Prisma.TransactionClient,userId:string,unitId?:string){
+  const a=await this.scopedAccess(tx,userId,unitId),asOf=new Date(),rows=await tx.aiRisk.findMany({where:a.where,select});
   const latest=rows.length?await tx.$queryRaw<Assessment[]>`SELECT DISTINCT ON ("riskId",kind) id,"riskId",kind,round,result,jsonb_build_object('inherentAssessmentId',inputs->'inherentAssessmentId') AS inputs FROM ai_assessment_rounds WHERE "riskId" IN (${Prisma.join(rows.map(r=>r.id))}) AND kind::text IN ('inherent','residual') ORDER BY "riskId",kind,round DESC`:[];
   const byRisk=new Map<string,Assessment[]>();for(const v of latest){const list=byRisk.get(v.riskId)??[];list.push(v);byRisk.set(v.riskId,list);}
   const risks=rows.map(r=>projectRisk({...r,assessments:byRisk.get(r.id)??[]},asOf));
@@ -93,8 +97,9 @@ export class AiDashboardService {
   const high=ethics.filter(c=>c.high),mandatory=ethics.filter(c=>c.mandatory);
   return {assessments:due,ethics,measures:{assessmentDue:due.length,assessmentComplete:due.filter(r=>r.complete).length,assessmentMissingDeadline:assessments.filter(r=>!r.dueAt).length,high:high.length,highReviewed:high.filter(c=>c.reviewed).length,mandatory:mandatory.length,mandatoryReviewed:mandatory.filter(c=>c.reviewed).length}};
  }
- async summary(userId:string){return this.prisma.$transaction(async tx=>{
-  const population=await this.population(tx,userId),{a,asOf,risks,useCases}=population,governance=await this.governance(tx,population),reviews=await aggregateReviewMeasures(tx,risks.map(r=>r.id),asOf);
+ async summary(userId:string){return this.prisma.$transaction(tx=>this.projection(tx,userId),{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:20000});}
+ async projection(tx:Prisma.TransactionClient,userId:string,unitId?:string){
+  const population=await this.population(tx,userId,unitId),{a,asOf,risks,useCases}=population,governance=await this.governance(tx,population),reviews=await aggregateReviewMeasures(tx,risks.map(r=>r.id),asOf);
   const high=useCases.filter(u=>u.approvedTier==='HIGH').length,unclassified=useCases.filter(u=>u.approvedTier===null||u.approvedTier==='').length,other=useCases.filter(u=>u.approvedTier!==null&&u.approvedTier!==''&&u.approvedTier!=='HIGH').length;
   const highInherent=risks.filter(r=>['HIGH','CRITICAL'].includes(String(r.inherentBand))),planned=risks.filter(r=>r.hasPlan),treated=planned.filter(r=>r.treated);
   const actions=risks.flatMap(r=>r.actions),inherent=risks.flatMap(r=>r.inherentScore===null?[]:[r.inherentScore]),residual=risks.flatMap(r=>r.residualScore===null?[]:[r.residualScore]),reduction=risks.flatMap(r=>r.reduction===null?[]:[r.reduction]);
@@ -123,7 +128,12 @@ export class AiDashboardService {
    governance:governance?.measures??null,
    matrix:a.mode==='risk_owner'?null:{cells:matrix,assessed:matrixCount,unassessed:risks.length-matrixCount},distribution,
    topRisks:a.aggregateOnly||a.mode==='risk_owner'?[]:risks.filter(r=>r.residualScore!==null).sort((l,r)=>r.residualScore!-l.residualScore!||l.id.localeCompare(r.id)).slice(0,10).map(({actions,...r})=>r)};
- },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:20000});}
+ }
+ async snapshotMembers(tx:Prisma.TransactionClient,userId:string,unitId:string){
+  const a=await this.scopedAccess(tx,userId,unitId);if(a.mode==='risk_owner'||!a.canUseCases)throw new ForbiddenException('Register reporting authority required');
+  const risks=await tx.aiRisk.findMany({where:a.where,select:{id:true,version:true},orderBy:{id:'asc'}}),register=await tx.aiUseCase.findMany({where:a.registerWhere,select:{id:true,version:true},orderBy:{id:'asc'}}),pipeline=await tx.aiUseCase.findMany({where:a.pipelineWhere,select:{id:true,version:true},orderBy:{id:'asc'}});
+  return {risks,register,pipeline};
+ }
  async drilldown(userId:string,filter:string,page=1,pageSize=20){
   if(!(DASHBOARD_FILTERS as readonly string[]).includes(filter)||!Number.isInteger(page)||page<1||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new BadRequestException('Use a supported dashboard filter, positive page and page size 1–100');
   return this.prisma.$transaction(async tx=>{

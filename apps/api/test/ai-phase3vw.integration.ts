@@ -1,3 +1,4 @@
+import { testReportingLibrary } from './ai-reporting-library.integration';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
@@ -38,5 +39,6 @@ export async function testPhase3VW(db:PrismaClient,service:AiDashboardService,f:
  await db.aiAssessmentRound.create({data:{useCaseId:cases[0].u.id,kind:'classification',round:2,engineVersion:'coverage-test-v1',ruleReferenceVersionId:ref.id,inputs:{},result:cases[0].result,createdBy:f.officerId}});s=await service.summary(f.officerId);assert.equal(s.governance!.highReviewed,g.highReviewed);assert.equal(s.governance!.high,g.high+2);
  await assert.rejects(service.drilldown(f.riskOwnerId,'assessment_gaps'),/authority/);await assert.rejects(service.drilldown(f.riskOwnerId,'ethics_gaps'),/authority/);const exec=await db.user.findFirstOrThrow({where:{isActive:true,userRoles:{some:{role:{code:'AI_EXECUTIVE_TEAM',isActive:true}}}}});assert.equal((await service.summary(exec.id)).governance,null);await assert.rejects(service.drilldown(exec.id,'ethics_gaps'),/aggregate only/);assert.equal((await service.summary(f.riskOwnerId)).governance,null);assert.equal((await service.drilldown(f.auditorId,'mandatory_ethics_gaps')).readOnly,true);
  const role=await db.role.findUniqueOrThrow({where:{code:'AI_GOVERNANCE_OFFICER'}}),scope=await db.roleDataScope.create({data:{roleId:role.id,scopeType:'org_unit',refId:randomUUID()}});const empty=await service.summary(f.officerId);for(const id of ['GEN-100','GEN-101'])assert.equal(empty.cards.find(k=>k.id===id)!.value,null);assert.equal((await service.drilldown(f.officerId,'assessment_gaps')).total,0);assert.equal((await service.drilldown(f.officerId,'ethics_gaps')).total,0);await db.roleDataScope.delete({where:{id:scope.id}});
+ await testReportingLibrary(db,f);
  console.log('Phases 3V/3W passed: due/current/non-cancelled eight-dimension provenance, superseded rounds/missing deadlines, exact approved HIGH versus mandatory Ethics cohorts, independent evidenced current decision outcomes, old review invalidation, full-denominator gap pagination, empty scoped ratios and executive/owner/Auditor privacy.');
 }

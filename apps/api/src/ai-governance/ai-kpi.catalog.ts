@@ -12,7 +12,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "طلبات AIUC المقدمة باستثناء المسودات والسجلات التجريبية.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-82",
@@ -26,7 +26,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "طلبات التبني المنتهية بقرار قبول أو قبول مشروط ÷ جميع الطلبات المنتهية.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-83",
@@ -40,7 +40,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "محاولات الفرز المنجزة بحلول مهلة خمسة أيام عمل المثبتة ÷ جميع محاولات الفرز المنجزة.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-84",
@@ -54,7 +54,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "محاولات الفرز المنجزة ذات حدث إعادة للاستكمال ÷ جميع محاولات الفرز المنجزة.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-85",
@@ -68,7 +68,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "حالات الاستخدام غير التجريبية ذات المرجع وأصل مسجل نشط.",
     "filter": "registered",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-86",
@@ -82,7 +82,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "المخاطر المؤهلة غير التجريبية ذات مرجع AIR.",
     "filter": "identified",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-87",
@@ -96,7 +96,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "مستوى الخطر المتبقي المحسوب حالياً مرتفع أو كارثي.",
     "filter": "residual_high",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-88",
@@ -110,7 +110,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "حالات المخاطر المعرفة باستثناء حالات سير العمل المغلقة والملغاة.",
     "filter": "open",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-89",
@@ -124,7 +124,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "المخاطر المعرفة التي لم يُعيّن لها مالك خطر.",
     "filter": "without_owner",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-90",
@@ -138,7 +138,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "متوسط الخطر المتأصل المحسوب حالياً؛ تُستبعد المخاطر غير المقيمة.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-91",
@@ -152,7 +152,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "متوسط الخطر المتبقي المحسوب حالياً والمرتبط بجولته المتأصلة.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-92",
@@ -166,7 +166,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "متوسط (المتأصل − المتبقي) ÷ المتأصل لأزواج الجولات الحالية الصالحة، بالنسبة المئوية؛ تظهر القيم السالبة.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-93",
@@ -180,7 +180,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "المخاطر المنجزة جميع إجراءات خطتها الحالية المعتمدة وغير الملغاة ÷ المخاطر ذات إجراءات خطة معتمدة حالية غير تجريبية.",
     "filter": "treated",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-94",
@@ -194,7 +194,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "إجراءات المعالجة الحالية المعتمدة وغير التجريبية التي لم تُنجز وحلّ موعدها السعودي المثبت.",
     "filter": "overdue_actions",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-95",
@@ -208,7 +208,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "المراجعات غير المنجزة وغير المستبدلة التي حلّ موعدها حتى وقت التقرير.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-96",
@@ -222,7 +222,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "المراجعات غير المستبدلة المنجزة بحلول موعدها ÷ المراجعات غير المستبدلة التي حلّ موعدها حتى وقت التقرير.",
     "filter": null,
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-97",
@@ -236,7 +236,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "المخاطر المتأصلة المرتفعة أو الكارثية ذات إجراء منجز موثق واحد على الأقل في خطتها الحالية المعتمدة ÷ جميع المخاطر المتأصلة المرتفعة أو الكارثية الحالية.",
     "filter": "plan_incomplete",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-98",
@@ -250,7 +250,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "تصنيف سدايا المعتمد «مخاطر عالية» حصراً في السجل المؤهل؛ لا يُستخدم التصنيف المقترح أو مستوى الخطر المتبقي.",
     "filter": "sdaia_high",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-99",
@@ -264,7 +264,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "سجلات الاستخدام المؤهلة التي لا تحمل تصنيف سدايا معتمداً.",
     "filter": "unclassified",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-100",
@@ -278,7 +278,7 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "جولات التقييم الحالية غير الملغاة المكتملة بالأبعاد الثمانية الموثقة ومبرراتها ÷ الجولات المستحقة حتى وقت التقرير؛ تُعرض المواعيد المفقودة منفصلة.",
     "filter": "assessment_gaps",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   },
   {
     "id": "GEN-101",
@@ -292,6 +292,6 @@ export const AI_KPI_CATALOG = [
     "formulaAr": "طلبات التبني المقدمة ذات تصنيف سدايا العالي المعتمد ونتيجة موثقة مستقلة للمرحلة الخامسة مرتبطة بقرار التصنيف الحالي ÷ جميع الطلبات المقدمة ذات التصنيف العالي المعتمد؛ تشمل النتائج القبول والإعادة والرفض.",
     "filter": "ethics_gaps",
     "coverage": "live",
-    "coverageNote": "Current scoped projection; scheduled period snapshots are not implemented."
+    "coverageNote": "Current scoped projection; immutable as-of observations and governed cadence-slot captures available. Historical month-end reconstruction is separate."
   }
 ] as const;

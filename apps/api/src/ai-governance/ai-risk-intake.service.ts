@@ -14,6 +14,7 @@ export const RISK_INTAKE_LISTS = { risk_category: 'R_RISKCAT', ethics_principle:
 const VIEW: AiPermission[] = ['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'];
 const TEXT = { title: 200, cause: 5000, event: 5000, effect: 5000, current_controls: 5000, notes: 5000 };
 export const riskSelect = {
+  libraryVersion: {select:{id:true,round:true,entry:{select:{libraryRef:true}}}},
   id: true, riskRef: true, version: true, title: true, cause: true, event: true, effect: true,
   ownerPersonId: true, intakeData: true, handoffPayload: true, aiucHandoffSourceId: true,
   owner: { select: { id: true, userId: true, fullNameEn: true, fullNameAr: true } },

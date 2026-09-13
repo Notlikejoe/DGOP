@@ -16,6 +16,9 @@ export class AiIdentifiersService {
       async riskRef => !(await tx.aiRisk.findUnique({ where: { riskRef }, select: { id: true } })));
   }
 
+  nextLibraryRef(tx: Prisma.TransactionClient): Promise<string> {
+    return nextAvailableBusinessCode(tx, 'ai_risk_library', n=>`AIRL-${formatBusinessSequence(n,3)}`, async libraryRef=>!(await tx.aiRiskLibraryEntry.findUnique({where:{libraryRef},select:{id:true}})));
+  }
   nextActionRef(tx: Prisma.TransactionClient): Promise<string> {
     return nextAvailableBusinessCode(tx, 'ai_treatment_action', n => `ACT-${formatBusinessSequence(n, 3)}`,
       async actionRef => !(await tx.aiTreatmentAction.findUnique({ where: { actionRef }, select: { id: true } })));

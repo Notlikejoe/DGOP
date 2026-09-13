@@ -4,6 +4,7 @@
   @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
   @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiRisk.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section> }
   @else {
+    <app-ai-risk-initiation (created)="load($event)"/>
     <div class="review-workspace">
       <aside class="ds-card queue-rail"><span class="eyebrow">{{ t('aiRisk.register') }} · {{ items().length }}</span><div class="queue-list">
         @for (item of items(); track item.id) { <button type="button" class="queue-row" [class.queue-row--active]="selected()?.id === item.id" (click)="select(item)"><span class="queue-icon"><app-icon name="shield" /></span><span><strong>{{ item.title || item.useCase.name }}</strong><small>{{ item.workflowCase.code }}</small><small>{{ item.riskRef || t('aiRisk.pendingRef') }}</small></span><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /></button> }
@@ -12,6 +13,7 @@
       <main class="review-main">
         @if (selected(); as item) {
           <section class="ds-card review-toolbar"><div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2></div><app-status-chip kind="info" [label]="item.riskRef || t('aiRisk.pendingRef')" /></section>
+          @if(item.libraryVersion;as l){<section class="ds-card review-toolbar"><strong>{{ l.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ l.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></section>}
           <section class="ds-card specialist-context"><header class="section-head"><span><app-icon name="shield" /></span><div><small>{{ t('aiRisk.handover') }}</small><h2>{{ item.useCase.name }}</h2></div></header><div class="specialist-facts">
             <div><small>{{ t('aiRisk.asset') }}</small><strong>{{ item.useCase.asset.code }} · {{ label(item.useCase.asset) }}</strong></div>
             <div><small>{{ t('aiRisk.department') }}</small><strong>{{ label(item.useCase.organizationUnit) }}</strong></div>

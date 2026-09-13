@@ -1,3 +1,4 @@
+import { AiRiskInitiation } from './ai-risk-initiation';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -14,6 +15,7 @@ import { AiResidualReview } from './ai-residual-review';
 import { AiRiskMonitoring } from './ai-risk-monitoring';
 
 interface RiskItem {
+  libraryVersion: {id:string;round:number;entry:{libraryRef:string}}|null;
   id: string; riskRef: string | null; version: number; title: string | null; cause: string | null; event: string | null; effect: string | null;
   canEdit: boolean; canAssignOwner: boolean; intakeData: Record<string, unknown> | null; handoffPayload: Record<string, unknown> | null;
   owner: { userId: string; fullNameEn: string; fullNameAr: string } | null;
@@ -27,7 +29,7 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment, AiResidualReview, AiRiskMonitoring],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment, AiResidualReview, AiRiskMonitoring],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);
@@ -62,6 +64,7 @@ export class AiRisksPage implements OnInit {
     try {
       const [items, lookups] = await Promise.all([firstValueFrom(this.http.get<RiskItem[]>('/api/ai/risks')),
         firstValueFrom(this.http.get<RiskLookups>('/api/ai/risks/lookups'))]);
+      if(preferredId&&!items.some(i=>i.id===preferredId))items.unshift(await firstValueFrom(this.http.get<RiskItem>(`/api/ai/risks/${preferredId}`)));
       this.items.set(items); this.lookups.set(lookups); this.select(items.find(item => item.id === preferredId) ?? items[0] ?? null); this.state.set('ok');
     } catch (error) { this.state.set('error'); this.toast.errorFrom(error, this.t('aiRisk.error')); }
   }

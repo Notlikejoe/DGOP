@@ -198,6 +198,8 @@ model Classification {
 /// Organizational hierarchy (entities, departments, sections).
 model OrganizationUnit {
   aiMonthlyReviewReports AiMonthlyReviewReport[]
+  aiDashboardSnapshots AiDashboardSnapshot[]
+  aiDashboardSchedules AiDashboardScheduleVersion[]
   aiAnnualReviews AiAnnualReview[]
   aiUseCases AiUseCase[]
   id         String             @id @default(uuid())
@@ -4886,6 +4888,9 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  libraryVersionId String?
+  initiationKey String? @unique
+  libraryVersion AiRiskLibraryVersion? @relation(fields:[libraryVersionId],references:[id],onDelete:Restrict)
   reassessments AiRiskReassessment[]
   reviews AiRiskReview[]
   responses AiRiskResponse[]
@@ -5290,4 +5295,94 @@ model AiMonthlyReviewReport {
  organizationUnit OrganizationUnit @relation(fields:[organizationUnitId], references:[id], onDelete:Restrict)
  @@unique([organizationUnitId, periodMonth])
  @@map("ai_monthly_review_reports")
+}
+
+/// Immutable as-of reporting observations. Period keys indicate cadence slots, not reconstructed history.
+model AiDashboardSnapshot {
+ id String @id @default(uuid())
+ organizationUnitId String
+ frequency String
+ periodKey String
+ asOf DateTime
+ createdBy String
+ sourceMembers Json
+ projection Json
+ digest String @db.VarChar(64)
+ scheduleVersionId String?
+ createdAt DateTime @default(now())
+ organizationUnit OrganizationUnit @relation(fields:[organizationUnitId],references:[id],onDelete:Restrict)
+ scheduleVersion AiDashboardScheduleVersion? @relation(fields:[scheduleVersionId],references:[id],onDelete:Restrict)
+ runs AiDashboardScheduleRun[]
+ @@unique([organizationUnitId,frequency,periodKey])
+ @@index([organizationUnitId,asOf])
+ @@map("ai_dashboard_snapshots")
+}
+model AiDashboardScheduleVersion {
+ id String @id @default(uuid())
+ organizationUnitId String
+ round Int
+ operatorUserId String
+ dailyEnabled Boolean @default(false)
+ monthlyEnabled Boolean @default(false)
+ justification String
+ evidenceIds Json
+ createdBy String
+ createdAt DateTime @default(now())
+ organizationUnit OrganizationUnit @relation(fields:[organizationUnitId],references:[id],onDelete:Restrict)
+ snapshots AiDashboardSnapshot[]
+ runs AiDashboardScheduleRun[]
+ @@unique([organizationUnitId,round])
+ @@map("ai_dashboard_schedule_versions")
+}
+/// Append-only attempts; a failed capture never becomes a successful run without a new attempt.
+model AiDashboardScheduleRun {
+ id String @id @default(uuid())
+ scheduleVersionId String
+ frequency String
+ periodKey String
+ attempt Int
+ status String
+ errorCode String?
+ snapshotId String?
+ createdAt DateTime @default(now())
+ scheduleVersion AiDashboardScheduleVersion @relation(fields:[scheduleVersionId],references:[id],onDelete:Restrict)
+ snapshot AiDashboardSnapshot? @relation(fields:[snapshotId],references:[id],onDelete:Restrict)
+ @@unique([scheduleVersionId,frequency,periodKey,attempt])
+ @@map("ai_dashboard_schedule_runs")
+}
+/// Business library entities, separate from governed picklist values.
+model AiRiskLibraryEntry {
+ id String @id @default(uuid())
+ libraryRef String @unique
+ createdBy String
+ createdAt DateTime @default(now())
+ versions AiRiskLibraryVersion[]
+ @@map("ai_risk_library_entries")
+}
+model AiRiskLibraryVersion {
+ id String @id @default(uuid())
+ entryId String
+ round Int
+ content Json
+ referencePins Json
+ digest String @db.VarChar(64)
+ proposedBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ entry AiRiskLibraryEntry @relation(fields:[entryId],references:[id],onDelete:Restrict)
+ publication AiRiskLibraryPublication?
+ risks AiRisk[]
+ @@unique([entryId,round])
+ @@map("ai_risk_library_versions")
+}
+model AiRiskLibraryPublication {
+ id String @id @default(uuid())
+ versionId String @unique
+ publishedBy String
+ justification String
+ evidenceIds Json
+ createdAt DateTime @default(now())
+ version AiRiskLibraryVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
+ @@map("ai_risk_library_publications")
 }

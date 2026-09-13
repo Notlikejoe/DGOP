@@ -1,5 +1,7 @@
 # Functional requirement implementation ledger
 
+Delivery update (2026-09-13): use the original design phase numbers and combined cycles in phase-delivery-cycles.md. Historical alphabetic tasks are traceability, not completed design phases. Local implementation, running-app integration, actual-source validation and release acceptance are distinct statuses.
+
 Generated from the supplied FD v1.0 requirement identifiers. Entries identify planned coverage, not implemented or passing tests. Cross-cutting rows will be refined to exact test files when their packet starts. Source documents remain authoritative.
 
 Phase 1A update (2026-09-11): supporting database/module contracts are implemented and tested; see phase-1a.md and apps/api/test/ai-foundation.integration.ts. No entire FD business requirement is marked complete: authorization, public operations and workflow behavior are still pending. “Not implemented” below means the complete requirement is not yet delivered, rather than absence of foundation work.

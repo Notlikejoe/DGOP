@@ -1,3 +1,4 @@
+import { AiSourceCorrections } from './ai-source-corrections';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
@@ -13,7 +14,7 @@ interface Reconciliation {counts:Record<string,number>;sourceCount:number;quaran
 interface Decision {id:string;outcome:string;actorId:string;justification:string;createdAt:string;rowKey?:string}
 interface SavedPreview {id:string;digest:string;createdAt:string;createdBy:string;justification:string;report:{rows:PreviewRow[];sources:Array<{source:string;sha256:string}>;reconciliation:Reconciliation};dispositions:Decision[];review:Decision|null}
 interface Context {canPropose:boolean;canReview:boolean;sources:Array<{source:string;file:string;sha256:string}>}
-@Component({selector:'app-ai-migration',standalone:true,imports:[DatePipe,JsonPipe,FormsModule,TableModule,TagModule,AppIcon],templateUrl:'./ai-migration.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-migration.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-migration',standalone:true,imports:[AiSourceCorrections,DatePipe,JsonPipe,FormsModule,TableModule,TagModule,AppIcon],templateUrl:'./ai-migration.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-migration.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiMigrationPage implements OnInit {
  private readonly http=inject(HttpClient);private readonly toast=inject(ToastService);protected readonly i18n=inject(I18nService);
  protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly detailsState=signal<'idle'|'loading'|'ok'|'error'>('idle');protected readonly working=signal(false);

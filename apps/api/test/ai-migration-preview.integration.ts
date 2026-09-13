@@ -1,3 +1,4 @@
+import { testSourceCorrections } from './ai-source-corrections.integration';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -59,4 +60,5 @@ export async function testMigrationPreviews(db:PrismaClient,app:INestApplication
  assert.equal((await fetch(base+'/api/ai/migration-previews/'+id,{headers})).status,200);assert.equal((await fetch(base+'/api/ai/migration-previews')).status,401);assert.equal((await fetch(base+'/api/ai/migration-previews',{method:'POST',headers,body:JSON.stringify({...dto,requestKey:randomUUID(),mode:'COMMIT',sourcePath:'C:/unknown',loadedCount:66})})).status,400);assert.equal((await fetch(base+'/api/ai/migration-previews/'+id+'/export?format=csv',{headers})).headers.get('content-type'),'text/csv; charset=utf-8');
  await db.user.update({where:{id:f.officerId},data:{isActive:false}});try{await assert.rejects(service.get(f.officerId,id),/explicit eligible/);}finally{await db.user.update({where:{id:f.officerId},data:{isActive:true}});}
  assert.deepEqual({risks:await db.aiRisk.count(),library:await db.aiRiskLibraryEntry.count(),assets:await db.dataAsset.count(),cases:await db.workflowCase.count(),actions:await db.aiTreatmentAction.count()},baseline);assert.equal(governanceDigest(sourceFixture()),governanceDigest(sourceFixture()));console.log('AI source previews: replay, audit rollback, quarantine, scope, independent review, immutable history, exports and no target mutations passed');
+ await testSourceCorrections(db,app,id,f);
 }

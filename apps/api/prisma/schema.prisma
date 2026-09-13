@@ -120,6 +120,8 @@ model UserRole {
 /// Directory of people (governance actors); optionally linked to a login account.
 /// Source previews never promote rows or alter business records. Review means preparation acceptance only.
 model AiMigrationPreview {
+  correctionVersions AiSourceCorrectionVersion[]
+  controlVersions AiControlDomainVersion[]
   id String @id @default(uuid())
   requestKey String @unique
   requestDigest String @db.VarChar(64)
@@ -148,6 +150,90 @@ model AiMigrationDisposition {
   preview AiMigrationPreview @relation(fields:[previewId],references:[id],onDelete:Restrict)
   @@unique([previewId, rowKey])
   @@map("ai_migration_dispositions")
+}
+
+model AiSourceCorrectionVersion {
+  id String @id @default(uuid())
+  previewId String
+  round Int
+  requestKey String @unique
+  requestDigest String @db.VarChar(64)
+  digest String @db.VarChar(64)
+  entries Json
+  proposedBy String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  preview AiMigrationPreview @relation(fields:[previewId],references:[id],onDelete:Restrict)
+  review AiSourceCorrectionReview?
+  snapshot AiCorrectedSourceSnapshot?
+  @@unique([previewId,round])
+  @@map("ai_source_correction_versions")
+}
+
+model AiSourceCorrectionReview {
+  id String @id @default(uuid())
+  versionId String @unique
+  outcome String @db.VarChar(20)
+  actorId String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  version AiSourceCorrectionVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
+  @@map("ai_source_correction_reviews")
+}
+
+model AiCorrectedSourceSnapshot {
+  id String @id @default(uuid())
+  correctionVersionId String @unique
+  report Json
+  digest String @db.VarChar(64)
+  createdBy String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  correctionVersion AiSourceCorrectionVersion @relation(fields:[correctionVersionId],references:[id],onDelete:Restrict)
+  @@map("ai_corrected_source_snapshots")
+}
+
+model AiControlDomainEntry {
+  id String @id @default(uuid())
+  controlCode String @unique @db.VarChar(40)
+  createdBy String
+  createdAt DateTime @default(now())
+  versions AiControlDomainVersion[]
+  @@map("ai_control_domain_entries")
+}
+
+model AiControlDomainVersion {
+  id String @id @default(uuid())
+  entryId String
+  previewId String
+  sourceRowKey String
+  round Int
+  content Json
+  dimensionPins Json
+  digest String @db.VarChar(64)
+  proposedBy String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  entry AiControlDomainEntry @relation(fields:[entryId],references:[id],onDelete:Restrict)
+  preview AiMigrationPreview @relation(fields:[previewId],references:[id],onDelete:Restrict)
+  publication AiControlDomainPublication?
+  @@unique([entryId,round])
+  @@map("ai_control_domain_versions")
+}
+
+model AiControlDomainPublication {
+  id String @id @default(uuid())
+  versionId String @unique
+  publishedBy String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  version AiControlDomainVersion @relation(fields:[versionId],references:[id],onDelete:Restrict)
+  @@map("ai_control_domain_publications")
 }
 
 model AiMigrationPreviewReview {

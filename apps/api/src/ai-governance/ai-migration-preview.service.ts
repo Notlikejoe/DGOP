@@ -64,6 +64,14 @@ export class AiMigrationPreviewService {
   return {total,page,pageSize,rows:rows.map(r=>({id:r.id,digest:r.digest,createdAt:r.createdAt,createdBy:r.createdBy,review:r.review,reconciliation:this.report(r)['reconciliation']}))};
  }
  async get(userId:string,id:string){await this.access(this.prisma,userId);const row=await this.prisma.aiMigrationPreview.findUnique({where:{id},include});if(!row)throw new NotFoundException('Source preview not found');return this.view(row);}
+ /** Internal governed-mapping facade. No additional HTTP endpoint or client-supplied scope facts. */
+ async mappingBase(tx:Prisma.TransactionClient,userId:string,id:string,operation:'read'|'propose'|'review'='read',fresh=false){
+  await this.access(tx,userId,operation);const row=await tx.aiMigrationPreview.findUnique({where:{id},include});if(!row)throw new NotFoundException('Source preview not found');
+  const report=this.report(row),environment=await this.environment(tx);
+  if(operation!=='read'&&row.review?.outcome!=='accept')throw new ConflictException('Accept source preparation before proposing source mappings');
+  if(fresh){const books=await this.sources();if(governanceDigest(environment)!==row.environmentDigest||governanceDigest(books.map(b=>({source:b.source,sha256:b.sha256})))!==governanceDigest(report['sources']))throw new ConflictException('Source or reference/identity configuration changed; propose a fresh preview');await governanceEvidence(tx,row.evidenceIds);if(row.review)await governanceEvidence(tx,row.review.evidenceIds);}
+  return {row,report,environment};
+ }
  async disposition(userId:string,id:string,dto:{rowKey:string;outcome:string;expectedDigest:string;justification:string;evidenceIds:string[]}){
   if(!['defer','reject'].includes(dto.outcome)||typeof dto.rowKey!=='string'||dto.rowKey.length>300)throw new BadRequestException('Use an evidenced defer or reject disposition; corrections require a new verified source');
   const justification=governanceText(dto.justification);

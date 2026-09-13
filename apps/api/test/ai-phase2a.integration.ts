@@ -1,3 +1,4 @@
+import { testAiHistory } from './ai-history.integration';
 import assert from 'node:assert/strict';
 import { Prisma, PrismaClient, TaskDecision } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -228,7 +229,7 @@ export async function testPhase2A(db: PrismaClient) {
     problem_desc: 'Manual matching takes too long', beneficiary_group: 'Job seekers', current_state: 'Manual review',
     objective_value: 'Reduce review time', success_kpi: 'Minutes per match', kpi_baseline: '30', kpi_target: '10',
     simpler_alternatives: { answer: true, justification: 'Rules were insufficient' },
-    existing_solutions_check: { answer: true, details: 'Checked Jadarat and Taqat' },
+    existing_solutions_check: { answer: true, details: 'Reviewed existing organization solutions' },
     human_role: 'HUMAN_APPROVAL', target_stage: 'PILOT', execution_model: 'INTERNAL', data_source: 'Matching records',
     data_owner: dataOwner.id, data_availability: 'AVAILABLE', personal_data_flag: 'YES', data_classification: 'RESTRICTED',
     budget_band: 'FUNDED', executive_sponsor: sponsor.id,
@@ -793,5 +794,6 @@ export async function testPhase2A(db: PrismaClient) {
   } finally { await riskApp.close(); }
   await testPhase3B(db, { riskId: handedOver.id, riskOwnerId: riskOwner.id, useCaseOwnerId: owner.id, otherRiskOwnerId: otherRiskOwner.id,
     privacyId: privacyReviewer.id, securityId: securityReviewer.id, auditorId: auditor.id, officerId: officer.id });
+  await testAiHistory(db, officer.id, riskOwner.id, handedOver.useCaseId);
   console.log('Phase 2/3A integration passed: AIUC reviews/decisions/asset handoff; scoped risk ownership and reassignment, causal validation, published intake snapshots, audit rollback, exactly-one AIR allocation/assessment task and HTTP authorization.');
 }

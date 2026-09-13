@@ -211,7 +211,7 @@ export class AiIntakeService {
       warnings.push({ field: 'simpler_alternatives', code: 'SIMPLER_ALTERNATIVE_NOT_CONFIRMED', message: 'Triage review is required because simpler alternatives were not confirmed' });
     }
     if (payload.existing_solutions_check?.answer === false) {
-      warnings.push({ field: 'existing_solutions_check', code: 'EXISTING_SOLUTION_NOT_CONFIRMED', message: 'Triage review is required because existing HRDF solutions were not confirmed' });
+      warnings.push({ field: 'existing_solutions_check', code: 'EXISTING_SOLUTION_NOT_CONFIRMED', message: 'Triage review is required because existing organization solutions were not confirmed' });
     }
     const classification = selected.data_classification?.[0];
     if (classification && cleanArabic(classification.labelAr) === 'غير معروف') {

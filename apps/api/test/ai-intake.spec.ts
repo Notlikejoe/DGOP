@@ -13,7 +13,7 @@ const complete = {
   problem_desc: 'Manual matching takes too long', beneficiary_group: 'Job seekers', current_state: 'Manual review',
   objective_value: 'Reduce review time', success_kpi: 'Minutes per match', kpi_baseline: '30', kpi_target: '10',
   simpler_alternatives: { answer: true, justification: 'Rules were insufficient' },
-  existing_solutions_check: { answer: true, details: 'Checked Jadarat and Taqat' },
+  existing_solutions_check: { answer: true, details: 'Reviewed existing organization solutions' },
   human_role: 'HUMAN_APPROVAL', target_stage: 'PILOT', execution_model: 'INTERNAL', data_source: 'Matching records',
   data_owner: id, data_availability: 'AVAILABLE', personal_data_flag: 'YES', data_classification: 'RESTRICTED',
   budget_band: 'FUNDED', executive_sponsor: id,

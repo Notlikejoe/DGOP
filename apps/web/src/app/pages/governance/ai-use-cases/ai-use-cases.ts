@@ -1,3 +1,4 @@
+import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -124,7 +125,7 @@ const SECTIONS: IntakeSectionDefinition[] = [
 @Component({
   selector: 'app-ai-use-cases',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, FormsModule, AppIcon, StatusChip],
+  imports: [AiJourneyHistory, DatePipe, FormsModule, AppIcon, StatusChip],
   templateUrl: './ai-use-cases.html',
   styleUrl: './ai-use-cases.scss',
 })

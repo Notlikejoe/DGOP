@@ -1,3 +1,4 @@
+import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
@@ -91,7 +92,7 @@ const INTAKE_FIELDS = [
 @Component({
   selector: 'app-ai-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, AppIcon, StatusChip],
+  imports: [AiJourneyHistory, FormsModule, AppIcon, StatusChip],
   templateUrl: './ai-review.html',
   styleUrl: './ai-review.scss',
 })

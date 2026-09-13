@@ -1,0 +1,41 @@
+@if (history(); as data) {
+  @if (data.demoMode) {
+    <aside class="journey-demo" role="status">
+      <strong>{{ t('aiJourney.demo') }}</strong><span>{{ t('aiJourney.demoBody') }}</span>
+      <div>@for (row of data.rows; track row.id) { <a routerLink="/governance/ai-risks">{{ row.useCaseRef }} · {{ row.name }}</a> }</div>
+    </aside>
+  }
+}
+@if (expanded() && state() !== 'hidden') {
+  <section class="ds-card journey-history">
+    <header><div><span class="eyebrow">{{ t('aiJourney.readOnly') }}</span><h2>{{ t('aiJourney.title') }}</h2><p>{{ t('aiJourney.body') }}</p></div>
+      <button class="ds-btn ds-btn--ghost" type="button" (click)="load(history()?.page || 1)" [disabled]="state() === 'loading'">{{ t('crud.retry') }}</button></header>
+    @if (state() === 'error') { <p role="alert">{{ t('aiJourney.error') }}</p> }
+    @if (history(); as data) {
+      <p-table [tableStyle]="{'table-layout': 'fixed', 'width': '100%'}" [value]="data.rows" [lazy]="true" [lazyLoadOnInit]="false" (onLazyLoad)="paginate($event)" [paginator]="true"
+        [rows]="data.pageSize" [first]="(data.page - 1) * data.pageSize" [totalRecords]="data.total" [loading]="state() === 'loading'" dataKey="id">
+        <ng-template #header><tr><th>{{ t('aiJourney.case') }}</th><th>{{ t('aiJourney.asset') }}</th><th>{{ t('aiJourney.risk') }}</th><th>{{ t('aiJourney.details') }}</th></tr></ng-template>
+        <ng-template #body let-row><tr>
+          <td><strong>{{ row.name }}</strong><small>{{ row.useCaseRef }} · {{ row.workflowCase?.code }}</small><app-status-chip kind="info" [label]="row.workflowCase ? t('aiuc.status.' + row.workflowCase.status) : '—'" /></td>
+          <td>{{ row.asset ? (i18n.lang() === 'ar' ? row.asset.nameAr : row.asset.nameEn) : '—' }}<small>{{ row.asset?.code }}</small></td>
+          <td>@for (risk of row.risks; track risk.id) { <strong>{{ risk.riskRef }}</strong><small>{{ risk.title }}</small>
+            <span>{{ t('aiJourney.inherent') }}: {{ latest(risk.assessments, 'inherent') ? value(latest(risk.assessments, 'inherent')!.result, 'score', 'riskScore') : '—' }}</span><br>
+            <span>{{ t('aiJourney.residual') }}: {{ latest(risk.assessments, 'residual') ? value(latest(risk.assessments, 'residual')!.result, 'score', 'riskScore') : '—' }}</span> }</td>
+          <td><details><summary>{{ t('aiJourney.details') }}</summary>
+            @for (classification of row.assessments; track classification.round) { <p>{{ t('aiJourney.classification') }}: {{ value(classification.result, 'approvedTierCode', 'proposedTierCode') }} · {{ value(classification.result, 'scoreMax') }}</p> }
+            @for (risk of row.risks; track risk.id) {
+              <h3>{{ risk.riskRef }} · {{ risk.workflowCase ? t('aiRisk.status.' + risk.workflowCase.status) : '—' }}</h3>
+              @for (round of risk.assessments; track round.id) { <div class="journey-round"><strong>{{ round.kind }} · {{ round.round }}</strong><small>{{ round.createdAt | date:'medium' }}</small>
+                @for (decision of round.decisions; track decision.kind) { <p><strong>{{ decision.actorRoleCode }} · {{ decision.decision }}</strong><small>{{ decision.createdAt | date:'medium' }}</small>{{ decision.justification }}</p> }</div> }
+              <h3>{{ t('aiJourney.actions') }}</h3>
+              @for (action of risk.actions; track action.actionRef) { <p>{{ action.actionRef }} · {{ action.title }} · {{ action.progress[0]?.completionPct ?? 0 }}%</p> }
+              <h3>{{ t('aiJourney.reviews') }}</h3>
+              @for (review of risk.reviews; track review.id) { <p>{{ review.dueAt | date:'mediumDate' }} · {{ review.bandCode }} · {{ review.cancellation ? t('aiJourney.superseded') : review.completion ? t('aiJourney.completed') : t('aiJourney.scheduled') }}</p> }
+            }
+          </details></td>
+        </tr></ng-template>
+        <ng-template #emptymessage><tr><td colspan="4">{{ t('aiJourney.empty') }}</td></tr></ng-template>
+      </p-table>
+    } @else if (state() === 'loading') { <p>{{ t('crud.loading') }}</p> }
+  </section>
+}

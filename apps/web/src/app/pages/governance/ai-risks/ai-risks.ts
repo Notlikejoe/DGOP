@@ -1,3 +1,4 @@
+import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { AiControlPicker, ControlTag } from './ai-control-picker';
 import { AiRiskInitiation } from './ai-risk-initiation';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
@@ -31,7 +32,7 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment, AiResidualReview, AiRiskMonitoring],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiTreatment, AiResidualReview, AiRiskMonitoring],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);

@@ -1,0 +1,15 @@
+:host { display: block; min-width: 0; max-width: 100%; }
+.journey-demo { display: flex; flex-wrap: wrap; gap: .6rem 1rem; padding: 1rem 1.2rem; margin-block: 1rem; border: 1px solid var(--p-primary-200, #c7d2fe); border-radius: var(--p-border-radius-lg, 12px); background: var(--p-primary-50, #eef2ff); color: var(--p-primary-800, #3730a3); }
+.journey-demo div { display: flex; flex-wrap: wrap; gap: .6rem 1rem; width: 100%; }
+.journey-demo a { color: inherit; }
+.journey-history { padding: 1.25rem; margin-block: 1rem; }
+header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+h2 { margin-block: .3rem; font-size: 1.3rem; }
+h3 { font-size: 1rem; margin-block: 1rem .4rem; }
+p { margin-block: .5rem; }
+small { display: block; margin-block: .35rem; opacity: .8; }
+td { vertical-align: top; overflow-wrap: anywhere; }
+summary { cursor: pointer; font-weight: 600; min-height: 2.5rem; }
+details { max-width: 100%; }
+.journey-round { padding-block: .6rem; border-bottom: 1px solid var(--p-content-border-color, #e2e8f0); }
+@media (max-width: 700px) { header { flex-wrap: wrap; } .journey-history { padding: .75rem; } }

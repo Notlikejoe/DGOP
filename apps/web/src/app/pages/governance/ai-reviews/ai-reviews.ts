@@ -1,3 +1,4 @@
+import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
@@ -21,7 +22,7 @@ interface ReviewDetail {id:string;round:number;dueAt:string;anchorAt:string;band
 interface MonthlyRow {id:string;periodMonth:string;capturedAt:string;sourceCount:number}
 interface MonthlySnapshot extends MonthlyRow {periodStart:string;periodEnd:string;measures:Measures}
 
-@Component({selector:'app-ai-reviews',standalone:true,imports:[DatePipe,FormsModule,TableModule,AppIcon,StatusChip],
+@Component({selector:'app-ai-reviews',standalone:true,imports: [AiJourneyHistory, DatePipe,FormsModule,TableModule,AppIcon,StatusChip],
   templateUrl:'./ai-reviews.html',styleUrls:['../ai-review/ai-review.scss','./ai-reviews.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiReviewsPage implements OnInit {
   private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
@@ -30,7 +31,7 @@ export class AiReviewsPage implements OnInit {
   protected readonly tab=signal<'report'|'annual'|'cadence'|'monthly'>('report');
   protected readonly cadence=signal<Cadence|null>(null);protected readonly detail=signal<ReviewDetail|null>(null);protected readonly detailLoading=signal(false);
   protected readonly monthlyRows=signal<MonthlyRow[]>([]);protected readonly monthlySnapshot=signal<MonthlySnapshot|null>(null);protected readonly monthlyLoading=signal(false);protected readonly cadenceState=signal<'idle'|'loading'|'ok'|'error'>('idle');
-  protected filter='next30';protected readonly filters=['next30','all','overdue','due_soon','scheduled','completed','superseded'];protected nomineeId='';protected handoverJustification='';protected handoverEvidence='';
+  protected filter='all';protected readonly filters=['next30','all','overdue','due_soon','scheduled','completed','superseded'];protected nomineeId='';protected handoverJustification='';protected handoverEvidence='';
   protected periodMonth=(()=>{const d=new Date(Date.now()+10800000);return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()-1,1)).toISOString().slice(0,7);})();
   private detailSequence=0;private monthlySequence=0;protected unitId='';protected trends='';protected controls='';protected nonconformities='';protected evidence='';
   private sequence=0;private annualSequence=0;

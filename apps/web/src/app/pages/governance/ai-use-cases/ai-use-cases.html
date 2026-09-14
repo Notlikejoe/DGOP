@@ -9,9 +9,11 @@
       <button type="button" class="ds-btn ds-btn--ghost" (click)="load(selected()?.id)">
         <app-icon name="refresh" />{{ t('crud.retry') }}
       </button>
+      @if (lookups()?.canCreate) {
       <button type="button" class="ds-btn ds-btn--primary" [disabled]="saving()" (click)="createDraft()">
         <app-icon name="plus" />{{ t('aiuc.new') }}
       </button>
+      }
     </div>
   </header>
   <app-ai-journey-history />
@@ -110,6 +112,7 @@
                         }
                         @case ('date') {
                           <input type="date" [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event)" />
+                          <small>{{ value(field.code) | dgopDualDate:'shortDate':i18n.lang() }}</small>
                         }
                         @case ('decimal') {
                           <input type="number" step="any" [disabled]="isReadOnly()" [required]="field.required" [ngModel]="value(field.code) || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateField(field.code, $event, field.kind)" />

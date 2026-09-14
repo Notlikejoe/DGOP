@@ -1,3 +1,5 @@
+import { AiAuditQuery } from '../../../shared/ai-audit-query';
+import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { TableModule } from 'primeng/table';
 import { firstValueFrom } from 'rxjs';
@@ -237,7 +239,7 @@ const MIN_PERSONAL_DATA_CLASSIFICATION_RANK = 2;
 @Component({
   selector: 'app-admin-assets',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe,JsonPipe,TableModule,FormsModule, RouterLink, Modal, StatusChip],
+  imports: [AiAuditQuery,DualDatePipe,DatePipe,JsonPipe,TableModule,FormsModule, RouterLink, Modal, StatusChip],
   templateUrl: './assets.html',
   styleUrl: './assets.scss',
 })

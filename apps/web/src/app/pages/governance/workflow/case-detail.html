@@ -32,6 +32,7 @@
   } @else if (state() === 'error') {
     <div class="ds-card"><p class="error">{{ t('crud.loadError') }}</p></div>
   } @else if (wfCase(); as c) {
+    @if (governedAi) { <app-ai-audit-query [caseId]="c.id" [kind]="c.type === 'AIUC' ? 'aiuc' : 'airs'" /> }
     <div class="detail-grid">
       <div class="ds-card">
         <h2 class="card-title">{{ t('wf.overview') }}</h2>
@@ -70,7 +71,7 @@
               <li class="timeline__item">
                 <span class="timeline__dot" aria-hidden="true"></span>
                 <div>
-                  <p class="timeline__action">{{ t('wf.event.' + e.action) }}
+                  <p class="timeline__action">{{ eventLabel(e.action) }}
                     @if (e.toStatus) { <span class="muted">&rarr; {{ t('case.' + e.toStatus) }}</span> }
                   </p>
                   @if (e.comment) { <p class="timeline__comment">{{ e.comment }}</p> }
@@ -107,8 +108,8 @@
               <tbody>
                 @for (task of c.tasks; track task.id) {
                   <tr>
-                    <td>{{ task.title }}</td>
-                    <td>{{ task.assignee?.displayName ?? '-' }}</td>
+                    <td>{{ taskLabel(task) }}</td>
+                    <td>{{ assigneeLabel(task) }}</td>
                     <td>{{ fmtDate(task.dueDate) }}</td>
                     <td><app-status-chip [kind]="slaKind(task.slaStatus)" [label]="t('sla.' + task.slaStatus)" /></td>
                     <td>

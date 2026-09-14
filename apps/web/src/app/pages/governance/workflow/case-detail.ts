@@ -1,4 +1,5 @@
 import { formatDualDate } from '../../../shared/dual-date.format';
+import { AiAuditQuery } from '../../../shared/ai-audit-query';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, ActivatedRoute } from '@angular/router';
@@ -22,7 +23,7 @@ import {
 @Component({
   selector: 'app-workflow-case',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, Modal, StatusChip],
+  imports: [AiAuditQuery, FormsModule, RouterLink, Modal, StatusChip],
   templateUrl: './case-detail.html',
   styleUrl: './workflow.scss',
 })
@@ -132,7 +133,22 @@ export class WorkflowCasePage implements OnInit {
   protected caseKind(s: string): StatusKind { return CASE_STATUS_KIND[s] ?? 'muted'; }
   protected approvalKind(s: string): StatusKind { return APPROVAL_KIND[s] ?? 'muted'; }
   protected typeLabel(t: string): string { return this.t('wf.type.' + t); }
-  protected fmtDate(d?: string | null): string { return d ? new Date(d).toISOString().slice(0, 10) : '-'; }
+  protected fmtDate(d?: string | null): string { return this.governedAi ? formatDualDate(d, 'shortDate', this.i18n.lang()) : d ? new Date(d).toISOString().slice(0, 10) : '-'; }
+  protected eventLabel(action: string): string {
+    const key = 'wf.event.' + action, label = this.t(key);
+    return this.governedAi && label === key ? this.t('aiAudit.event') : label;
+  }
+  protected taskLabel(task: Task): string {
+    return this.governedAi && task.templateStage ? (this.i18n.lang() === 'ar' ? task.templateStage.nameAr : task.templateStage.nameEn) : task.title;
+  }
+  protected assigneeLabel(task: Task): string {
+    if (task.assignee?.displayName) return task.assignee.displayName;
+    if (this.governedAi && task.assigneeRoleCode) {
+      const key = 'aiAssessment.role.' + task.assigneeRoleCode, label = this.t(key);
+      return label === key ? this.t('wf.graph.noDefaultRole') : label;
+    }
+    return '-';
+  }
   protected fmtDateTime(d?: string | null): string { return this.governedAi ? formatDualDate(d, 'medium', this.i18n.lang()) : d ? new Date(d).toLocaleString() : '-'; }
   protected tokenShort(id?: string | null): string { return id ? id.slice(0, 8) : '-'; }
   protected executionKind(status: string): StatusKind {

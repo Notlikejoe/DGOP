@@ -15,13 +15,11 @@ export class AiIntakeController {
   }
 
   @Get()
-  @RequirePermissions('case.view.aiuc.own')
   list(@CurrentUser() user: AuthUser) {
-    return this.service.listOwn(user.id);
+    return this.service.listVisible(user.id);
   }
 
   @Get('lookups')
-  @RequirePermissions('case.create.aiuc')
   lookups(@CurrentUser() user: AuthUser) {
     return this.service.lookups(user.id);
   }
@@ -33,9 +31,8 @@ export class AiIntakeController {
   }
 
   @Get(':id')
-  @RequirePermissions('case.view.aiuc.own')
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    return this.service.getOwn(user.id, id);
+    return this.service.getVisible(user.id, id);
   }
 
   @Patch(':id/intake')

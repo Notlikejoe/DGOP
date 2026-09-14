@@ -10,6 +10,8 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { canonicalAiReference } from '../master-data/ai-reference.catalog';
 import { AiAuthorizationService } from './ai-authorization.service';
+import { ScopeService } from '../access/scope.service';
+import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
 import { AI_INTAKE_SCHEMA_VERSION, AiIntakeDraftV1, AiIntakeField, AiIntakeV1 } from './ai-governance.contracts';
 import { AiIdentifiersService } from './ai-identifiers.service';
 import {
@@ -531,14 +533,61 @@ export class AiIntakeService {
     });
   }
 
+  private async readVisibility(userId: string, tx: Prisma.TransactionClient) {
+    const view: AiPermission[] = ['case.view.aiuc.own', 'case.view.aiuc.org', 'case.view.aiuc.all'];
+    const actor = await this.authorization.authorizeAny(userId, view, tx);
+    const grants = await tx.rolePermission.findMany({
+      where: { role: { code: { in: actor.roles }, isActive: true, deletedAt: null }, permission: { OR: [...view, 'case.create.aiuc' as AiPermission].map(splitAiPermission) } },
+      include: { permission: true, role: { select: { code: true } } },
+    });
+    const permissions = new Set(grants.filter(g => aiRoleMayHold(g.role.code, `${g.permission.resource}.${g.permission.action}` as AiPermission)).map(g => `${g.permission.resource}.${g.permission.action}`));
+    const canCreate = permissions.has('case.create.aiuc') && !actor.roles.includes('auditor');
+    const alternatives: Prisma.AiUseCaseWhereInput[] = [];
+    if (permissions.has('case.view.aiuc.own')) alternatives.push({ requesterUserId: actor.id });
+    if (permissions.has('case.view.aiuc.org') || permissions.has('case.view.aiuc.all')) {
+      const scope = await new ScopeService(tx as PrismaService).resolve(actor.roles);
+      const asset: Prisma.DataAssetWhereInput = { deletedAt: null,
+        ...(scope.orgUnits === 'all' ? {} : { orgUnitId: { in: scope.orgUnits } }),
+        ...(scope.domains === 'all' ? {} : { domainId: { in: scope.domains } }),
+        ...(scope.maxClassRank === null ? {} : { classification: { is: { rank: { lte: scope.maxClassRank } } } }),
+      };
+      // Other requesters' unsubmitted drafts stay private. Unlinked pipeline cases
+      // cannot satisfy a restricted asset domain or classification scope.
+      alternatives.push({ isSampleData: false, workflowCase: { is: { type: 'AIUC', status: { not: CaseStatus.draft } } },
+        intakeRevisions: { some: { submittedAt: { not: null } } },
+        ...(scope.orgUnits === 'all' ? {} : { organizationUnitId: { in: scope.orgUnits } }),
+        OR: [{ asset: { is: asset } }, ...(scope.domains === 'all' && scope.maxClassRank === null ? [{ assetId: null }] : [])],
+      });
+    }
+    return { actor, canCreate, where: { deletedAt: null, OR: alternatives } satisfies Prisma.AiUseCaseWhereInput };
+  }
+
+  async listVisible(userId: string) {
+    return this.prisma.$transaction(async tx => {
+      const { actor, canCreate, where } = await this.readVisibility(userId, tx);
+      const rows = await tx.aiUseCase.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 100, select: intakeUseCase });
+      return rows.map(row => ({ ...row, canEdit: canCreate && row.requesterUserId === actor.id && (!row.workflowCase || row.workflowCase.status === CaseStatus.awaiting_information) }));
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
+  async getVisible(userId: string, id: string) {
+    return this.prisma.$transaction(async tx => {
+      const { actor, canCreate, where } = await this.readVisibility(userId, tx);
+      const row = await tx.aiUseCase.findFirst({ where: { AND: [where, { id }] }, select: intakeUseCase });
+      if (!row) throw new NotFoundException('AI use case not found');
+      return { ...row, canEdit: canCreate && row.requesterUserId === actor.id && (!row.workflowCase || row.workflowCase.status === CaseStatus.awaiting_information) };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
   async lookups(userId: string) {
-    await this.authorization.authorize(userId, 'case.create.aiuc');
+    return this.prisma.$transaction(async tx => {
+    const { canCreate, where } = await this.readVisibility(userId, tx);
     const now = new Date();
     const lists: Record<string, { listCode: string; versionId: string; values: ReferenceSelection[] }> = {};
     const missingLists: string[] = [];
     for (const [field, alias] of Object.entries(AI_INTAKE_REFERENCE_FIELDS)) {
       const listCode = canonicalAiReference(alias);
-      const version = await this.prisma.governedReferenceVersion.findFirst({
+      const version = await tx.governedReferenceVersion.findFirst({
         where: {
           listCode,
           state: 'published',
@@ -558,8 +607,17 @@ export class AiIntakeService {
         values: version.values.map(value => ({ code: value.code, labelEn: value.labelEn, labelAr: value.labelAr })),
       };
     }
-    const directory = await this.prisma.user.findMany({
-      where: { isActive: true, person: { is: { isActive: true, deletedAt: null } } },
+    const referencedUsers = new Set<string>();
+    if (!canCreate) {
+      const cases = await tx.aiUseCase.findMany({ where, select: { requesterUserId: true, intakeRevisions: { orderBy: { revision: 'desc' }, take: 1, select: { payload: true } } } });
+      for (const row of cases) {
+        referencedUsers.add(row.requesterUserId);
+        const payload = row.intakeRevisions[0]?.payload as Record<string, unknown> | undefined;
+        for (const field of ['proposed_owner', 'data_owner', 'executive_sponsor']) if (typeof payload?.[field] === 'string') referencedUsers.add(payload[field] as string);
+      }
+    }
+    const directory = await tx.user.findMany({
+      where: { isActive: true, person: { is: { isActive: true, deletedAt: null } }, ...(!canCreate ? { id: { in: [...referencedUsers] } } : {}) },
       orderBy: { displayName: 'asc' },
       take: 1000,
       select: {
@@ -580,6 +638,7 @@ export class AiIntakeService {
       roles: user.userRoles.map(row => row.role.code),
     }));
     return {
+      canCreate,
       ready: missingLists.length === 0,
       missingLists: [...new Set(missingLists)].sort(),
       lists,
@@ -587,6 +646,7 @@ export class AiIntakeService {
       dataOwners: users.map(user => ({ ...user, expectedRole: user.roles.includes('data_owner') })),
       executiveSponsors: users,
     };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15000 });
   }
 
   async getOwn(userId: string, id: string) {

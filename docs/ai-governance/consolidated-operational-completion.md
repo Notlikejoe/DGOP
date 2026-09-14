@@ -18,7 +18,7 @@ API and Angular builds pass. New integration modules compile. Full clean-install
 
 Pure dual-date verification covers Hijri-first ordering, Arabic and English, Saudi midnight rollover, one era label, date-only display and invalid values.
 
-Populated preview dgop_ai_preview_1789317143275 on 55436 is migrated to 85 migrations. Catalog sync adds four grants for airs.severity.override, 30 AI permissions total, no revocations or membership/password changes. Previous identity and complete AI use-case/risk/assessment/action/review/capture fingerprints match. Two complete demonstrations and the additional user-created draft remain. A second native manual capture was recorded on 2026-09-14 at 17:04:33Z; the original capture matches its prior row fingerprint exactly, and the additional observation is preserved.
+Populated preview dgop_ai_preview_1789317143275 on 55436 is migrated to 85 migrations. Catalog sync adds four grants for airs.severity.override, 30 AI permissions total, no revocations or membership/password changes. Previous identity and complete AI use-case/risk/assessment/action/review fingerprints match; the original saved capture matches its prior fingerprint. Two complete demonstrations and the additional user-created draft remain. A second native manual capture was recorded on 2026-09-14 at 17:04:33Z; the original capture matches its prior row fingerprint exactly, and the additional observation is preserved.
 
 Recovery rehearsal restored all 201 tables with matching row fingerprints into dgop_ai_restore_1789404189020 in 9 seconds. Both the unique pre-migration dump and recovery dump are preserved under ignored storage. This demonstrates local snapshot recovery, not production RTO/RPO or continuous WAL/PITR certification.
 
@@ -29,7 +29,7 @@ Original DGOP 4205/API 3005/dgop_dev remains at 62 migrations. AI preview 4206/A
 1. Unify every AIUC/AIRS event notification with the governed template facade. Earlier review/strategy notices still have legacy bodies; all thirteen specified template/event mappings, exact Arabic subjects, native digest/quiet-hour dispatch and real provider evidence are not yet fully delivered.
 2. Treatment completion/supersession/ineligibility and harmony stale/missing-lineage archival now use the existing worker and skip unsent attempts transactionally. Native completion audit rollback/concurrent replay passes in clean/upgrade tests; restored-demo harmony tests pass for matching Limited/Low, independent High/Medium discrepancy, unchanged models, missing linked assessment, governed content and audit rollback. Remaining: full native review/strategy notice unification and exact tier end-of-life compensation/closure operations.
 3. Native AIUC/AIRS/combined-asset queries and full scoped Auditor page exports are delivered. Remaining: complete event/source-IP/old-new census and full global-chain/source evidence reconciliation.
-4. Finalize per-card nightly/month-close presentation and approved snapshot granularity. The main dashboard remains explicitly live; saved capture, trends and timestamped divergence are available in Reports.
+4. Per-card daily/completed-month saved cadence presentation is delivered with explicit timestamps, unavailable observations and separation from live distributions/drilldowns. Saved captures, trends and timestamped divergence remain available in Reports. Remaining: approved snapshot granularity and complete scheduled-run acceptance.
 5. Complete multi-actor browser/accessibility, exact bilingual-label audit, load/volume benchmarks and production baseline acceptance. Native integration tests do not replace these measurements.
 6. Actual-source pilot remains missing twenty eligible filled anchors (one sample plus nineteen absent workbook anchors). No synthetic demonstration can sign off the actual pilot.
 7. Target deployment/cutover and real outbound provider delivery require a concrete target, approved pilot/configuration and final authorized activation.
@@ -37,3 +37,4 @@ Original DGOP 4205/API 3005/dgop_dev remains at 62 migrations. AI preview 4206/A
 Browser verifies translated authority/event labels and Hijri-first treatment dates in English/Arabic. The new native audit and saved/live report views retain DGOP cards and PrimeNG tables. Complete accessibility/multi-actor/notification reference-label acceptance is still open.
 
 Do not mark original Phases 7/11/12 or the full extension accepted from this local implementation cycle. Continue remaining code work from this checklist without inventing phase totals.
+

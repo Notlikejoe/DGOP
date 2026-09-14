@@ -39,6 +39,7 @@ interface DirectoryUser {
   expectedRole?: boolean;
 }
 interface IntakeLookups {
+  canCreate: boolean;
   ready: boolean;
   missingLists: string[];
   lists: Record<string, { listCode: string; versionId: string; values: ReferenceValue[] }>;
@@ -148,8 +149,8 @@ export class AiUseCasesPage implements OnInit {
   protected readonly attachmentInput = signal('');
   protected readonly requiredTotal = 26;
   protected readonly isReadOnly = computed(() => {
-    const workflow = this.selected()?.workflowCase;
-    return !!workflow && workflow.status !== 'awaiting_information';
+    const item = this.selected();
+    return !this.lookups()?.canCreate || item?.requesterUserId !== this.auth.currentUser()?.id || !!item?.workflowCase && item.workflowCase.status !== 'awaiting_information';
   });
   protected readonly completedRequired = computed(() => {
     let completed = 0;
@@ -200,7 +201,7 @@ export class AiUseCasesPage implements OnInit {
   }
 
   protected async createDraft(): Promise<void> {
-    if (this.saving()) return;
+    if (this.saving() || !this.lookups()?.canCreate) return;
     this.saving.set(true);
     try {
       const created = await firstValueFrom(this.http.post<AiUseCase>('/api/ai/use-cases', { payload: {} }));
@@ -274,7 +275,9 @@ export class AiUseCasesPage implements OnInit {
   }
 
   protected requesterLabel(): string {
-    return this.auth.currentUser()?.displayName ?? String(this.value('requester') ?? '');
+    if (this.selected()?.requesterUserId === this.auth.currentUser()?.id) return this.auth.currentUser()?.displayName ?? '';
+    const requester = this.lookups()?.executiveSponsors.find(user => user.id === this.value('requester'));
+    return requester ? this.userLabel(requester) : String(this.value('requester') ?? '');
   }
 
   protected addAttachment(): void {

@@ -27,6 +27,18 @@
               <h3>{{ risk.riskRef }} · {{ risk.workflowCase ? t('aiRisk.status.' + risk.workflowCase.status) : '—' }}</h3>
               @for (round of risk.assessments; track round.id) { <div class="journey-round"><strong>{{ round.kind }} · {{ round.round }}</strong><small>{{ round.createdAt | date:'medium' }}</small>
                 @for (decision of round.decisions; track decision.kind) { <p><strong>{{ decision.actorRoleCode }} · {{ decision.decision }}</strong><small>{{ decision.createdAt | date:'medium' }}</small>{{ decision.justification }}</p> }</div> }
+              @if (row.operationalStatusCode) { <p><strong>{{ t('aiJourney.operational.' + row.operationalStatusCode) }}</strong></p> }
+              @if (risk.authorityReversals.length) { <h3>{{ t('aiMonitoring.reverse') }}</h3>
+                @for (reversal of risk.authorityReversals; track reversal.id) { <div class="journey-round"><strong>{{ reversal.actorRoleCode }} · {{ t('aiDashboard.round') }} {{ reversal.reassessment.inherentRound }}</strong><small>{{ reversal.createdAt | date:'medium' }}</small><p>{{ reversal.justification }}</p></div> }
+              }
+              @for (response of risk.responses; track response.id) {
+                @if (response.strategyEvents.length) { <h3>{{ response.strategyCode }} · {{ t('aiDashboard.round') }} {{ response.round }}</h3>
+                  @for (event of response.strategyEvents; track event.id) { <div class="journey-round"><strong>{{ event.actorRoleCode }} · {{ t('aiStrategy.' + event.kind) }}</strong><small>{{ event.createdAt | date:'medium' }}</small><p>{{ t('aiStrategy.' + event.outcome) }} · {{ event.justification }}</p></div> }
+                }
+              }
+              @if (risk.auditEvents.length) { <h3>{{ t('aiJourney.audit') }}</h3>
+                @for (event of risk.auditEvents; track event.id) { <p>{{ event.action }}<small>{{ event.createdAt | date:'medium' }}</small></p> }
+              }
               <h3>{{ t('aiJourney.actions') }}</h3>
               @for (action of risk.actions; track action.actionRef) { <p>{{ action.actionRef }} · {{ action.title }} · {{ action.progress[0]?.completionPct ?? 0 }}%</p> }
               <h3>{{ t('aiJourney.reviews') }}</h3>

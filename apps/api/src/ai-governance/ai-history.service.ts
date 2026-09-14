@@ -29,6 +29,14 @@ export class AiHistoryService {
             select: { round: true, result: true, createdAt: true } },
           risks: { where: access.where, orderBy: { createdAt: 'asc' }, select: {
             id: true, riskRef: true, title: true,
+            authorityReversals: { orderBy: { createdAt: 'desc' }, take: 20, select: {
+              id: true, actorRoleCode: true, previousAuthorityLevel: true, authorityLevel: true,
+              justification: true, evidenceIds: true, createdAt: true,
+              reassessment: { select: { inherentRound: true } } } },
+            responses: { orderBy: { round: 'desc' }, take: 20, select: { id: true, round: true, strategyCode: true,
+              strategyEvents: { orderBy: { round: 'asc' }, take: 50, select: {
+                id: true, kind: true, outcome: true, actorRoleCode: true, justification: true,
+                evidenceIds: true, createdAt: true } } } },
             workflowCase: { select: { status: true } },
             assessments: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: {
               id: true, kind: true, round: true, result: true, createdAt: true,
@@ -42,13 +50,22 @@ export class AiHistoryService {
               cancellation: { select: { createdAt: true } } } },
           } },
         } });
+      const riskIds = rows.flatMap(row => row.risks.map(risk => risk.id));
+      // Only the scoped risk's action/date trail; never global actors, metadata or audit hashes.
+      const auditEvents = riskIds.length ? await tx.$queryRaw<Array<{ id: string; action: string; entityId: string; createdAt: Date }>>`
+        SELECT id, action, "entityId", "createdAt" FROM (
+          SELECT id, action, "entityId", "createdAt", row_number() OVER (PARTITION BY "entityId" ORDER BY "createdAt" DESC, id DESC) AS rn
+          FROM audit_logs WHERE "entityType"='ai_risk' AND "entityId" IN (${Prisma.join(riskIds)})
+        ) scoped WHERE rn<=20 ORDER BY "createdAt" DESC, id DESC` : [];
+      const journeys = rows.map(row => ({ ...row, risks: row.risks.map(risk => ({ ...risk,
+        auditEvents: auditEvents.filter(event => event.entityId === risk.id).map(({ id, action, createdAt }) => ({ id, action, createdAt })) })) }));
       let demoMode = false;
       try {
         const db = new URL(process.env.DATABASE_URL ?? '');
         demoMode = process.env.DGOP_AI_DEMO_MODE === 'true' && process.env.NODE_ENV === 'development'
           && db.hostname === '127.0.0.1' && /^\/dgop_ai_preview_\d+$/.test(db.pathname);
       } catch { /* Invalid configuration never enables demonstration labels. */ }
-      return { rows, total, page, pageSize, demoMode, readOnly: true };
+      return { rows: journeys, total, page, pageSize, demoMode, readOnly: true, historyLimits: { reversals: 20, responses: 20, eventsPerResponse: 50, auditEvents: 20 } };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15000 });
   }
 }

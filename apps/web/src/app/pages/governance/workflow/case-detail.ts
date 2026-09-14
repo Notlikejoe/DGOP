@@ -63,8 +63,11 @@ export class WorkflowCasePage implements OnInit {
     });
   }
 
-  protected get canEdit(): boolean { return this.auth.hasPermission('workflow_cases.edit'); }
-  protected get canAddTask(): boolean { return this.auth.hasPermission('workflow_tasks.create'); }
+  protected get governedAi(): boolean { return ['AIUC','AIRS'].includes(this.wfCase()?.type ?? ''); }
+  protected get aiWorkRoute(): string { return this.wfCase()?.type === 'AIUC' ? '/governance/ai-review'
+    : this.wfCase()?.tasks.some(t => t.templateStage?.code === 'airs-annual-review') ? '/governance/ai-reviews' : '/governance/ai-risks'; }
+  protected get canEdit(): boolean { return !this.governedAi && this.auth.hasPermission('workflow_cases.edit'); }
+  protected get canAddTask(): boolean { return !this.governedAi && this.auth.hasPermission('workflow_tasks.create'); }
   private get isAdmin(): boolean { return this.auth.hasAnyRole(['system_admin', 'dmo_admin']); }
 
   protected load(): void {
@@ -145,6 +148,7 @@ export class WorkflowCasePage implements OnInit {
 
   /** A task can be decided by its assignee or an admin while still open. */
   protected canDecide(task: Task): boolean {
+    if (this.governedAi) return false;
     if (task.status === 'completed' || task.status === 'cancelled') return false;
     return this.isAdmin || task.assigneeUserId === this.auth.currentUser()?.id;
   }

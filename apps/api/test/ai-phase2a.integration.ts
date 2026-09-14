@@ -1,3 +1,4 @@
+import { testAiSharedOperational } from './ai-shared-operational.integration';
 import { testAuthorityStrategy } from './ai-authority-strategy.integration';
 import { testAiHistory } from './ai-history.integration';
 import assert from 'node:assert/strict';
@@ -796,6 +797,7 @@ export async function testPhase2A(db: PrismaClient) {
   await testPhase3B(db, { riskId: handedOver.id, riskOwnerId: riskOwner.id, useCaseOwnerId: owner.id, otherRiskOwnerId: otherRiskOwner.id,
     privacyId: privacyReviewer.id, securityId: securityReviewer.id, auditorId: auditor.id, officerId: officer.id });
   await testAuthorityStrategy(db,{riskId:handedOver.id,riskOwnerId:riskOwner.id,officerId:officer.id,auditorId:auditor.id});
+  await testAiSharedOperational(db,officer.id,riskOwner.id);
   await testAiHistory(db, officer.id, riskOwner.id, handedOver.useCaseId);
   console.log('Phase 2/3A integration passed: AIUC reviews/decisions/asset handoff; scoped risk ownership and reassignment, causal validation, published intake snapshots, audit rollback, exactly-one AIR allocation/assessment task and HTTP authorization.');
 }

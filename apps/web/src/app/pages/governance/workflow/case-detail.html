@@ -10,6 +10,7 @@
       }
     </div>
     <div class="header-actions">
+      @if (governedAi) { <a class="ds-btn ds-btn--primary" [routerLink]="aiWorkRoute">{{ t('aiJourney.openGoverned') }}</a> }
       <button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button>
       @if (canSubmit()) {
         <button type="button" class="ds-btn ds-btn--primary" (click)="submitCase()">{{ t('wf.submitCase') }}</button>
@@ -35,6 +36,8 @@
       <div class="ds-card">
         <h2 class="card-title">{{ t('wf.overview') }}</h2>
         <dl class="meta">
+          @if (c.aiGovernance?.severityCode) { <dt>{{ t('aiJourney.severity') }}</dt><dd><app-status-chip kind="info" [label]="c.aiGovernance!.severityCode!" /></dd> }
+          @if (c.aiGovernance?.operationalStatusCode) { <dt>{{ t('aiJourney.operationalStatus') }}</dt><dd>{{ t('aiJourney.operational.' + c.aiGovernance!.operationalStatusCode) }}</dd> }
           <dt>{{ t('wf.col.status') }}</dt>
           <dd>
             <app-status-chip [kind]="caseKind(c.status)" [label]="t('case.' + c.status)" />

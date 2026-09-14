@@ -259,6 +259,8 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     return {
       AND: [
         this.notificationRecipientWhere(user),
+        { OR: [{ sourceType: null }, { sourceType: { not: 'ai_risk_strategy' } },
+          { assigneeUserId: null }, { assigneeUserId: user.id }] },
         this.workflowLinkScopeWhere(assetIds, user),
       ],
     };
@@ -376,6 +378,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     emailTo: string | null;
     dedupeKey: string | null;
   }> {
+    if (dto.sourceType === 'ai_risk_strategy') throw new BadRequestException('AI operational notifications are created by their governed strategy outcome');
     let targetRoleCode = this.cleanOptional(dto.targetRoleCode);
     let assigneeUserId = this.cleanOptional(dto.assigneeUserId);
     let emailTo = this.cleanOptional(dto.emailTo);
@@ -2312,6 +2315,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       },
     });
     if (!row) throw new NotFoundException('governance_escalation not found');
+    if (row.sourceType === 'ai_risk_strategy') throw new ConflictException('Use the assigned AI strategy council action to change this escalation');
     const updated = await this.prisma.governanceEscalation.update({
       where: { id },
       data: {

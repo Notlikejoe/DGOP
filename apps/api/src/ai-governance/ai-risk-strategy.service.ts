@@ -112,8 +112,22 @@ export class AiRiskStrategyService {
         await this.routing.openResponseGate(tx,g.risk.workflowCase!.id,g.assessment!.id,g.adoption!.id,g.risk.riskRef!,g.risk.owner!.userId!,now,g.response!.id);
       }
       if((await tx.aiRisk.updateMany({where:{id,version:dto.expectedVersion},data:{version:{increment:1}}})).count!==1)throw new ConflictException('AI risk changed; reload');
+      const notificationIds:string[]=[];
+      await tx.governanceNotification.updateMany({where:{sourceType:'ai_risk_strategy',sourceId:g.response!.id,status:'unread'},data:{status:'archived'}});
+      const nextTasks=await tx.workflowTask.findMany({where:{caseId:g.risk.workflowCase!.id,status:'pending'},select:{id:true,assigneeRoleCode:true,assigneeUserId:true}});
+      const targets=dto.action==='close'?[{id:g.task!.id,assigneeRoleCode:'AI_RISK_OWNER',assigneeUserId:g.risk.owner!.userId!}]:nextTasks;
+      for(const target of targets){
+        if(!target.assigneeRoleCode&&!target.assigneeUserId)continue;
+        const n=await tx.governanceNotification.create({data:{dedupeKey:`ai-strategy:${event.id}:${target.id}`,title:`${g.risk.riskRef} · AI operational outcome / نتيجة تشغيلية للذكاء الاصطناعي`,
+          message:`${kind} · ${outcome}. Review the linked AI risk and assigned governance task.\nراجع خطر الذكاء الاصطناعي والمهمة المسندة للاطلاع على النتيجة المحكومة.`,
+          severity:dto.action==='open-escalation'||dto.action==='advance'?'warning':'info',sourceType:'ai_risk_strategy',sourceId:g.response!.id,
+          targetRoleCode:target.assigneeRoleCode,assigneeUserId:target.assigneeUserId,workflowCaseId:g.risk.workflowCase!.id,workflowTaskId:target.id,createdBy:userId}});
+        notificationIds.push(n.id);
+        await tx.governanceNotificationDeliveryAttempt.create({data:{notificationId:n.id,channel:'in_app',status:'planned',target:target.assigneeUserId??target.assigneeRoleCode!,
+          payloadJson:{eventId:event.id,responseId:g.response!.id,riskRef:g.risk.riskRef,kind,outcome,locale:'en/ar',externalDelivery:false}}});
+      }
       await tx.workflowEvent.create({data:{caseId:g.risk.workflowCase!.id,taskId:g.task!.id,actor:userId,action:`airs.strategy.${kind}.${outcome}`,comment:dto.justification.trim()}});
-      await this.audit.logRequired({actor:userId,action:`airs.strategy.${kind}`,entityType:'ai_risk',entityId:id,metadata:{eventId:event.id,responseId:g.response!.id,outcome,evidenceIds,justification:dto.justification.trim(),clientIp:clientIp??null}},tx);
+      await this.audit.logRequired({actor:userId,action:`airs.strategy.${kind}`,entityType:'ai_risk',entityId:id,metadata:{eventId:event.id,responseId:g.response!.id,outcome,evidenceIds,notificationIds,justification:dto.justification.trim(),clientIp:clientIp??null}},tx);
       return {id,version:dto.expectedVersion+1,eventId:event.id};
     },options);
   }

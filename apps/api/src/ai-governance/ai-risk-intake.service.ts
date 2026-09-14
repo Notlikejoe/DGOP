@@ -21,7 +21,7 @@ export const riskSelect = {
   id: true, riskRef: true, version: true, title: true, cause: true, event: true, effect: true,
   ownerPersonId: true, intakeData: true, handoffPayload: true, aiucHandoffSourceId: true,
   owner: { select: { id: true, userId: true, fullNameEn: true, fullNameAr: true } },
-  useCase: { select: { id: true, useCaseRef: true, name: true, assetId: true, organizationUnitId: true,
+  useCase: { select: { id: true, useCaseRef: true, name: true, operationalStatusCode: true, assetId: true, organizationUnitId: true,
     owner: { select: { userId: true } }, organizationUnit: { select: { nameEn: true, nameAr: true } }, asset: { select: { code: true, nameEn: true, nameAr: true } } } },
   obligations: { where: { deletedAt: null }, select: { id: true, description: true } },
   assessments: { where: { kind: 'inherent' }, orderBy: { round: 'desc' }, take: 20,
@@ -88,7 +88,7 @@ export class AiRiskIntakeService {
   }
 
   private decorate(item: Prisma.AiRiskGetPayload<{ select: typeof riskSelect }>, actor: { id: string; roles: string[] }, permissions: Set<string>) {
-    const draft = item.workflowCase?.status === 'draft' && !item.riskRef && !actor.roles.includes('auditor');
+    const draft = !['SUSPENDED','ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '') && item.workflowCase?.status === 'draft' && !item.riskRef && !actor.roles.includes('auditor');
     return { ...item, canAssignOwner: draft && actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs'),
       canEdit: draft && item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs') };
   }
@@ -129,6 +129,7 @@ export class AiRiskIntakeService {
     const visibility = await this.visibility(userId, tx);
     const item = await tx.aiRisk.findFirst({ where: { AND: [visibility.where, { id }] }, select: riskSelect });
     if (!item || item.workflowCase?.status !== 'draft' || item.riskRef) throw new NotFoundException('AI risk draft not available');
+    if (['SUSPENDED','ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '')) throw new ConflictException('New risk intake is paused because the linked AI use case is suspended or archived');
     if (item.version !== version) throw new ConflictException('AI risk changed; reload before editing');
     if (ownerOnly && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id)) throw new ForbiddenException('Only the assigned Risk Owner can edit or submit this intake');
     return { actor, item };

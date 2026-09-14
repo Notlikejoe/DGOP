@@ -15,6 +15,11 @@ interface Journey { id: string; useCaseRef: string; name: string; operationalSta
   assessments: Array<{ round: number; result: Record<string, unknown>; createdAt: string }>;
   risks: Array<{ id: string; riskRef: string; title: string; workflowCase: { status: string } | null; assessments: Round[];
     actions: Array<{ actionRef: string; title: string; progress: Array<{ completionPct: number }> }>;
+    authorityReversals: Array<{ id: string; actorRoleCode: string; authorityLevel: number; previousAuthorityLevel: number;
+      justification: string; createdAt: string; reassessment: { inherentRound: number } }>;
+    responses: Array<{ id: string; round: number; strategyCode: string; strategyEvents: Array<{
+      id: string; kind: string; outcome: string; actorRoleCode: string; justification: string; createdAt: string }> }>;
+    auditEvents: Array<{ id: string; action: string; createdAt: string }>;
     reviews: Array<{ id: string; dueAt: string; bandCode: string; completion: { completedAt: string } | null; cancellation: unknown }> }> }
 interface History { rows: Journey[]; total: number; page: number; pageSize: number; demoMode: boolean; readOnly: boolean }
 

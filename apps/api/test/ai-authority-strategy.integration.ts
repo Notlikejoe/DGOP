@@ -51,14 +51,19 @@ export async function testAuthorityStrategy(db:PrismaClient,f:{riskId:string;ris
   const liveAudit=app.get(AuditService),saved=liveAudit.logRequired;
   liveAudit.logRequired=async()=>{throw new Error('Injected operational audit failure');};
   const before=await strategy.context(f.officerId,avoid.id);
+  const notificationsBefore=await db.governanceNotification.count({where:{sourceType:'ai_risk_strategy'}});
   await assert.rejects(act(avoid.id,f.officerId,'approve'),/Injected operational audit/);
   liveAudit.logRequired=saved;
   assert.deepEqual(await strategy.context(f.officerId,avoid.id),before);
+  assert.equal(await db.governanceNotification.count({where:{sourceType:'ai_risk_strategy'}}),notificationsBefore,'Required audit rollback also rolls back native notifications');
   await act(avoid.id,f.officerId,'approve');await act(avoid.id,f.officerId,'close');
   assert.equal((await db.workflowCase.findUniqueOrThrow({where:{id:avoid.workflowCaseId!}})).status,'closed');
   assert.equal((await db.aiUseCase.findUniqueOrThrow({where:{id:avoid.useCaseId}})).operationalStatusCode,null);
   assert.equal(await db.aiAssessmentRound.count({where:{riskId:avoid.id,kind:'residual'}}),0);
-  const stop=await source('AVOID');await act(stop.id,f.riskOwnerId,'propose',{avoidanceAction:'stop_use_case',scopeChange:'Entire use case stopped; processing and rollout disabled with evidence'});await act(stop.id,f.officerId,'approve');
+  const stop=await source('AVOID');
+  const pausedCase=await db.workflowCase.create({data:{code:'AIRS-STOP-PAUSED',title:'Pre-existing intake retained after stop',type:'AIRS',status:'draft',createdBy:f.riskOwnerId}});
+  await db.aiRisk.create({data:{useCaseId:stop.useCaseId,workflowCaseId:pausedCase.id,ownerPersonId:baseRisk.ownerPersonId,title:'Retained draft',createdBy:f.riskOwnerId,intakeData:{}}});
+  await act(stop.id,f.riskOwnerId,'propose',{avoidanceAction:'stop_use_case',scopeChange:'Entire use case stopped; processing and rollout disabled with evidence'});await act(stop.id,f.officerId,'approve');
   assert.equal((await strategy.context(f.officerId,stop.id)).canClose,false);await act(stop.id,actors.STEERING_COMMITTEE,'close');
   const stopped=await db.aiUseCase.findUniqueOrThrow({where:{id:stop.useCaseId}});assert.equal(stopped.operationalStatusCode,'ARCHIVED');assert.ok(stopped.operationalStrategyEventId);
   await assert.rejects(db.aiUseCase.update({where:{id:stopped.id},data:{operationalStatusCode:null,operationalStrategyEventId:null,version:{increment:1}}}));
@@ -74,11 +79,11 @@ export async function testAuthorityStrategy(db:PrismaClient,f:{riskId:string;ris
    if(i===1){
     const esc=c.escalation!,task=await db.workflowTask.findFirstOrThrow({where:{caseId:escalated.workflowCaseId!,status:'pending',templateStage:{code:'airs-escalation-gate'}}});
     const prior=c.events.at(-1)!;
-    await db.governanceEscalation.update({where:{id:esc.id},data:{ownerRoleCode:'AI_GOVERNANCE_OFFICER'}});
+    await assert.rejects(db.governanceEscalation.update({where:{id:esc.id},data:{ownerRoleCode:'AI_GOVERNANCE_OFFICER'}}), /latest council event/);
     await db.workflowTask.update({where:{id:task.id},data:{assigneeRoleCode:'AI_GOVERNANCE_OFFICER'}});
     assert.equal((await strategy.context(f.officerId,escalated.id)).canResolveEscalation,false);
     await assert.rejects(db.aiRiskStrategyEvent.create({data:{responseId:prior.responseId,round:prior.round+1,kind:'escalation_outcome',outcome:'advance',taskId:task.id,basisEventId:prior.id,escalationId:esc.id,payload:{councilLevel:esc.level},actorId:f.officerId,actorRoleCode:'AI_GOVERNANCE_OFFICER',justification:'Forged council role must be rejected by database',evidenceIds:[evidence.id]}}));
-    await db.governanceEscalation.update({where:{id:esc.id},data:{ownerRoleCode:council.role}});
+    assert.equal((await db.governanceEscalation.findUniqueOrThrow({where:{id:esc.id}})).ownerRoleCode,council.role);
     await db.workflowTask.update({where:{id:task.id},data:{assigneeRoleCode:council.role}});
    }
    if(i<3){await assert.rejects(act(escalated.id,actors[AI_COUNCILS[i+1].role],'advance'));await act(escalated.id,user,'advance');}

@@ -29,7 +29,8 @@ function run(command, args, env) {
   if (result.status !== 0) {
     // Redact credentials even if a dependency echoes a connection URL.
     const message = `${result.error ?? ''}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-    throw new Error(message.replaceAll(decodeURIComponent(url.password), '[REDACTED]').replaceAll(url.password, '[REDACTED]'));
+    const secrets = [...new Set([decodeURIComponent(url.password), url.password])].filter(Boolean);
+    throw new Error(secrets.reduce((safe, secret) => safe.replaceAll(secret, '[REDACTED]'), message));
   }
   return result.stdout;
 }

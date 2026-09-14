@@ -1491,15 +1491,19 @@
           </ng-template>
           <ng-template #body let-task>
             <tr>
-              <td><div class="inbox-task-cell"><span class="inbox-task-cell__mark"><app-icon name="fileCheck" /></span><span><strong [pTooltip]="task.title" tooltipPosition="top">{{ task.title }}</strong><small>{{ task.type }}</small></span></div></td>
+              <td><div class="inbox-task-cell"><span class="inbox-task-cell__mark"><app-icon name="fileCheck" /></span><span><strong [pTooltip]="task.title" tooltipPosition="top">{{ task.title }}</strong><small>{{ task.type }}</small>@if (task.aiGovernance?.severityCode) { <app-status-chip [kind]="task.aiGovernance.severityCode === 'P1' || task.aiGovernance.severityCode === 'P2' ? 'warning' : 'info'" [label]="t('aiJourney.severity') + ' · ' + task.aiGovernance.severityCode" /> }</span></div></td>
               <td>@if (task.case) { <a class="inbox-case-link" [routerLink]="['/governance/workflow/cases', task.caseId]"><code>{{ task.case.code }}</code><span>{{ task.case.title }}</span></a> } @else { - }</td>
               <td><time [attr.datetime]="task.dueDate || null">{{ fmtDate(task.dueDate) }}</time></td>
               <td><app-status-chip [kind]="slaKind(task.slaStatus)" [label]="t('sla.' + task.slaStatus)" /></td>
               <td class="actions-col"><div class="inbox-actions">
+                @if (task.case?.type === 'AIRS' || task.case?.type === 'AIUC') {
+                  <a class="ds-btn ds-btn--primary" [routerLink]="task.case?.type === 'AIUC' ? '/governance/ai-review' : task.templateStage?.code === 'airs-annual-review' ? '/governance/ai-reviews' : '/governance/ai-risks'">{{ t('aiJourney.openGoverned') }}</a>
+                } @else {
                 <p-button [label]="t('wf.inbox.openWork')" icon="pi pi-pencil" size="small" severity="secondary" [outlined]="true" (onClick)="openTaskWork(task)" />
                 <p-button [label]="t('wf.approve')" icon="pi pi-check" size="small" severity="success" (onClick)="openDecision(task, 'approved')" />
                 <p-button icon="pi pi-ellipsis-v" size="small" severity="secondary" [text]="true" [rounded]="true" [ariaLabel]="t('wf.returnForClarification')" [pTooltip]="t('wf.inbox.moreActions')" tooltipPosition="top" (onClick)="openDecision(task, 'return_for_clarification')" />
                 <p-button icon="pi pi-times" size="small" severity="danger" [text]="true" [rounded]="true" [ariaLabel]="t('wf.reject')" [pTooltip]="t('wf.reject')" tooltipPosition="top" (onClick)="openDecision(task, 'rejected')" />
+                }
               </div></td>
             </tr>
           </ng-template>

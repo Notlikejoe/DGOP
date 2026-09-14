@@ -23,7 +23,7 @@ interface RiskItem {
   id: string; riskRef: string | null; version: number; title: string | null; cause: string | null; event: string | null; effect: string | null;
   canEdit: boolean; canAssignOwner: boolean; intakeData: Record<string, unknown> | null; handoffPayload: Record<string, unknown> | null;
   owner: { userId: string; fullNameEn: string; fullNameAr: string } | null;
-  useCase: { useCaseRef: string; name: string; asset: { code: string; nameEn: string; nameAr: string }; organizationUnit: { nameEn: string; nameAr: string } };
+  useCase: { useCaseRef: string; name: string; operationalStatusCode: string | null; asset: { code: string; nameEn: string; nameAr: string }; organizationUnit: { nameEn: string; nameAr: string } };
   obligations: Array<{ id: string; description: string }>;
   workflowCase: { id: string; code: string; status: string };
 }

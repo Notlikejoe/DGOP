@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
@@ -26,6 +27,7 @@ import {
   GovernanceNotificationSeverity,
   WorkflowSlaBreachPolicy,
 } from '@prisma/client';
+import { AiWorkflowProjectionService } from '../ai-governance/ai-workflow-projection.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
@@ -309,6 +311,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     private readonly scope: ScopeService,
     private readonly assignments: AssignmentsService,
     private readonly integrations: IntegrationsService,
+    @Optional() private readonly aiProjection?: AiWorkflowProjectionService,
   ) {
     const configured = process.env.WORKFLOW_ATTACHMENT_STORAGE_DIR || 'storage/workflow-attachments';
     this.attachmentStorageDir = isAbsolute(configured) ? resolve(configured) : resolve(process.cwd(), configured);
@@ -4319,7 +4322,9 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       }),
       this.prisma.workflowCase.count({ where }),
     ]);
+    const ai = viewer && this.aiProjection ? await this.aiProjection.forCases(viewer.id, rows.filter(c => c.type === 'AIRS').map(c => c.id)) : new Map();
     const data = rows.map((c) => ({
+        ...(ai.has(c.id) ? { aiGovernance: ai.get(c.id) } : {}),
         ...c,
         tasks: c.tasks.map((t) => this.withSla(t)),
         openTasks: c.tasks.filter((t) => t.status === TaskStatus.pending || t.status === TaskStatus.in_progress).length,
@@ -4339,6 +4344,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     });
     return {
       ...wfCase,
+      ...(viewer && this.aiProjection && wfCase.type === 'AIRS' ? { aiGovernance: (await this.aiProjection.forCases(viewer.id, [id])).get(id) } : {}),
       tasks: wfCase.tasks.map((t) => this.withSla(t)),
       events,
     };
@@ -5831,7 +5837,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       skip,
       take,
     });
-    const data = rows.map((t) => this.withSla(t));
+    const ai = this.aiProjection ? await this.aiProjection.forCases(user.id, [...new Set(rows.filter(t => t.case.type === 'AIRS').map(t => t.caseId))]) : new Map();
+    const data = rows.map((t) => ({ ...this.withSla(t), ...(ai.has(t.caseId) ? { aiGovernance: ai.get(t.caseId) } : {}) }));
     if (!page) return data;
     const total = await this.prisma.workflowTask.count({ where });
     return toPaged(data, total, page);
@@ -5847,7 +5854,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     });
     if (!task) throw new NotFoundException('workflow task not found');
     await this.assertCaseVisible(roleCodes, task.case, viewer);
-    return this.withSla(task);
+    return { ...this.withSla(task), ...(viewer && this.aiProjection && task.case.type === 'AIRS' ? { aiGovernance: (await this.aiProjection.forCases(viewer.id, [task.caseId])).get(task.caseId) } : {}) };
   }
 
   private caseStatusForActiveStage(stage: WorkflowStageWithRoute): CaseStatus {

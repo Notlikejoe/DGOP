@@ -1,3 +1,4 @@
+import { AiGovernanceModule } from '../ai-governance/ai-governance.module';
 import { Module } from '@nestjs/common';
 import { AccessModule } from '../access/access.module';
 import { OwnershipModule } from '../ownership/ownership.module';
@@ -6,7 +7,7 @@ import { WorkflowController } from './workflow.controller';
 import { WorkflowService } from './workflow.service';
 
 @Module({
-  imports: [AccessModule, OwnershipModule, IntegrationsModule],
+  imports: [AiGovernanceModule, AccessModule, OwnershipModule, IntegrationsModule],
   controllers: [WorkflowController],
   providers: [WorkflowService],
   exports: [WorkflowService],

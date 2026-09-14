@@ -4,7 +4,7 @@ import { aiDutyViolation } from '../src/ai-governance/ai-authorization.service';
 import { AI_REFERENCE_CODES, canonicalAiReference } from '../src/master-data/ai-reference.catalog';
 import { AIRS_WORKFLOW_TEMPLATE } from '../src/workflow/workflow.logic';
 import { validateWorkflowRoute } from '../src/workflow/workflow.bpmn';
-assert.equal(AI_NEW_ROLES.length,10); assert.equal(new Set(AI_PERMISSIONS).size,27);
+assert.equal(AI_NEW_ROLES.length,10); assert.equal(new Set(AI_PERMISSIONS).size,29);
 assert.equal(aiRoleMayHold('AI_WORKING_GROUP','aiuc.asset.register'),true);
 assert.equal(aiRoleMayHold('data_owner','aiuc.asset.approve'),true);
 assert.equal(aiRoleMayHold('AI_USECASE_OWNER','aiuc.asset.approve'),false);
@@ -37,3 +37,5 @@ const route = validateWorkflowRoute(AIRS_WORKFLOW_TEMPLATE.stages.map((stage, in
     decision: transition.decision ?? null, isDefaultPath: !!transition.isDefaultPath, isHappyPath: transition.isHappyPath ?? true })));
 assert.notEqual(route.status, 'blocked', route.errors.join('; '));
 console.log('AI security contracts passed: exact catalog, existing-role mappings, authority and SoD rules.');
+
+for (const permission of ['airs.risk.reverse','airs.strategy.decide'] as const) { assert.equal(aiRoleMayHold('executive',permission),false); assert.equal(aiRoleMayHold('auditor',permission),false); assert.equal(aiRoleMayHold('AI_RISK_OWNER',permission),false); assert.equal(aiRoleMayHold('AI_ETHICS_COMMITTEE',permission),true); }

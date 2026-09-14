@@ -1,3 +1,5 @@
+import { AiRiskStrategyService } from './ai-risk-strategy.service';
+import { AiRiskStrategyController } from './ai-risk-strategy.controller';
 import { AiHistoryService } from './ai-history.service';
 import { AiHistoryController } from './ai-history.controller';
 import { AiCategoryControlsService } from './ai-category-controls.service';
@@ -52,8 +54,8 @@ import { AiRiskReviewController } from './ai-risk-review.controller';
 
 @Module({
   imports: [AccessModule],
-  controllers: [AiHistoryController, AiCycleAController, AiLibrarySourceController, AiControlLinksController, AiAssetRiskController, AiSourceCorrectionsController, AiMigrationPreviewController, AiRiskLibraryController, AiDashboardReportsController, AiDashboardController, AiReviewOperationsController, AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController, AiRiskReviewController],
-  providers: [AiHistoryService, AiCategoryControlsService, AiMigrationPilotService, AiSourceNativeService, AiLibrarySourceService, AiControlDomainsService, AiLibraryControlLinksService, AiAssetRiskService, AiSourceCorrectionsService, AiMigrationPreviewService, AiRiskLibraryService, AiRiskInitiationService, AiDashboardReportsService, AiDashboardService, AiReviewDisplayService, AiMonthlyReviewService, AiAnnualReviewService, AiReviewReportService, AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService, AiTreatmentService, AiResidualAssessmentService, AiResidualDecisionService, AiRiskReviewService],
+  controllers: [AiRiskStrategyController, AiHistoryController, AiCycleAController, AiLibrarySourceController, AiControlLinksController, AiAssetRiskController, AiSourceCorrectionsController, AiMigrationPreviewController, AiRiskLibraryController, AiDashboardReportsController, AiDashboardController, AiReviewOperationsController, AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController, AiRiskReviewController],
+  providers: [AiRiskStrategyService, AiHistoryService, AiCategoryControlsService, AiMigrationPilotService, AiSourceNativeService, AiLibrarySourceService, AiControlDomainsService, AiLibraryControlLinksService, AiAssetRiskService, AiSourceCorrectionsService, AiMigrationPreviewService, AiRiskLibraryService, AiRiskInitiationService, AiDashboardReportsService, AiDashboardService, AiReviewDisplayService, AiMonthlyReviewService, AiAnnualReviewService, AiReviewReportService, AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService, AiTreatmentService, AiResidualAssessmentService, AiResidualDecisionService, AiRiskReviewService],
   exports: [AiDashboardReportsService, AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiRiskReviewService],
 })
 export class AiGovernanceModule {}

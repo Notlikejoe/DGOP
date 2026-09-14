@@ -64,7 +64,7 @@ export class AiRiskIntakeService {
   async visibility(userId: string, tx: Prisma.TransactionClient = this.prisma) {
     const actor = await this.authorization.authorizeAny(userId, VIEW, tx);
     const candidates = [...VIEW, 'case.create.airs', 'airs.risk.assess', 'case.approve.airs',
-      'airs.risk.accept.low', 'airs.risk.accept.medium', 'airs.risk.accept.high', 'airs.cadence.manage'] as AiPermission[];
+      'airs.risk.accept.low', 'airs.risk.accept.medium', 'airs.risk.accept.high', 'airs.cadence.manage', 'airs.risk.reverse', 'airs.strategy.decide'] as AiPermission[];
     const grants = await tx.rolePermission.findMany({ where: { role: { is: { code: { in: actor.roles }, isActive: true, deletedAt: null } },
       permission: { is: { OR: candidates.map(splitAiPermission) } } }, include: { permission: true, role: { select: { code: true } } } });
     const permissions = new Set(grants.filter(grant => aiRoleMayHold(grant.role.code, `${grant.permission.resource}.${grant.permission.action}` as AiPermission))
@@ -82,7 +82,9 @@ export class AiRiskIntakeService {
           { workflowCase: { is: { tasks: { some: { OR: [{ assigneeUserId: actor.id },
             { assigneeUserId: null, assigneeRoleCode: { in: actor.roles }, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } }] } } } } }],
       }) };
-    return { actor, permissions, where };
+    const permissionRoles:Record<string,string[]>={};
+    for(const grant of grants){const code=grant.permission.resource+'.'+grant.permission.action;if(aiRoleMayHold(grant.role.code,code as AiPermission))(permissionRoles[code]??=[]).push(grant.role.code);}
+    return { actor, permissions, permissionRoles, where };
   }
 
   private decorate(item: Prisma.AiRiskGetPayload<{ select: typeof riskSelect }>, actor: { id: string; roles: string[] }, permissions: Set<string>) {

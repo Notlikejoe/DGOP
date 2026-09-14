@@ -1042,6 +1042,7 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  aiStrategyEvents AiRiskStrategyEvent[]
   reassessmentTrigger AiReassessmentTrigger?
   aiAnnualReview AiAnnualReview?
   reassessment AiRiskReassessment?
@@ -4512,6 +4513,7 @@ model GovernanceNotificationDeliveryAttempt {
 }
 
 model GovernanceEscalation {
+  aiStrategyEvents AiRiskStrategyEvent[]
   aiReviewSignals AiRiskReviewSignal[]
   id             String                     @id @default(uuid())
   dedupeKey      String?                    @unique
@@ -4969,8 +4971,10 @@ enum AiAssessmentKind {
 /// Full 28-field intake lives in append-only, schema-versioned revisions.
 /// Register projections/remaining business fields are added in the AIRS phase.
 model AiUseCase {
+  operationalStrategyEvent AiRiskStrategyEvent? @relation(fields:[operationalStrategyEventId],references:[id],onDelete:Restrict,onUpdate:NoAction)
  sourceDraft AiSourceNativeDraft?
   operationalStatusCode String?
+  operationalStrategyEventId String?
   operationalDecisionId String?
   operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict)
   id                 String                 @id @default(uuid())
@@ -5022,6 +5026,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  authorityReversals AiRiskAuthorityReversal[]
  sourceDraft AiSourceNativeDraft?
   suggestedControlPins Json?
   controlPins Json?
@@ -5091,6 +5096,7 @@ model AiAssessmentRound {
 
 /// Append-only specialist review/adoption evidence; calculated rounds remain unchanged.
 model AiRiskAssessmentDecision {
+  authorityReversal AiRiskAuthorityReversal?
   reassessment AiRiskReassessment?
   reviews AiRiskReview[]
   restrictedUseCases AiUseCase[]
@@ -5179,6 +5185,7 @@ model AiRiskReviewSignal {
 
 /// Procedure-triggered fresh assessment, never a mutation of accepted history.
 model AiRiskReassessment {
+  authorityReversal AiRiskAuthorityReversal?
   additionalTriggers AiReassessmentTrigger[]
   id String @id @default(uuid())
   riskId String
@@ -5212,6 +5219,7 @@ model AiRiskReviewCancellation {
 
 /// Immutable response proposals tied to an adopted inherent assessment.
 model AiRiskResponse {
+  strategyEvents AiRiskStrategyEvent[]
   actions AiTreatmentAction[]
   plans AiTreatmentPlan[]
   id String @id @default(uuid())
@@ -5660,4 +5668,50 @@ model AiMigrationPilotReview {
  evidenceIds Json
  createdAt DateTime @default(now())
  @@map("ai_migration_pilot_reviews")
+}
+
+/// Immutable authority-led reopening; foreign-key provenance is enforced in SQL.
+model AiRiskAuthorityReversal {
+  id String @id @default(uuid())
+  riskId String
+  previousDecisionId String @unique
+  reassessmentId String @unique
+  actorId String
+  actorRoleCode String
+  authorityLevel Int
+  previousAuthorityLevel Int
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  risk AiRisk @relation(fields:[riskId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  previousDecision AiRiskAssessmentDecision @relation(fields:[previousDecisionId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  reassessment AiRiskReassessment @relation(fields:[reassessmentId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  @@index([riskId,createdAt], map:"ai_risk_authority_reversals_riskid_createdat_idx")
+  @@map("ai_risk_authority_reversals")
+}
+/// Append-only operational outcomes; scores and assessment decisions remain untouched.
+model AiRiskStrategyEvent {
+  id String @id @default(uuid())
+  responseId String
+  round Int
+  kind String
+  outcome String
+  taskId String
+  basisEventId String?
+  escalationId String?
+  payload Json
+  actorId String
+  actorRoleCode String
+  justification String
+  evidenceIds Json
+  createdAt DateTime @default(now())
+  response AiRiskResponse @relation(fields:[responseId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  task WorkflowTask @relation(fields:[taskId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  basisEvent AiRiskStrategyEvent? @relation("AiStrategyEventBasis",fields:[basisEventId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  subsequentEvents AiRiskStrategyEvent[] @relation("AiStrategyEventBasis")
+  escalation GovernanceEscalation? @relation(fields:[escalationId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+  stoppedUseCases AiUseCase[]
+  @@unique([responseId,round])
+  @@index([taskId], map:"ai_risk_strategy_events_taskid_idx")
+  @@map("ai_risk_strategy_events")
 }

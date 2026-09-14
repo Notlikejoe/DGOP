@@ -46,6 +46,9 @@ export const AI_PERMISSION_ROLES = {
   'airs.risk.accept.high': [ET],
   'airs.library.import': ['dmo_admin'],
   'airs.cadence.manage': [WG,RAIO],
+  // Purpose-specific decisions; case visibility alone never grants write authority.
+  'airs.risk.reverse': [RAIO,EC,ET,SC],
+  'airs.strategy.decide': [RAIO,EC,ET,SC],
   'refdata.propose.ai': [RAIO],
   'refdata.approve.ai': [EC],
   'refdata.publish': ['dmo_admin'],

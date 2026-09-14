@@ -1,0 +1,29 @@
+@if(failed()){<section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button class="ds-btn ds-btn--ghost" type="button" (click)="load()">{{ t('crud.retry') }}</button></section>}
+@if(context(); as c){
+ @if(c.strategyCode === 'AVOID' || c.strategyCode === 'ESCALATE'){
+ <section class="assessment-workspace" [attr.aria-busy]="working()">
+  <header class="ds-card assessment-heading"><div><h2>{{ t('aiStrategy.title') }} · {{ c.strategyCode }}</h2><p>{{ t('aiStrategy.help') }}</p></div></header>
+  @if(c.escalation; as escalation){<section class="ds-card decision-card"><strong>{{ escalation.code }} · {{ t('aiStrategy.' + escalation.level) }}</strong><p>{{ escalation.status }}</p></section>}
+  @if(c.canPropose || c.canReview || c.canReturn || c.canClose || c.canOpenEscalation || c.canResolveEscalation){
+  <section class="ds-card decision-card specialist-decision">
+   @if(c.canPropose){
+    <label><span>{{ t('aiStrategy.title') }}</span><select [(ngModel)]="avoidanceAction"><option value="scope_change">{{ t('aiStrategy.scope_change') }}</option><option value="stop_use_case">{{ t('aiStrategy.stop_use_case') }}</option></select></label>
+    <label><span>{{ t('aiStrategy.details') }} *</span><textarea rows="3" maxlength="5000" [(ngModel)]="scopeChange"></textarea></label>
+   }
+   <label><span>{{ t('aiAssessment.justification') }} *</span><textarea rows="3" maxlength="5000" [(ngModel)]="justification"></textarea></label>
+   <label><span>{{ t('aiAdoption.evidence') }} *</span><textarea rows="2" [(ngModel)]="evidence"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label>
+   <div class="decision-actions">
+    @if(c.canPropose){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !scopeChange.trim() || !justification.trim() || !evidence.trim()" (click)="act('propose')">{{ t('aiStrategy.propose') }}</button>}
+    @if(c.canReview){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('approve')">{{ t('aiStrategy.approve') }}</button>}
+    @if(c.canReturn){<button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('return')">{{ t('aiStrategy.return') }}</button>}
+    @if(c.canClose){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('close')">{{ t('aiStrategy.close') }}</button>}
+    @if(c.canOpenEscalation){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('open-escalation')">{{ t('aiStrategy.open-escalation') }}</button>}
+    @if(c.canAdvance){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('advance')">{{ t('aiStrategy.advance') }}</button>}
+    @if(c.canResolveEscalation){<button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('return-for-response')">{{ t('aiStrategy.return-for-response') }}</button>}
+   </div>
+  </section>
+  } @else {<p>{{ t('aiStrategy.awaiting') }}</p>}
+  @if(c.events.length){<section class="ds-card decision-card"><p-table [value]="c.events" [tableStyle]="{'width':'100%','table-layout':'fixed'}"><ng-template #header><tr><th>{{ t('aiStrategy.title') }}</th><th>{{ t('aiAssessment.justification') }}</th><th>{{ t('aiAdoption.evidence') }}</th></tr></ng-template><ng-template #body let-event><tr><td style="overflow-wrap:anywhere">{{ t('aiStrategy.' + event.kind) }}<p>{{ t('aiStrategy.' + event.outcome) }}</p><small>{{ event.actorRoleCode }} · {{ event.createdAt | date:'medium':'+0300' }}</small></td><td style="overflow-wrap:anywhere">{{ event.justification }}<p>{{ event.payload.scopeChange }}</p></td><td style="overflow-wrap:anywhere">{{ event.evidenceIds.join(', ') }}</td></tr></ng-template></p-table></section>}
+ </section>
+ }
+}

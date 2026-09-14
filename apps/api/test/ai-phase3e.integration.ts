@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { testOperationalAlerts } from './ai-operational-alerts.integration';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
@@ -97,6 +98,7 @@ export async function testPhase3E(db: PrismaClient,f:{riskId:string;riskOwnerId:
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/actions`,{method:'POST',headers,body:JSON.stringify({...action(version),actionRef:'ACT-999',completionPct:100,actorId:f.officerId})})).status,400);
   assert.equal((await fetch(`${base}/api/ai/risks/${f.riskId}/actions/${first.id}/progress`,{method:'POST',headers,body:JSON.stringify({expectedVersion:version,completionPct:100,justification:'Injected computed fields',evidenceIds:[evidence.id],closureDate:'2026-01-01',planApproverId:f.riskOwnerId})})).status,400);
  }finally{await app.close();}
+ await testOperationalAlerts(db,f.riskId,model.id,f.officerId);
  await testPhase3F1(db,f);
  console.log('Phase 3E passed: governed ACT records, date/evidence/executor/scope validation, immutable submitted plans, returns/reference retirement, GEN-28/WF-05/Auditor blocks, required-audit rollback, concurrent exactly-once action/approval, one-to-one assigned tasks with KSA target deadlines and HTTP protection.');
 }

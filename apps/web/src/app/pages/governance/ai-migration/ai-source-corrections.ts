@@ -1,6 +1,7 @@
+import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { AiNativePilot } from './ai-native-pilot';
 import { ChangeDetectionStrategy, Component, computed, inject, Input, OnChanges, signal } from '@angular/core';
-import { DatePipe, JsonPipe } from '@angular/common';
+import { JsonPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -13,7 +14,7 @@ interface Rule {column:string;kind:string;listCode?:string}
 interface Version {id:string;round:number;digest:string;proposedBy:string;justification:string;entries:Binding[];review:{outcome:string;justification:string}|null;snapshot:{id:string;digest:string}|null}
 interface Control {id:string;entryId:string;sourceRowKey:string;round:number;digest:string;entry:{controlCode:string};content:Record<string,string>;dimensionPins:Array<{code:string}>;publication:unknown}
 interface Context {canPropose:boolean;canReview:boolean;latestRound:number;rules:Record<string,Record<string,Rule>>;rows:Array<{key:string;kind:string;sourceRef:string}>;references:Array<{listCode:string;versionId:string;values:Array<{code:string;labelEn:string;labelAr:string}>}>;people:Array<{id:string;labels:string[]}>;units:Array<{id:string;labels:string[]}>;dimensions:Array<{code:string;labelEn:string;labelAr:string}>;controls:Control[];selectableControls:Control[];versions:Version[]}
-@Component({selector:'app-ai-source-corrections',standalone:true,imports:[AiNativePilot,DatePipe,JsonPipe,FormsModule,TableModule],templateUrl:'./ai-source-corrections.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-migration.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-source-corrections',standalone:true,imports:[AiNativePilot,DualDatePipe,JsonPipe,FormsModule,TableModule],templateUrl:'./ai-source-corrections.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-migration.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiSourceCorrections implements OnChanges {
  @Input({required:true}) previewId='';private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
  protected readonly context=signal<Context|null>(null);protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly working=signal(false);protected readonly tab=signal('bindings');

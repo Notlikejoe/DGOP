@@ -685,6 +685,7 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     stage('airs-monitoring', 'Risk monitoring preparation', 'إعداد متابعة الخطر', 'Register the next governed review cadence; authority decisions are already recorded.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 5),
     stage('airs-annual-review', 'Annual comprehensive AI review', 'المراجعة الشاملة السنوية للذكاء الاصطناعي', 'Review organization-register trends, control effectiveness and non-conformities with evidence.', 'review', 'review', 'AI_GOVERNANCE_OFFICER', 0),
     stage('airs-periodic-review', 'Periodic risk review', 'المراجعة الدورية للخطر', 'Complete the assigned governed review with evidence; retain prior assessment decisions.', 'review', 'review', 'AI_RISK_OWNER', 0),
+    stage('airs-severity-override', 'Independent severity override review', 'مراجعة تعديل الأولوية المستقلة', 'Higher authority reviews an evidenced operational severity proposal; scores and acceptance stay unchanged.', 'decision', 'approval', 'AI_ETHICS_COMMITTEE', 5, { isDecision: true }),
     stage('airs-closure', 'Risk case closure', 'إغلاق حالة الخطر', 'Retain the risk identity and final resolution.', 'closure', 'review', undefined, 0, { isFinal: true }),
   ],
   transitions: [
@@ -730,6 +731,9 @@ export const AIRS_WORKFLOW_TEMPLATE: WorkflowTemplateSeed = {
     link('airs-restrict-critical','airs-residual-assessment','Return for fresh residual assessment','إعادة تقييم الخطر المتبقي','rejected',false),
     link('airs-monitoring', 'airs-annual-review', 'Annual register review', 'المراجعة السنوية للسجل', 'annual'),
     link('airs-annual-review', 'airs-closure', 'Annual review recorded', 'تسجيل المراجعة السنوية'),
+    link('airs-monitoring', 'airs-severity-override', 'Operational severity proposal', 'اقتراح تعديل الأولوية التشغيلية', 'severity_override'),
+    { ...link('airs-severity-override', 'airs-monitoring', 'Independent severity approved', 'اعتماد تعديل الأولوية المستقل', 'approved'), isDefaultPath: true },
+    link('airs-severity-override', 'airs-monitoring', 'Severity proposal returned', 'إعادة مقترح الأولوية', 'rejected'),
     { ...link('airs-monitoring', 'airs-periodic-review', 'Monitoring registered', 'تسجيل المتابعة'), isDefaultPath: true },
     link('airs-periodic-review', 'airs-monitoring', 'Next governed review', 'المراجعة الدورية التالية', 'continue'),
     { ...link('airs-periodic-review', 'airs-closure', 'Monitoring closed', 'إغلاق المتابعة'), isDefaultPath: true },

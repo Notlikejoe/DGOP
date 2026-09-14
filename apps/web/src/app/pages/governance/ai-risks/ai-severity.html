@@ -1,0 +1,20 @@
+@if(failed()){<section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button class="ds-btn ds-btn--ghost" type="button" (click)="load()">{{ t('crud.retry') }}</button></section>}
+@if(context(); as c){
+<section class="assessment-workspace" [attr.aria-busy]="working()">
+ <header class="ds-card assessment-heading"><div><h2>{{ t('aiSeverity.title') }}</h2><p>{{ t('aiSeverity.help') }}</p></div></header>
+ <section class="ds-card decision-card"><p><strong>{{ t('aiSeverity.calculated') }}: {{ c.calculatedSeverityCode || '—' }}</strong> · {{ t('aiSeverity.effective') }}: {{ c.effectiveSeverityCode || '—' }}</p>
+ @if(c.pending;as pending){<p>{{ t('aiSeverity.pending') }}: {{ pending.severityCode }} · {{ t('aiAssessment.role.' + pending.role) }}</p>}</section>
+ @if(c.canPropose || c.canApprove || c.canReturn || c.canReverse){
+ <section class="ds-card decision-card specialist-decision">
+  @if(c.canPropose){<label><span>{{ t('aiSeverity.proposed') }}</span><select [(ngModel)]="severityCode"><option>P1</option><option>P2</option><option>P3</option><option>P4</option></select></label>}
+  <label><span>{{ t('aiAssessment.justification') }} *</span><textarea rows="3" maxlength="5000" [(ngModel)]="justification"></textarea></label>
+  <label><span>{{ t('aiAdoption.evidence') }} *</span><textarea rows="2" [(ngModel)]="evidence"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label>
+  <div class="decision-actions">
+   @if(c.canPropose){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim() || severityCode === c.effectiveSeverityCode" (click)="act('propose')">{{ t('aiSeverity.propose') }}</button>}
+   @if(c.canApprove){<button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('approve')">{{ t('aiSeverity.approve') }}</button>}
+   @if(c.canReturn){<button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('return')">{{ t('aiSeverity.return') }}</button>}
+   @if(c.canReverse){<button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('reverse')">{{ t('aiSeverity.reverse') }}</button>}
+  </div>
+ </section>}
+ @if(c.events.length){<section class="ds-card decision-card"><p-table [value]="c.events" [tableStyle]="{'width':'100%','table-layout':'fixed'}"><ng-template #header><tr><th>{{ t('aiSeverity.title') }}</th><th>{{ t('aiAssessment.justification') }}</th><th>{{ t('aiAdoption.evidence') }}</th></tr></ng-template><ng-template #body let-event><tr><td style="overflow-wrap:anywhere">{{ t('aiSeverity.' + event.kind) }} · {{ event.previousSeverityCode }} → {{ event.severityCode }}<p>{{ t('aiAssessment.role.' + event.actorRoleCode) }}</p><small>{{ event.createdAt | dgopDualDate:'medium':i18n.lang() }}</small></td><td style="overflow-wrap:anywhere">{{ event.justification }}</td><td style="overflow-wrap:anywhere">{{ event.evidenceIds.join(', ') }}</td></tr></ng-template></p-table></section>}
+</section>}

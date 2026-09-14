@@ -29,7 +29,7 @@ export interface Task {
   formSubmittedAt?: string | null;
   formSubmittedBy?: string | null;
   completedAt?: string | null;
-  aiGovernance?: { severityCode: string | null; assessmentKind: string | null; operationalStatusCode: string | null };
+  aiGovernance?: { effectiveSeverityCode?: string | null; overrideEventId?: string | null; severityCode: string | null; assessmentKind: string | null; operationalStatusCode: string | null };
   slaStatus: string;
   assignee?: UserRef | null;
   case?: TaskCaseRef | null;
@@ -47,7 +47,7 @@ export interface CaseEvent {
 }
 
 export interface CaseRow {
-  aiGovernance?: { severityCode: string | null; assessmentKind: string | null; operationalStatusCode: string | null };
+  aiGovernance?: { effectiveSeverityCode?: string | null; overrideEventId?: string | null; severityCode: string | null; assessmentKind: string | null; operationalStatusCode: string | null };
   id: string;
   code: string;
   title: string;

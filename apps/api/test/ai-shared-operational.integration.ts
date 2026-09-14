@@ -50,9 +50,9 @@ export async function testAiSharedOperational(db: PrismaClient, officerId: strin
     const closeSignal=signals.find(n=>n.assigneeUserId===riskOwnerId&&n.status==='unread')!;assert.ok(closeSignal);
     const otherOwner=await db.user.findFirstOrThrow({where:{id:{not:riskOwnerId},userRoles:{some:{role:{code:'AI_RISK_OWNER'}}}}});
     // Same role is not sufficient for an individually addressed AI notice.
-    const recipientWhere=(operations as any).notificationVisibilityWhere('all',{id:otherOwner.id,email:otherOwner.email,roles:['AI_RISK_OWNER']});
+    const recipientWhere=await (operations as any).notificationVisibilityWhere('all',{id:otherOwner.id,email:otherOwner.email,roles:['AI_RISK_OWNER']});
     assert.equal(await db.governanceNotification.count({where:{AND:[{id:closeSignal.id},recipientWhere]}}),0);
-    const ownWhere=(operations as any).notificationVisibilityWhere('all',{id:riskOwnerId,email:'fixture@example.test',roles:['AI_RISK_OWNER']});
+    const ownWhere=await (operations as any).notificationVisibilityWhere('all',{id:riskOwnerId,email:'fixture@example.test',roles:['AI_RISK_OWNER']});
     assert.equal(await db.governanceNotification.count({where:{AND:[{id:closeSignal.id},ownWhere]}}),1);
     // Named native test anchors make the outcome ledgers visible through the real journey contract.
     for (const risk of risks) {

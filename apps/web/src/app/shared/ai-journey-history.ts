@@ -1,5 +1,5 @@
+import { DualDatePipe } from './dual-date.pipe';
 import { ChangeDetectionStrategy, Component, inject, input, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -24,7 +24,7 @@ interface Journey { id: string; useCaseRef: string; name: string; operationalSta
 interface History { rows: Journey[]; total: number; page: number; pageSize: number; demoMode: boolean; readOnly: boolean }
 
 @Component({ selector: 'app-ai-journey-history', standalone: true,
-  imports: [DatePipe, RouterLink, TableModule, StatusChip], changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [DualDatePipe, RouterLink, TableModule, StatusChip], changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ai-journey-history.html', styleUrl: './ai-journey-history.scss' })
 export class AiJourneyHistory implements OnInit {
   readonly expanded = input(false);

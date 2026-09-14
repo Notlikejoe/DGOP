@@ -1,3 +1,4 @@
+import { formatDualDate } from '../../../shared/dual-date.format';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, ActivatedRoute } from '@angular/router';
@@ -132,7 +133,7 @@ export class WorkflowCasePage implements OnInit {
   protected approvalKind(s: string): StatusKind { return APPROVAL_KIND[s] ?? 'muted'; }
   protected typeLabel(t: string): string { return this.t('wf.type.' + t); }
   protected fmtDate(d?: string | null): string { return d ? new Date(d).toISOString().slice(0, 10) : '-'; }
-  protected fmtDateTime(d?: string | null): string { return d ? new Date(d).toLocaleString() : '-'; }
+  protected fmtDateTime(d?: string | null): string { return this.governedAi ? formatDualDate(d, 'medium', this.i18n.lang()) : d ? new Date(d).toLocaleString() : '-'; }
   protected tokenShort(id?: string | null): string { return id ? id.slice(0, 8) : '-'; }
   protected executionKind(status: string): StatusKind {
     if (status === 'succeeded') return 'success';

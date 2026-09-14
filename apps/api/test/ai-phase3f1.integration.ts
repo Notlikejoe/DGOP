@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { testOperationalAlertResolution } from './ai-operational-alerts.integration';
 import { PrismaClient } from '@prisma/client';
 import { AuditService } from '../src/audit/audit.service';
 import { ScopeService } from '../src/access/scope.service';
@@ -55,6 +56,7 @@ export async function testPhase3F1(db:PrismaClient,f:{riskId:string;riskOwnerId:
  assert.deepEqual((await db.aiTreatmentPlan.findUniqueOrThrow({where:{id:snapshot.id}})).snapshot,snapshot.snapshot);
  assert.equal((await db.workflowTask.findUniqueOrThrow({where:{id:original.id}})).dueDate!.getTime(),original.dueDate!.getTime());
  assert.equal((await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId}})).version,version);assert.equal(await db.aiAssessmentRound.count({where:{riskId:f.riskId,kind:'residual'}}),0);
+ await testOperationalAlertResolution(db,f.riskId);
  await testPhase3F2(db,f);
  console.log('Phase 3F1 passed: assigned executor/live scope/activity/Auditor controls, immutable approver GEN-28, provenance/deadline protection, required completion evidence, audit rollback, concurrent exactly-once progress/completion, immutable execution ledger, computed mean/overdue/closure and no residual fabrication.');
 }

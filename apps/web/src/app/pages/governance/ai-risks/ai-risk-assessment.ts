@@ -57,7 +57,8 @@ export class AiRiskAssessment {
   protected reduction(value: number): string { return new Intl.NumberFormat(this.i18n.lang(), { maximumFractionDigits: 1 }).format(value) + '%'; }
   protected dimensionLabel(dimension: string): string {
     const value = this.context()?.configuration.dimensions.find(value => value.dimension === dimension);
-    return value ? this.bilingual(value) : this.t('aiAssessment.dimension.' + dimension);
+    const label=value?this.bilingual(value):null;
+    return label&&label!==dimension?label:this.t('aiAssessment.dimension.' + dimension);
   }
   protected anchor(score: number | null, kind: 'likelihood' | 'impact'): string {
     const value = this.context()?.configuration.scores.find(value => value.score === score)?.anchors[kind];

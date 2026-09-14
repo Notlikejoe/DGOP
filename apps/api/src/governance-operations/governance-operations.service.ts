@@ -1,3 +1,4 @@
+import { AiOperationalAlertsService, AI_ALERT_SOURCES } from '../ai-governance/ai-operational-alerts.service';
 import { AiDashboardReportsService } from '../ai-governance/ai-dashboard-reports.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
@@ -136,6 +137,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     private readonly workflow?: WorkflowService,
     private readonly aiReviews?: AiRiskReviewService,
     private readonly aiReports?: AiDashboardReportsService,
+    private readonly aiAlerts?: AiOperationalAlertsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -167,6 +169,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         await this.generateCalendarOccurrences(this.systemUser);
         await this.aiReviews?.processSignals();
         await this.aiReports?.processDue();
+        await this.aiAlerts?.process();
       });
     } catch (error) {
       this.logger.warn(
@@ -252,13 +255,14 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     };
   }
 
-  private notificationVisibilityWhere(
+  private async notificationVisibilityWhere(
     assetIds: Set<string> | 'all',
     user: AuthUser,
-  ): Prisma.GovernanceNotificationWhereInput {
+  ): Promise<Prisma.GovernanceNotificationWhereInput> {
     return {
       AND: [
         this.notificationRecipientWhere(user),
+        ...(this.aiAlerts ? [await this.aiAlerts.visibility(user.id)] : []),
         { OR: [{ sourceType: null }, { sourceType: { not: 'ai_risk_strategy' } },
           { assigneeUserId: null }, { assigneeUserId: user.id }] },
         this.workflowLinkScopeWhere(assetIds, user),
@@ -378,7 +382,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     emailTo: string | null;
     dedupeKey: string | null;
   }> {
-    if (dto.sourceType === 'ai_risk_strategy') throw new BadRequestException('AI operational notifications are created by their governed strategy outcome');
+    if (dto.sourceType && AI_ALERT_SOURCES.includes(dto.sourceType)) throw new BadRequestException('AI operational notifications are created by their governed strategy outcome');
     let targetRoleCode = this.cleanOptional(dto.targetRoleCode);
     let assigneeUserId = this.cleanOptional(dto.assigneeUserId);
     let emailTo = this.cleanOptional(dto.emailTo);
@@ -483,7 +487,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
         take: 80,
       }),
       this.prisma.governanceNotification.findMany({
-        where: this.notificationVisibilityWhere(assetIds, user),
+        where: await this.notificationVisibilityWhere(assetIds, user),
         include: notificationInclude,
         orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
         take: 80,
@@ -1823,7 +1827,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   async notificationDigest(user: AuthUser) {
     const scope = await this.scope.resolve(user.roles);
     const assetIds = await this.visibleAssetIds(scope);
-    const where = this.notificationVisibilityWhere(assetIds, user);
+    const where = await this.notificationVisibilityWhere(assetIds, user);
     const [notifications, activeEscalations] = await Promise.all([
       this.prisma.governanceNotification.findMany({
         where,
@@ -1852,6 +1856,13 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   async upsertNotificationTemplate(dto: UpsertGovernanceNotificationTemplateDto, user: AuthUser) {
+    if (/^(AIUC|AIRS|AIX)-NTF-/.test(dto.code) || (dto.sourceType && AI_ALERT_SOURCES.includes(dto.sourceType))) {
+      const eligible=await this.prisma.user.findFirst({where:{id:user.id,isActive:true,userRoles:{some:{role:{is:{code:'dmo_admin',isActive:true,deletedAt:null}}},none:{role:{is:{code:'auditor',isActive:true,deletedAt:null}}}}},select:{id:true}});
+      if(!eligible)throw new ForbiddenException('Only a live DMO_ADMIN may edit governed AI notification templates');
+      if(!/^(AIUC|AIRS|AIX)-NTF-\d{2}$/.test(dto.code) || !dto.sourceType || !AI_ALERT_SOURCES.includes(dto.sourceType))throw new BadRequestException('Use an exact governed AI template code and source');
+      if(!Array.isArray(dto.defaultChannelsJson)||dto.defaultChannelsJson.some(c=>!['in_app','email'].includes(String(c))))throw new BadRequestException('AI templates support in-system and email channels');
+    }
+
     await this.ensureDefaultNotificationTemplates();
     const row = await this.prisma.governanceNotificationTemplate.upsert({
       where: { code: dto.code },
@@ -1997,7 +2008,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       where: {
         AND: [
           { id },
-          this.notificationVisibilityWhere(assetIds, user),
+          await this.notificationVisibilityWhere(assetIds, user),
         ],
       },
     });
@@ -2023,7 +2034,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       where: {
         AND: [
           { id },
-          this.notificationVisibilityWhere(assetIds, user),
+          await this.notificationVisibilityWhere(assetIds, user),
         ],
       },
     });
@@ -2054,7 +2065,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     const assetIds = await this.visibleAssetIds(scope);
     const where: Prisma.GovernanceNotificationWhereInput = {
       AND: [
-        this.notificationVisibilityWhere(assetIds, user),
+        await this.notificationVisibilityWhere(assetIds, user),
         { status: GovernanceNotificationStatus.unread },
       ],
     };
@@ -2154,7 +2165,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       where: {
         AND: [
           { id },
-          this.notificationVisibilityWhere(assetIds, user),
+          await this.notificationVisibilityWhere(assetIds, user),
         ],
       },
       include: notificationInclude,

@@ -88,6 +88,30 @@ export class AiDashboardReportsService {
     observationBasis:'saved_capture',historicalReconstruction:false,missingObservationsInterpolated:false,timeZone:'Asia/Riyadh'};
   });
  }
+ async currentBasis(userId:string,unitId:string,frequency='daily'){
+  if(!['manual','daily','monthly'].includes(frequency))throw new BadRequestException('Use a supported report frequency');
+  return governanceTransaction(this.prisma,async tx=>{
+   await this.access(tx,userId,unitId);
+   const asOf=new Date(),live=await this.dashboard.projection(tx,userId,unitId);
+   const saved=await tx.aiDashboardSnapshot.findFirst({where:{organizationUnitId:unitId,frequency,asOf:{lte:asOf}},orderBy:[{asOf:'desc'},{id:'desc'}]});
+   if(!saved)return {frequency,liveAsOf:asOf,savedAsOf:null,snapshotId:null,divergent:null,comparisonAvailable:false,rows:[],observationBasis:'current_scope_at_capture',historicalReconstruction:false,readOnly:true};
+   await this.visible(tx,userId,saved);
+   const stored=jsonRecord(saved.projection),cards=Array.isArray(stored['cards'])?stored['cards'].map(jsonRecord):[];
+   const compatible=stored['projectionVersion']==='ai-dashboard-v2'&&stored['observationBasis']==='current_scope_at_capture';
+   const rows=live.cards.map(card=>{
+    const matches=cards.filter(c=>c['id']===card.id),old=matches[0];
+    const valid=compatible&&matches.length===1&&old['unit']===card.unit&&(old['value']===null||typeof old['value']==='number'&&Number.isFinite(old['value']));
+    const savedValue=valid?old['value'] as number|null:null;
+    return {id:card.id,labelEn:card.labelEn,labelAr:card.labelAr,unit:card.unit,saved:savedValue,live:card.value,
+     changed:valid?savedValue!==card.value||old['numerator']!==card.numerator||old['denominator']!==card.denominator:null,
+     delta:valid&&typeof savedValue==='number'&&typeof card.value==='number'?Math.round((card.value-savedValue)*100)/100:null,
+     deltaUnit:card.unit==='percent'?'percentage_points':card.unit};
+   });
+   return {frequency,liveAsOf:asOf,savedAsOf:saved.asOf,snapshotId:saved.id,periodKey:saved.periodKey,
+    divergent:rows.every(r=>r.changed!==null)?rows.some(r=>r.changed):null,comparisonAvailable:rows.every(r=>r.changed!==null),rows,
+    observationBasis:'current_scope_at_capture',historicalReconstruction:false,readOnly:true};
+  });
+ }
  private async view(tx:Prisma.TransactionClient,userId:string,row:Snapshot){
   await this.visible(tx,userId,row);
   const actor=await this.authorization.authorizeAny(userId,['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'],tx);

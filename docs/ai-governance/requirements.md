@@ -1,6 +1,8 @@
 # Functional requirement implementation ledger
 
-Delivery update (2026-09-13): use the original design phase numbers and combined cycles in phase-delivery-cycles.md. Historical alphabetic tasks are traceability, not completed design phases. Local implementation, running-app integration, actual-source validation and release acceptance are distinct statuses.
+Delivery update (2026-09-15): consolidated local severity/date/audit/report/notification/restore implementation is integrated at 85 migrations; see consolidated-operational-completion.md and completion-cycle.md. Statuses below distinguish local engineering evidence from source/production acceptance.
+
+Previous delivery update (2026-09-13): use the original design phase numbers and combined cycles in phase-delivery-cycles.md. Historical alphabetic tasks are traceability, not completed design phases. Local implementation, running-app integration, actual-source validation and release acceptance are distinct statuses.
 
 Generated from the supplied FD v1.0 requirement identifiers. Entries identify planned coverage, not implemented or passing tests. Cross-cutting rows will be refined to exact test files when their packet starts. Source documents remain authoritative.
 
@@ -8,24 +10,24 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 
 | Requirement | Planned phase | Proposed verification | Status |
 |---|---|---|---|
-| BR-01 | 3 | Deterministic rule and negative-input tests | Not implemented |
-| BR-02 | 5 | Deterministic rule and negative-input tests | Not implemented |
-| BR-03 | 5 | Deterministic rule and negative-input tests | Not implemented |
+| BR-01 | 3 | Deterministic rule and negative-input tests | Implemented locally — six 1–5 criteria use MAX and governed proposed bands; Unacceptable is never computed; server/UI input protection and immutable classification tests pass (ai-phase2a.integration.ts). |
+| BR-02 | 5 | Deterministic rule and negative-input tests | Implemented locally — eight competent-role dimensions use MAX with pinned deterministic tie order; no weighting/average; inherent/residual and immutability tests pass (ai-phase3b/3f2.integration.ts). |
+| BR-03 | 5 | Deterministic rule and negative-input tests | Implemented locally — inherent/residual likelihood × maximum impact, governed four bands and immutable server outputs pass native HTTP/SQL tests (ai-phase3b/3f2.integration.ts). |
 | BR-04 | 8 | Deterministic rule and negative-input tests | Partial — protected engine cadence/anchor/deadline, renewed-authority rebase and per-organization annual 365-day calendar implemented; governed display pins/status mapping now implemented; production metadata approval/release certification remains |
-| BR-05 | 6,8 | Deterministic rule and negative-input tests | Partial — scoped reads derive overdue from preserved KSA target deadline and completion; automatic governed status updates/reporting remain |
+| BR-05 | 6,8 | Deterministic rule and negative-input tests | Implemented locally — current eligible non-cancelled approved actions derive overdue from KSA target deadlines; existing worker emits governed thresholds and archives completed/superseded notices (ai-phase3f1, ai-operational-alerts.integration.ts). |
 | BR-06 | 8 | Deterministic rule and negative-input tests | Partial — computed review status and protected task/evidence lifecycle implemented; complete governed status/register mapping remains |
-| BR-07 | 6,10 | Deterministic rule and negative-input tests | Partial — current approved-plan mean completion derived from immutable execution rounds; reporting/KPI persistence and full model remain |
-| BR-08 | 8 | Deterministic rule and negative-input tests | Not implemented |
-| BR-09 | 3 | Deterministic rule and negative-input tests | Not implemented |
+| BR-07 | 6,10 | Deterministic rule and negative-input tests | Implemented locally — current approved-plan action completion mean and sample-excluded KPI denominators pass native execution/full-register/snapshot tests; actual-source acceptance remains separate. |
+| BR-08 | 8 | Deterministic rule and negative-input tests | Implemented locally — current eligible linked risk assessments versus approved classification raise individually scoped Officer notices from governed content; matching/missing lineage, unchanged models, dedupe and audit rollback verified in restored-demo ai-harmony.integration.ts. |
+| BR-09 | 3 | Deterministic rule and negative-input tests | Partial — manual documented Officer Unacceptable verification and Steering-only restriction/stop implemented; direct Ethics tier proposal remains outside the current native classification intake. |
 | BR-10 | 10 | Deterministic rule and negative-input tests | Implemented locally — approved SDAIA HIGH use-case count from current scoped non-sample register, independent of proposed tiers/residual bands; real store reconciliation tested |
 | BR-11 | 10 | Deterministic rule and negative-input tests | Implemented locally — absent approved SDAIA classification count from current scoped non-sample register; register total reconciliation tested |
 | GEN-01 | 1–12 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-02 | 1–12 | Governed configuration / permissions / reporting; refine at packet entry | Partial — 21 live scoped dashboard indicators, repaired register counts/reconciliation and immutable governed as-of captures implemented; historical period reconstruction/source acceptance remain |
-| GEN-20 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-21 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-22 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-23 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-24 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-20 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — existing-role mappings plus exactly ten registered AI role codes and native purpose grants tested in ai-phase1b.integration.ts. |
+| GEN-21 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — exact ten-code AI_NEW_ROLES catalog, idempotent native registration and membership governance tested; additional purpose permissions add no AI role codes. |
+| GEN-22 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — native roles/permissions/assignment targets and bilingual role names use DGOP registration; initial native AIUC/AIRS managed templates tested. |
+| GEN-23 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Partial — native AIUC stage assignments, tier-dependent decision roles and separate specialist/asset approvals implemented; complete source-RACI acceptance remains. |
+| GEN-24 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Partial — native AIRS competent-role stages, independent reviews/plans, band-dependent authority and separate closure/escalation outcomes implemented; complete source-RACI/closure acceptance remains. |
 | GEN-25 | 1,3,6 | Computed band authority | Implemented — immutable residual band selects protected actual-owner/RAIO/Ethics/Executive/Steering tasks and explicit permissions; posted roles/bands cannot confer authority |
 | GEN-26 | 1,3,6 | AIUC final-decision segregation | Implemented — requester/linked owner excluded from decision queues and blocked at recording; configured tier role, claimed assignee and live permission enforced; generic task assignment/decision bypass blocked |
 | GEN-27 | 1,3,6 | Risk-owner self-acceptance exclusion | Implemented — actual Risk Owner cannot accept/countersign Medium+, including combined competent roles; native SQL guards reinforce the service checks |
@@ -33,8 +35,8 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-29 | 1,3,6 | Independent Ethics owner recusal | Implemented for AIUC and inherent AIRS review — actual owner identities blocked and recusal audit persists on rejection |
 | GEN-30 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Partial — Auditor scoped AI dashboard/archive/comparison/export/library reads and write denial implemented alongside prior reviews/annual snapshots; broader platform integration certification remains |
 | GEN-31 | 1,3,6 | Evidence-backed authority decisions | Partial — AIUC and AIRS authority decisions require justification, existing evidence and transactional audit with immutable conditions; AIRS higher-authority reopening is now implemented; shared integration and actual-organization/release acceptance remain |
-| GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-72 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-71 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Partial — canonical 14 L_* plus 26 R_* catalog and governed proposal/publication lifecycle implemented; actual original forty-list publication approval remains. |
+| GEN-72 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Partial — exact unified forty-list definitions and retained-source preparation exist; approved actual-source loaded count/reconciliation remains. |
 | GEN-73 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-74 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-75 | 1 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
@@ -74,16 +76,16 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | GEN-114 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-115 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-116 | 1,3,6 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-121 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-122 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-121 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — reserved native strategy/review notices and new governed treatment/harmony planned in-app/email attempts implemented; all specified event/template mappings and provider evidence remain. |
+| GEN-122 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — live DMO-only AI notification configuration guard, reserved source/code patterns and active-content rendering implemented; full thirteen-code atomic configuration/event facade remains. |
 | GEN-123 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
 | GEN-124 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — periodic and organization-register annual occurrences, assigned native Review tasks, evidence-backed completion and next scheduling implemented; approved cadence display pins and safe officer handover implemented; production metadata/notification certification remains |
 | GEN-125 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — original and additional evidenced procedure triggers, immutable ledger, fresh assessment restart and renewed-authority monitoring regeneration implemented; full event/reporting integration remains |
 | GEN-126 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — native review threshold warnings/breach, EN/AR plans, escalation and timeline events implemented; provider delivery and full KPI dashboards remain |
-| GEN-127 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-128 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-129 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
-| GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Not implemented |
+| GEN-127 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — required native audit captures current business events and new severity compensation; full source-IP/old-new/evidence event census remains. |
+| GEN-128 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — AI events use existing append-only audit_logs and native hash chain, no new audit store; required-audit rollback tested. |
+| GEN-129 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Partial — native immutable rounds/decisions/ledgers and independent higher-authority severity compensation/acceptance reopening tested; tier reversal and full event census remain. |
+| GEN-130 | 7,8 | Governed configuration / permissions / reporting; refine at packet entry | Implemented locally — bounded case/asset/actor/date native AIUC/AIRS/all audit queries and page CSV; redacted Officer views and full native Auditor metadata/chain fields with live grants/scope tested in ai-audit-query.integration.ts. |
 | INT-01 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-02 | 1–7 | Platform integration and legacy-case regression | Not implemented |
 | INT-03 | 4 | Identifier-gated pipeline integration | Partial — identifier-gated AIUC/AIRS assessment/decision/treatment, periodic reviews and off-cycle reassessment/monitoring rebase implemented; annual review, immutable completed history and governed AVOID closure now implemented; shared stopped/suspended intake guards and retained histories now implemented; full shared integration certification stays open |
@@ -106,25 +108,25 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | MIG-14 | 11 | Import staging, source reconciliation and replay | Partial — independent evidenced preparation review implemented, explicitly distinct from pilot sign-off; production load remains unavailable |
 | MIG-15 | 12 | Import staging, source reconciliation and replay | Not implemented |
 | NFR-01 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-02 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-02 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — recurring native calendar/worker, current monitoring rebase and retries tested; production 100% generation/24-hour recovery measurement remains. |
 | NFR-03 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-04 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-05 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-04 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — deterministic six-criterion native computation passes functional tests; ≤1-second baseline-load measurement remains. |
+| NFR-05 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — native full-register matrix/21-KPI scope/computation verified beyond 100 rows; baseline-concurrency ≤2-second full-register measurement remains. |
 | NFR-06 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-07 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-08 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-09 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-10 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
+| NFR-07 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — retained 66-risk/forty-list preparation and idempotent native source/library contracts tested; approved full-source import and ≤60-second batch measurement remain. |
+| NFR-08 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — explicit native live purpose grants, current scopes, SoD/Auditor/executive restrictions and generic bypass guards pass clean/upgrade/HTTP/SQL tests; complete platform baseline acceptance remains. |
+| NFR-09 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — native classification/domain/org visibility and intake-driven specialist gates implemented; real-data handling and platform privacy compliance acceptance remain. |
+| NFR-10 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — native append-only audit/immutable ledger and required-audit rollback tests pass; full event/IP census and tier compensation remain. |
 | NFR-11 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-12 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-13 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-14 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-15 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-16 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-17 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-18 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| NFR-19 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Not implemented |
-| RM-01 | 5 | AIRS lifecycle | Partial — inherent assessment/review/adoption and returns implemented; response, treatment, residual acceptance and monitoring remain |
+| NFR-12 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — bilingual AI UI labels/role/event names and RTL verified in targeted native browser checks; every forty-list value/notification and complete fallback census remain. |
+| NFR-13 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — Hijri-first dual Saudi display across six AI screens/native case history and KSA calculation/rollover tests pass; complete editable-input/date-default browser census remains. |
+| NFR-14 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Implemented locally — deterministic server computations replace spreadsheet references; actual approved-High/unclassified reconciliation, stable captured KPI comparisons and unavailable/null handling tested. |
+| NFR-15 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Implemented locally — proposed tier/inherent/residual computations read-only and SQL-immutable, fresh rounds retain history; computed-input HTTP rejection tested. |
+| NFR-16 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — native AIUC/AIRS BPMN templates and REST/Asset 360/calendar/audit/workflow integrations implemented; full template deployment/notification and baseline acceptance remain. |
+| NFR-17 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — guarded isolated PostgreSQL snapshot backup/restore matched all 201 tables in 9 seconds; production 4-hour RTO/15-minute RPO, evidence recovery and WAL/PITR remain unmeasured. |
+| NFR-18 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — declared standard/reference/control-domain alignment preserved from supplied designs; actual regulatory compliance certification is not inferred from synthetic fixtures. |
+| NFR-19 | 7,11,12 | Cross-phase acceptance; production evidence where applicable | Partial — native legacy workflow 89/89 and governance-operation 30/30 checks pass with new clean/upgrade AI contracts; complete inherited baseline configuration/accessibility/load/provider acceptance remains. |
+| RM-01 | 5 | AIRS lifecycle | Partial — complete current assessment/response/treatment/residual authority/monitoring native journeys implemented and tested; exact end-of-life closure/resolution coverage remains. |
 | RM-02 | 5 | AIRS initiation paths | Implemented locally — automatic AIUC handoff, workshop creation, published-library draft instantiation and existing-case off-cycle reassessment paths implemented; new drafts require assigned owner submission |
 | RM-03 | 5 | AIRS numbering | Partial — atomic immutable AIR submission numbers and native workshop/library/handoff case identities implemented; native case code is reserved at draft creation, rather than FD submission-only timing |
 | RM-04 | 5 | Risk source facts and sample handling | Partial — department/source handoff preserved and third-party involvement confirmed at intake; sample reporting exclusions and other computed fields remain |
@@ -137,8 +139,8 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-11 | 5 | AIRS assessment / decision / operations | Partial — immutable version-pinned AIRL business provenance/FK resolves from risk and its existing ACT/use-case chain; original workbook source reconciliation remains |
 | RM-12 | 5 | Server-only computed outputs | Partial — inherent/residual outputs computed server-side, injected score/authority/acceptance rejected and persisted rounds SQL-immutable; other reporting/cadence rollups remain |
 | RM-13 | 5 | Inherent risk scoring | Implemented — justified 1–4 likelihood with published bilingual anchors × MAX impact, server-calculated range 1–16 |
-| RM-14 | 5 | Risk bands and harmony | Partial — four governed inherent/residual bands through published R_LEVEL implemented; reporting and model-harmony alerts remain |
-| RM-15 | 5 | Severity emission and overrides | Partial — P4/P3/P2/P1 emitted in inherent result/audit/UI; live scoped native WorkflowCase/task calculated severity is now integrated; justified override authorities remain |
+| RM-14 | 5 | Risk bands and harmony | Implemented locally — pinned four-band inherent/residual scoring and independent model-harmony review alerts tested; actual-source acceptance remains separate. |
+| RM-15 | 5 | Severity emission and overrides | Implemented locally — calculated P1–P4 plus separate effective native workflow severity, justified independent higher assigned authority approval/return and higher immutable compensation tested (ai-severity.integration.ts). |
 | RM-16 | 5 | AIRS assessment / decision / operations | Implemented — version-pinned governed control effectiveness and current post-treatment controls mandatory before residual calculation |
 | RM-17 | 5 | AIRS assessment / decision / operations | Implemented — fresh justified residual likelihood/eight impacts after completed treatment; no effectiveness-based numeric modifier |
 | RM-18 | 5 | AIRS assessment / decision / operations | Implemented — immutable residual probability × max impact, governed score/band/severity and display-only risk reduction |
@@ -146,7 +148,7 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-20 | 6 | Critical restriction/stop | Implemented — Critical acceptance denied; Steering restrict/stop/return only, with guarded actual use-case suspension/archive linked to immutable decision |
 | RM-21 | 6 | No Risk Owner self-acceptance Medium+ | Implemented — server-resolved actual Risk Owner excluded from Medium/High/Critical authority decisions despite extra roles; Medium owner/countersigner must also be independent |
 | RM-22 | 6 | AIRS assessment / decision / operations | Partial — published strategies, transfer consultations, approved MITIGATE/TRANSFER plans/execution and residual acceptance/Critical decisions implemented; evidence-backed AVOID return/closure/Steering stop and separate native four-level ESCALATE outcomes now implemented; shared integration and release acceptance remain |
-| RM-23 | 6 | AIRS assessment / decision / operations | Partial — ACT records/independent plan approval, assigned target-date tasks and evidence-backed execution with derived mean/overdue; warning/breach notifications and automatic governed status/KPI reporting remain |
+| RM-23 | 6 | AIRS assessment / decision / operations | Partial — native accountable actions, immutable execution/mean/overdue, governed thresholds/completion archival and live/saved KPIs implemented; all FD notification mappings/status/actual-source acceptance remain. |
 | RM-24 | 6 | AIRS assessment / decision / operations | Implemented — residual start/contribution/calculation blocks inherent High/Critical with zero verified completed actions; approved treatment requires all planned actions complete |
 | RM-25 | 8 | AIRS assessment / decision / operations | Partial — published four-band R_LEVEL_DAYS interval/first-review metadata, immutable cadence snapshots and native calendar registration implemented; authoritative R_CADENCE mapping/production reconciliation remain |
 | RM-26 | 8 | AIRS assessment / decision / operations | Implemented — current residual authority decision/monitoring entry opens an actual-owner review; evidence-backed completion records last review and schedules exactly one next governed occurrence |
@@ -157,9 +159,9 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | RM-31 | 9 | AIRS assessment / decision / operations | Partial — governed AIRL entities/versions/publications plus corrected 66-row candidate selection, atomic source proposals, provenance and subset target reconciliation implemented; real source/pilot activation remains gated |
 | RM-32 | 9 | AIRS assessment / decision / operations | Partial — source-linked ISO definitions/dimensions, independent library mappings, separate draft suggestions/owner-selected risk and action tags, native submission freeze/execution provenance implemented; independently reviewed category-to-ISO derivation/revisions/stale derived pins implemented locally; exact original R_CATMAP activation and real source acceptance remain |
 | RM-33 | 9 | AIRS assessment / decision / operations | Implemented locally — current published library version creates an editable native risk draft with immutable source/library and approved ISO-link suggestions; actual owner tags remain explicit, with no fabricated event, auto-submission, control certification or score |
-| RM-34 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-35 | 6 | AIRS assessment / decision / operations | Not implemented |
-| RM-36 | 6 | AIRS assessment / decision / operations | Not implemented |
+| RM-34 | 6 | AIRS assessment / decision / operations | Partial — treatment completion/evidence/residual acceptance prerequisites and AVOID closure implemented; complete explicit end-of-life closure operation remains. |
+| RM-35 | 6 | AIRS assessment / decision / operations | Partial — approved/conditioned residual and Critical restrict/stop plus AVOID/ESCALATE native outcomes implemented; complete closure resolution code mapping remains. |
+| RM-36 | 6 | AIRS assessment / decision / operations | Partial — existing immutable native audit/round/decision/override events and scoped Auditor query implemented; complete event/IP/old-new census and tier reversal remain. |
 | RM-37 | 10 | AIRS assessment / decision / operations | Partial — computed approved-High/unclassified cards and current register reconciliation implemented/tested beyond 100 rows; original workbook migration reconciliation remains |
 | UC-01 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A |
 | UC-02 | 2 | AIUC intake / classification / handoff | Implemented — Phase 2A/2B |
@@ -196,12 +198,12 @@ Phase 1A update (2026-09-11): supporting database/module contracts are implement
 | WF-04 | 3,6,8 | Critical acceptance denial | Implemented — computed Critical routes to Steering restrict/stop/return only; plain acceptance blocked in service/SQL and HTTP rejects injected band/authority fields |
 | WF-05 | 3,6,8 | Owner–approver segregation | Implemented for current AIUC/AIRS review/treatment/acceptance — actual owners/assessors cannot adopt their own rounds; independent plan/execution and Medium countersign/High Ethics checks are audited |
 | WF-06 | 3,6,8 | Workflow gate and SoD negative tests | Implemented for AIUC — Phase 2E; personal-data Privacy co-signature blocks tier decision until complete |
-| WF-07 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-08 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-09 | 3,6,8 | Workflow gate and SoD negative tests | Partial — permanent AI/AIR/ACT identities and AIRL version/source/FK immutability implemented, with referenced library histories append-only; original source migration chain reconciliation remains |
-| WF-10 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-11 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
-| WF-12 | 3,6,8 | Workflow gate and SoD negative tests | Not implemented |
+| WF-07 | 3,6,8 | Workflow gate and SoD negative tests | Partial — native band-derived calendar cadence, actual-owner recurring reviews and deduplicated warning/breach/escalation tested; full governed template/provider acceptance remains. |
+| WF-08 | 3,6,8 | Workflow gate and SoD negative tests | Partial — server-derived native stage/band authority and separate independent decision records enforced; exact full RACI acceptance remains. |
+| WF-09 | 3,6,8 | Workflow gate and SoD negative tests | Implemented locally — one-time AI/AIR/ACT/AIRL identifiers, parent FKs/immutable provenance and archive/no-delete guards tested; actual-source full chains remain a migration acceptance gate. |
+| WF-10 | 3,6,8 | Workflow gate and SoD negative tests | Partial — native five KSA-business-day triage/return deadlines and reference-pinned tasks implemented; AIUC warnings/justified requester-window no-action closure remain. |
+| WF-11 | 3,6,8 | Workflow gate and SoD negative tests | Partial — native specialist/adoption/plan/residual/severity authority decisions require justification and existing evidence; complete closure stage-specific checklist acceptance remains. |
+| WF-12 | 3,6,8 | Workflow gate and SoD negative tests | Partial — independent higher-authority acceptance reopening and severity compensation preserve actor/time/old-new/justification/evidence/IP; explicit tier-override reversal remains. |
 
 Phase 1B backend update: exact 10-role/25-permission catalog and reference publication controls are tested. Source-list reconciliation, full GEN-116 integration certification, and workflow assignment/completion wiring remain open; see phase-1b.md. Do not mark complete business requirements from these supporting components alone.
 

@@ -8,6 +8,7 @@ import { AiDashboardReportsService } from './ai-dashboard-reports.service';
 export class AiDashboardReportsController {
  constructor(private readonly reports:AiDashboardReportsService){}
  @Get('units') units(@CurrentUser() u:AuthUser){return this.reports.units(u.id);}
+ @Get('units/:unitId/basis') basis(@CurrentUser() u:AuthUser,@Param('unitId',ParseUUIDPipe) unitId:string,@Query('frequency',new DefaultValuePipe('daily')) frequency:string){return this.reports.currentBasis(u.id,unitId,frequency);}
  @Post('snapshots') capture(@CurrentUser() u:AuthUser,@Body() dto:CaptureDashboardDto){return this.reports.capture(u.id,dto.organizationUnitId,dto.frequency);}
  @Get('units/:unitId/snapshots') list(@CurrentUser() u:AuthUser,@Param('unitId',ParseUUIDPipe) unitId:string,@Query('page',new DefaultValuePipe(1),ParseIntPipe) page:number,@Query('pageSize',new DefaultValuePipe(20),ParseIntPipe) size:number){return this.reports.list(u.id,unitId,page,size);}
  // Keep raw pagination untyped until ParseIntPipe: global implicit conversion would turn invalid strings into NaN and let DefaultValuePipe hide them.

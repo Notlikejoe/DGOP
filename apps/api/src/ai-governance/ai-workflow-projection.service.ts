@@ -10,7 +10,9 @@ export class AiWorkflowProjectionService {
   constructor(private readonly prisma: PrismaService, private readonly risks: AiRiskIntakeService) {}
   async forCases(userId: string, caseIds: string[]) {
     if (!caseIds.length) return new Map<string, unknown>();
-    return this.prisma.$transaction(async tx => {
+    return this.prisma.$transaction(tx => this.forCasesIn(tx, userId, caseIds), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15000 });
+  }
+  async forCasesIn(tx: Prisma.TransactionClient, userId: string, caseIds: string[]) {
       let access: Awaited<ReturnType<AiRiskIntakeService['visibility']>>;
       try { access = await this.risks.visibility(userId, tx); }
       catch (error) { if (error instanceof ForbiddenException) return new Map<string, unknown>(); throw error; }
@@ -25,7 +27,7 @@ export class AiWorkflowProjectionService {
           select: { id: true, kind: true, round: true, inputs: true, result: true, createdAt: true,
             decisions: { select: { decision: true } } } },
       } });
-      return new Map(rows.map(r => {
+      const calculations = new Map(rows.map(r => {
         const required = Math.max(r.reassessments[0]?.inherentRound ?? 0, r.reassessments[0]?.additionalTriggers[0]?.requiredInherentRound ?? 0);
         const inherent = r.assessments.find(a => a.kind === 'inherent');
         const current = inherent && inherent.round >= required && !inherent.decisions.some(d => d.decision === 'return') ? inherent : null;
@@ -41,8 +43,16 @@ export class AiWorkflowProjectionService {
           severityCode: valid ? code : null, bandCode: valid ? result['bandCode'] : null,
           score: valid ? result['score'] : null, assessmentId: valid ? selected!.id : null,
           assessmentKind: valid ? selected!.kind : null, calculatedAt: valid ? selected!.createdAt : null,
+          effectiveSeverityCode: valid ? code : null, overrideEventId: null as string|null,
           calculated: true, acceptanceInferred: false }];
       }));
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15000 });
+      const assessmentIds = [...calculations.values()].map(c => c.assessmentId).filter((id): id is string => !!id);
+      const overrides = assessmentIds.length ? await tx.aiRiskSeverityEvent.findMany({where:{assessmentId:{in:assessmentIds},kind:{in:['approved','reversed']}},orderBy:{round:'desc'},select:{id:true,assessmentId:true,severityCode:true,risk:{select:{workflowCaseId:true}}}}) : [];
+      const seen = new Set<string>();
+      for(const event of overrides){const id=event.risk.workflowCaseId,calculation=id?calculations.get(id):null;
+        if(!id||!calculation||seen.has(id)||calculation.assessmentId!==event.assessmentId)continue;
+        seen.add(id);calculation.effectiveSeverityCode=event.severityCode;calculation.overrideEventId=event.id;
+      }
+      return calculations;
   }
 }

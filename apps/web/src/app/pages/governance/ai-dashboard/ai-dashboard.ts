@@ -1,7 +1,7 @@
+import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { AiDashboardReports } from './ai-dashboard-reports';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -13,7 +13,7 @@ import { ToastService } from '../../../shared/toast.service';
 interface Kpi {id:string;labelEn:string;labelAr:string;group:string;unit:string;frequency:string;formulaEn:string;formulaAr:string;coverage:string;filter:string|null;value:number|null;numerator?:number;denominator?:number}
 interface Dashboard {governance:{assessmentDue:number;assessmentComplete:number;assessmentMissingDeadline:number;high:number;highReviewed:number;mandatory:number;mandatoryReviewed:number}|null;asOf:string;mode:string;aggregateOnly:boolean;cards:Kpi[];catalog:Kpi[];reconciliation:{total:number;high:number;unclassified:number;otherClassified:number;sum:number;balanced:boolean}|null;matrix:{cells:number[][];assessed:number;unassessed:number}|null;distribution:Array<{nameEn:string|null;nameAr:string|null;count:number}>;topRisks:Array<{id:string;riskRef:string;title:string;inherentScore:number|null;residualScore:number|null;residualBand:string;completionPct:number}>}
 interface Drilldown {filter:string;page:number;pageSize:number;total:number;readOnly:boolean;asOf:string;rows:Array<{id:string;reference:string;title:string;approvedTier?:string;inherentScore?:number;residualScore?:number;completionPct?:number;dueAt?:string;riskRef?:string;kind?:string;round?:number;validDimensions?:number}>}
-@Component({selector:'app-ai-dashboard',standalone:true,imports: [AiJourneyHistory, AiDashboardReports,DatePipe,FormsModule,RouterLink,TableModule,AppIcon],templateUrl:'./ai-dashboard.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-dashboard.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-dashboard',standalone:true,imports: [AiJourneyHistory, AiDashboardReports,DualDatePipe,FormsModule,RouterLink,TableModule,AppIcon],templateUrl:'./ai-dashboard.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-dashboard.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiDashboardPage implements OnInit {
  private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
  protected readonly dashboard=signal<Dashboard|null>(null);protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly group=signal('register');

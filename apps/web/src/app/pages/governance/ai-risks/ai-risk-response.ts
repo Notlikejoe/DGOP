@@ -27,7 +27,7 @@ export class AiRiskResponse {
   protected readonly drafts = signal<Record<string, { justification: string; evidence: string }>>({}); private sequence = 0;
   constructor() { effect(() => { void this.load(this.riskId()); }); }
   protected t(key: string): string { return this.i18n.t(key); }
-  protected label(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }
+  protected label(value: { code?: string; labelEn: string; labelAr: string }): string { const label=this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn,key='aiResponse.strategy.'+(value.code??label),translated=this.t(key);return label===(value.code??label)&&translated!==key?translated:label; }
   protected patch(id: string, field: 'justification' | 'evidence', value: string): void {
     this.drafts.update(drafts => ({ ...drafts, [id]: { ...drafts[id], [field]: value } }));
   }

@@ -1,3 +1,4 @@
+import { formatDualDate } from '../../../shared/dual-date.format';
 import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -423,7 +424,7 @@ export class AiReviewPage implements OnInit {
   protected specialistDueDate(): string {
     const value = this.selectedReviewTask()?.dueDate;
     if (!value) return this.t('aiReview.notProvided');
-    return new Intl.DateTimeFormat(this.i18n.lang() === 'ar' ? 'ar-SA' : 'en-GB', { dateStyle: 'medium' }).format(new Date(value));
+    return formatDualDate(value, 'mediumDate', this.i18n.lang());
   }
 
   protected async assess(): Promise<void> {

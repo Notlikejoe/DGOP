@@ -5026,6 +5026,7 @@ model AiIntakeRevision {
 
 /// One risk per submitted AIRS case. A handoff draft may have no AIR-### yet.
 model AiRisk {
+  severityEvents AiRiskSeverityEvent[]
   authorityReversals AiRiskAuthorityReversal[]
  sourceDraft AiSourceNativeDraft?
   suggestedControlPins Json?
@@ -5071,6 +5072,7 @@ model AiRisk {
 /// Immutable calculation history; no default/fabricated scores. An optional
 /// composite risk FK ensures risk assessments belong to the same use case.
 model AiAssessmentRound {
+  severityEvents AiRiskSeverityEvent[]
   responses AiRiskResponse[]
   id                     String                   @id @default(uuid())
   useCaseId              String
@@ -5671,6 +5673,32 @@ model AiMigrationPilotReview {
 }
 
 /// Immutable authority-led reopening; foreign-key provenance is enforced in SQL.
+model AiRiskSeverityEvent {
+ id String @id @default(uuid())
+ riskId String
+ assessmentId String
+ round Int
+ kind String
+ severityCode String
+ previousSeverityCode String
+ relatedEventId String?
+ taskId String?
+ actorId String
+ actorRoleCode String
+ authorityLevel Int
+ justification String
+ evidenceIds Json
+ clientIp String?
+ createdAt DateTime @default(now())
+ risk AiRisk @relation(fields:[riskId],references:[id],onDelete:Restrict)
+ assessment AiAssessmentRound @relation(fields:[assessmentId],references:[id],onDelete:Restrict)
+ relatedEvent AiRiskSeverityEvent? @relation("AiSeverityBasis",fields:[relatedEventId],references:[id],onDelete:Restrict)
+ outcomes AiRiskSeverityEvent[] @relation("AiSeverityBasis")
+ @@unique([riskId,round])
+ @@index([assessmentId,round])
+ @@map("ai_risk_severity_events")
+}
+
 model AiRiskAuthorityReversal {
   id String @id @default(uuid())
   riskId String

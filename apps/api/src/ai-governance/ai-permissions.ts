@@ -49,6 +49,7 @@ export const AI_PERMISSION_ROLES = {
   // Purpose-specific decisions; case visibility alone never grants write authority.
   'airs.risk.reverse': [RAIO,EC,ET,SC],
   'airs.strategy.decide': [RAIO,EC,ET,SC],
+  'airs.severity.override': [RAIO,EC,ET,SC],
   'refdata.propose.ai': [RAIO],
   'refdata.approve.ai': [EC],
   'refdata.publish': ['dmo_admin'],

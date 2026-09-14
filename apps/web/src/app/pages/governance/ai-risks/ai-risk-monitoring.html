@@ -6,7 +6,7 @@
     @if (summary(); as s) {
       <dl class="review-summary" [attr.aria-label]="t('aiMonitoring.summary')">
         <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.currentStatus') }}</dt><dd><app-status-chip [kind]="s.current?.status === 'overdue' ? 'danger' : s.current?.status === 'due_soon' ? 'warning' : s.current ? 'info' : 'muted'" [label]="t(s.current ? 'aiMonitoring.status.' + s.current.status : 'aiMonitoring.noActiveReview')" /></dd></div>
-        <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.nextDue') }}</dt><dd>@if (s.current) { {{ s.current.dueAt | date:'medium':'+0300' }} } @else { {{ t('aiMonitoring.notScheduled') }} }</dd></div>
+        <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.nextDue') }}</dt><dd>@if (s.current) { {{ s.current.dueAt | dgopDualDate:'medium':i18n.lang() }} } @else { {{ t('aiMonitoring.notScheduled') }} }</dd></div>
         <div class="ds-card review-summary__item"><dt>{{ t('aiMonitoring.completedReviews') }}</dt><dd>{{ s.completed }}</dd></div>
       </dl>
     }
@@ -23,21 +23,21 @@
         @if(c.canReverseAuthority){ <p>{{ t('aiMonitoring.reverseHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('reverse-authority')">{{ t('aiMonitoring.reverse') }}</button> }
       </section>
     }
-    @for(reversal of c.reversals; track reversal.id){<section class="ds-card decision-card"><h2>{{ t('aiMonitoring.reverse') }}</h2><p>{{ reversal.actorRoleCode }} · {{ reversal.createdAt | date:'medium':'+0300' }}</p><p>{{ reversal.justification }}</p><small>{{ t('aiMonitoring.previousDecision') }}: {{ reversal.previousDecisionId }}</small></section>}
-    @for (reassessment of c.reassessments; track reassessment.id) { <section class="ds-card decision-card"><h2>{{ t('aiMonitoring.trigger.' + reassessment.triggerCode) }}</h2><p>{{ reassessment.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ reassessment.evidenceIds.join(', ') }}</small><p>{{ reassessment.createdAt | date:'medium':'+0300' }}</p>@for (trigger of reassessment.additionalTriggers; track trigger.id) { <div class="override-notice"><div><strong>{{ t('aiMonitoring.trigger.' + trigger.triggerCode) }}</strong><p>{{ trigger.justification }}</p><small>{{ trigger.evidenceIds.join(', ') }} · {{ trigger.createdAt | date:'medium':'+0300' }}</small></div></div> }</section> }
+    @for(reversal of c.reversals; track reversal.id){<section class="ds-card decision-card"><h2>{{ t('aiMonitoring.reverse') }}</h2><p>{{ t('aiAssessment.role.'+reversal.actorRoleCode) }} · {{ reversal.createdAt | dgopDualDate:'medium':i18n.lang() }}</p><p>{{ reversal.justification }}</p><small>{{ t('aiMonitoring.previousDecision') }}: {{ reversal.previousDecisionId }}</small></section>}
+    @for (reassessment of c.reassessments; track reassessment.id) { <section class="ds-card decision-card"><h2>{{ t('aiMonitoring.trigger.' + reassessment.triggerCode) }}</h2><p>{{ reassessment.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ reassessment.evidenceIds.join(', ') }}</small><p>{{ reassessment.createdAt | dgopDualDate:'medium':i18n.lang() }}</p>@for (trigger of reassessment.additionalTriggers; track trigger.id) { <div class="override-notice"><div><strong>{{ t('aiMonitoring.trigger.' + trigger.triggerCode) }}</strong><p>{{ trigger.justification }}</p><small>{{ trigger.evidenceIds.join(', ') }} · {{ trigger.createdAt | dgopDualDate:'medium':i18n.lang() }}</small></div></div> }</section> }
     @for (r of c.history; track r.id) {
       <section class="ds-card decision-card specialist-decision"><header class="assessment-result"><h2>{{ t('aiAssessment.round') }} {{ r.round }} · {{ r.bandCode }} · {{ r.intervalDays }} {{ t('aiMonitoring.days') }}</h2><app-status-chip [kind]="r.status === 'overdue' ? 'danger' : 'info'" [label]="t('aiMonitoring.status.' + r.status)" /></header>
-        <p>{{ t('aiMonitoring.due') }}: <strong>{{ r.dueAt | date:'medium':'+0300' }}</strong></p>
+        <p>{{ t('aiMonitoring.due') }}: <strong>{{ r.dueAt | dgopDualDate:'medium':i18n.lang() }}</strong></p>
         <p>{{ t('aiReviews.cadence') }}: {{ (i18n.lang() === 'ar' ? r.displayCadenceLabelAr : r.displayCadenceLabelEn) || t('aiReviews.unpinned') }}</p>
         @if(r.cadenceReferenceVersionId){<small>{{ t('aiReviews.labelVersion') }}: {{ r.cadenceReferenceVersionId }}</small>}
         <small>{{ t('aiMonitoring.reference') }}: {{ r.referenceVersionId }}</small>
-        @for (s of r.signals; track s.threshold) { <p>{{ s.threshold }}% · {{ t(s.threshold === 100 ? 'aiMonitoring.breach' : 'aiMonitoring.warning') }} · {{ s.createdAt | date:'short':'+0300' }}</p> }
+        @for (s of r.signals; track s.threshold) { <p>{{ s.threshold }}% · {{ t(s.threshold === 100 ? 'aiMonitoring.breach' : 'aiMonitoring.warning') }} · {{ s.createdAt | dgopDualDate:'short':i18n.lang() }}</p> }
         @if (r.canComplete) {
           <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [(ngModel)]="justification"></textarea></label>
           <label><span>{{ t('aiAdoption.evidence') }} <b>*</b></span><textarea rows="2" [(ngModel)]="evidence"></textarea><small>{{ t('aiAdoption.evidenceHelp') }}</small></label>
           <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !justification.trim() || !evidence.trim()" (click)="act('complete',r.id)">{{ t('aiMonitoring.complete') }}</button>
         }
-        @if (r.completion; as completion) { <p>{{ completion.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ completion.evidenceIds.join(', ') }}</small><p>{{ completion.completedAt | date:'medium':'+0300' }}</p> }
+        @if (r.completion; as completion) { <p>{{ completion.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ completion.evidenceIds.join(', ') }}</small><p>{{ completion.completedAt | dgopDualDate:'medium':i18n.lang() }}</p> }
       </section>
     }
   }

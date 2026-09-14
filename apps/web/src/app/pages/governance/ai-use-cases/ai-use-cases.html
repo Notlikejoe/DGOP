@@ -47,7 +47,7 @@
               <span class="case-row__copy">
                 <strong>{{ item.name }}</strong>
                 <small>{{ item.workflowCase?.code || t('aiuc.status.unnumbered') }}</small>
-                <small>{{ item.updatedAt | date:'medium' }}</small>
+                <small>{{ item.updatedAt | dgopDualDate:'medium':i18n.lang() }}</small>
               </span>
               <app-status-chip [kind]="statusKind(item)" [label]="statusLabel(item)" />
             </button>
@@ -59,6 +59,7 @@
 
       <main class="intake-main">
         @if (selected(); as item) {
+          @if(item.workflowCaseId){<app-ai-audit-query [caseId]="item.workflowCaseId" kind="aiuc" />}
           <section class="ds-card intake-toolbar">
             <div>
               <span class="eyebrow">{{ item.workflowCase?.code || t('aiuc.status.unnumbered') }}</span>

@@ -25,24 +25,24 @@
             @for (classification of row.assessments; track classification.round) { <p>{{ t('aiJourney.classification') }}: {{ value(classification.result, 'approvedTierCode', 'proposedTierCode') }} · {{ value(classification.result, 'scoreMax') }}</p> }
             @for (risk of row.risks; track risk.id) {
               <h3>{{ risk.riskRef }} · {{ risk.workflowCase ? t('aiRisk.status.' + risk.workflowCase.status) : '—' }}</h3>
-              @for (round of risk.assessments; track round.id) { <div class="journey-round"><strong>{{ round.kind }} · {{ round.round }}</strong><small>{{ round.createdAt | date:'medium' }}</small>
-                @for (decision of round.decisions; track decision.kind) { <p><strong>{{ decision.actorRoleCode }} · {{ decision.decision }}</strong><small>{{ decision.createdAt | date:'medium' }}</small>{{ decision.justification }}</p> }</div> }
+              @for (round of risk.assessments; track round.id) { <div class="journey-round"><strong>{{ t('aiJourney.kind.'+round.kind) }} · {{ round.round }}</strong><small>{{ round.createdAt | dgopDualDate:'medium':i18n.lang() }}</small>
+                @for (decision of round.decisions; track decision.kind) { <p><strong>{{ t('aiAssessment.role.'+decision.actorRoleCode) }} · {{ t('aiAdoption.decision.'+decision.decision) }}</strong><small>{{ decision.createdAt | dgopDualDate:'medium':i18n.lang() }}</small>{{ decision.justification }}</p> }</div> }
               @if (row.operationalStatusCode) { <p><strong>{{ t('aiJourney.operational.' + row.operationalStatusCode) }}</strong></p> }
               @if (risk.authorityReversals.length) { <h3>{{ t('aiMonitoring.reverse') }}</h3>
-                @for (reversal of risk.authorityReversals; track reversal.id) { <div class="journey-round"><strong>{{ reversal.actorRoleCode }} · {{ t('aiDashboard.round') }} {{ reversal.reassessment.inherentRound }}</strong><small>{{ reversal.createdAt | date:'medium' }}</small><p>{{ reversal.justification }}</p></div> }
+                @for (reversal of risk.authorityReversals; track reversal.id) { <div class="journey-round"><strong>{{ t('aiAssessment.role.'+reversal.actorRoleCode) }} · {{ t('aiDashboard.round') }} {{ reversal.reassessment.inherentRound }}</strong><small>{{ reversal.createdAt | dgopDualDate:'medium':i18n.lang() }}</small><p>{{ reversal.justification }}</p></div> }
               }
               @for (response of risk.responses; track response.id) {
                 @if (response.strategyEvents.length) { <h3>{{ response.strategyCode }} · {{ t('aiDashboard.round') }} {{ response.round }}</h3>
-                  @for (event of response.strategyEvents; track event.id) { <div class="journey-round"><strong>{{ event.actorRoleCode }} · {{ t('aiStrategy.' + event.kind) }}</strong><small>{{ event.createdAt | date:'medium' }}</small><p>{{ t('aiStrategy.' + event.outcome) }} · {{ event.justification }}</p></div> }
+                  @for (event of response.strategyEvents; track event.id) { <div class="journey-round"><strong>{{ t('aiAssessment.role.' + event.actorRoleCode) }} · {{ t('aiStrategy.' + event.kind) }}</strong><small>{{ event.createdAt | dgopDualDate:'medium':i18n.lang() }}</small><p>{{ t('aiStrategy.' + event.outcome) }} · {{ event.justification }}</p></div> }
                 }
               }
               @if (risk.auditEvents.length) { <h3>{{ t('aiJourney.audit') }}</h3>
-                @for (event of risk.auditEvents; track event.id) { <p>{{ event.action }}<small>{{ event.createdAt | date:'medium' }}</small></p> }
+                @for (event of risk.auditEvents; track event.id) { <p>{{ t('wf.event.' + event.action) }}<small>{{ event.createdAt | dgopDualDate:'medium':i18n.lang() }}</small></p> }
               }
               <h3>{{ t('aiJourney.actions') }}</h3>
               @for (action of risk.actions; track action.actionRef) { <p>{{ action.actionRef }} · {{ action.title }} · {{ action.progress[0]?.completionPct ?? 0 }}%</p> }
               <h3>{{ t('aiJourney.reviews') }}</h3>
-              @for (review of risk.reviews; track review.id) { <p>{{ review.dueAt | date:'mediumDate' }} · {{ review.bandCode }} · {{ review.cancellation ? t('aiJourney.superseded') : review.completion ? t('aiJourney.completed') : t('aiJourney.scheduled') }}</p> }
+              @for (review of risk.reviews; track review.id) { <p>{{ review.dueAt | dgopDualDate:'mediumDate':i18n.lang() }} · {{ review.bandCode }} · {{ review.cancellation ? t('aiJourney.superseded') : review.completion ? t('aiJourney.completed') : t('aiJourney.scheduled') }}</p> }
             }
           </details></td>
         </tr></ng-template>

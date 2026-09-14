@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { testSeverity } from './ai-severity.integration';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
@@ -38,7 +39,7 @@ export async function testAuthorityStrategy(db:PrismaClient,f:{riskId:string;ris
    return risk;
   }
   async function act(id:string,user:string,action:StrategyAction,extra={}){const c=await strategy.context(user,id);return strategy.act(user,id,{...dto(c.version),action,...extra});}
-  const avoid=await source('AVOID');let c=await strategy.context(f.riskOwnerId,avoid.id);assert.equal(c.canPropose,true);
+  const avoid=await source('AVOID');await testSeverity(db,app,avoid.id,actors,f.riskOwnerId,f.auditorId,evidence.id);let c=await strategy.context(f.riskOwnerId,avoid.id);assert.equal(c.canPropose,true);
   await assert.rejects(strategy.act(f.officerId,avoid.id,{...dto(c.version),action:'close'}));
   await assert.rejects(strategy.act(f.riskOwnerId,avoid.id,{...dto(c.version),action:'propose',avoidanceAction:'scope_change',scopeChange:' ',evidenceIds:[]}));
   await act(avoid.id,f.riskOwnerId,'propose',{avoidanceAction:'scope_change',scopeChange:'Removed risky inputs; verified restricted processing scope'});

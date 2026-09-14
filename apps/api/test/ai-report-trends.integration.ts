@@ -34,6 +34,11 @@ export async function testReportTrends(db:PrismaClient,app:INestApplication,f:{o
  assert.equal(firstPage.rows[4].delta,2);assert.equal(firstPage.rows[4].snapshotId,rows[4].snapshotId);assert.equal(nextPage.rows[0].snapshotId,rows[5].snapshotId);
  const percent=await reports.trend(f.officerId,unitId,'GEN-101','monthly',1,100);assert.equal(percent.rows.find(r=>r.snapshotId===fixtures[1].id)!.delta,15);assert.equal(percent.rows[0].deltaUnit,'percentage_points');
  const executive=await reports.trend(execId,unitId);assert.equal(executive.aggregateOnly,true);assert.equal(executive.availableKpis.length,9);
+ const basis=await reports.currentBasis(f.officerId,unitId,'manual');
+ assert.equal(basis.snapshotId,base.id);assert.equal(basis.comparisonAvailable,true);assert.equal(basis.historicalReconstruction,false);
+ assert.equal((await reports.currentBasis(execId,unitId,'manual')).rows.length,9);
+ await assert.rejects(reports.currentBasis(f.riskOwnerId,unitId,'manual'));
+ await assert.rejects(reports.currentBasis(f.officerId,unitId,'weekly'));
  for(const secret of ['sourceMembers','createdBy','operatorUserId','referencePins'])assert.ok(!JSON.stringify(executive).includes(secret));
  await assert.rejects(reports.trend(execId,unitId,'GEN-81'),/outside your live/);await assert.rejects(reports.trend(f.riskOwnerId,unitId),/register visibility|authority/);
  await assert.rejects(reports.trend(f.officerId,unitId,'GEN-999'),/supported KPI/);await assert.rejects(reports.trend(f.officerId,unitId,'GEN-85','weekly'),/supported KPI/);

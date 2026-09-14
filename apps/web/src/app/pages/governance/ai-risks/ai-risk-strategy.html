@@ -23,7 +23,7 @@
    </div>
   </section>
   } @else {<p>{{ t('aiStrategy.awaiting') }}</p>}
-  @if(c.events.length){<section class="ds-card decision-card"><p-table [value]="c.events" [tableStyle]="{'width':'100%','table-layout':'fixed'}"><ng-template #header><tr><th>{{ t('aiStrategy.title') }}</th><th>{{ t('aiAssessment.justification') }}</th><th>{{ t('aiAdoption.evidence') }}</th></tr></ng-template><ng-template #body let-event><tr><td style="overflow-wrap:anywhere">{{ t('aiStrategy.' + event.kind) }}<p>{{ t('aiStrategy.' + event.outcome) }}</p><small>{{ event.actorRoleCode }} · {{ event.createdAt | date:'medium':'+0300' }}</small></td><td style="overflow-wrap:anywhere">{{ event.justification }}<p>{{ event.payload.scopeChange }}</p></td><td style="overflow-wrap:anywhere">{{ event.evidenceIds.join(', ') }}</td></tr></ng-template></p-table></section>}
+  @if(c.events.length){<section class="ds-card decision-card"><p-table [value]="c.events" [tableStyle]="{'width':'100%','table-layout':'fixed'}"><ng-template #header><tr><th>{{ t('aiStrategy.title') }}</th><th>{{ t('aiAssessment.justification') }}</th><th>{{ t('aiAdoption.evidence') }}</th></tr></ng-template><ng-template #body let-event><tr><td style="overflow-wrap:anywhere">{{ t('aiStrategy.' + event.kind) }}<p>{{ t('aiStrategy.' + event.outcome) }}</p><small>{{ t('aiAssessment.role.'+event.actorRoleCode) }} · {{ event.createdAt | dgopDualDate:'medium':i18n.lang() }}</small></td><td style="overflow-wrap:anywhere">{{ event.justification }}<p>{{ event.payload.scopeChange }}</p></td><td style="overflow-wrap:anywhere">{{ event.evidenceIds.join(', ') }}</td></tr></ng-template></p-table></section>}
  </section>
  }
 }

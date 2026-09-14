@@ -1491,7 +1491,7 @@
           </ng-template>
           <ng-template #body let-task>
             <tr>
-              <td><div class="inbox-task-cell"><span class="inbox-task-cell__mark"><app-icon name="fileCheck" /></span><span><strong [pTooltip]="task.title" tooltipPosition="top">{{ task.title }}</strong><small>{{ task.type }}</small>@if (task.aiGovernance?.severityCode) { <app-status-chip [kind]="task.aiGovernance.severityCode === 'P1' || task.aiGovernance.severityCode === 'P2' ? 'warning' : 'info'" [label]="t('aiJourney.severity') + ' · ' + task.aiGovernance.severityCode" /> }</span></div></td>
+              <td><div class="inbox-task-cell"><span class="inbox-task-cell__mark"><app-icon name="fileCheck" /></span><span><strong [pTooltip]="task.title" tooltipPosition="top">{{ task.title }}</strong><small>{{ task.type }}</small>@if (task.aiGovernance?.effectiveSeverityCode && task.aiGovernance?.overrideEventId) { <app-status-chip kind="warning" [label]="t('aiSeverity.effective') + ' · ' + task.aiGovernance!.effectiveSeverityCode" /> }@if (task.aiGovernance?.severityCode) { <app-status-chip [kind]="task.aiGovernance.severityCode === 'P1' || task.aiGovernance.severityCode === 'P2' ? 'warning' : 'info'" [label]="t('aiJourney.severity') + ' · ' + task.aiGovernance.severityCode" /> }</span></div></td>
               <td>@if (task.case) { <a class="inbox-case-link" [routerLink]="['/governance/workflow/cases', task.caseId]"><code>{{ task.case.code }}</code><span>{{ task.case.title }}</span></a> } @else { - }</td>
               <td><time [attr.datetime]="task.dueDate || null">{{ fmtDate(task.dueDate) }}</time></td>
               <td><app-status-chip [kind]="slaKind(task.slaStatus)" [label]="t('sla.' + task.slaStatus)" /></td>

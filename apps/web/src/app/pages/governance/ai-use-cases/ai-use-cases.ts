@@ -1,6 +1,7 @@
+import { DualDatePipe } from '../../../shared/dual-date.pipe';
+import { AiAuditQuery } from '../../../shared/ai-audit-query';
 import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -125,7 +126,7 @@ const SECTIONS: IntakeSectionDefinition[] = [
 @Component({
   selector: 'app-ai-use-cases',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AiJourneyHistory, DatePipe, FormsModule, AppIcon, StatusChip],
+  imports: [AiAuditQuery, AiJourneyHistory, DualDatePipe, FormsModule, AppIcon, StatusChip],
   templateUrl: './ai-use-cases.html',
   styleUrl: './ai-use-cases.scss',
 })

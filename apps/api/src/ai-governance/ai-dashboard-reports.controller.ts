@@ -10,6 +10,8 @@ export class AiDashboardReportsController {
  @Get('units') units(@CurrentUser() u:AuthUser){return this.reports.units(u.id);}
  @Post('snapshots') capture(@CurrentUser() u:AuthUser,@Body() dto:CaptureDashboardDto){return this.reports.capture(u.id,dto.organizationUnitId,dto.frequency);}
  @Get('units/:unitId/snapshots') list(@CurrentUser() u:AuthUser,@Param('unitId',ParseUUIDPipe) unitId:string,@Query('page',new DefaultValuePipe(1),ParseIntPipe) page:number,@Query('pageSize',new DefaultValuePipe(20),ParseIntPipe) size:number){return this.reports.list(u.id,unitId,page,size);}
+ // Keep raw pagination untyped until ParseIntPipe: global implicit conversion would turn invalid strings into NaN and let DefaultValuePipe hide them.
+ @Get('units/:unitId/trend') trend(@CurrentUser() u:AuthUser,@Param('unitId',ParseUUIDPipe) unitId:string,@Query('kpiId',new DefaultValuePipe('GEN-85')) kpi:string,@Query('frequency',new DefaultValuePipe('manual')) frequency:string,@Query('page',new DefaultValuePipe(1),ParseIntPipe) page:unknown,@Query('pageSize',new DefaultValuePipe(20),ParseIntPipe) size:unknown){return this.reports.trend(u.id,unitId,kpi,frequency,Number(page),Number(size));}
  @Get('units/:unitId/schedule') schedule(@CurrentUser() u:AuthUser,@Param('unitId',ParseUUIDPipe) unitId:string){return this.reports.schedule(u.id,unitId);}
  @Post('units/:unitId/schedule') configure(@CurrentUser() u:AuthUser,@Param('unitId',ParseUUIDPipe) unitId:string,@Body() dto:ConfigureDashboardScheduleDto){return this.reports.configure(u.id,unitId,dto);}
  @Get('compare') compare(@CurrentUser() u:AuthUser,@Query('leftId',ParseUUIDPipe) left:string,@Query('rightId',ParseUUIDPipe) right:string){return this.reports.compare(u.id,left,right);}

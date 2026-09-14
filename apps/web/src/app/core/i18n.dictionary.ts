@@ -3,6 +3,13 @@ export type Dict = Record<string, { en: string; ar: string }>;
 
 /** Minimal in-app i18n for Sprint 0. Replaced by a full i18n pipeline later. */
 export const DICT: Dict = {
+"aiReports.trendTitle": {"en":"Saved KPI observations","ar":"قراءات المؤشرات المحفوظة"},
+"aiReports.trendHelp": {"en":"Dated saved captures only; missing periods are not filled or reconstructed. Changes compare the preceding capture with the same definition. A changed population can affect the value; unavailable comparisons show —.","ar":"قراءات محفوظة ومؤرخة فقط؛ لا تُملأ الفترات المفقودة ولا يُعاد بناؤها. يُقارن التغير بالقراءة السابقة ذات التعريف نفسه. قد يؤثر تغير مجموعة السجلات في القيمة؛ تظهر المقارنات غير المتاحة بعلامة —."},
+"aiReports.trendDelta": {"en":"Change from preceding capture","ar":"التغير عن القراءة السابقة"},
+"aiReports.cohortChanged": {"en":"Reporting population","ar":"مجموعة السجلات المشمولة"},
+"aiReports.cohortDifferent": {"en":"Changed","ar":"تغيرت"},
+"aiReports.cohortSame": {"en":"Same records","ar":"السجلات نفسها"},
+"aiReports.trendEmpty": {"en":"No saved observations for this frequency.","ar":"لا توجد قراءات محفوظة لهذا التكرار."},
 "aiMonitoring.reverse": {"en":"Reopen by higher authority","ar":"إعادة الفتح بقرار سلطة أعلى"},
 "aiMonitoring.reverseHelp": {"en":"Reopens assessment without changing the previous decision. Pending monitoring is superseded; fresh scores and approvals are required.","ar":"إعادة فتح التقييم مع حفظ القرار السابق وإلغاء المتابعة المعلقة. يلزم تقييم وموافقات جديدة."},
 "aiMonitoring.previousDecision": {"en":"Previous decision retained","ar":"القرار السابق محفوظ"},

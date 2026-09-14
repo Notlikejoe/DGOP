@@ -8,6 +8,7 @@ import { AiAnnualReviewService } from './ai-annual-review.service';
 import { AiDashboardService } from './ai-dashboard.service';
 import { governanceDigest, governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import { jsonRecord } from './ai-risk-scoring';
+import { AI_KPI_CATALOG } from './ai-kpi.catalog';
 
 export type ReportFrequency='manual'|'daily'|'monthly';
 export function reportSlots(now=new Date()){
@@ -41,13 +42,51 @@ export class AiDashboardReportsService {
  async units(userId:string){return this.annual.units(userId);}
  private async visible(tx:Prisma.TransactionClient,userId:string,row:Snapshot){
   await this.access(tx,userId,row.organizationUnitId);
-  const current=await this.dashboard.snapshotMembers(tx,userId,row.organizationUnitId),saved=jsonRecord(row.sourceMembers);
+  const current=await this.dashboard.snapshotMembers(tx,userId,row.organizationUnitId);
+  this.verifySnapshot(row,current);
+  return current;
+ }
+ private verifySnapshot(row:Snapshot,current:Awaited<ReturnType<AiDashboardService['snapshotMembers']>>){
+  const saved=jsonRecord(row.sourceMembers);
   for(const kind of ['risks','register','pipeline'] as const){
    const list=saved[kind],eligible=new Set(current[kind].map(m=>m.id));
    if(!Array.isArray(list)||list.some(m=>typeof jsonRecord(m)['id']!=='string'||!eligible.has(String(jsonRecord(m)['id']))))throw new ForbiddenException('Snapshot sources are outside current register visibility');
   }
   if(governanceDigest({sourceMembers:row.sourceMembers,projection:row.projection})!==row.digest)throw new ConflictException('Snapshot integrity check failed');
-  return current;
+ }
+ async trend(userId:string,unitId:string,kpiId='GEN-85',frequency='manual',page=1,pageSize=20){
+  const definition=AI_KPI_CATALOG.find(k=>k.id===kpiId);
+  if(!definition||!['manual','daily','monthly'].includes(frequency)||!Number.isSafeInteger(page)||page<1||!Number.isInteger(pageSize)||pageSize<1||pageSize>100||(page-1)*pageSize>2147483647)
+   throw new BadRequestException('Use a supported KPI/frequency, positive page and page size 1–100');
+  return governanceTransaction(this.prisma,async tx=>{
+   await this.access(tx,userId,unitId);
+   const live=await this.dashboard.projection(tx,userId,unitId);
+   if(!live.cards.some(k=>k.id===kpiId))throw new ForbiddenException('This KPI is outside your live reporting authority');
+   const members=await this.dashboard.snapshotMembers(tx,userId,unitId),where={organizationUnitId:unitId,frequency};
+   // One older neighbor keeps each delta identical across page boundaries.
+   const snapshots=await tx.aiDashboardSnapshot.findMany({where,orderBy:[{asOf:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1});
+   const values=snapshots.map(row=>{
+    this.verifySnapshot(row,members);
+    const projection=jsonRecord(row.projection),cards=Array.isArray(projection['cards'])?projection['cards'].map(jsonRecord):[];
+    const card=cards.filter(k=>k['id']===kpiId);
+    if(projection['observationBasis']!=='current_scope_at_capture'||typeof projection['projectionVersion']!=='string'||card.length!==1||card[0]['unit']!==definition.unit||
+      !(card[0]['value']===null||typeof card[0]['value']==='number'&&Number.isFinite(card[0]['value'])))throw new ConflictException('Saved KPI observation definition is incompatible');
+    const sources=jsonRecord(row.sourceMembers);
+    const cohort=governanceDigest(Object.fromEntries(['risks','register','pipeline'].map(kind=>[kind,(sources[kind] as unknown[]).map(m=>String(jsonRecord(m)['id'])).sort()])));
+    return {row,card:card[0],version:projection['projectionVersion'],cohort};
+   });
+   const rows=values.slice(0,pageSize).map((v,index)=>{
+    const older=values[index+1],value=v.card['value'] as number|null,previous=older?.card['value'];
+    const comparable=!!older&&older.version===v.version&&older.row.asOf<v.row.asOf;
+    return {snapshotId:v.row.id,asOf:v.row.asOf,periodKey:v.row.periodKey,value,unit:definition.unit,
+     numerator:typeof v.card['numerator']==='number'?v.card['numerator']:null,denominator:typeof v.card['denominator']==='number'?v.card['denominator']:null,
+     previousAsOf:older?.row.asOf??null,delta:comparable&&typeof value==='number'&&typeof previous==='number'?Math.round((value-previous)*100)/100:null,
+     deltaUnit:definition.unit==='percent'?'percentage_points':definition.unit,cohortChanged:older?v.cohort!==older.cohort:null,comparisonAvailable:comparable&&typeof value==='number'&&typeof previous==='number'};
+   });
+   return {rows,total:await tx.aiDashboardSnapshot.count({where}),page,pageSize,frequency,kpi:{id:definition.id,labelEn:definition.labelEn,labelAr:definition.labelAr,unit:definition.unit},
+    availableKpis:live.cards.map(k=>({id:k.id,labelEn:k.labelEn,labelAr:k.labelAr,unit:k.unit})),aggregateOnly:live.aggregateOnly,readOnly:true,
+    observationBasis:'saved_capture',historicalReconstruction:false,missingObservationsInterpolated:false,timeZone:'Asia/Riyadh'};
+  });
  }
  private async view(tx:Prisma.TransactionClient,userId:string,row:Snapshot){
   await this.visible(tx,userId,row);

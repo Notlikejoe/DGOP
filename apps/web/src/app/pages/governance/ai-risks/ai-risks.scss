@@ -1,8 +1,38 @@
-.risk-intake, .risk-intake fieldset { display: grid; gap: var(--space-4); }
-.risk-intake { padding: var(--space-5); }
-.risk-intake h2 { margin: 0; }
-.risk-intake label { display: grid; gap: var(--space-2); color: var(--command-muted); font-weight: 750; }
-.risk-intake fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.risk-register-workspace, .risk-intake { display: grid; gap: var(--space-4); min-width: 0; }
+.risk-register-table { padding: 0; overflow: hidden; min-width: 0; }
+.risk-register-heading { padding: var(--space-4); border-bottom: 1px solid var(--border); }
+.risk-register-heading h2, .risk-intake h2 { margin: 0; }
+.risk-register-heading p { margin: .25rem 0 0; color: var(--command-muted); }
+.risk-register-table .eyebrow { margin-bottom: .25rem; }
+:host ::ng-deep .risk-register-table .p-datatable { min-width: 0; }
+:host ::ng-deep .risk-register-table .p-datatable-thead > tr > th,
+:host ::ng-deep .risk-intake .p-datatable-thead > tr > th { background: color-mix(in srgb, var(--primary-soft) 34%, var(--surface)); color: var(--on-surface); font-weight: 850; }
+:host ::ng-deep .risk-register-table .p-datatable-thead > tr > th,
+:host ::ng-deep .risk-register-table .p-datatable-tbody > tr > td { padding: .55rem .65rem; vertical-align: middle; }
+:host ::ng-deep .risk-register-table .p-datatable-tbody > tr.risk-row--active > td { background: color-mix(in srgb, var(--primary-soft) 40%, var(--surface)); }
+.risk-register-table td strong, .risk-register-table td small { display: block; max-width: 16rem; }
+.risk-register-table td small { margin-top: .2rem; color: var(--command-muted); }
+.risk-register-table td input, .risk-register-table td p-select { display: block; width: 100%; min-width: 11rem; }
+.risk-register-table td input { min-height: 38px; }
+.table-open { white-space: nowrap; }
+.table-check { display: flex; align-items: center; gap: var(--space-2); min-width: max-content; color: var(--on-surface); font-weight: 750; }
+.table-check input { width: 1.15rem !important; min-width: 1.15rem !important; min-height: 1.15rem !important; margin: 0; }
+.risk-intake { padding: var(--space-4); }
 .risk-intake b { color: var(--danger); }
-.risk-check { display: flex !important; align-items: center; gap: var(--space-2); }
-.risk-check input { width: auto; }
+.risk-unsaved { display: inline-block; margin-top: .4rem; padding: .2rem .55rem; color: var(--warning); background: var(--warning-soft); border-radius: var(--radius-pill); font-weight: 800; }
+:host ::ng-deep .risk-intake .p-datatable-thead > tr > th:first-child,
+:host ::ng-deep .risk-intake .p-datatable-tbody > tr > th { width: 31%; }
+:host ::ng-deep .risk-intake .p-datatable-thead > tr > th,
+:host ::ng-deep .risk-intake .p-datatable-tbody > tr > th,
+:host ::ng-deep .risk-intake .p-datatable-tbody > tr > td { padding: .6rem .75rem; vertical-align: middle; }
+:host ::ng-deep .risk-intake .p-datatable-tbody > tr > th { color: var(--command-muted); font-weight: 800; text-align: start; overflow-wrap: anywhere; }
+.risk-intake td p-select, .risk-intake td textarea { display: block; width: 100%; }
+.risk-intake td textarea { min-height: 58px; resize: vertical; }
+.risk-intake td app-ai-control-picker { display: block; }
+.risk-intake td app-ai-control-picker fieldset { margin: 0; border: 0; padding: 0; }
+.risk-cell-value { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  :host ::ng-deep .risk-intake .p-datatable-thead > tr > th:first-child,
+  :host ::ng-deep .risk-intake .p-datatable-tbody > tr > th { width: 42%; }
+  .risk-intake { padding: var(--space-3); }
+}

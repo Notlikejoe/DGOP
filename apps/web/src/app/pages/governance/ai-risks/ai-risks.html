@@ -5,15 +5,32 @@
   @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
   @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiRisk.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section> }
   @else {
-    <app-ai-risk-initiation (created)="load($event)"/>
-    <div class="review-workspace">
-      <aside class="ds-card queue-rail"><span class="eyebrow">{{ t('aiRisk.register') }} · {{ items().length }}</span><div class="queue-list">
-        @for (item of items(); track item.id) { <button type="button" class="queue-row" [class.queue-row--active]="selected()?.id === item.id" (click)="select(item)"><span class="queue-icon"><app-icon name="shield" /></span><span><strong>{{ item.title || item.useCase.name }}</strong><small>{{ item.workflowCase.code }}</small><small>{{ item.riskRef || t('aiRisk.pendingRef') }}</small></span><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /></button> }
-        @empty { <div class="empty-state"><strong>{{ t('aiRisk.empty') }}</strong></div> }
-      </div></aside>
+    <div class="risk-register-workspace">
+      <section class="ds-card risk-register-table">
+        <header class="risk-register-heading"><div><span class="eyebrow">{{ t('aiRisk.register') }} · {{ items().length }}</span><h2>{{ t('aiRisk.tableTitle') }}</h2><p>{{ t('aiRisk.tableHelp') }}</p></div></header>
+        <p-table [value]="items()" dataKey="id" [rowHover]="true" [stripedRows]="true" [scrollable]="true" [paginator]="items().length > 12" [rows]="12" [tableStyle]="{'min-width':'64rem'}">
+          <ng-template #header><tr>
+            <th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiInitiation.useCase') }}</th><th>{{ t('aiRisk.field.title') }}</th>
+            <th>{{ t('aiRisk.field.risk_category') }}</th><th>{{ t('aiRisk.field.third_party_involved') }}</th><th>{{ t('aiRisk.owner') }}</th>
+            <th>{{ t('aiRisk.tableStatus') }}</th><th>{{ t('aiRisk.tableAction') }}</th>
+          </tr></ng-template>
+          <ng-template #body let-row><tr [class.risk-row--active]="selected()?.id === row.id">
+            <td><strong>{{ row.riskRef || row.workflowCase.code }}</strong><small>{{ row.riskRef ? row.workflowCase.code : t('aiRisk.pendingRef') }}</small></td>
+            <td><strong>{{ row.useCase.useCaseRef }}</strong><small>{{ row.useCase.name }}</small></td>
+            <td>@if (selected()?.id === row.id && row.canEdit) { <input pInputText type="text" maxlength="200" [disabled]="working()" [ngModel]="input()['title']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('title', $event)" [attr.aria-label]="t('aiRisk.field.title')" /> } @else { <span>{{ row.title || row.useCase.name }}</span> }</td>
+            <td>@if (selected()?.id === row.id && row.canEdit) { <p-select [options]="lookup('risk_category')?.values || []" optionValue="code" [optionLabel]="i18n.lang() === 'ar' ? 'labelAr' : 'labelEn'" [placeholder]="t('aiuc.select')" [disabled]="working()" [ngModel]="input()['risk_category'] || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('risk_category', $event)" [ariaLabel]="t('aiRisk.field.risk_category')" /> } @else { {{ lookupLabel('risk_category', row.intakeData?.['risk_category']) }} }</td>
+            <td>@if (selected()?.id === row.id && row.canEdit) { <label class="table-check"><input type="checkbox" [disabled]="working()" [ngModel]="input()['third_party_involved']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('third_party_involved', $event)" /><span>{{ t(input()['third_party_involved'] ? 'aiuc.yes' : 'aiuc.no') }}</span></label> } @else { {{ displayValue(row, 'third_party_involved') }} }</td>
+            <td>{{ row.owner ? ownerLabel(row.owner) : t('aiRisk.unassigned') }}</td>
+            <td><app-status-chip kind="info" [label]="t('aiRisk.status.' + row.workflowCase.status)" /></td>
+            <td><button type="button" class="ds-btn ds-btn--ghost table-open" [attr.aria-pressed]="selected()?.id === row.id" (click)="select(row)">{{ t(selected()?.id === row.id ? 'aiRisk.tableSelected' : 'aiRisk.tableOpen') }}</button></td>
+          </tr></ng-template>
+          <ng-template #emptymessage><tr><td colspan="8">{{ t('aiRisk.empty') }}</td></tr></ng-template>
+        </p-table>
+      </section>
+      <app-ai-risk-initiation (created)="load($event)"/>
       <main class="review-main">
         @if (selected(); as item) {
-          <section class="ds-card review-toolbar"><div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2></div><app-status-chip kind="info" [label]="item.riskRef || t('aiRisk.pendingRef')" /></section>
+          <section class="ds-card review-toolbar"><div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2>@if (dirty()) { <small class="risk-unsaved" role="status">{{ t('aiRisk.unsaved') }}</small> }</div><app-status-chip kind="info" [label]="item.riskRef || t('aiRisk.pendingRef')" /></section>
           @if (item.useCase.operationalStatusCode) { <section class="ds-card review-toolbar" role="status"><strong>{{ t('aiJourney.operational.' + item.useCase.operationalStatusCode) }}</strong><p>{{ t('aiJourney.intakePaused') }}</p></section> }
           @if(item.libraryVersion;as l){<section class="ds-card review-toolbar"><strong>{{ l.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ l.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></section>}
           <section class="ds-card specialist-context"><header class="section-head"><span><app-icon name="shield" /></span><div><small>{{ t('aiRisk.handover') }}</small><h2>{{ item.useCase.name }}</h2></div></header><div class="specialist-facts">
@@ -25,15 +42,20 @@
           @if (item.canAssignOwner) { <section class="ds-card decision-card specialist-decision"><h2>{{ t('aiRisk.assignOwner') }}</h2><label><span>{{ t('aiRisk.owner') }}</span><select [ngModel]="ownerUserId()" (ngModelChange)="ownerUserId.set($event)"><option value="">{{ t('aiuc.select') }}</option>@for (owner of lookups().riskOwners; track owner.userId) { <option [value]="owner.userId">{{ ownerLabel(owner) }}</option> }</select></label><label><span>{{ t('aiReview.justification') }}</span><textarea rows="2" maxlength="2000" [ngModel]="ownerJustification()" (ngModelChange)="ownerJustification.set($event)"></textarea></label><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t('aiRisk.assignOwner') }}</button></section> }
           <section class="ds-card specialist-decision risk-intake"><h2>{{ t('aiRisk.intake') }}</h2>
             @if(item.suggestedControlPins;as suggestions){<section class="ds-card"><h3>{{ t('aiControls.librarySuggestions') }}</h3>@for(p of suggestions.controlPins;track p.versionId){<p>{{ p.controlCode }} · {{ i18n.lang()==='ar'?p.titleAr:p.titleEn }}</p>}<p>{{ t('aiControls.suggestions') }}</p></section>}
-            @if(!item.canEdit){@for(p of item.controlPins??[];track p.versionId){<p>{{ p.controlCode }} · {{ i18n.lang()==='ar'?p.titleAr:p.titleEn }}</p>}}
-            <app-ai-control-picker [choices]="controls()" [selected]="selectedControls()" [disabled]="!item.canEdit||working()" (changed)="patch('control_domain_version_ids',$event)" />
-            <fieldset [disabled]="!item.canEdit || working()">
-              <label><span>{{ t('aiRisk.field.title') }} <b>*</b></span><input type="text" maxlength="200" [ngModel]="input()['title']" (ngModelChange)="patch('title', $event)" /></label>
-              <div class="verification-fields">@for (list of lookups().lists; track list.field) { <label><span>{{ t('aiRisk.field.' + list.field) }} <b>*</b></span><select [ngModel]="input()[list.field]" (ngModelChange)="patch(list.field, $event)"><option value="">{{ t('aiuc.select') }}</option>@for (value of list.values; track value.code) { <option [value]="value.code">{{ optionLabel(value) }}</option> }</select></label> }</div>
-              @for (field of textFields; track field) { <label><span>{{ t('aiRisk.field.' + field) }} @if (field !== 'notes') { <b>*</b> }</span><textarea rows="3" maxlength="5000" [ngModel]="input()[field]" (ngModelChange)="patch(field, $event)"></textarea></label> }
-              <label class="risk-check"><input type="checkbox" [ngModel]="input()['third_party_involved']" (ngModelChange)="patch('third_party_involved', $event)" /><span>{{ t('aiRisk.field.third_party_involved') }}</span></label>
-              <label><span>{{ t('aiRisk.field.evidence') }}</span><textarea rows="2" [ngModel]="evidenceText()" (ngModelChange)="evidenceText.set($event)" [placeholder]="t('aiReview.verification.evidenceHint')"></textarea></label>
-            </fieldset>
+            <p-table [value]="detailFields()" dataKey="field" [stripedRows]="true" [tableStyle]="{'width':'100%','table-layout':'fixed'}">
+              <ng-template #header><tr><th>{{ t('aiRisk.tableField') }}</th><th>{{ t('aiRisk.tableValue') }}</th></tr></ng-template>
+              <ng-template #body let-field><tr><th scope="row">{{ t('aiRisk.field.' + field.field) }} @if (field.required) { <b>*</b> }</th><td>
+                @if (item.canEdit) {
+                  @switch (field.kind) {
+                    @case ('select') { <p-select [options]="lookup(field.field)?.values || []" optionValue="code" [optionLabel]="i18n.lang() === 'ar' ? 'labelAr' : 'labelEn'" [placeholder]="t('aiuc.select')" [disabled]="working()" [ngModel]="input()[field.field] || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [ariaLabel]="t('aiRisk.field.' + field.field)" /> }
+                    @case ('textarea') { <textarea pTextarea rows="2" maxlength="5000" [disabled]="working()" [ngModel]="input()[field.field] || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [attr.aria-label]="t('aiRisk.field.' + field.field)"></textarea> }
+                    @case ('boolean') { <label class="table-check"><input type="checkbox" [disabled]="working()" [ngModel]="input()['third_party_involved']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('third_party_involved', $event)" /><span>{{ t(input()['third_party_involved'] ? 'aiuc.yes' : 'aiuc.no') }}</span></label> }
+                    @case ('controls') { <app-ai-control-picker [choices]="controls()" [selected]="selectedControls()" [disabled]="working()" (changed)="patch('control_domain_version_ids',$event)" /> }
+                    @case ('evidence') { <textarea pTextarea rows="2" [disabled]="working()" [ngModel]="evidenceText()" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateEvidence($event)" [placeholder]="t('aiReview.verification.evidenceHint')" [attr.aria-label]="t('aiRisk.field.evidence')"></textarea> }
+                  }
+                } @else { <span class="risk-cell-value">{{ displayValue(item, field.field) }}</span> }
+              </td></tr></ng-template>
+            </p-table>
             @if (item.canEdit) { <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="save()">{{ t('aiRisk.save') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !lookups().ready" (click)="save(true)">{{ t('aiRisk.submit') }}</button></div> }
             @else { <div class="review-gate-note"><app-icon name="info" /><span>{{ t(item.workflowCase.status === 'draft' ? 'aiRisk.ownerOnly' : 'aiRisk.awaitingAssessment') }}</span></div> }
           </section>

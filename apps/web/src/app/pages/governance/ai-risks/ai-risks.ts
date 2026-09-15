@@ -4,7 +4,7 @@ import { AiRiskStrategy } from './ai-risk-strategy';
 import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { AiControlPicker, ControlTag } from './ai-control-picker';
 import { AiRiskInitiation } from './ai-risk-initiation';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -18,6 +18,10 @@ import { AiRiskResponse } from './ai-risk-response';
 import { AiTreatment } from './ai-treatment';
 import { AiResidualReview } from './ai-residual-review';
 import { AiRiskMonitoring } from './ai-risk-monitoring';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { TextareaModule } from 'primeng/textarea';
 
 interface RiskItem {
   controlPins:ControlTag[]|null;suggestedControlPins:{controlPins:ControlTag[]}|null;
@@ -35,7 +39,7 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);
@@ -48,25 +52,62 @@ export class AiRisksPage implements OnInit {
   protected readonly lookups = signal<RiskLookups>({ ready: false, lists: [], riskOwners: [] });
   protected readonly controls=signal<ControlTag[]>([]);
   protected readonly input = signal<Record<string, unknown>>({});
+  protected readonly draftCache = signal<Record<string, { fields: Record<string, unknown>; evidence: string }>>({});
+  protected readonly dirty = signal(false);
   protected readonly ownerUserId = signal('');
   protected readonly ownerJustification = signal('');
   protected readonly evidenceText = signal('');
   protected readonly textFields = ['cause', 'event', 'effect', 'current_controls', 'notes'];
+  protected readonly otherFields = [
+    { field: 'cause', kind: 'textarea', required: true },
+    { field: 'event', kind: 'textarea', required: true },
+    { field: 'effect', kind: 'textarea', required: true },
+    { field: 'current_controls', kind: 'textarea', required: true },
+    { field: 'notes', kind: 'textarea', required: false },
+    { field: 'third_party_involved', kind: 'boolean', required: true },
+    { field: 'control_domain_version_ids', kind: 'controls', required: false },
+    { field: 'evidence', kind: 'evidence', required: false },
+  ] as const;
+  protected readonly detailFields = computed(() => [
+    ...this.lookups().lists.filter(list => list.field !== 'risk_category').map(list => ({ field: list.field, kind: 'select', required: true })),
+    ...this.otherFields,
+  ]);
   ngOnInit(): void { void this.load(); }
   protected t(key: string): string { return this.i18n.t(key); }
   protected label(value: { nameEn: string; nameAr: string } | null): string { return value ? (this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn) : '—'; }
   protected ownerLabel(value: { fullNameEn: string; fullNameAr: string }): string { return this.i18n.lang() === 'ar' ? value.fullNameAr : value.fullNameEn; }
   protected optionLabel(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }
+  protected lookup(field: string) { return this.lookups().lists.find(list => list.field === field); }
+  protected lookupLabel(field: string, code: unknown): string {
+    return this.lookup(field)?.values.find(value => value.code === code)?.[this.i18n.lang() === 'ar' ? 'labelAr' : 'labelEn'] ?? (typeof code === 'string' && code ? code : '—');
+  }
+  protected displayValue(item: RiskItem, field: string): string {
+    const value = item.intakeData?.[field];
+    if (field === 'third_party_involved') return this.t(value === true ? 'aiuc.yes' : value === false ? 'aiuc.no' : 'aiRisk.notSet');
+    if (field === 'control_domain_version_ids') return item.controlPins?.map(pin => pin.controlCode).join(', ') || '—';
+    if (field === 'evidence') return Array.isArray(value) ? value.join(', ') || '—' : '—';
+    if (this.lookup(field)) return this.lookupLabel(field, value);
+    return typeof value === 'string' && value ? value : '—';
+  }
   protected selectedControls():string[]{const v=this.input()['control_domain_version_ids'];return Array.isArray(v)?v:[];}
-  protected patch(field: string, value: unknown): void { this.input.update(input => ({ ...input, [field]: value })); }
+  protected patch(field: string, value: unknown): void {
+    this.input.update(input => ({ ...input, [field]: value }));
+    if (this.selected()?.canEdit) this.dirty.set(true);
+  }
+  protected updateEvidence(value: string): void { this.evidenceText.set(value); if (this.selected()?.canEdit) this.dirty.set(true); }
   protected select(item: RiskItem | null): void {
+    const previous = this.selected();
+    if (previous?.canEdit && this.dirty()) this.draftCache.update(cache => ({ ...cache, [previous.id]: { fields: this.input(), evidence: this.evidenceText() } }));
     this.selected.set(item); this.ownerUserId.set(item?.owner?.userId ?? ''); this.ownerJustification.set('');
     const stored = item?.intakeData ?? {};
-    this.input.set(Object.fromEntries(['title', ...this.textFields, ...this.lookups().lists.map(list => list.field)].map(field => [field,
-      stored[field] ?? (field === 'title' ? item?.title ?? '' : field === 'dev_stage' ? item?.handoffPayload?.['lifecycleStage'] ?? '' : '')])));
-    this.patch('control_domain_version_ids', stored['control_domain_version_ids']??[]);
-    this.patch('third_party_involved', stored['third_party_involved'] ?? item?.handoffPayload?.['thirdPartyInvolved'] ?? false);
-    this.evidenceText.set(Array.isArray(stored['evidence']) ? stored['evidence'].join('\n') : '');
+    const initial = Object.fromEntries(['title', ...this.textFields, ...this.lookups().lists.map(list => list.field)].map(field => [field,
+      stored[field] ?? (field === 'title' ? item?.title ?? '' : field === 'dev_stage' ? item?.handoffPayload?.['lifecycleStage'] ?? '' : '')]));
+    initial['control_domain_version_ids'] = stored['control_domain_version_ids'] ?? [];
+    initial['third_party_involved'] = stored['third_party_involved'] ?? item?.handoffPayload?.['thirdPartyInvolved'] ?? false;
+    const cached = item ? this.draftCache()[item.id] : null;
+    this.input.set(cached?.fields ?? initial);
+    this.evidenceText.set(cached?.evidence ?? (Array.isArray(stored['evidence']) ? stored['evidence'].join('\n') : ''));
+    this.dirty.set(!!cached);
   }
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
@@ -95,8 +136,11 @@ export class AiRisksPage implements OnInit {
       const input = { ...this.input(), evidence: [...new Set(this.evidenceText().split(/[\s,;]+/u).filter(Boolean))] };
       const saved = await firstValueFrom(this.http.patch<{ version: number }>(`/api/ai/risks/${item.id}/intake`, { expectedVersion: item.version, input }));
       if (submit) await firstValueFrom(this.http.post(`/api/ai/risks/${item.id}/submit`, { expectedVersion: saved.version }));
+      this.dirty.set(false);
+      this.draftCache.update(cache => { const next = { ...cache }; delete next[item.id]; return next; });
       this.toast.success(this.t(submit ? 'aiRisk.submitted' : 'aiRisk.saved')); await this.load(item.id);
     } catch (error) {
+      this.dirty.set(true);
       this.toast.errorFrom(error, this.t('aiRisk.error'));
       // A valid draft save can precede a failed submission; refresh its version before retry.
       await this.load(item.id);

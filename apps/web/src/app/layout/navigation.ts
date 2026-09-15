@@ -4,10 +4,11 @@ export type NavSectionId =
   | 'overview'
   | 'foundation'
   | 'governance'
+  | 'aiGovernance'
   | 'accessManagement'
   | 'administration';
 
-export type HubId = 'governance' | 'accessManagement' | 'administration';
+export type HubId = 'governance' | 'aiGovernance' | 'accessManagement' | 'administration';
 
 export interface NavItem {
   labelKey: string;
@@ -135,46 +136,6 @@ export const NAV_SECTIONS: NavSection[] = [
         groupKey: 'hub.group.review',
         featured: true,
         badge: true,
-      },
-      {
-        labelKey: 'nav.aiUseCases',
-        descriptionKey: 'nav.desc.aiUseCases',
-        icon: 'AI',
-        iconName: 'shield',
-        link: '/governance/ai-use-cases',
-        permission: 'case.view.aiuc.own',
-        groupKey: 'hub.group.review',
-        featured: true,
-      },
-      {
-        labelKey: 'nav.aiReview',
-        descriptionKey: 'nav.desc.aiReview',
-        icon: 'AR',
-        iconName: 'fileCheck',
-        link: '/governance/ai-review',
-        permission: ['case.view.aiuc.org', 'case.approve.aiuc', 'aiuc.asset.register', 'aiuc.asset.approve'],
-        groupKey: 'hub.group.review',
-        featured: true,
-      },
-      {
-        labelKey: 'nav.aiDashboard', descriptionKey: 'nav.desc.aiDashboard', icon: 'AI', iconName: 'shield',
-        link: '/governance/ai-dashboard', permission: ['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'],
-        groupKey: 'hub.group.review', featured: true,
-      },
-      {
-        labelKey: 'nav.aiMigration', descriptionKey: 'nav.desc.aiMigration', icon: 'AI', iconName: 'listCheck',
-        link: '/governance/ai-migration', permission: ['refdata.propose.ai','airs.library.import'],
-        groupKey: 'hub.group.review',
-      },
-      {
-        labelKey: 'nav.aiReviews', descriptionKey: 'nav.desc.aiReviews', icon: 'AI', iconName: 'listCheck',
-        link: '/governance/ai-reviews', permission: ['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'],
-        groupKey: 'hub.group.review', featured: true,
-      },
-      {
-        labelKey: 'nav.aiRisks', descriptionKey: 'nav.desc.aiRisks', icon: 'AI', iconName: 'shield',
-        link: '/governance/ai-risks', permission: ['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'],
-        groupKey: 'hub.group.review', featured: true,
       },
       {
         labelKey: 'nav.dataQuality',
@@ -330,6 +291,56 @@ export const NAV_SECTIONS: NavSection[] = [
         link: '/governance/training',
         permission: 'training_assignments.view',
         groupKey: 'hub.group.evidence',
+      },
+    ],
+  },
+  {
+    id: 'aiGovernance',
+    titleKey: 'nav.section.aiGovernance',
+    summaryKey: 'nav.section.aiGovernance.summary',
+    homeLink: '/ai-governance',
+    icon: 'AI',
+    iconName: 'shield',
+    items: [
+      {
+        labelKey: 'nav.aiUseCases',
+        descriptionKey: 'nav.desc.aiUseCases',
+        icon: 'AI',
+        iconName: 'shield',
+        link: '/governance/ai-use-cases',
+        permission: 'case.view.aiuc.own',
+        groupKey: 'hub.group.aiAdoption',
+        featured: true,
+      },
+      {
+        labelKey: 'nav.aiReview',
+        descriptionKey: 'nav.desc.aiReview',
+        icon: 'AR',
+        iconName: 'fileCheck',
+        link: '/governance/ai-review',
+        permission: ['case.view.aiuc.org', 'case.approve.aiuc', 'aiuc.asset.register', 'aiuc.asset.approve'],
+        groupKey: 'hub.group.aiAdoption',
+        featured: true,
+      },
+      {
+        labelKey: 'nav.aiRisks', descriptionKey: 'nav.desc.aiRisks', icon: 'AI', iconName: 'shield',
+        link: '/governance/ai-risks', permission: ['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'],
+        groupKey: 'hub.group.aiRisk', featured: true,
+      },
+      {
+        labelKey: 'nav.aiReviews', descriptionKey: 'nav.desc.aiReviews', icon: 'AI', iconName: 'listCheck',
+        link: '/governance/ai-reviews', permission: ['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'],
+        groupKey: 'hub.group.aiRisk', featured: true,
+      },
+      {
+        labelKey: 'nav.aiDashboard', descriptionKey: 'nav.desc.aiDashboard', icon: 'AI', iconName: 'dashboard',
+        link: '/governance/ai-dashboard', permission: ['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'],
+        groupKey: 'hub.group.aiReporting', featured: true,
+      },
+      {
+        labelKey: 'nav.aiMigration', descriptionKey: 'nav.desc.aiMigration', icon: 'AI', iconName: 'listCheck',
+        link: '/governance/ai-migration', permission: ['refdata.propose.ai','airs.library.import'],
+        groupKey: 'hub.group.aiReporting',
       },
     ],
   },
@@ -511,6 +522,19 @@ export const HUB_CONFIGS: HubConfig[] = [
     ],
   },
   {
+    id: 'aiGovernance',
+    sectionIds: ['aiGovernance'],
+    eyebrowKey: 'hub.ai.eyebrow',
+    titleKey: 'hub.ai.title',
+    subtitleKey: 'hub.ai.subtitle',
+    checklistTitleKey: 'hub.ai.checklistTitle',
+    checklistKeys: [
+      'hub.ai.check.intake',
+      'hub.ai.check.risk',
+      'hub.ai.check.monitoring',
+    ],
+  },
+  {
     id: 'accessManagement',
     sectionIds: ['accessManagement'],
     eyebrowKey: 'hub.access.eyebrow',
@@ -543,6 +567,7 @@ export const CRUMB_MAP: Record<string, string> = {
   '/about': 'nav.about',
   '/governance-map': 'nav.designSystem',
   '/design-system': 'nav.designSystem',
+  '/ai-governance': 'nav.section.aiGovernance',
   '/access-management': 'nav.section.accessManagement',
   '/assets': 'nav.dataAssets',
   '/governance/ownership': 'nav.ownership',

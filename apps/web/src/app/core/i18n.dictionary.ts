@@ -1091,7 +1091,8 @@ export const DICT: Dict = {
   'nav.dataAssets': { en: 'Data Assets', ar: 'أصول البيانات' },
   'nav.section.overview': { en: 'Overview', ar: 'نظرة عامة' },
   'nav.section.foundation': { en: 'Foundation', ar: 'الأساس' },
-  'nav.section.governance': { en: 'Governance', ar: 'الحوكمة' },
+  'nav.section.governance': { en: 'Data Governance', ar: 'حوكمة البيانات' },
+  'nav.section.aiGovernance': { en: 'AI Governance', ar: 'حوكمة الذكاء الاصطناعي' },
   'nav.section.accessManagement': { en: 'Access Management', ar: 'إدارة الوصول' },
   'nav.accessGrants': { en: 'Access grants', ar: 'منح الوصول' },
   'nav.workflowDesigner': { en: 'Workflow Designer', ar: 'مصمم سير العمل' },
@@ -1108,6 +1109,10 @@ export const DICT: Dict = {
   'nav.section.governance.summary': {
     en: 'Ownership, exceptions, workflow, and NDI evidence.',
     ar: 'الملكية والاستثناءات وسير العمل وأدلة المؤشر الوطني.',
+  },
+  'nav.section.aiGovernance.summary': {
+    en: 'AI use cases, risk assessment, reviews, and reporting.',
+    ar: 'حالات استخدام الذكاء الاصطناعي وتقييم المخاطر والمراجعات والتقارير.',
   },
   'nav.section.accessManagement.summary': {
     en: 'Grants, roles, users, and access audit.',
@@ -1245,7 +1250,7 @@ export const DICT: Dict = {
     en: 'Your role does not currently include tools in this workspace.',
     ar: 'دورك الحالي لا يتضمن أدوات في مساحة العمل هذه.',
   },
-  'hub.governance.eyebrow': { en: 'Governance workspace', ar: 'مساحة عمل الحوكمة' },
+  'hub.governance.eyebrow': { en: 'Data Governance workspace', ar: 'مساحة عمل حوكمة البيانات' },
   'hub.governance.title': {
     en: 'Turn governance risk into clear owner action',
     ar: 'حوّل مخاطر الحوكمة إلى إجراءات واضحة للمالكين',
@@ -1270,6 +1275,16 @@ export const DICT: Dict = {
     en: 'Use NDI readiness and gaps to prepare evidence for review.',
     ar: 'استخدم جاهزية المؤشر والفجوات لتحضير الأدلة للمراجعة.',
   },
+  'hub.ai.eyebrow': { en: 'AI Governance workspace', ar: 'مساحة عمل حوكمة الذكاء الاصطناعي' },
+  'hub.ai.title': { en: 'Govern AI use cases from intake through monitoring', ar: 'حوكمة حالات استخدام الذكاء الاصطناعي من الطلب حتى المتابعة' },
+  'hub.ai.subtitle': {
+    en: 'Open the governed adoption, risk, review, reporting, and source-preparation screens for your role.',
+    ar: 'افتح شاشات التبني والمخاطر والمراجعات والتقارير وإعداد المصادر المتاحة لدورك.',
+  },
+  'hub.ai.checklistTitle': { en: 'AI Governance operating path', ar: 'مسار عمل حوكمة الذكاء الاصطناعي' },
+  'hub.ai.check.intake': { en: 'Register the use case and complete its independent governance review.', ar: 'سجّل حالة الاستخدام واستكمل مراجعة الحوكمة المستقلة.' },
+  'hub.ai.check.risk': { en: 'Assess linked risks, treatment, and scheduled reviews.', ar: 'قيّم المخاطر المرتبطة والمعالجة والمراجعات المجدولة.' },
+  'hub.ai.check.monitoring': { en: 'Use the dashboard and source-preparation view to verify current evidence.', ar: 'استخدم اللوحة وعرض إعداد المصادر للتحقق من الأدلة الحالية.' },
   'hub.access.eyebrow': { en: 'Access Management workspace', ar: 'مساحة عمل إدارة الوصول' },
   'hub.access.title': {
     en: 'Control access from request to audit evidence',
@@ -1319,6 +1334,21 @@ export const DICT: Dict = {
   'hub.admin.check.taxonomy': {
     en: 'Keep domains, subjects, classifications, and templates consistent.',
     ar: 'حافظ على اتساق المجالات والموضوعات والتصنيفات والقوالب.',
+  },
+  'hub.group.aiAdoption.title': { en: 'AI use-case adoption', ar: 'تبني حالات استخدام الذكاء الاصطناعي' },
+  'hub.group.aiAdoption.summary': {
+    en: 'Intake and independent classification review.',
+    ar: 'تقديم الطلب ومراجعة التصنيف المستقلة.',
+  },
+  'hub.group.aiRisk.title': { en: 'AI risk and review', ar: 'مخاطر الذكاء الاصطناعي ومراجعتها' },
+  'hub.group.aiRisk.summary': {
+    en: 'Risk register, treatment, and recurring review.',
+    ar: 'سجل المخاطر والمعالجة والمراجعات الدورية.',
+  },
+  'hub.group.aiReporting.title': { en: 'Reporting and sources', ar: 'التقارير والمصادر' },
+  'hub.group.aiReporting.summary': {
+    en: 'Governance measures and source preparation.',
+    ar: 'مؤشرات الحوكمة وإعداد المصادر.',
   },
   'hub.group.assets.title': { en: 'Assets and ownership', ar: 'الأصول والملكية' },
   'hub.group.assets.summary': {

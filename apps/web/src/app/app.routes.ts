@@ -38,6 +38,12 @@ export const routes: Routes = [
         data: { hubId: 'governance' },
       },
       {
+        path: 'ai-governance',
+        loadComponent: () =>
+          import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),
+        data: { hubId: 'aiGovernance' },
+      },
+      {
         path: 'access-management',
         loadComponent: () =>
           import('./pages/section-hub/section-hub').then((m) => m.SectionHubPage),

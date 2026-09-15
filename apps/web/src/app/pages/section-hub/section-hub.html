@@ -1,6 +1,7 @@
 <section
   class="workspace foundation-modern"
   [class.workspace--governance]="config().id === 'governance'"
+  [class.workspace--ai]="config().id === 'aiGovernance'"
   [class.workspace--access]="config().id === 'accessManagement'"
   [class.workspace--administration]="config().id === 'administration'"
 >
@@ -33,6 +34,7 @@
       <p>{{ t('hub.empty.copy') }}</p>
     </div>
   } @else {
+    @if (metrics().length) {
     <section class="console-metrics" [attr.aria-label]="t('console.metrics')">
       @for (metric of metrics(); track metric.labelKey) {
         <article class="console-metric" [class]="'console-metric console-metric--' + metric.tone">
@@ -47,6 +49,7 @@
         </article>
       }
     </section>
+    }
 
     <div class="console-layout">
       <section class="console-panel console-panel--map">
@@ -109,6 +112,7 @@
           </div>
         </section>
 
+        @if (queue().length) {
         <section class="console-panel">
           <div class="console-panel__head">
             <div>
@@ -130,6 +134,7 @@
             }
           </div>
         </section>
+        }
       </aside>
     </div>
 

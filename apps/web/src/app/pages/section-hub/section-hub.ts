@@ -80,11 +80,13 @@ export class SectionHubPage {
   protected readonly groupCount = computed(() => this.groups().length);
   protected readonly hubIcon = computed<AppIconName>(() => {
     if (this.config().id === 'governance') return 'shield';
+    if (this.config().id === 'aiGovernance') return 'dashboard';
     if (this.config().id === 'accessManagement') return 'keyRound';
     return 'settings';
   });
 
   protected readonly metrics = computed<HubMetric[]>(() => {
+    if (this.config().id === 'aiGovernance') return [];
     if (this.config().id === 'governance') {
       return [
         {
@@ -184,6 +186,7 @@ export class SectionHubPage {
   });
 
   protected readonly queue = computed<QueueItem[]>(() => {
+    if (this.config().id === 'aiGovernance') return [];
     if (this.config().id === 'governance') {
       return [
         {

@@ -7247,6 +7247,7 @@ export const DICT: Dict = {
   'aiuc.multiSelectHint': { en: 'Select one or more values.', ar: 'اختر قيمة واحدة أو أكثر.' },
   'aiuc.completion': { en: 'required fields completed', ar: 'من الحقول المطلوبة مكتملة' },
   'aiuc.sectionLabel': { en: 'Section', ar: 'القسم' },
+  'aiuc.optional': { en: 'Optional', ar: 'اختياري' },
   'aiuc.rail.eyebrow': { en: 'Visible intake queue', ar: 'قائمة الطلبات ضمن الصلاحيات' },
   'aiuc.rail.title': { en: 'AI proposals', ar: 'مقترحات الذكاء الاصطناعي' },
   'aiuc.empty.title': { en: 'No AI requests yet', ar: 'لا توجد طلبات ذكاء اصطناعي بعد' },

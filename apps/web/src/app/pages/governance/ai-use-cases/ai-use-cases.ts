@@ -11,6 +11,12 @@ import { I18nService } from '../../../core/i18n.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
+import { AccordionModule, type AccordionValue } from 'primeng/accordion';
+import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { SelectModule } from 'primeng/select';
+import { TextareaModule } from 'primeng/textarea';
 
 type FieldKind = 'text' | 'textarea' | 'date' | 'decimal' | 'select' | 'multiselect'
   | 'user' | 'boolean-detail' | 'constraints' | 'attachments';
@@ -128,7 +134,8 @@ const SECTIONS: IntakeSectionDefinition[] = [
 @Component({
   selector: 'app-ai-use-cases',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AiAuditQuery, AiJourneyHistory, AiRequestControls, DualDatePipe, FormsModule, AppIcon, StatusChip],
+  imports: [AiAuditQuery, AiJourneyHistory, AiRequestControls, DualDatePipe, FormsModule, AppIcon, StatusChip,
+    AccordionModule, InputTextModule, MultiSelectModule, ProgressBarModule, SelectModule, TextareaModule],
   templateUrl: './ai-use-cases.html',
   styleUrl: './ai-use-cases.scss',
 })
@@ -148,6 +155,7 @@ export class AiUseCasesPage implements OnInit {
   protected readonly issues = signal<ValidationIssue[]>([]);
   protected readonly warnings = signal<IntakeWarning[]>([]);
   protected readonly attachmentInput = signal('');
+  protected readonly activeSection = signal<AccordionValue>(1);
   protected readonly requiredTotal = 26;
   protected readonly isReadOnly = computed(() => {
     const item = this.selected();
@@ -160,6 +168,7 @@ export class AiUseCasesPage implements OnInit {
     }
     return completed;
   });
+  protected readonly completionPercent = computed(() => Math.round(this.completedRequired() / this.requiredTotal * 100));
 
   ngOnInit(): void {
     void this.load();
@@ -168,6 +177,10 @@ export class AiUseCasesPage implements OnInit {
   protected t(key: string): string { return this.i18n.t(key); }
   protected fieldLabel(code: string): string { return this.t(`aiuc.field.${code}`); }
   protected sectionLabel(number: number): string { return this.t(`aiuc.section.${number}`); }
+  protected sectionRequired(section: IntakeSectionDefinition): number { return section.fields.filter(field => field.required).length; }
+  protected sectionCompleted(section: IntakeSectionDefinition): number {
+    return section.fields.filter(field => field.required && this.hasValue(this.payload()[field.code])).length;
+  }
   protected value(code: string): any { return this.payload()[code]; }
   protected fieldIssues(code: string): ValidationIssue[] { return this.issues().filter(issue => issue.field === code); }
 
@@ -199,6 +212,7 @@ export class AiUseCasesPage implements OnInit {
     this.issues.set([]);
     this.dirty.set(false);
     this.attachmentInput.set('');
+    this.activeSection.set(1);
   }
 
   protected async createDraft(): Promise<void> {
@@ -356,7 +370,12 @@ export class AiUseCasesPage implements OnInit {
   private handleError(error: unknown, fallbackKey: string): void {
     const response = error as HttpErrorResponse;
     const issues = response.error?.issues;
-    if (Array.isArray(issues)) this.issues.set(issues);
+    if (Array.isArray(issues)) {
+      this.issues.set(issues);
+      const firstField = issues.find((issue: ValidationIssue) => SECTIONS.some(section => section.fields.some(field => field.code === issue.field)))?.field;
+      const section = SECTIONS.find(row => row.fields.some(field => field.code === firstField));
+      if (section) this.activeSection.set(section.number);
+    }
     this.toast.errorFrom(error, this.t(fallbackKey));
   }
 

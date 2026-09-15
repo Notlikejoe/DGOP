@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { AuditContextMiddleware } from './audit/audit-context';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
@@ -90,4 +91,6 @@ import { PermissionsGuard } from './access/permissions.guard';
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+ configure(consumer:MiddlewareConsumer){consumer.apply(AuditContextMiddleware).forRoutes('*');}
+}

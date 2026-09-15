@@ -1,3 +1,4 @@
+import { logAiRequired } from './ai-notifications';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CaseStatus, Prisma, TaskDecision, TaskStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -150,7 +151,7 @@ export class AiResidualDecisionService {
       if((await tx.aiRisk.updateMany({where:{id,version:dto.expectedVersion},data:{version:{increment:1}}})).count!==1)throw new ConflictException('AI risk changed; reload');
       const action=`airs.residual.${rule.kind}.${dto.decision}`;
       await tx.workflowEvent.create({data:{caseId:g.risk.workflowCase!.id,taskId,actor:userId,action,comment:dto.justification.trim()}});
-      await this.audit.logRequired({actor:userId,action,entityType:'ai_risk',entityId:id,metadata:{assessmentId:g.assessment.id,decisionId:decision.id,taskId,actorRoleCode:rule.role,
+      await logAiRequired(this.audit, {actor:userId,action,entityType:'ai_risk',entityId:id,metadata:{assessmentId:g.assessment.id,decisionId:decision.id,taskId,actorRoleCode:rule.role,
         bandCode:g.result['bandCode'],score:g.result['score'],decision:dto.decision,justification:dto.justification.trim(),evidenceIds,conditions,SoD:'passed',riskAccepted,nextTaskId,clientIp:clientIp??null}},tx);
       return {id,version:dto.expectedVersion+1,decisionId:decision.id,nextTaskId,riskAccepted};
     },options);

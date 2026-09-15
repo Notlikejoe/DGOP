@@ -347,7 +347,7 @@
             @for (row of w.notifications.slice(0, 6); track row.id) {
               <article class="list-row">
                 <div>
-                  <strong>{{ row.title }}</strong>
+                  <strong>{{ notificationTitle(row) }}</strong>
                   <span>{{ row.message }}</span>
                   <small class="notification-route">
                     {{ row.deliveryPlan?.priority || '-' }} &middot; {{ channelText(row) }}
@@ -389,6 +389,7 @@
       </aside>
     </section>
 
+    <app-ai-notification-config />
     <section class="lower-grid">
       <article class="ds-card">
         <div class="panel-head">

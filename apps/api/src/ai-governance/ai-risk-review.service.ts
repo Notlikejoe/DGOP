@@ -1,3 +1,4 @@
+import { logAiRequired, notifyReviewWindow } from './ai-notifications';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma, TaskStatus } from '@prisma/client';
@@ -116,6 +117,7 @@ export class AiRiskReviewService {
       await tx.complianceCalendarOccurrence.update({where:{id:r.calendarOccurrenceId},data:{status:'completed',completedAt}});
       const next=await this.open(tx,g,completedAt,userId,r.round+1,r.calendarTemplateId);
       await tx.governanceNotification.updateMany({where:{sourceType:'ai_risk_review',sourceId:reviewId,status:{not:'archived'}},data:{status:'archived'}});
+      await tx.governanceNotificationDeliveryAttempt.updateMany({where:{notification:{sourceType:'ai_risk_review',sourceId:reviewId,status:'archived'},status:{in:['planned','failed']}},data:{status:'skipped',nextRetryAt:null,errorMessage:'Native AI work completed or superseded'}});
       await tx.governanceEscalation.updateMany({where:{sourceType:'ai_risk_review',sourceId:reviewId,status:{not:'resolved'}},data:{status:'resolved',resolvedAt:completedAt,updatedBy:userId}});
       await this.changed(tx,g,userId,'airs.review.complete',{reviewId,nextReviewId:next.id,completedAt,justification:dto.justification.trim(),evidenceIds,clientIp:clientIp??null});
       return {id,version:dto.expectedVersion+1,nextReviewId:next.id};
@@ -134,7 +136,7 @@ export class AiRiskReviewService {
       if(reversal) {
         await this.authorization.authorize(userId,'airs.risk.reverse',tx);
         if(!this.reversalAuthority(g)){
-          await this.audit.logRequired({actor:userId,action:'ai.sod.blocked',entityType:'ai_risk',entityId:id,metadata:{attemptedAction:'higher_authority_reversal',rule:'GEN-31',previousDecisionId:terminal?.id??null}});
+          await logAiRequired(this.audit, {actor:userId,action:'ai.sod.blocked',entityType:'ai_risk',entityId:id,metadata:{attemptedAction:'higher_authority_reversal',rule:'GEN-31',previousDecisionId:terminal?.id??null}});
           throw new ForbiddenException('An independent higher actual decision authority is required');
         }
       } else if(this.manages(g))await this.authorization.authorize(userId,'airs.cadence.manage',tx);
@@ -159,6 +161,7 @@ export class AiRiskReviewService {
         await tx.complianceCalendarOccurrence.update({where:{id:review.calendarOccurrenceId},data:{status:'archived',completedAt:null}});
         await tx.complianceCalendarTemplate.update({where:{id:review.calendarTemplateId},data:{status:'paused',updatedBy:userId}});
         await tx.governanceNotification.updateMany({where:{sourceType:'ai_risk_review',sourceId:review.id},data:{status:'archived'}});
+      await tx.governanceNotificationDeliveryAttempt.updateMany({where:{notification:{sourceType:'ai_risk_review',sourceId:review.id,status:'archived'},status:{in:['planned','failed']}},data:{status:'skipped',nextRetryAt:null,errorMessage:'Native AI work completed or superseded'}});
         await tx.governanceEscalation.updateMany({where:{sourceType:'ai_risk_review',sourceId:review.id,status:{not:'resolved'}},data:{status:'resolved',resolvedAt:cancellation.createdAt,updatedBy:userId}});
       }
       await tx.workflowTask.updateMany({where:{caseId:g.risk.workflowCase!.id,status:'pending',templateStage:{is:{code:'airs-monitoring'}}},data:{status:'cancelled',completedAt:new Date()}});
@@ -191,7 +194,7 @@ export class AiRiskReviewService {
   private async changed(tx:Prisma.TransactionClient,g:Gate,actor:string,action:string,metadata:Record<string,unknown>) {
     if((await tx.aiRisk.updateMany({where:{id:g.risk.id,version:g.risk.version},data:{version:{increment:1}}})).count!==1)throw new ConflictException('AI risk changed; reload');
     await tx.workflowEvent.create({data:{caseId:g.risk.workflowCase!.id,actor,action}});
-    await this.audit.logRequired({actor,action,entityType:'ai_risk',entityId:g.risk.id,metadata},tx);
+    await logAiRequired(this.audit, {actor,action,entityType:'ai_risk',entityId:g.risk.id,metadata:{...metadata,before:{version:g.risk.version},after:{version:g.risk.version+1}}},tx);
   }
   async recalculate(userId:string,id:string,expectedVersion:number) {
     const access=await this.risks.get(userId,id);await this.authorization.authorize(userId,'airs.cadence.manage');
@@ -216,13 +219,10 @@ export class AiRiskReviewService {
         let count=0;
         const ownerScope=await this.risks.visibility(r.assignedOwnerId,tx);
         if(!await tx.aiRisk.findFirst({where:{AND:[ownerScope.where,{id:r.riskId}]},select:{id:true}}))return 0;
+        const windowNotices=await notifyReviewWindow(tx,this.audit,r.id,now);
         for(const threshold of aiReviewThresholds(r.anchorAt,r.dueAt,now,dates,recurring)) {
           if(r.signals.some(s=>s.threshold===threshold))continue;
-          const notificationIds:string[]=[],breach=threshold===100;
-          for(const role of ['AI_RISK_OWNER','AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER']) {
-            const n=await tx.governanceNotification.create({data:{dedupeKey:`ai-review:${r.id}:${threshold}:${role}`,title:`${r.risk.riskRef} · ${breach?'Review overdue / مراجعة متأخرة':`Review ${threshold}% warning / تنبيه المراجعة ${threshold}%`}`,message:`AI risk review due ${r.dueAt.toISOString()}. Complete the assigned review with evidence.\nموعد مراجعة خطر الذكاء الاصطناعي: ${r.dueAt.toISOString()}. أكمل المراجعة المسندة بالأدلة.`,severity:breach?'critical':'warning',sourceType:'ai_risk_review',sourceId:r.id,targetRoleCode:role,assigneeUserId:role==='AI_RISK_OWNER'?r.assignedOwnerId:undefined,workflowCaseId:r.task.caseId,workflowTaskId:r.taskId,createdBy:actor}});notificationIds.push(n.id);
-            await tx.governanceNotificationDeliveryAttempt.createMany({data:['in_app','email'].map(channel=>({notificationId:n.id,channel:channel as 'in_app'|'email',status:'planned' as const,target:role==='AI_RISK_OWNER'?r.assignedOwnerId:role,payloadJson:{templateCode:breach?'AIX-NTF-02':'AIRS-NTF-04',riskRef:r.risk.riskRef,dueAt:r.dueAt.toISOString(),threshold,locale:'en/ar'}}))});
-          }
+          const notificationIds=windowNotices,breach=threshold===100;
           let escalationId:string|undefined;
           if(breach) {
             const overdue=Math.max(0,businessDaysBetween(new Date(r.dueAt.getTime()+KSA),new Date(now.getTime()+KSA),dates,recurring)),level=escalationLevel(overdue),day=now.toISOString().slice(0,10).replace(/-/g,'');
@@ -231,14 +231,14 @@ export class AiRiskReviewService {
           }
           await tx.aiRiskReviewSignal.create({data:{reviewId:r.id,threshold,notificationIds,escalationId}});count++;
           await tx.workflowEvent.create({data:{caseId:r.task.caseId,taskId:r.taskId,actor,action:breach?'governance.airs.review.overdue.v1':'governance.airs.review.due.v1',comment:JSON.stringify({reviewId:r.id,threshold,notificationIds,escalationId:escalationId??null})}});
-          await this.audit.logRequired({actor,action:'airs.review.sla.signal',entityType:'ai_risk',entityId:r.riskId,metadata:{reviewId:r.id,threshold,notificationIds,escalationId:escalationId??null}},tx);
+          await logAiRequired(this.audit, {actor,action:'airs.review.sla.signal',entityType:'ai_risk',entityId:r.riskId,metadata:{reviewId:r.id,threshold,notificationIds,escalationId:escalationId??null}},tx);
         }
         const existing=await tx.governanceEscalation.findUnique({where:{dedupeKey:`ai-review:${r.id}:breach`}});
         if(existing&&existing.status!=='resolved') {
           const overdue=Math.max(0,businessDaysBetween(new Date(r.dueAt.getTime()+KSA),new Date(now.getTime()+KSA),dates,recurring)),level=escalationLevel(overdue),penaltyPoints=escalationPenalty(overdue);
           if(existing.level!==level||existing.penaltyPoints!==penaltyPoints) {
             await tx.governanceEscalation.update({where:{id:existing.id},data:{level,penaltyPoints,ownerRoleCode:escalationOwnerRole(level),updatedBy:actor}});
-            await this.audit.logRequired({actor,action:'airs.review.sla.escalate',entityType:'ai_risk',entityId:r.riskId,metadata:{reviewId:r.id,escalationId:existing.id,level,penaltyPoints}},tx);
+            await logAiRequired(this.audit, {actor,action:'airs.review.sla.escalate',entityType:'ai_risk',entityId:r.riskId,metadata:{reviewId:r.id,escalationId:existing.id,level,penaltyPoints}},tx);
           }
         }
         return count;

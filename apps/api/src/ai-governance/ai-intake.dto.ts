@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID, IsIn, IsInt, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateAiIntakeDraftDto {
   @IsOptional()
@@ -33,4 +33,9 @@ export class TriageAiIntakeDto extends SubmitAiIntakeDto {
   @IsString()
   @MaxLength(2000)
   justification?: string;
+}
+export class CloseAiIntakeDto extends SubmitAiIntakeDto {
+ @IsIn(['withdraw','closed_no_action']) mode!:'withdraw'|'closed_no_action';
+ @IsString() @MaxLength(5000) justification!:string;
+ @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsUUID('4',{each:true}) evidenceIds!:string[];
 }

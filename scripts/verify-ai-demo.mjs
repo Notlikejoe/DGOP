@@ -50,7 +50,9 @@ for (const fixture of manifest.cases) {
     residualScore: residual.result.score, residualBand: residual.result.bandCode, completedActions: 2, completedReviews: 1, scheduledReviews: 1 });
 }
 const own = await get('/ai/use-cases', cookie); assert.equal(own.length, 2);
-const risks = await get('/ai/risks', cookie); assert.equal(risks.length, 2);
+const risks = await get('/ai/risks', cookie), demoRiskIds=new Set(manifest.cases.map(c=>c.riskId));
+assert.equal(risks.filter(r=>demoRiskIds.has(r.id)).length, 2);
+assert.ok(risks.some(r=>r.riskRef===null), 'The preserved user-created AIRS draft must remain visible and unnumbered');
 for (const path of ['/ai/use-cases/triage', '/ai/use-cases/classification/queue', '/ai/use-cases/classification/verification/queue',
   '/ai/use-cases/classification/reviews/queue', '/ai/use-cases/decisions/queue', '/ai/use-cases/registration/queue']) {
   assert.equal((await get(path, cookie)).length, 0, 'Completed demo approvals must not appear as pending');

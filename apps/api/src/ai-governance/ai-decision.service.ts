@@ -1,3 +1,4 @@
+import { logAiRequired } from './ai-notifications';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CaseStatus, Prisma, TaskDecision, TaskStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
@@ -204,7 +205,7 @@ export class AiDecisionService {
         fromStatus: isReturn ? current.workflowCase.status : CaseStatus.decision_made, toStatus: nextStatus,
         comment: justification,
       } });
-      await this.audit.logRequired({ actor: actor.id, action, entityType: 'ai_use_case', entityId: id, metadata: {
+      await logAiRequired(this.audit, { actor: actor.id, action, entityType: 'ai_use_case', entityId: id, metadata: {
         ...decisionRecord, actorRoles: actor.roles, clientIp: clientIp ?? null,
         caseCode: current.workflowCase.code, useCaseRef: current.useCaseRef,
         oldValue: current.workflowCase.status, newValue: nextStatus, nextTaskId, assignmentRuleId: assignment.ruleId,

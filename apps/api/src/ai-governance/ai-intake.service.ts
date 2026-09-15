@@ -1,3 +1,5 @@
+import { logAiRequired, aiNoticeAccess } from './ai-notifications';
+import { governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import {
   BadRequestException,
   ConflictException,
@@ -253,12 +255,12 @@ export class AiIntakeService {
         },
         select: intakeUseCase,
       });
-      await this.audit.logRequired({
+      await logAiRequired(this.audit, {
         actor: userId,
         action: 'aiuc.intake.draft.created',
         entityType: 'ai_use_case',
         entityId: created.id,
-        metadata: { revision: 1, referenceVersions: references.versionPins },
+        metadata: { revision: 1, referenceVersions: references.versionPins, before:null, after:{version:created.version,payload} },
       }, tx);
       return { ...created, warnings, conditions: this.conditions(references.selected) };
   }
@@ -298,12 +300,12 @@ export class AiIntakeService {
       if (updated.count !== 1) throw new ConflictException('AI use-case draft changed; reload before saving');
       const revision = (current.intakeRevisions[0]?.revision ?? 0) + 1;
       await tx.aiIntakeRevision.create({ data: { useCaseId: id, revision, schemaVersion: AI_INTAKE_SCHEMA_VERSION, payload: asJson(payload), createdBy: userId } });
-      await this.audit.logRequired({
+      await logAiRequired(this.audit, {
         actor: userId,
         action: 'aiuc.intake.draft.revised',
         entityType: 'ai_use_case',
         entityId: id,
-        metadata: { revision, expectedVersion, changedFields: Object.keys(changes).sort(), referenceVersions: references.versionPins },
+        metadata: { revision, expectedVersion, changedFields: Object.keys(changes).sort(), referenceVersions: references.versionPins, before:{version:expectedVersion,payload:prior},after:{version:expectedVersion+1,payload} },
       }, tx);
       const saved = await tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: intakeUseCase });
       return {
@@ -312,6 +314,46 @@ export class AiIntakeService {
         conditions: this.conditions(references.selected),
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }
+
+  private async closureGate(tx:Prisma.TransactionClient,userId:string,id:string) {
+    const uc=await tx.aiUseCase.findFirst({where:{id,deletedAt:null,isSampleData:false},include:{workflowCase:true}});
+    if(!uc?.workflowCaseId)throw new NotFoundException('Submitted native AI request not found');
+    const access=await aiNoticeAccess(tx,userId,uc.workflowCaseId);
+    if(!access)throw new NotFoundException('Submitted native AI request not found');
+    const open=!uc.assetId&&!!uc.workflowCase&&!['closed','rejected','cancelled'].includes(uc.workflowCase.status);
+    const task=await tx.workflowTask.findFirst({where:{caseId:uc.workflowCaseId,status:'pending',assigneeUserId:uc.requesterUserId,templateStage:{code:'aiuc-completion',isActive:true,template:{code:'AIUC_APPROVAL_V1',isActive:true,deletedAt:null}}}});
+    const grants=await tx.rolePermission.findMany({where:{role:{isActive:true,deletedAt:null,userRoles:{some:{userId}}},permission:{OR:[{resource:'case.create',action:'aiuc'},{resource:'case.approve',action:'aiuc'}]}},include:{role:true,permission:true}});
+    const withdrawRole=grants.filter(g=>g.permission.resource==='case.create'&&aiRoleMayHold(g.role.code,'case.create.aiuc')).map(g=>g.role.code).sort()[0];
+    return {uc,access,task,withdrawRole,canWithdraw:open&&uc.requesterUserId===userId&&!access.roles.includes('auditor')&&!!withdrawRole,
+      canCloseNoAction:open&&uc.workflowCase?.status==='awaiting_information'&&!!task?.dueDate&&task.dueDate<=new Date()&&!access.roles.includes('auditor')&&grants.some(g=>g.role.code==='AI_GOVERNANCE_OFFICER'&&g.permission.resource==='case.approve')};
+  }
+  async closureContext(userId:string,id:string) {
+    return governanceTransaction(this.prisma,async tx=>{const g=await this.closureGate(tx,userId,id);return {version:g.uc.version,canWithdraw:g.canWithdraw,canCloseNoAction:g.canCloseNoAction,informationDueAt:g.task?.dueDate??null};});
+  }
+  async closeRequest(userId:string,id:string,expectedVersion:number,mode:'withdraw'|'closed_no_action',justificationValue:string,evidenceInput:string[]) {
+    const justification=governanceText(justificationValue);
+    if(!['withdraw','closed_no_action'].includes(mode)||!Number.isInteger(expectedVersion)||expectedVersion<1)throw new BadRequestException('Specify a recognized request closure and current version');
+    return governanceTransaction(this.prisma,async tx=>{
+      const g=await this.closureGate(tx,userId,id);
+      await this.authorization.authorize(userId,mode==='withdraw'?'case.create.aiuc':'case.approve.aiuc',tx);
+      if(!(mode==='withdraw'?g.canWithdraw:g.canCloseNoAction))throw new ForbiddenException('Only the actual requester may withdraw, or the Responsible AI Officer may close an expired information request');
+      if(g.uc.version!==expectedVersion)throw new ConflictException('AI request changed; reload');
+      const evidenceIds=await governanceEvidence(tx,evidenceInput),now=new Date(),resolutionCode=mode==='withdraw'?'withdrawn':'closed_no_action';
+      const role=mode==='closed_no_action'?'AI_GOVERNANCE_OFFICER':g.withdrawRole!;
+      const task=await this.routing.createStageTask(tx,g.uc.workflowCaseId!,'aiuc-decision',now,{title:'AI request closure',assigneeRoleCode:role,assigneeUserId:userId,formDataJson:{operation:'aiuc_request_closure',resolutionCode,actorId:userId,justification,evidenceIds,closedAt:now.toISOString(),informationTaskId:g.task?.id??null}});
+      await tx.workflowTask.update({where:{id:task.id},data:{status:'completed',completedAt:now,formSubmittedAt:now,formSubmittedBy:userId,decisionComment:justification}});
+      const pending=await tx.workflowTask.findMany({where:{caseId:g.uc.workflowCaseId!,status:{in:['pending','in_progress']}},select:{id:true}});
+      await tx.workflowTask.updateMany({where:{id:{in:pending.map(t=>t.id)}},data:{status:'cancelled',decisionComment:resolutionCode}});
+      await tx.workflowCase.update({where:{id:g.uc.workflowCaseId!},data:{status:'closed'}});
+      if((await tx.aiUseCase.updateMany({where:{id,version:expectedVersion,assetId:null},data:{version:{increment:1}}})).count!==1)throw new ConflictException('AI request changed; reload');
+      await tx.governanceNotification.updateMany({where:{sourceType:'ai_use_case',workflowCaseId:g.uc.workflowCaseId!,status:{not:'archived'}},data:{status:'archived'}});
+      await tx.governanceNotificationDeliveryAttempt.updateMany({where:{notification:{sourceType:'ai_use_case',workflowCaseId:g.uc.workflowCaseId!,status:'archived'},status:{in:['planned','failed']}},data:{status:'skipped',nextRetryAt:null,errorMessage:'AI request closed'}});
+      const action='aiuc.request.'+resolutionCode;
+      await tx.workflowEvent.create({data:{caseId:g.uc.workflowCaseId!,taskId:task.id,actor:userId,action,fromStatus:g.uc.workflowCase!.status,toStatus:'closed',comment:justification}});
+      await logAiRequired(this.audit,{actor:userId,action,entityType:'ai_use_case',entityId:id,metadata:{resolutionCode,justification,evidenceIds,closureTaskId:task.id,cancelledTaskIds:pending.map(t=>t.id),before:{version:expectedVersion,status:g.uc.workflowCase!.status},after:{version:expectedVersion+1,status:'closed'}}},tx);
+      return {id,version:expectedVersion+1,resolutionCode};
+    });
   }
 
   async submit(userId: string, id: string, expectedVersion: number) {
@@ -371,13 +413,14 @@ export class AiIntakeService {
       const conditions = this.conditions(references.selected);
       const duplicateWarnings = await this.duplicateWarning(tx, payload, id);
       const warnings = [...directory.warnings, ...duplicateWarnings, ...this.businessWarnings(payload, references.selected)];
-      await this.audit.logRequired({
+      await logAiRequired(this.audit, {
         actor: userId,
         action: 'aiuc.intake.submitted',
         entityType: 'ai_use_case',
         entityId: id,
         metadata: {
           caseCode,
+          before:{version:expectedVersion,workflowCaseId:null},after:{version:expectedVersion+1,workflowCaseId:workflowCase.id,status:workflowCase.status},
           triageTaskId: triageTask.id,
           triageDueDate: triageTask.dueDate?.toISOString() ?? null,
           revision,
@@ -430,9 +473,9 @@ export class AiIntakeService {
       });
       if (updated.count !== 1) throw new ConflictException('AI use-case draft changed; reload before resubmitting');
       await tx.workflowEvent.create({ data: { caseId: current.workflowCaseId, taskId: completionTask.id, actor: userId, action: 'aiuc.intake.resubmitted', fromStatus: CaseStatus.awaiting_information, toStatus: CaseStatus.submitted } });
-      await this.audit.logRequired({
+      await logAiRequired(this.audit, {
         actor: userId, action: 'aiuc.intake.resubmitted', entityType: 'ai_use_case', entityId: id,
-        metadata: { caseCode: current.workflowCase?.code, revision, triageTaskId: triageTask.id, referenceVersions: references.versionPins },
+        metadata: { caseCode: current.workflowCase?.code, revision, triageTaskId: triageTask.id, referenceVersions: references.versionPins,before:{version:expectedVersion,status:current.workflowCase?.status},after:{version:expectedVersion+1,status:CaseStatus.submitted} },
       }, tx);
       return tx.aiUseCase.findUniqueOrThrow({ where: { id }, select: intakeUseCase });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -515,7 +558,7 @@ export class AiIntakeService {
           comment: justification?.trim() || null,
         },
       });
-      await this.audit.logRequired({
+      await logAiRequired(this.audit, {
         actor: userId, action: `aiuc.triage.${decision}`, entityType: 'ai_use_case', entityId: id,
         metadata: { actorRoles: actor.roles, caseCode: current.workflowCase.code, useCaseRef, taskId: task.id, justification: justification?.trim() || null },
       }, tx);

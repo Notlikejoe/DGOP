@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { parsePageParams, toPaged, type Paged } from "../common/pagination";
 import { isProductionLikeRuntime } from "../common/runtime-safety";
+import { nativeAuditContext } from './audit-context';
 import {
   hashAuditEntry,
   sanitizeAuditMetadata,
@@ -74,12 +75,16 @@ export class AuditService {
     client: AuditWriter,
   ): Promise<void> {
     await client.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY}) IS NULL AS "locked"`;
+    const context=nativeAuditContext(entry.action);
     const metadata = sanitizeAuditMetadata(entry.metadata ?? null);
+    const contextMetadata = sanitizeAuditMetadata(Object.keys(context).length?{...(metadata as Record<string,unknown>??{}),...context}:metadata);
     const previous = await client.auditLog.findFirst({
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: { entryHash: true },
+      select: { entryHash: true, createdAt:true },
     });
-    const createdAt = new Date();
+    // Preserve a deterministic chain order when a command writes several audits
+    // inside the same millisecond; historical entries remain unchanged.
+    const createdAt = new Date(Math.max(Date.now(),(previous?.createdAt?.getTime()??-1)+1));
     const previousHash = previous?.entryHash ?? null;
     const chainVersion = 1;
     const entryHash = hashAuditEntry({
@@ -87,7 +92,7 @@ export class AuditService {
       action: entry.action,
       entityType: entry.entityType,
       entityId: entry.entityId ?? null,
-      metadata,
+      metadata:contextMetadata,
       createdAt,
       previousHash,
       chainVersion,
@@ -98,7 +103,7 @@ export class AuditService {
         action: entry.action,
         entityType: entry.entityType,
         entityId: entry.entityId ?? null,
-        metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+        metadata: (contextMetadata ?? undefined) as Prisma.InputJsonValue | undefined,
         previousHash,
         entryHash,
         chainVersion,
@@ -191,7 +196,8 @@ export class AuditService {
     return toPaged(rows, total, params);
   }
 
-  async verifyChain(limit?: string | number) {
+  async verifyChain(limit?: string | number, client?:AuditWriter) {
+    const db=client??this.prisma;
     const parsed =
       limit === undefined || limit === null || String(limit).trim() === ""
         ? null
@@ -202,7 +208,7 @@ export class AuditService {
         : Number.isFinite(parsed)
           ? Math.min(Math.max(parsed, 1), AUDIT_CHAIN_MAX_LIMIT)
           : AUDIT_CHAIN_PAGE_SIZE;
-    const totalRows = await this.prisma.auditLog.count();
+    const totalRows = await db.auditLog.count();
     const rows: Prisma.AuditLogGetPayload<{
       select: typeof auditChainSelect;
     }>[] = [];
@@ -213,7 +219,7 @@ export class AuditService {
           ? AUDIT_CHAIN_PAGE_SIZE
           : Math.min(AUDIT_CHAIN_PAGE_SIZE, takeLimit - rows.length);
       if (take <= 0) break;
-      const page = await this.prisma.auditLog.findMany({
+      const page = await db.auditLog.findMany({
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
         take,

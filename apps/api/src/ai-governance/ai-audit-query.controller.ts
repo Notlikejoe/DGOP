@@ -20,6 +20,8 @@ export class AuditQueryDto {
 export class AiAuditQueryController {
  constructor(private readonly audit:AiAuditQueryService){}
  @Get() query(@CurrentUser() user:AuthUser,@Query() query:AuditQueryDto){return this.audit.query(user.id,query);}
+ @Get('census') census(@CurrentUser() user:AuthUser,@Query() query:AuditQueryDto){return this.audit.census(user.id,query);}
+ @Get('chain/verify') verifyChain(@CurrentUser() user:AuthUser){return this.audit.verifyGlobalChain(user.id);}
  @Get('export') async csv(@CurrentUser() user:AuthUser,@Query() query:AuditQueryDto,@Res() response:Response){
   const result=await this.audit.csv(user.id,query);response.setHeader('Content-Type','text/csv; charset=utf-8');response.setHeader('Content-Disposition','attachment; filename="DGOP-AI-audit-page.csv"');response.send(result);
  }

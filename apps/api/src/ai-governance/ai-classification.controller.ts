@@ -96,6 +96,12 @@ export class AiClassificationController {
       dto.evidenceIds, dto.authorityReference, req.ip ?? req.socket?.remoteAddress);
   }
 
+  @Get(':id/reversal')
+  reversalContext(@Param('id',ParseUUIDPipe) id:string,@CurrentUser() user:AuthUser){return this.service.reversalContext(user.id,id);}
+  @Post(':id/reversal')
+  @RequirePermissions('aiuc.classify.reverse')
+  reverse(@Param('id',ParseUUIDPipe) id:string,@Body() dto:UnacceptableAiClassificationDto,@CurrentUser() user:AuthUser,@Req() req:Request){return this.service.reverseOverride(user.id,id,dto.expectedVersion,dto.justification,dto.evidenceIds,dto.authorityReference,req.ip??req.socket.remoteAddress);}
+
 
   @Post(':id/reviews/:taskId')
   @RequirePermissions('case.view.aiuc.org')

@@ -171,7 +171,20 @@ export class AiDashboardReportsService {
   const versions=await tx.aiDashboardScheduleVersion.findMany({where:{organizationUnitId:unitId},orderBy:{round:'desc'}}),latest=versions[0];
   const runs=latest?await tx.aiDashboardScheduleRun.findMany({where:{scheduleVersionId:{in:versions.map(v=>v.id)}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:30}):[];
   const canManage=a.actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r))&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor');
-  return {canManage,timeZone:'Asia/Riyadh',retryLimit:3,workerEnabled:process.env.GOVERNANCE_OPERATIONS_SCHEDULER!=='false'&&process.env.NODE_ENV!=='test',latest:latest?{id:latest.id,round:latest.round,dailyEnabled:latest.dailyEnabled,monthlyEnabled:latest.monthlyEnabled,operatorUserId:latest.operatorUserId}:null,
+  const workerEnabled=process.env.GOVERNANCE_OPERATIONS_SCHEDULER!=='false'&&process.env.NODE_ENV!=='test',slots=reportSlots(),current=await this.dashboard.snapshotMembers(tx,userId,unitId);
+  const evidence=[] as Array<{frequency:'daily'|'monthly';periodKey:string;enabled:boolean;status:'disabled'|'awaiting'|'failed'|'exhausted'|'verified';attempt:number;lastAttemptAt:Date|null;snapshotId:string|null}>;
+  for(const frequency of ['daily','monthly'] as const){
+   const enabled=!!latest&&(frequency==='daily'?latest.dailyEnabled:latest.monthlyEnabled),periodKey=slots[frequency];
+   const run=latest?runs.find(r=>r.scheduleVersionId===latest.id&&r.frequency===frequency&&r.periodKey===periodKey):undefined;
+   let status:typeof evidence[number]['status']=!enabled?'disabled':!run?'awaiting':run.status!=='success'?(run.attempt>=3?'exhausted':'failed'):'failed';
+   if(enabled&&run?.status==='success'&&run.snapshotId){
+    const snapshot=await tx.aiDashboardSnapshot.findUnique({where:{id:run.snapshotId}});
+    try{if(!snapshot||snapshot.organizationUnitId!==unitId||snapshot.frequency!==frequency||snapshot.periodKey!==periodKey)throw new ConflictException('Scheduled snapshot binding is invalid');this.verifySnapshot(snapshot,current);status='verified';}catch{status='failed';}
+   }
+   evidence.push({frequency,periodKey,enabled,status,attempt:run?.attempt??0,lastAttemptAt:run?.createdAt??null,snapshotId:status==='verified'?run!.snapshotId:null});
+  }
+  const cadenceConfigured=!!latest&&latest.dailyEnabled&&latest.monthlyEnabled,evidenceComplete=cadenceConfigured&&evidence.every(row=>row.status==='verified');
+  return {canManage,timeZone:'Asia/Riyadh',retryLimit:3,workerEnabled,acceptance:{cadenceConfigured,evidenceComplete,environmentReady:workerEnabled&&evidenceComplete,checkedAt:new Date(),slots:evidence},latest:latest?{id:latest.id,round:latest.round,dailyEnabled:latest.dailyEnabled,monthlyEnabled:latest.monthlyEnabled,operatorUserId:latest.operatorUserId}:null,
    history:versions.map(v=>({id:v.id,round:v.round,dailyEnabled:v.dailyEnabled,monthlyEnabled:v.monthlyEnabled,createdAt:v.createdAt,justification:v.justification})),runs:runs.map(({scheduleVersionId,...r})=>({...r,scheduleRound:versions.find(v=>v.id===scheduleVersionId)!.round}))};
  });}
  async configure(userId:string,unitId:string,dto:{expectedRound:number;dailyEnabled:boolean;monthlyEnabled:boolean;justification:string;evidenceIds:string[]}){

@@ -6,6 +6,7 @@ import { I18nService } from '../../../core/i18n.service';
 import { ErrorExperienceService, UserFacingError } from '../../../core/error-experience.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip, StatusKind } from '../../../shared/status-chip';
+import { AiNotificationConfig } from './ai-notification-config';
 
 interface GraphNode {
   id: string;
@@ -226,7 +227,7 @@ interface ErrorExperienceReadiness {
 @Component({
   selector: 'app-governance-operations',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, AppIcon, StatusChip],
+  imports: [FormsModule, RouterLink, AppIcon, StatusChip, AiNotificationConfig],
   templateUrl: './governance-operations.html',
   styleUrl: './governance-operations.scss',
 })
@@ -269,6 +270,10 @@ export class GovernanceOperationsPage implements OnInit {
 
   ngOnInit(): void {
     this.loadWorkspace();
+  }
+
+  protected notificationTitle(row:{sourceType?:string;title:string}):string {
+    return /^(ai_use_case|ai_risk_)/.test(row.sourceType??'')?(row.title.split('\n')[this.i18n.lang()==='ar'?1:0]??row.title):row.title;
   }
 
   protected loadWorkspace(): void {

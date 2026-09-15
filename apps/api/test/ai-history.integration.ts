@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { testAuditQuery } from './ai-audit-query.integration';
 import { testIntakeVisibility } from './ai-intake-visibility.integration';
+import { testAiNotifications } from './ai-notifications.integration';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { NestFactory } from '@nestjs/core';
@@ -44,6 +45,7 @@ export async function testAiHistory(db: PrismaClient, officerId: string, riskOwn
     await app.listen(0, '127.0.0.1');
     await testAuditQuery(db,app,officerId,riskOwnerId);
     await testIntakeVisibility(db,app,officerId);
+    await testAiNotifications(db,app,officerId);
     const base = await app.getUrl(), jwt = app.get(JwtService);
     const headers = { authorization: `Bearer ${jwt.sign({ sub: officerId, tokenVersion: 0, roles: ['system_admin'] })}` };
     assert.equal((await fetch(base + '/api/ai/history', { headers })).status, 200, 'Live native roles, not token role claims, resolve access');

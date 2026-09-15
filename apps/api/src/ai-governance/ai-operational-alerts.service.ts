@@ -6,38 +6,26 @@ import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { governanceDigest, governanceTransaction } from './ai-governance-ledger';
 import { aiReviewThresholds } from './ai-risk-review.service';
 import { jsonRecord } from './ai-risk-scoring';
+import { AI_NOTIFICATION_SOURCES, emitAiNotice, aiNoticeAccess, processAiTriageSignals, processAiNotificationClosures, aiVariables } from './ai-notifications';
 
-export const AI_ALERT_SOURCES=['ai_risk_strategy','ai_risk_review','ai_risk_treatment','ai_risk_harmony'];
+export const AI_ALERT_SOURCES=AI_NOTIFICATION_SOURCES;
 @Injectable()
 export class AiOperationalAlertsService {
  constructor(private readonly db:PrismaService,private readonly risks:AiRiskIntakeService,private readonly audit:AuditService){}
  async visibility(userId:string):Promise<Prisma.GovernanceNotificationWhereInput>{
   const ordinary={OR:[{sourceType:null},{sourceType:{notIn:AI_ALERT_SOURCES}}]};
-  try{const access=await this.risks.visibility(userId);return {OR:[ordinary,{sourceType:{in:AI_ALERT_SOURCES},workflowCase:{is:{aiRisk:{is:access.where}}},
-   AND:[{OR:[{assigneeUserId:null},{assigneeUserId:userId}]}]}]};}
-  catch(e){if(e instanceof ForbiddenException)return ordinary;throw e;}
+  const alternatives:Prisma.GovernanceNotificationWhereInput[]=[ordinary];
+  try{const access=await this.risks.visibility(userId);alternatives.push({sourceType:{in:AI_ALERT_SOURCES.filter(s=>s!=='ai_use_case')},workflowCase:{is:{aiRisk:{is:access.where}}},AND:[{OR:[{assigneeUserId:null},{assigneeUserId:userId}]}]});}
+  catch(e){if(!(e instanceof ForbiddenException))throw e;}
+  // AIUC notices also support requester-only users without any AIRS purpose grant.
+  const assigned=await this.db.governanceNotification.findMany({where:{sourceType:'ai_use_case',assigneeUserId:userId,workflowCaseId:{not:null}},select:{workflowCaseId:true},distinct:['workflowCaseId']});
+  const cases:string[]=[];
+  for(const n of assigned)if(n.workflowCaseId&&await aiNoticeAccess(this.db,userId,n.workflowCaseId))cases.push(n.workflowCaseId);
+  alternatives.push({sourceType:'ai_use_case',assigneeUserId:userId,workflowCaseId:{in:cases}});
+  return {OR:alternatives};
  }
  private async emit(tx:Prisma.TransactionClient,input:{code:string;sourceType:string;sourceId:string;caseId:string;taskId?:string;dedupeKey:string;userId:string;role:string;variables:Record<string,string>;severity:GovernanceNotificationSeverity}){
-  const template=await tx.governanceNotificationTemplate.findFirst({where:{code:input.code,isActive:true,sourceType:input.sourceType}});
-  if(!template||await tx.governanceNotification.findUnique({where:{dedupeKey:input.dedupeKey}}))return 0;
-  const render=(text:string)=>{let complete=true;const value=text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(_,key:string)=>{if(input.variables[key]===undefined){complete=false;return ''; }return input.variables[key];});return complete?value:null;};
-  const title=render(template.titleTemplate),message=render(template.messageTemplate);if(!title||!message)return 0;
-  const user=await tx.user.findUniqueOrThrow({where:{id:input.userId},select:{email:true}});
-  const notification=await tx.governanceNotification.create({data:{dedupeKey:input.dedupeKey,title,message,severity:input.severity,
-   sourceType:input.sourceType,sourceId:input.sourceId,targetRoleCode:input.role,assigneeUserId:input.userId,workflowCaseId:input.caseId,workflowTaskId:input.taskId,createdBy:'system:ai-operational-alerts'}});
-  const preferences=await tx.governanceNotificationPreference.findMany({where:{OR:[{userId:input.userId},{userId:null,roleCode:input.role}]}});
-  const channels=Array.isArray(template.defaultChannelsJson)?template.defaultChannelsJson:[];
-  const rank={info:0,success:0,warning:1,critical:2};
-  for(const channel of ['in_app','email'] as const){
-   const pref=preferences.find(p=>p.userId===input.userId&&p.channel===channel)??preferences.find(p=>p.channel===channel);
-   if(!channels.includes(channel)||pref&&(!pref.isEnabled||rank[pref.minimumSeverity]>rank[input.severity]))continue;
-   await tx.governanceNotificationDeliveryAttempt.create({data:{notificationId:notification.id,channel,status:'planned',target:channel==='email'?user.email:input.userId,
-    payloadJson:{templateCode:template.code,templateId:template.id,templateUpdatedAt:template.updatedAt.toISOString(),digestCadence:pref?.digestCadence??template.digestCadence,
-     quietHours:pref?.quietHoursJson??null,locale:'en/ar',variables:input.variables}}});
-  }
-  await this.audit.logRequired({actor:'system:ai-operational-alerts',action:'airs.operational.alert',entityType:'ai_risk',entityId:input.variables['risk_id'],
-   metadata:{notificationId:notification.id,templateCode:template.code,sourceType:input.sourceType,sourceId:input.sourceId,recipientRole:input.role,externalDelivery:false}},tx);
-  return 1;
+  return await emitAiNotice(tx,this.audit,{...input,variables:await aiVariables(tx,input.caseId,input.variables)})?1:0;
  }
  private async recipients(tx:Prisma.TransactionClient,riskId:string,roles:string[],exactId?:string){
   const users=await tx.user.findMany({where:{isActive:true,...(exactId?{id:exactId}:{}),userRoles:{some:{role:{is:{code:{in:roles},isActive:true,deletedAt:null}}},none:{role:{is:{code:'auditor',isActive:true,deletedAt:null}}}}},select:{id:true}});
@@ -61,8 +49,10 @@ export class AiOperationalAlertsService {
  }
  async process(now=new Date(),riskId?:string){
   if(!Number.isFinite(now.getTime()))throw new Error('Valid operational alert instant required');
+  const triage=riskId?{created:0}:await processAiTriageSignals(this.db,this.audit,now);
+  const closures=await processAiNotificationClosures(this.db,this.audit,riskId);
   const holidays=await this.db.ksaHoliday.findMany(),dates=holidays.filter(h=>!h.isRecurring).map(h=>h.date.toISOString().slice(0,10)),recurring=holidays.filter(h=>h.isRecurring).map(h=>h.date.toISOString().slice(5,10));
-  let cursor:string|undefined,created=0,archived=0;
+  let cursor:string|undefined,created=triage.created,archived=closures.archived;
   do{
    const rows=await this.db.aiRisk.findMany({where:{...(riskId?{id:riskId}:{}),OR:[{deletedAt:null,isSampleData:false,riskRef:{not:null},workflowCase:{is:{status:{in:['under_review','implemented']}}},useCase:{is:{deletedAt:null,isSampleData:false,useCaseRef:{not:null},OR:[{operationalStatusCode:null},{operationalStatusCode:{notIn:['ARCHIVED','SUSPENDED']}}],asset:{is:{isActive:true,deletedAt:null}}}}},{workflowCase:{is:{governanceNotifications:{some:{sourceType:{in:['ai_risk_treatment','ai_risk_harmony']},status:{not:'archived'}}}}}}]},orderBy:{id:'asc'},take:50,...(cursor?{cursor:{id:cursor},skip:1}:{})});
    if(!rows.length)break;

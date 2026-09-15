@@ -61,7 +61,7 @@
 
       <main class="intake-main">
         @if (selected(); as item) {
-          @if(item.workflowCaseId){<app-ai-audit-query [caseId]="item.workflowCaseId" kind="aiuc" />}
+          @if(item.workflowCaseId){<app-ai-request-controls [useCaseId]="item.id" [version]="item.version" (changed)="load(item.id)" /><app-ai-audit-query [caseId]="item.workflowCaseId" kind="aiuc" />}
           <section class="ds-card intake-toolbar">
             <div>
               <span class="eyebrow">{{ item.workflowCase?.code || t('aiuc.status.unnumbered') }}</span>

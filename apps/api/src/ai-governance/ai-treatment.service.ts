@@ -1,3 +1,4 @@
+import { logAiRequired } from './ai-notifications';
 import { AiControlDomainsService } from './ai-control-domains.service';
 import { requiredInherentRound } from './ai-reassessment-state';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -231,6 +232,6 @@ export class AiTreatmentService {
  }
  private async commit(tx: Prisma.TransactionClient,id: string,caseId: string,version: number,actor: string,action: string,metadata: Record<string,unknown>) {
   if((await tx.aiRisk.updateMany({where:{id,version},data:{version:{increment:1}}})).count!==1) throw new ConflictException('AI risk changed; reload');
-  await tx.workflowEvent.create({data:{caseId,actor,action}});await this.audit.logRequired({actor,action,entityType:'ai_risk',entityId:id,metadata},tx);
+  await tx.workflowEvent.create({data:{caseId,actor,action}});await logAiRequired(this.audit, {actor,action,entityType:'ai_risk',entityId:id,metadata:{...metadata,before:{version},after:{version:version+1}}},tx);
  }
 }

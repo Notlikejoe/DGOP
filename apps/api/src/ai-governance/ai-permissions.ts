@@ -39,6 +39,7 @@ export const AI_PERMISSION_ROLES = {
   'case.approve.airs': [RAIO,SC],
   'aiuc.classify.assess': [WG,RAIO],
   'aiuc.classify.override': [RAIO,ET,SC],
+  'aiuc.classify.reverse': [EC,ET,SC],
   'aiuc.tier.unacceptable': [RAIO,EC],
   'airs.risk.assess': [RO,MO,ML,'security_reviewer','privacy_officer','technical_steward','business_steward',UO],
   'airs.risk.accept.low': [UO],

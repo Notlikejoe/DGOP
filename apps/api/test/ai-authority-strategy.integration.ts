@@ -14,10 +14,13 @@ import { AiRiskAdoptionService } from '../src/ai-governance/ai-risk-adoption.ser
 import { AiRiskResponseService } from '../src/ai-governance/ai-risk-response.service';
 import { AiWorkflowRoutingService, AIRS_TEMPLATE_CODE } from '../src/ai-governance/ai-workflow-routing.service';
 import { computeInherentRisk, jsonRecord } from '../src/ai-governance/ai-risk-scoring';
+import { ensureAiNotificationTemplates } from '../src/ai-governance/ai-notifications';
 
 export async function testAuthorityStrategy(db:PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;auditorId:string}){
  const app=await NestFactory.create(AppModule,{logger:false});
  try{
+  await ensureAiNotificationTemplates(db as PrismaService);
+  await db.governanceNotificationTemplate.update({where:{code:'AIX-NTF-04'},data:{isActive:true}});
   const strategy=app.get(AiRiskStrategyService),reviews=app.get(AiRiskReviewService),scoring=app.get(AiRiskAssessmentService),adoption=app.get(AiRiskAdoptionService),responses=app.get(AiRiskResponseService),routing=app.get(AiWorkflowRoutingService);
   // Services in this isolated app use the same test database as the fixture client.
   const baseRisk=await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId},include:{useCase:true}}),evidence=await db.ndiEvidence.findFirstOrThrow({where:{deletedAt:null}});

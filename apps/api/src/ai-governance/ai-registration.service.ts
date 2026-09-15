@@ -1,3 +1,4 @@
+import { logAiRequired } from './ai-notifications';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CaseStatus, Prisma, TaskStatus } from '@prisma/client';
 import { ScopeService } from '../access/scope.service';
@@ -150,7 +151,7 @@ export class AiRegistrationService {
       });
       await this.version(tx, id, dto.expectedVersion);
       await tx.workflowEvent.create({ data: { caseId: context.current.workflowCase!.id, taskId, actor: actor.id, action: 'aiuc.asset.proposed', comment: dto.justification.trim() } });
-      await this.audit.logRequired({ actor: actor.id, action: 'aiuc.asset.proposed', entityType: 'ai_use_case', entityId: id, metadata: { proposal, approvalTaskId: approval.id, clientIp: clientIp ?? null } }, tx);
+      await logAiRequired(this.audit, { actor: actor.id, action: 'aiuc.asset.proposed', entityType: 'ai_use_case', entityId: id, metadata: { proposal, approvalTaskId: approval.id, clientIp: clientIp ?? null } }, tx);
       return { id, version: dto.expectedVersion + 1, nextTaskId: approval.id };
     }, this.transactionOptions);
   }
@@ -167,7 +168,7 @@ export class AiRegistrationService {
         || actor.id !== context.task.assigneeUserId || actor.id !== context.dataOwner.userId
         || actor.id !== proposal['dataOwnerUserId']) throw new ForbiddenException('Only the nominated active Data Owner can decide asset registration');
       if ([context.current.requesterUserId, context.current.owner?.userId, proposal['registeredBy'], context.adoption['actorId']].includes(actor.id)) {
-        await this.audit.logRequired({ actor: actor.id, action: 'ai.sod.blocked', entityType: 'ai_use_case', entityId: id, metadata: { rule: 'AIUC-ASSET-INDEPENDENCE', taskId } });
+        await logAiRequired(this.audit, { actor: actor.id, action: 'ai.sod.blocked', entityType: 'ai_use_case', entityId: id, metadata: { rule: 'AIUC-ASSET-INDEPENDENCE', taskId } });
         throw new ForbiddenException('Asset approval must be independent of registration and tier adoption');
       }
       const registration = await tx.workflowTask.findFirst({ where: { id: String(context.form['submittedRegistrationTaskId'] ?? ''), caseId: context.current.workflowCase!.id,
@@ -221,7 +222,7 @@ export class AiRegistrationService {
         await tx.workflowEvent.create({ data: { caseId: airs.id, actor: 'system:aiuc-handoff', action: 'airs.handoff.created', toStatus: CaseStatus.draft, comment: context.current.useCaseRef } });
         await tx.workflowCase.update({ where: { id: context.current.workflowCase!.id }, data: { status: CaseStatus.closed } });
         await tx.workflowEvent.create({ data: { caseId: context.current.workflowCase!.id, taskId, actor: 'system:aiuc-handoff', action: 'aiuc.closed', fromStatus: CaseStatus.implemented, toStatus: CaseStatus.closed, comment: String(context.adoption['resolutionCode']) } });
-        await this.audit.logRequired({ actor: actor.id, action: 'airs.handoff.created', entityType: 'ai_risk', entityId: risk.id, metadata: { sourceUseCaseId: id, assetId, airsCaseId, clientIp: clientIp ?? null } }, tx);
+        await logAiRequired(this.audit, { actor: actor.id, action: 'airs.handoff.created', entityType: 'ai_risk', entityId: risk.id, metadata: { sourceUseCaseId: id, assetId, airsCaseId, clientIp: clientIp ?? null } }, tx);
       }
       await tx.workflowTask.update({ where: { id: taskId }, data: {
         status: TaskStatus.completed, decision: dto.decision === 'approve' ? 'approved' : 'rejected', decisionComment: justification,
@@ -231,7 +232,7 @@ export class AiRegistrationService {
       } });
       await this.version(tx, id, dto.expectedVersion, assetId, context.current.organizationUnitId);
       await tx.workflowEvent.create({ data: { caseId: context.current.workflowCase!.id, taskId, actor: actor.id, action: `aiuc.asset.${dto.decision}`, comment: justification } });
-      await this.audit.logRequired({ actor: actor.id, action: `aiuc.asset.${dto.decision}`, entityType: 'ai_use_case', entityId: id, metadata: { taskId, justification, evidenceIds, assetId, airsCaseId, nextTaskId, clientIp: clientIp ?? null } }, tx);
+      await logAiRequired(this.audit, { actor: actor.id, action: `aiuc.asset.${dto.decision}`, entityType: 'ai_use_case', entityId: id, metadata: { taskId, justification, evidenceIds, assetId, airsCaseId, nextTaskId, clientIp: clientIp ?? null } }, tx);
       return { id, version: dto.expectedVersion + 1, assetId, airsCaseId, nextTaskId };
     }, this.transactionOptions);
   }

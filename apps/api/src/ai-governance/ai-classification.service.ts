@@ -4,6 +4,8 @@ import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiAuthorizationService } from './ai-authorization.service';
 import { AIUC_STAGE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
+import { aiNoticeAccess } from './ai-notifications';
+import { governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import {
   AI_CLASSIFICATION_CRITERIA,
   AiCalculationInputV1,
@@ -41,6 +43,7 @@ const classificationCase = {
   useCaseRef: true,
   workflowCaseId: true,
   requesterUserId: true,
+  assetId:true,
   ownerPersonId: true,
   name: true,
   description: true,
@@ -359,6 +362,49 @@ export class AiClassificationService {
     evidenceIds: string[], authorityReference: string, clientIp?: string) {
     return this.recordOfficerDecision(userId, id, 'unacceptable', {
       expectedVersion, justification, evidenceIds, authorityReference, clientIp,
+    });
+  }
+
+  private async reversalGate(tx:Prisma.TransactionClient,userId:string,id:string) {
+    const current=await tx.aiUseCase.findFirst({where:{id,deletedAt:null,isSampleData:false},select:classificationCase});
+    if(!current?.workflowCaseId||!await aiNoticeAccess(tx,userId,current.workflowCaseId))throw new NotFoundException('Native AI classification not found');
+    const source=current.assessments[0],result=source?metadata(source.result):{},decision=metadata(result['officerDecision'] as Prisma.JsonValue);
+    const levels=['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER','AI_ETHICS_COMMITTEE','AI_EXECUTIVE_TEAM','STEERING_COMMITTEE'];
+    const previousLevel=levels.indexOf(String(decision['actorRole']));
+    const access=await aiNoticeAccess(tx,userId,current.workflowCaseId);
+    const grants=await tx.rolePermission.findMany({where:{role:{code:{in:['AI_ETHICS_COMMITTEE','AI_EXECUTIVE_TEAM','STEERING_COMMITTEE']},isActive:true,deletedAt:null,userRoles:{some:{userId}}},permission:{resource:'aiuc.classify',action:'reverse'}},include:{role:true}});
+    const role=grants.map(g=>g.role.code).sort((a,b)=>levels.indexOf(a)-levels.indexOf(b)).find(r=>levels.indexOf(r)>previousLevel);
+    const owner=current.ownerPersonId?await tx.person.findUnique({where:{id:current.ownerPersonId},select:{userId:true}}):null;
+    const calculated=source?classificationResult(source.result):null;
+    const basis=typeof result['sourceAssessmentId']==='string'?await tx.aiAssessmentRound.findFirst({where:{id:result['sourceAssessmentId'],useCaseId:id,kind:'classification'}}):null;
+    const canReverse=!!source&&source.engineVersion===DECISION_ENGINE_VERSION&&['override','unacceptable'].includes(String(decision['decisionType']))&&previousLevel>=1&&!!role&&!access!.roles.includes('auditor')&&![current.requesterUserId,owner?.userId,source.createdBy,basis?.createdBy,decision['verifiedBy']].includes(userId)&&!current.assetId&&['under_review','decision_made','approved'].includes(current.workflowCase!.status)&&result['approvedTierCode']!==calculated?.proposedTierCode;
+    return {current,source,basis,result,decision,role,canReverse};
+  }
+  async reversalContext(userId:string,id:string) {
+    return governanceTransaction(this.prisma,async tx=>{const g=await this.reversalGate(tx,userId,id);return {version:g.current.version,assessmentId:g.source?.id??null,calculatedTierCode:g.result['proposedTierCode']??null,approvedTierCode:g.result['approvedTierCode']??null,scoreMax:g.result['scoreMax']??null,canReverse:g.canReverse,registeredReassessmentRequired:!!g.current.assetId};});
+  }
+  async reverseOverride(userId:string,id:string,expectedVersion:number,justificationValue:string,evidenceInput:string[],authorityReferenceValue:string,clientIp?:string) {
+    const justification=governanceText(justificationValue),authorityReference=governanceText(authorityReferenceValue);
+    return governanceTransaction(this.prisma,async tx=>{
+      const actor=await this.authorization.authorize(userId,'aiuc.classify.reverse',tx),g=await this.reversalGate(tx,userId,id);
+      await this.authorization.enforceDuty(actor,'approve_aiuc',{requesterId:g.current.requesterUserId,useCaseOwnerId:g.current.ownerPersonId?(await tx.person.findUnique({where:{id:g.current.ownerPersonId}}))?.userId??undefined:undefined},id);
+      if(!g.canReverse)throw new ForbiddenException('Only an independent higher classification authority may reverse the current pre-registration override');
+      if(g.current.version!==expectedVersion)throw new ConflictException('AI classification changed; reload');
+      const source=g.source!,evidenceIds=await governanceEvidence(tx,evidenceInput),calculated=classificationResult(source.result),now=new Date();
+      const tier=await tx.governedReferenceValue.findUnique({where:{versionId_code:{versionId:source.ruleReferenceVersionId,code:calculated.proposedTierCode}}});
+      if(!tier||metadata(tier.metadata)['automatic']!==true)throw new ConflictException('The immutable assessment lacks its pinned automatic tier');
+      const task=await this.routing.createStageTask(tx,g.current.workflowCaseId!,AIUC_STAGE.classification,now,{title:'Higher-authority classification reversal',assigneeRoleCode:g.role!,assigneeUserId:userId,formDataJson:{sourceAssessmentId:source.id,operation:'tier_reversal'}});
+      const routingFacts=metadata(g.basis?.result??source.result)['routingFacts'];
+      const decisionRound=await tx.aiAssessmentRound.create({data:{useCaseId:id,kind:'classification',round:source.round+1,engineVersion:DECISION_ENGINE_VERSION,ruleReferenceVersionId:source.ruleReferenceVersionId,inputs:source.inputs as Prisma.InputJsonValue,result:{...g.result as Prisma.InputJsonObject,routingFacts:(routingFacts??{}) as Prisma.InputJsonValue,approvedTierCode:calculated.proposedTierCode,sourceAssessmentId:source.id,officerDecision:{decisionType:'reversal',reversesAssessmentId:source.id,actorRole:g.role!,verifiedBy:userId,verifiedAt:now.toISOString(),justification,evidenceIds,authorityReference}},createdBy:userId}});
+      await tx.workflowTask.update({where:{id:task.id},data:{status:'completed',decision:'approved',completedAt:now,formSubmittedAt:now,formSubmittedBy:userId,decisionComment:justification}});
+      const cancelled=await tx.workflowTask.findMany({where:{caseId:g.current.workflowCaseId!,id:{not:task.id},status:{in:['pending','in_progress']}},select:{id:true}});
+      await tx.workflowTask.updateMany({where:{id:{in:cancelled.map(t=>t.id)}},data:{status:'cancelled',decisionComment:'Superseded by higher-authority classification reversal'}});
+      const route=await this.routing.openPostClassificationGate(tx,g.current.workflowCaseId!,decisionRound.id,calculated.proposedTierCode,calculated.proposedTierCode,this.routing.routingFacts({routingFacts}),now);
+      await tx.workflowCase.update({where:{id:g.current.workflowCaseId!},data:{status:route.nextStatus}});
+      if((await tx.aiUseCase.updateMany({where:{id,version:expectedVersion,assetId:null},data:{version:{increment:1}}})).count!==1)throw new ConflictException('AI classification changed; reload');
+      await tx.workflowEvent.create({data:{caseId:g.current.workflowCaseId!,taskId:task.id,actor:userId,action:'aiuc.classification.reversed',fromStatus:g.current.workflowCase!.status,toStatus:route.nextStatus,comment:justification}});
+      await this.audit.logRequired({actor:userId,action:'aiuc.classification.reversed',entityType:'ai_use_case',entityId:id,metadata:{sourceAssessmentId:source.id,decisionAssessmentId:decisionRound.id,oldValue:g.result['approvedTierCode'],newValue:calculated.proposedTierCode,scoreMax:calculated.scoreMax,actorRoleCode:g.role,justification,evidenceIds,authorityReference,clientIp:clientIp??null,cancelledTaskIds:cancelled.map(t=>t.id),before:{version:expectedVersion,status:g.current.workflowCase!.status},after:{version:expectedVersion+1,status:route.nextStatus}}},tx);
+      return {id,version:expectedVersion+1,assessmentId:decisionRound.id};
     });
   }
 

@@ -44,6 +44,7 @@ export async function testReportingLibrary(db:PrismaClient,f:{riskId:string;risk
   await assert.rejects(db.aiDashboardScheduleVersion.update({where:{id:schedule.id},data:{dailyEnabled:false}}),/append-only/);
   const cycle=await Promise.all([reports.processDue(),reports.processDue()]);assert.equal(cycle.reduce((n,r)=>n+r.captured,0),1);assert.equal((await reports.processDue()).captured,0);
   const runs=await db.aiDashboardScheduleRun.findMany();assert.equal(runs.length,2);assert.ok(runs.every(r=>r.status==='success'&&!!r.snapshotId));await assert.rejects(db.aiDashboardScheduleRun.delete({where:{id:runs[0].id}}),/append-only/);
+  const acceptedCadence=await reports.schedule(f.officerId,unitId);assert.equal(acceptedCadence.acceptance.cadenceConfigured,true);assert.equal(acceptedCadence.acceptance.evidenceComplete,true);assert.equal(acceptedCadence.acceptance.environmentReady,false);assert.ok(acceptedCadence.acceptance.slots.every(s=>s.status==='verified'&&s.snapshotId));
   const nextDay=new Date(Date.now()+86400000),exhaustDay=new Date(Date.now()+172800000);
   await db.user.update({where:{id:f.officerId},data:{isActive:false}});
   try{await reports.processDue(nextDay);assert.equal((await db.aiDashboardScheduleRun.findFirstOrThrow({where:{periodKey:reportSlots(nextDay).daily}})).errorCode,'ACCESS_UNAVAILABLE');await reports.processDue(new Date(nextDay.getTime()+60000));assert.equal(await db.aiDashboardScheduleRun.count({where:{periodKey:reportSlots(nextDay).daily}}),1);

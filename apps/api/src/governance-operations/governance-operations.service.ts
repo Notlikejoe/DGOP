@@ -1,4 +1,6 @@
 import { AiOperationalAlertsService, AI_ALERT_SOURCES } from '../ai-governance/ai-operational-alerts.service';
+import { ensureAiNotificationTemplates, validateAiNotificationTemplate, assertAiDeliveryEligible } from '../ai-governance/ai-notifications';
+import { governanceTransaction } from '../ai-governance/ai-governance-ledger';
 import { AiDashboardReportsService } from '../ai-governance/ai-dashboard-reports.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
@@ -1849,8 +1851,8 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
 
   async notificationTemplates() {
     await this.ensureDefaultNotificationTemplates();
+    await ensureAiNotificationTemplates(this.prisma);
     return this.prisma.governanceNotificationTemplate.findMany({
-      where: { isActive: true },
       orderBy: [{ sourceType: 'asc' }, { code: 'asc' }],
     });
   }
@@ -1861,6 +1863,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       if(!eligible)throw new ForbiddenException('Only a live DMO_ADMIN may edit governed AI notification templates');
       if(!/^(AIUC|AIRS|AIX)-NTF-\d{2}$/.test(dto.code) || !dto.sourceType || !AI_ALERT_SOURCES.includes(dto.sourceType))throw new BadRequestException('Use an exact governed AI template code and source');
       if(!Array.isArray(dto.defaultChannelsJson)||dto.defaultChannelsJson.some(c=>!['in_app','email'].includes(String(c))))throw new BadRequestException('AI templates support in-system and email channels');
+      validateAiNotificationTemplate(dto.code,dto.sourceType,dto.titleTemplate,dto.messageTemplate,dto.digestCadence??'immediate');
     }
 
     await this.ensureDefaultNotificationTemplates();
@@ -2126,7 +2129,24 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
     dto: UpdateNotificationDeliveryAttemptDto,
     user: AuthUser,
   ) {
-    await this.visibleNotification(id, user);
+    const notification = await this.visibleNotification(id, user);
+    if(notification.sourceType&&AI_ALERT_SOURCES.includes(notification.sourceType)) {
+      return governanceTransaction(this.prisma,async tx=>{
+        await tx.$executeRaw`SELECT id FROM governance_notification_delivery_attempts WHERE id=${attemptId} AND "notificationId"=${id} FOR UPDATE`;
+        const current=await tx.governanceNotificationDeliveryAttempt.findFirst({where:{id:attemptId,notificationId:id}});
+        if(!current)throw new NotFoundException('notification delivery attempt not found');
+        if(['sent','skipped'].includes(current.status))throw new BadRequestException('A completed AI delivery cannot be replayed');
+        if(dto.target!==undefined&&dto.target!==current.target)throw new BadRequestException('Preserve the native AI recipient');
+        const now=new Date();
+        if(dto.status===GovernanceNotificationDeliveryStatus.sent) {
+          await assertAiDeliveryEligible(tx,attemptId,now);
+          if(current.channel!=='in_app')throw new ForbiddenException('Email delivery requires a verified connector receipt; this endpoint cannot certify external delivery');
+        }
+        const row=await tx.governanceNotificationDeliveryAttempt.update({where:{id:attemptId},data:{status:dto.status,provider:current.channel==='in_app'?'dgop-in-app':current.provider,errorMessage:dto.errorMessage??null,attemptCount:{increment:1},lastAttemptAt:now,deliveredAt:dto.status==='sent'?now:current.deliveredAt,nextRetryAt:dto.status==='failed'?new Date(now.getTime()+30*60*1000):dto.status==='planned'?current.nextRetryAt:null}});
+        await this.audit.logRequired({actor:user.email,action:'ai.notification.delivery.updated',entityType:'governance_notification_delivery_attempt',entityId:row.id,metadata:{notificationId:id,workflowCaseId:notification.workflowCaseId,status:row.status,channel:row.channel,externalDelivery:false}},tx);
+        return row;
+      });
+    }
     const existing = await this.prisma.governanceNotificationDeliveryAttempt.findFirst({
       where: { id: attemptId, notificationId: id },
     });
@@ -2175,6 +2195,10 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
   }
 
   private async planNotificationDeliveryInternal(row: NotificationWithLinks, user: AuthUser) {
+    if(row.sourceType&&AI_ALERT_SOURCES.includes(row.sourceType)) {
+      const attempts=await this.prisma.governanceNotificationDeliveryAttempt.findMany({where:{notificationId:row.id},orderBy:{createdAt:'desc'}});
+      return {notification:this.enrichNotification(row),createdAttempts:0,attempts};
+    }
     const enriched = this.enrichNotification(row);
     const deliveryAttemptClient = (
       this.prisma as unknown as {

@@ -1,3 +1,4 @@
+import { logAiRequired } from './ai-notifications';
 import { governanceDigest } from './ai-governance-ledger';
 import { AiControlDomainsService } from './ai-control-domains.service';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -158,7 +159,7 @@ export class AiRiskIntakeService {
         templateCode: AIRS_TEMPLATE_CODE, assigneeUserId: nominee.id, formDataJson: { sourceRiskId: id, handoffSourceId: item.aiucHandoffSourceId } });
       await tx.aiRisk.update({ where: { id }, data: { ownerPersonId: person.id, version: { increment: 1 } } });
       await tx.workflowEvent.create({ data: { caseId: item.workflowCase!.id, taskId: task.id, actor: actor.id, action: 'airs.owner.assigned', comment: dto.justification.trim() } });
-      await this.audit.logRequired({ actor: actor.id, action: 'airs.owner.assigned', entityType: 'ai_risk', entityId: id,
+      await logAiRequired(this.audit, { actor: actor.id, action: 'airs.owner.assigned', entityType: 'ai_risk', entityId: id,
         metadata: { oldOwnerPersonId: item.ownerPersonId, newOwnerPersonId: person.id, taskId: task.id, justification: dto.justification.trim(), clientIp: clientIp ?? null } }, tx);
       return { id, version: item.version + 1 };
     }, this.options);
@@ -191,7 +192,7 @@ export class AiRiskIntakeService {
         cause: typeof input['cause'] === 'string' ? input['cause'] : item.cause,
         event: typeof input['event'] === 'string' ? input['event'] : item.event,
         effect: typeof input['effect'] === 'string' ? input['effect'] : item.effect, version: { increment: 1 } } });
-      await this.audit.logRequired({ actor: actor.id, action: 'airs.intake.saved', entityType: 'ai_risk', entityId: id,
+      await logAiRequired(this.audit, { actor: actor.id, action: 'airs.intake.saved', entityType: 'ai_risk', entityId: id,
         metadata: { oldValue: item.intakeData, newValue: input, version: version + 1, clientIp: clientIp ?? null } }, tx);
       return { id, version: version + 1 };
     }, this.options);
@@ -222,7 +223,7 @@ export class AiRiskIntakeService {
       await tx.workflowCase.update({ where: { id: item.workflowCase!.id }, data: { status: 'under_review' } });
       await tx.workflowEvent.create({ data: { caseId: item.workflowCase!.id, taskId: assessment.id, actor: 'system',
         action: 'airs.assessment.opened', fromStatus: 'submitted', toStatus: 'under_review', comment: riskRef } });
-      await this.audit.logRequired({ actor: actor.id, action: 'airs.intake.submitted', entityType: 'ai_risk', entityId: id,
+      await logAiRequired(this.audit, { actor: actor.id, action: 'airs.intake.submitted', entityType: 'ai_risk', entityId: id,
         metadata: { ...snapshot, sourceUseCaseId: item.useCase.id, relatedAssetId: item.useCase.assetId,
           caseCode: item.workflowCase!.code, assessmentTaskId: assessment.id, clientIp: clientIp ?? null } }, tx);
       return { id, version: version + 1, riskRef, nextTaskId: assessment.id };

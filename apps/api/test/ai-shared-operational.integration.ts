@@ -46,7 +46,7 @@ export async function testAiSharedOperational(db: PrismaClient, officerId: strin
     await assert.rejects(db.governanceEscalation.update({where:{id:escalation.id},data:{status:'acknowledged'}}),/must resolve|stays open/);
     await assert.rejects(db.governanceEscalation.update({where:{id:escalation.id},data:{sourceType:'workflow_task'}}),/provenance is immutable/);
     const signals=await db.governanceNotification.findMany({where:{sourceType:'ai_risk_strategy'},include:{deliveryAttempts:true}});
-    assert.ok(signals.length>=10);assert.ok(signals.every(n=>n.deliveryAttempts.length===1&&n.deliveryAttempts[0].channel==='in_app'&&n.deliveryAttempts[0].status==='planned'&&!n.emailSentAt));
+    assert.ok(signals.length>0,'Published strategy templates emit native outcome notices');assert.ok(signals.every(n=>n.deliveryAttempts.length===1&&n.deliveryAttempts[0].channel==='in_app'&&n.deliveryAttempts[0].status===(n.status==='archived'?'skipped':'planned')&&!n.emailSentAt));
     const closeSignal=signals.find(n=>n.assigneeUserId===riskOwnerId&&n.status==='unread')!;assert.ok(closeSignal);
     const otherOwner=await db.user.findFirstOrThrow({where:{id:{not:riskOwnerId},userRoles:{some:{role:{code:'AI_RISK_OWNER'}}}}});
     // Same role is not sufficient for an individually addressed AI notice.

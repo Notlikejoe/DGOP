@@ -17,6 +17,7 @@ import { AiResidualDecisionService } from '../src/ai-governance/ai-residual-deci
 import { AiWorkflowRoutingService } from '../src/ai-governance/ai-workflow-routing.service';
 import { AiRiskReviewService, aiReviewDue, aiReviewThresholds, aiReviewStatus } from '../src/ai-governance/ai-risk-review.service';
 import { GovernanceOperationsService } from '../src/governance-operations/governance-operations.service';
+import { ensureAiNotificationTemplates } from '../src/ai-governance/ai-notifications';
 
 export async function testPhase3HI(db:PrismaClient,f:{riskId:string;riskOwnerId:string;officerId:string;auditorId:string}) {
  const prisma=db as PrismaService,audit=new AuditService(prisma),auth=new AiAuthorizationService(prisma,audit),routing=new AiWorkflowRoutingService(prisma),scope=new ScopeService(prisma);
@@ -62,14 +63,16 @@ export async function testPhase3HI(db:PrismaClient,f:{riskId:string;riskOwnerId:
   if(band==='CRITICAL'){assert.equal(r.dueAt.getTime(),r.anchorAt.getTime());assert.equal((await decisions.context(f.officerId,risk.id)).riskAccepted,false);}
  }
  // Catch-up sweep emits each threshold once, persists native alerts/escalation, never dispatches email.
+ await ensureAiNotificationTemplates(prisma);
+ await db.governanceNotificationTemplate.updateMany({where:{code:{in:['AIRS-NTF-05','AIRS-NTF-06']}},data:{isActive:true}});
  const now=new Date(snapshot.dueAt.getTime()+20*86400000);
  await assert.rejects(failed.processSignals(now,f.riskId),/Injected review audit failure/);assert.equal(await db.aiRiskReviewSignal.count({where:{reviewId:medium.id}}),0);
  assert.equal((await service.processSignals(now,f.riskId)).created,4);assert.equal((await service.processSignals(now,f.riskId)).created,0);
  const signals=await db.aiRiskReviewSignal.findMany({where:{reviewId:medium.id},orderBy:{threshold:'asc'}});assert.deepEqual(signals.map(s=>s.threshold),[50,80,95,100]);
- assert.equal(await db.governanceNotification.count({where:{sourceType:'ai_risk_review',sourceId:medium.id}}),12);assert.equal(await db.governanceNotification.count({where:{sourceId:medium.id,emailSentAt:{not:null}}}),0);
+ assert.equal(await db.governanceNotification.count({where:{sourceType:'ai_risk_review',sourceId:medium.id,assigneeUserId:f.riskOwnerId}}),1,'The governed due notice addresses the actual owner once, independently of SLA thresholds');assert.equal(await db.governanceNotification.count({where:{sourceId:medium.id,emailSentAt:{not:null}}}),0);
  const escalation=await db.governanceEscalation.findFirstOrThrow({where:{sourceType:'ai_risk_review',sourceId:medium.id}});assert.equal(escalation.level,'executive_steering_committee');
- assert.equal(await db.governanceNotificationDeliveryAttempt.count({where:{notification:{sourceId:medium.id},status:'planned'}}),24);
- assert.equal(await db.governanceNotification.count({where:{sourceId:medium.id,title:{contains:'مراجعة'}}}),12);
+ assert.equal(await db.governanceNotificationDeliveryAttempt.count({where:{notification:{sourceType:'ai_risk_review',sourceId:medium.id},status:'planned'}}),2);
+ assert.equal(await db.governanceNotification.count({where:{sourceId:medium.id,title:{contains:'المراجعة'}}}),1);
  await assert.rejects(db.governanceEscalation.delete({where:{id:escalation.id}}),/Foreign key|foreign key/);
  await assert.rejects(db.aiRiskReviewSignal.update({where:{id:signals[0].id},data:{threshold:100}}),/append-only/);
  // Publication change applies to the next occurrence only; missing publication rolls the completion back.

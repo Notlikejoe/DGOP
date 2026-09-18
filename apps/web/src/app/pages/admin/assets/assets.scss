@@ -413,12 +413,12 @@ code { font-family: var(--font-mono, monospace); font-size: var(--font-size-sm);
 :host ::ng-deep .vital-card .p-progressbar-value, :host ::ng-deep .risk-vitals .p-progressbar-value, :host ::ng-deep .open-data-list .p-progressbar-value { background: linear-gradient(90deg, var(--primary), #12bca8); }
 
 .asset360-tabs { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl, 16px); box-shadow: 0 6px 18px rgba(15, 33, 59, .07); overflow: hidden; }
-:host ::ng-deep .asset360-tabs .p-tablist-tab-list { padding-inline: .45rem; background: var(--surface); border-color: var(--border); }
-:host ::ng-deep .asset360-tabs .p-tablist,
-:host ::ng-deep .asset360-tabs .p-tablist-content { background: var(--surface) !important; background-image: none !important; }
-:host ::ng-deep .asset360-tabs .p-tab { display: inline-flex; gap: .45rem; padding: .8rem .95rem; color: var(--on-surface-muted); font-weight: 800; white-space: nowrap; }
-:host ::ng-deep .asset360-tabs .p-tab:hover { color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 25%, transparent); }
-:host ::ng-deep .asset360-tabs .p-tab-active { color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 48%, transparent); }
+:host ::ng-deep .asset360-tabs .p-tablist { padding: .45rem .55rem 0; background: color-mix(in srgb, var(--surface-2) 72%, var(--surface)) !important; background-image: none !important; border-bottom: 1px solid var(--border); }
+:host ::ng-deep .asset360-tabs .p-tablist-content { gap: .35rem; background: transparent !important; background-image: none !important; }
+:host ::ng-deep .asset360-tabs .p-tab { position: relative; top: 1px; display: inline-flex; gap: .45rem; min-height: 42px; padding: .62rem .9rem; color: var(--on-surface-muted); background: color-mix(in srgb, var(--surface-2) 82%, var(--surface)); border: 1px solid var(--border); border-bottom-color: var(--border); border-radius: .7rem .7rem 0 0; font-weight: 800; white-space: nowrap; transition: color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease; }
+:host ::ng-deep .asset360-tabs .p-tab:hover { color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 42%, var(--surface)); transform: translateY(-1px); }
+:host ::ng-deep .asset360-tabs .p-tab-active { z-index: 1; color: var(--primary); background: var(--surface); border-color: color-mix(in srgb, var(--primary) 34%, var(--border)); border-bottom-color: var(--surface); box-shadow: 0 -4px 12px rgba(15, 33, 59, .08); transform: translateY(0); }
+:host ::ng-deep .asset360-tabs .p-tablist-active-bar { display: none; }
 :host ::ng-deep .asset360-tabs .p-tabpanels { padding: var(--space-3); background: transparent; }
 .tab-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; flex: 0 0 auto; padding-inline: .35rem; color: var(--primary); background: var(--primary-soft); border-radius: var(--radius-pill); font-size: var(--font-size-xs); }
 .asset360-panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }

@@ -1,6 +1,6 @@
 import { AiRiskInitiationService } from './ai-risk-initiation.service';
 import { CreateAiRiskDto } from './ai-risk-library.dto';
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -95,6 +95,11 @@ export class AiRiskIntakeController {
   @Patch(':id/intake') @RequirePermissions('case.create.airs')
   save(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveAiRiskIntakeDto, @Req() req: Request) {
     return this.service.save(user.id, id, dto.expectedVersion, dto.input, req.ip ?? req.socket?.remoteAddress);
+  }
+  @Delete(':id')
+  @RequirePermissions('case.create.airs')
+  remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) {
+    return this.service.remove(user.id, id, dto.expectedVersion, req.ip ?? req.socket?.remoteAddress);
   }
   @Post(':id/submit') @RequirePermissions('case.create.airs')
   submit(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AiRiskVersionDto, @Req() req: Request) {

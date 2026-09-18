@@ -1,67 +1,146 @@
-<section class="page ai-review-page governance-modern">
-  <header class="page__header review-hero"><div><span class="eyebrow">{{ t('aiRisk.eyebrow') }}</span><h1>{{ t('aiRisk.title') }}</h1><p class="page__subtitle">{{ t('aiRisk.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load(selected()?.id)"><app-icon name="refresh" />{{ t('crud.retry') }}</button></header>
+<section class="page ai-review-page governance-modern risk-page">
+  <header class="page__header review-hero risk-hero">
+    <div><span class="eyebrow">{{ t('aiRisk.eyebrow') }}</span><h1>{{ t('aiRisk.title') }}</h1><p class="page__subtitle">{{ t('aiRisk.subtitle') }}</p></div>
+    <div class="risk-hero-actions">
+      <button type="button" class="ds-btn ds-btn--primary" pRipple (click)="createOpen.set(true)">+ {{ t('aiRisk.add') }}</button>
+      <button type="button" class="ds-btn ds-btn--ghost" pRipple [disabled]="working()" (click)="load(selected()?.id)"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
+    </div>
+  </header>
+
   <app-ai-journey-history />
   @if (!lookups().ready && state() === 'ok') { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiRisk.references') }}</p></div> }
-  @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
-  @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiRisk.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section> }
-  @else {
-    <div class="risk-register-workspace">
-      <section class="ds-card risk-register-table">
-        <header class="risk-register-heading"><div><span class="eyebrow">{{ t('aiRisk.register') }} · {{ items().length }}</span><h2>{{ t('aiRisk.tableTitle') }}</h2><p>{{ t('aiRisk.tableHelp') }}</p></div></header>
-        <p-table [value]="items()" dataKey="id" [rowHover]="true" [stripedRows]="true" [scrollable]="true" [paginator]="items().length > 12" [rows]="12" [tableStyle]="{'min-width':'64rem'}">
-          <ng-template #header><tr>
-            <th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiInitiation.useCase') }}</th><th>{{ t('aiRisk.field.title') }}</th>
-            <th>{{ t('aiRisk.field.risk_category') }}</th><th>{{ t('aiRisk.field.third_party_involved') }}</th><th>{{ t('aiRisk.owner') }}</th>
-            <th>{{ t('aiRisk.tableStatus') }}</th><th>{{ t('aiRisk.tableAction') }}</th>
-          </tr></ng-template>
-          <ng-template #body let-row><tr [class.risk-row--active]="selected()?.id === row.id">
-            <td><strong>{{ row.riskRef || row.workflowCase.code }}</strong><small>{{ row.riskRef ? row.workflowCase.code : t('aiRisk.pendingRef') }}</small></td>
-            <td><strong>{{ row.useCase.useCaseRef }}</strong><small>{{ row.useCase.name }}</small></td>
-            <td>@if (selected()?.id === row.id && row.canEdit) { <input pInputText type="text" maxlength="200" [disabled]="working()" [ngModel]="input()['title']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('title', $event)" [attr.aria-label]="t('aiRisk.field.title')" /> } @else { <span>{{ row.title || row.useCase.name }}</span> }</td>
-            <td>@if (selected()?.id === row.id && row.canEdit) { <p-select [options]="lookup('risk_category')?.values || []" optionValue="code" [optionLabel]="i18n.lang() === 'ar' ? 'labelAr' : 'labelEn'" [placeholder]="t('aiuc.select')" [disabled]="working()" [ngModel]="input()['risk_category'] || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('risk_category', $event)" [ariaLabel]="t('aiRisk.field.risk_category')" /> } @else { {{ lookupLabel('risk_category', row.intakeData?.['risk_category']) }} }</td>
-            <td>@if (selected()?.id === row.id && row.canEdit) { <label class="table-check"><input type="checkbox" [disabled]="working()" [ngModel]="input()['third_party_involved']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('third_party_involved', $event)" /><span>{{ t(input()['third_party_involved'] ? 'aiuc.yes' : 'aiuc.no') }}</span></label> } @else { {{ displayValue(row, 'third_party_involved') }} }</td>
-            <td>{{ row.owner ? ownerLabel(row.owner) : t('aiRisk.unassigned') }}</td>
-            <td><app-status-chip kind="info" [label]="t('aiRisk.status.' + row.workflowCase.status)" /></td>
-            <td><button type="button" class="ds-btn ds-btn--ghost table-open" [attr.aria-pressed]="selected()?.id === row.id" (click)="select(row)">{{ t(selected()?.id === row.id ? 'aiRisk.tableSelected' : 'aiRisk.tableOpen') }}</button></td>
-          </tr></ng-template>
-          <ng-template #emptymessage><tr><td colspan="8">{{ t('aiRisk.empty') }}</td></tr></ng-template>
-        </p-table>
-      </section>
-      <app-ai-risk-initiation (created)="load($event)"/>
-      <main class="review-main">
-        @if (selected(); as item) {
-          <section class="ds-card review-toolbar"><div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2>@if (dirty()) { <small class="risk-unsaved" role="status">{{ t('aiRisk.unsaved') }}</small> }</div><app-status-chip kind="info" [label]="item.riskRef || t('aiRisk.pendingRef')" /></section>
-          @if (item.useCase.operationalStatusCode) { <section class="ds-card review-toolbar" role="status"><strong>{{ t('aiJourney.operational.' + item.useCase.operationalStatusCode) }}</strong><p>{{ t('aiJourney.intakePaused') }}</p></section> }
-          @if(item.libraryVersion;as l){<section class="ds-card review-toolbar"><strong>{{ l.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ l.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></section>}
-          <section class="ds-card specialist-context"><header class="section-head"><span><app-icon name="shield" /></span><div><small>{{ t('aiRisk.handover') }}</small><h2>{{ item.useCase.name }}</h2></div></header><div class="specialist-facts">
-            <div><small>{{ t('aiRisk.asset') }}</small><strong>{{ item.useCase.asset.code }} · {{ label(item.useCase.asset) }}</strong></div>
-            <div><small>{{ t('aiRisk.department') }}</small><strong>{{ label(item.useCase.organizationUnit) }}</strong></div>
-            <div><small>{{ t('aiRisk.approvedTier') }}</small><strong>{{ item.handoffPayload?.['approvedTierCode'] ? t('aiRisk.tier.' + item.handoffPayload?.['approvedTierCode']) : '—' }}</strong></div>
-            <div><small>{{ t('aiRisk.owner') }}</small><strong>{{ item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned') }}</strong></div>
-          </div>@if (item.obligations.length) { <div><strong>{{ t('aiReview.adoption.conditions') }}</strong><ul>@for (condition of item.obligations; track condition.id) { <li>{{ condition.description }}</li> }</ul></div> }</section>
-          @if (item.canAssignOwner) { <section class="ds-card decision-card specialist-decision"><h2>{{ t('aiRisk.assignOwner') }}</h2><label><span>{{ t('aiRisk.owner') }}</span><select [ngModel]="ownerUserId()" (ngModelChange)="ownerUserId.set($event)"><option value="">{{ t('aiuc.select') }}</option>@for (owner of lookups().riskOwners; track owner.userId) { <option [value]="owner.userId">{{ ownerLabel(owner) }}</option> }</select></label><label><span>{{ t('aiReview.justification') }}</span><textarea rows="2" maxlength="2000" [ngModel]="ownerJustification()" (ngModelChange)="ownerJustification.set($event)"></textarea></label><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t('aiRisk.assignOwner') }}</button></section> }
-          <section class="ds-card specialist-decision risk-intake"><h2>{{ t('aiRisk.intake') }}</h2>
-            @if(item.suggestedControlPins;as suggestions){<section class="ds-card"><h3>{{ t('aiControls.librarySuggestions') }}</h3>@for(p of suggestions.controlPins;track p.versionId){<p>{{ p.controlCode }} · {{ i18n.lang()==='ar'?p.titleAr:p.titleEn }}</p>}<p>{{ t('aiControls.suggestions') }}</p></section>}
-            <p-table [value]="detailFields()" dataKey="field" [stripedRows]="true" [tableStyle]="{'width':'100%','table-layout':'fixed'}">
-              <ng-template #header><tr><th>{{ t('aiRisk.tableField') }}</th><th>{{ t('aiRisk.tableValue') }}</th></tr></ng-template>
-              <ng-template #body let-field><tr><th scope="row">{{ t('aiRisk.field.' + field.field) }} @if (field.required) { <b>*</b> }</th><td>
+
+  @if (state() === 'loading') {
+    <section class="ds-card state-card">{{ t('crud.loading') }}</section>
+  } @else if (state() === 'error') {
+    <section class="ds-card state-card"><p>{{ t('aiRisk.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section>
+  } @else {
+    <section class="risk-metrics" [attr.aria-label]="t('aiRisk.metrics.title')">
+      <article><span>{{ t('aiRisk.metrics.all') }}</span><strong>{{ items().length }}</strong><small>{{ t('aiRisk.metrics.allHelp') }}</small></article>
+      <article><span>{{ t('aiRisk.metrics.drafts') }}</span><strong>{{ draftCount() }}</strong><small>{{ t('aiRisk.metrics.draftsHelp') }}</small></article>
+      <article><span>{{ t('aiRisk.metrics.review') }}</span><strong>{{ reviewCount() }}</strong><small>{{ t('aiRisk.metrics.reviewHelp') }}</small></article>
+      <article><span>{{ t('aiRisk.metrics.active') }}</span><strong>{{ activeCount() }}</strong><small>{{ t('aiRisk.metrics.activeHelp') }}</small></article>
+    </section>
+
+    <section class="ds-card risk-cycle">
+      <header><div><span class="eyebrow">{{ t('aiRisk.lifecycle.title') }}</span><h2>{{ t('aiRisk.lifecycle.heading') }}</h2></div><p>{{ t('aiRisk.lifecycle.help') }}</p></header>
+      <ol>
+        @for (step of lifecycleSteps; track step) {
+          <li><span>{{ step }}</span><div><strong>{{ t('aiRisk.stage.' + step) }}</strong><small>{{ t('aiRisk.stage.' + step + '.help') }}</small></div></li>
+        }
+      </ol>
+      <footer><app-icon name="info" /><span>{{ t('aiRisk.deleteRule') }}</span></footer>
+    </section>
+
+    <section class="ds-card risk-register-table">
+      <header class="risk-register-heading">
+        <div><span class="eyebrow">{{ t('aiRisk.register') }} · {{ filteredItems().length }}/{{ items().length }}</span><h2>{{ t('aiRisk.tableTitle') }}</h2><p>{{ t('aiRisk.tableHelp') }}</p></div>
+        <div class="risk-register-tools">
+          <label class="risk-search"><span class="sr-only">{{ t('aiRisk.search') }}</span><input pInputText type="search" [placeholder]="t('aiRisk.search')" [ngModel]="riskSearch()" [ngModelOptions]="{standalone:true}" (ngModelChange)="riskSearch.set($event)" /></label>
+          <p-select [options]="statusOptions()" optionLabel="label" optionValue="value" [ngModel]="riskStatus()" [ngModelOptions]="{standalone:true}" (ngModelChange)="riskStatus.set($event)" [ariaLabel]="t('aiRisk.filterLabel')" />
+        </div>
+      </header>
+      <p-table [value]="filteredItems()" dataKey="id" [rowHover]="true" [stripedRows]="true" [scrollable]="true" [paginator]="filteredItems().length > 10" [rows]="10" [tableStyle]="{'min-width':'61rem'}">
+        <ng-template #header><tr>
+          <th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiRisk.tableRisk') }}</th><th>{{ t('aiInitiation.useCase') }}</th><th>{{ t('aiRisk.field.risk_category') }}</th><th>{{ t('aiRisk.owner') }}</th><th>{{ t('aiRisk.lifecycle.column') }}</th><th>{{ t('crud.actions') }}</th>
+        </tr></ng-template>
+        <ng-template #body let-row><tr [class.risk-row--active]="selected()?.id === row.id" (dblclick)="openRisk(row)">
+          <td><strong>{{ row.riskRef || row.workflowCase.code }}</strong><small>{{ row.riskRef ? row.workflowCase.code : t('aiRisk.pendingRef') }}</small></td>
+          <td><strong>{{ row.title || row.useCase.name }}</strong><small>{{ displayValue(row, 'third_party_involved') }}</small></td>
+          <td><strong>{{ row.useCase.useCaseRef }}</strong><small>{{ row.useCase.name }}</small></td>
+          <td>{{ lookupLabel('risk_category', row.intakeData?.['risk_category']) }}</td>
+          <td>{{ row.owner ? ownerLabel(row.owner) : t('aiRisk.unassigned') }}</td>
+          <td class="risk-stage-cell"><div><app-status-chip kind="info" [label]="t('aiRisk.status.' + row.workflowCase.status)" /><small>{{ t('aiRisk.stage.' + stageNumber(row)) }}</small></div><p-progressbar [value]="stageProgress(row)" [showValue]="false" [attr.aria-label]="t('aiRisk.lifecycle.column')" /></td>
+          <td><div class="risk-row-actions">
+            <button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple [pTooltip]="t(row.canEdit ? 'aiRisk.actions.editHelp' : 'aiRisk.actions.viewHelp')" tooltipPosition="top" (click)="openRisk(row)">{{ t(row.canEdit ? 'aiRisk.actions.edit' : 'aiRisk.actions.view') }}</button>
+            @if (row.canDelete) { <button type="button" class="ds-btn ds-btn--ghost btn-sm risk-delete" pRipple [pTooltip]="t('aiRisk.actions.deleteHelp')" tooltipPosition="top" [disabled]="working()" (click)="deleteRisk(row)">{{ t('aiRisk.actions.delete') }}</button> }
+          </div></td>
+        </tr></ng-template>
+        <ng-template #emptymessage><tr><td colspan="7" class="risk-empty-table">{{ t(items().length ? 'aiRisk.noMatches' : 'aiRisk.empty') }}</td></tr></ng-template>
+      </p-table>
+    </section>
+
+    <main class="review-main risk-detail">
+      @if (selected(); as item) {
+        <section class="ds-card risk-detail-head">
+          <div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.riskRef || item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2><p>{{ t('aiRisk.detailHelp') }}</p>@if (dirty()) { <small class="risk-unsaved" role="status">{{ t('aiRisk.unsaved') }}</small> }</div>
+          <div class="risk-detail-status"><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /><strong>{{ stageProgress(item) }}%</strong><p-progressbar [value]="stageProgress(item)" [showValue]="false" /></div>
+        </section>
+
+        @if (item.useCase.operationalStatusCode) { <section class="ds-card risk-alert" role="status"><app-icon name="info" /><div><strong>{{ t('aiJourney.operational.' + item.useCase.operationalStatusCode) }}</strong><p>{{ t('aiJourney.intakePaused') }}</p></div></section> }
+        @if (item.libraryVersion; as libraryVersion) { <section class="ds-card risk-alert"><app-icon name="shield" /><div><strong>{{ libraryVersion.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ libraryVersion.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></div></section> }
+
+        <p-tabs class="risk-detail-tabs" [value]="detailTab()" (valueChange)="detailTab.set($event)" [lazy]="true">
+          <p-tablist>
+            <p-tab value="identification">{{ t('aiRisk.details.identification') }}</p-tab>
+            <p-tab value="lifecycle">{{ t('aiRisk.details.lifecycle') }} <span class="tab-count">{{ stageNumber(item) }}/6</span></p-tab>
+            <p-tab value="audit">{{ t('aiRisk.details.audit') }}</p-tab>
+          </p-tablist>
+          <p-tabpanels>
+            <p-tabpanel value="identification">
+              <div class="risk-identification-grid">
+                <section class="ds-card specialist-context risk-context">
+                  <header class="section-head"><span><app-icon name="shield" /></span><div><small>{{ t('aiRisk.handover') }}</small><h2>{{ item.useCase.name }}</h2></div></header>
+                  <div class="specialist-facts">
+                    <div><small>{{ t('aiRisk.asset') }}</small><strong>{{ item.useCase.asset.code }} · {{ label(item.useCase.asset) }}</strong></div>
+                    <div><small>{{ t('aiRisk.department') }}</small><strong>{{ label(item.useCase.organizationUnit) }}</strong></div>
+                    <div><small>{{ t('aiRisk.approvedTier') }}</small><strong>{{ item.handoffPayload?.['approvedTierCode'] ? t('aiRisk.tier.' + item.handoffPayload?.['approvedTierCode']) : '—' }}</strong></div>
+                    <div><small>{{ t('aiRisk.owner') }}</small><strong>{{ item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned') }}</strong></div>
+                  </div>
+                  @if (item.obligations.length) { <div class="risk-obligations"><strong>{{ t('aiReview.adoption.conditions') }}</strong><ul>@for (condition of item.obligations; track condition.id) { <li>{{ condition.description }}</li> }</ul></div> }
+                </section>
+
+                @if (item.canAssignOwner) {
+                  <section class="ds-card decision-card specialist-decision risk-owner-card">
+                    <div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t('aiRisk.assignOwner') }}</h2></div>
+                    <label><span>{{ t('aiRisk.owner') }}</span><p-select [options]="lookups().riskOwners" optionValue="userId" [optionLabel]="i18n.lang() === 'ar' ? 'fullNameAr' : 'fullNameEn'" [filter]="true" [placeholder]="t('aiuc.select')" [ngModel]="ownerUserId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerUserId.set($event || '')" [ariaLabel]="t('aiRisk.owner')" /></label>
+                    <label><span>{{ t('aiReview.justification') }}</span><textarea pTextarea rows="2" maxlength="2000" [ngModel]="ownerJustification()" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerJustification.set($event)"></textarea></label>
+                    <button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t('aiRisk.assignOwner') }}</button>
+                  </section>
+                }
+              </div>
+
+              <section class="ds-card specialist-decision risk-intake">
+                <header class="risk-intake-head"><div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t('aiRisk.intake') }}</h2><p>{{ t(item.canEdit ? 'aiRisk.editHint' : 'aiRisk.readOnlyHint') }}</p></div>@if (item.canEdit) { <app-status-chip kind="success" [label]="t('aiRisk.editable')" /> }</header>
+                @if (item.suggestedControlPins; as suggestions) { <section class="risk-suggestions"><strong>{{ t('aiControls.librarySuggestions') }}</strong><div>@for (pin of suggestions.controlPins; track pin.versionId) { <span>{{ pin.controlCode }} · {{ i18n.lang() === 'ar' ? pin.titleAr : pin.titleEn }}</span> }</div><small>{{ t('aiControls.suggestions') }}</small></section> }
+                <p-table [value]="detailFields()" dataKey="field" [stripedRows]="true" [tableStyle]="{'width':'100%','table-layout':'fixed'}">
+                  <ng-template #header><tr><th>{{ t('aiRisk.tableField') }}</th><th>{{ t('aiRisk.tableValue') }}</th></tr></ng-template>
+                  <ng-template #body let-field><tr><th scope="row">{{ t('aiRisk.field.' + field.field) }} @if (field.required) { <b>*</b> }</th><td>
+                    @if (item.canEdit) {
+                      @switch (field.kind) {
+                        @case ('text') { <input pInputText type="text" maxlength="200" [disabled]="working()" [ngModel]="input()[field.field] || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [attr.aria-label]="t('aiRisk.field.' + field.field)" /> }
+                        @case ('select') { <p-select [options]="lookup(field.field)?.values || []" optionValue="code" [optionLabel]="i18n.lang() === 'ar' ? 'labelAr' : 'labelEn'" [placeholder]="t('aiuc.select')" [disabled]="working()" [ngModel]="input()[field.field] || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [ariaLabel]="t('aiRisk.field.' + field.field)" /> }
+                        @case ('textarea') { <textarea pTextarea rows="2" maxlength="5000" [disabled]="working()" [ngModel]="input()[field.field] || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [attr.aria-label]="t('aiRisk.field.' + field.field)"></textarea> }
+                        @case ('boolean') { <label class="table-check"><input type="checkbox" [disabled]="working()" [ngModel]="input()['third_party_involved']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('third_party_involved', $event)" /><span>{{ t(input()['third_party_involved'] ? 'aiuc.yes' : 'aiuc.no') }}</span></label> }
+                        @case ('controls') { <app-ai-control-picker [choices]="controls()" [selected]="selectedControls()" [disabled]="working()" (changed)="patch('control_domain_version_ids', $event)" /> }
+                        @case ('evidence') { <textarea pTextarea rows="2" [disabled]="working()" [ngModel]="evidenceText()" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateEvidence($event)" [placeholder]="t('aiReview.verification.evidenceHint')" [attr.aria-label]="t('aiRisk.field.evidence')"></textarea> }
+                      }
+                    } @else { <span class="risk-cell-value">{{ displayValue(item, field.field) }}</span> }
+                  </td></tr></ng-template>
+                </p-table>
                 @if (item.canEdit) {
-                  @switch (field.kind) {
-                    @case ('select') { <p-select [options]="lookup(field.field)?.values || []" optionValue="code" [optionLabel]="i18n.lang() === 'ar' ? 'labelAr' : 'labelEn'" [placeholder]="t('aiuc.select')" [disabled]="working()" [ngModel]="input()[field.field] || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [ariaLabel]="t('aiRisk.field.' + field.field)" /> }
-                    @case ('textarea') { <textarea pTextarea rows="2" maxlength="5000" [disabled]="working()" [ngModel]="input()[field.field] || ''" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch(field.field, $event)" [attr.aria-label]="t('aiRisk.field.' + field.field)"></textarea> }
-                    @case ('boolean') { <label class="table-check"><input type="checkbox" [disabled]="working()" [ngModel]="input()['third_party_involved']" [ngModelOptions]="{standalone:true}" (ngModelChange)="patch('third_party_involved', $event)" /><span>{{ t(input()['third_party_involved'] ? 'aiuc.yes' : 'aiuc.no') }}</span></label> }
-                    @case ('controls') { <app-ai-control-picker [choices]="controls()" [selected]="selectedControls()" [disabled]="working()" (changed)="patch('control_domain_version_ids',$event)" /> }
-                    @case ('evidence') { <textarea pTextarea rows="2" [disabled]="working()" [ngModel]="evidenceText()" [ngModelOptions]="{standalone:true}" (ngModelChange)="updateEvidence($event)" [placeholder]="t('aiReview.verification.evidenceHint')" [attr.aria-label]="t('aiRisk.field.evidence')"></textarea> }
-                  }
-                } @else { <span class="risk-cell-value">{{ displayValue(item, field.field) }}</span> }
-              </td></tr></ng-template>
-            </p-table>
-            @if (item.canEdit) { <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="save()">{{ t('aiRisk.save') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !lookups().ready" (click)="save(true)">{{ t('aiRisk.submit') }}</button></div> }
-            @else { <div class="review-gate-note"><app-icon name="info" /><span>{{ t(item.workflowCase.status === 'draft' ? 'aiRisk.ownerOnly' : 'aiRisk.awaitingAssessment') }}</span></div> }
-          </section>
-          @if (item.riskRef) { <app-ai-risk-assessment [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-adoption [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-response [riskId]="item.id" (updated)="load(item.id)" /><app-ai-audit-query [caseId]="item.workflowCase.id" /><app-ai-severity [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-strategy [riskId]="item.id" (updated)="load(item.id)" /><app-ai-treatment [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-assessment assessmentKind="residual" [riskId]="item.id" (updated)="load(item.id)" /><app-ai-residual-review [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-monitoring [riskId]="item.id" (updated)="load(item.id)" /> }
-        } @else { <section class="ds-card empty-state empty-state--main"><app-icon name="shield" /><h2>{{ t('aiRisk.empty') }}</h2></section> }
-      </main>
-    </div>
+                  <div class="decision-actions risk-save-actions"><button type="button" class="ds-btn ds-btn--ghost" pRipple [disabled]="working()" (click)="save()">{{ t('aiRisk.save') }}</button><button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !lookups().ready" (click)="save(true)">{{ t('aiRisk.submit') }}</button></div>
+                } @else { <div class="review-gate-note"><app-icon name="info" /><span>{{ t(item.workflowCase.status === 'draft' ? 'aiRisk.ownerOnly' : 'aiRisk.awaitingAssessment') }}</span></div> }
+              </section>
+            </p-tabpanel>
+
+            <p-tabpanel value="lifecycle">
+              @if (item.riskRef) {
+                <div class="risk-lifecycle-stack"><app-ai-risk-assessment [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-adoption [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-response [riskId]="item.id" (updated)="load(item.id)" /><app-ai-severity [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-strategy [riskId]="item.id" (updated)="load(item.id)" /><app-ai-treatment [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-assessment assessmentKind="residual" [riskId]="item.id" (updated)="load(item.id)" /><app-ai-residual-review [riskId]="item.id" (updated)="load(item.id)" /><app-ai-risk-monitoring [riskId]="item.id" (updated)="load(item.id)" /></div>
+              } @else { <section class="ds-card risk-tab-empty"><app-icon name="info" /><h3>{{ t('aiRisk.lifecycle.locked') }}</h3><p>{{ t('aiRisk.lifecycle.lockedHelp') }}</p></section> }
+            </p-tabpanel>
+
+            <p-tabpanel value="audit"><app-ai-audit-query [caseId]="item.workflowCase.id" /></p-tabpanel>
+          </p-tabpanels>
+        </p-tabs>
+      } @else {
+        <section class="ds-card empty-state empty-state--main"><app-icon name="shield" /><h2>{{ t('aiRisk.empty') }}</h2></section>
+      }
+    </main>
   }
+
+  <p-drawer styleClass="risk-create-drawer" [visible]="createOpen()" (visibleChange)="createOpen.set($event)" position="right" [modal]="true">
+    <ng-template #header><div class="risk-drawer-head"><span class="eyebrow">{{ t('aiRisk.stage.1') }}</span><strong>{{ t('aiRisk.add') }}</strong></div></ng-template>
+    <app-ai-risk-initiation (created)="createdRisk($event)" />
+  </p-drawer>
 </section>

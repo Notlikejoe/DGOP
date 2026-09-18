@@ -19,7 +19,7 @@ const TEXT = { title: 200, cause: 5000, event: 5000, effect: 5000, current_contr
 export const riskSelect = {
   controlPins:true,suggestedControlPins:true,
   libraryVersion: {select:{id:true,round:true,entry:{select:{libraryRef:true}}}},
-  id: true, riskRef: true, version: true, title: true, cause: true, event: true, effect: true,
+  id: true, riskRef: true, version: true, title: true, cause: true, event: true, effect: true, createdBy: true, initiationKey: true,
   ownerPersonId: true, intakeData: true, handoffPayload: true, aiucHandoffSourceId: true,
   owner: { select: { id: true, userId: true, fullNameEn: true, fullNameAr: true } },
   useCase: { select: { id: true, useCaseRef: true, name: true, operationalStatusCode: true, assetId: true, organizationUnitId: true,
@@ -90,8 +90,11 @@ export class AiRiskIntakeService {
 
   private decorate(item: Prisma.AiRiskGetPayload<{ select: typeof riskSelect }>, actor: { id: string; roles: string[] }, permissions: Set<string>) {
     const draft = !['SUSPENDED','ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '') && item.workflowCase?.status === 'draft' && !item.riskRef && !actor.roles.includes('auditor');
-    return { ...item, canAssignOwner: draft && actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs'),
-      canEdit: draft && item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs') };
+    const { createdBy, initiationKey, ...publicItem } = item;
+    return { ...publicItem, canAssignOwner: draft && actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs'),
+      canEdit: draft && item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs'),
+      canDelete: draft && !!initiationKey && permissions.has('case.create.airs')
+        && (createdBy === actor.id || actor.roles.includes('AI_WORKING_GROUP')) };
   }
 
   async list(userId: string) {
@@ -195,6 +198,24 @@ export class AiRiskIntakeService {
       await logAiRequired(this.audit, { actor: actor.id, action: 'airs.intake.saved', entityType: 'ai_risk', entityId: id,
         metadata: { oldValue: item.intakeData, newValue: input, version: version + 1, clientIp: clientIp ?? null } }, tx);
       return { id, version: version + 1 };
+    }, this.options);
+  }
+
+  async remove(userId: string, id: string, version: number, clientIp?: string) {
+    return this.prisma.$transaction(async tx => {
+      const { actor, item } = await this.writable(tx, userId, id, version, false);
+      if (!item.initiationKey) throw new ConflictException('Automatic handoff risks cannot be deleted');
+      if (item.createdBy !== actor.id && !actor.roles.includes('AI_WORKING_GROUP')) throw new ForbiddenException('Only the draft creator or AI Working Group can delete this risk draft');
+      const now = new Date();
+      await tx.workflowTask.updateMany({ where: { caseId: item.workflowCase!.id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
+        data: { status: TaskStatus.cancelled, completedAt: now, decisionComment: 'Risk draft deleted before registration' } });
+      await tx.aiRisk.update({ where: { id }, data: { deletedAt: now, version: { increment: 1 } } });
+      await tx.workflowCase.update({ where: { id: item.workflowCase!.id }, data: { status: 'cancelled' } });
+      await tx.workflowEvent.create({ data: { caseId: item.workflowCase!.id, actor: actor.id, action: 'airs.draft.deleted',
+        fromStatus: 'draft', toStatus: 'cancelled', comment: item.title || item.workflowCase!.code } });
+      await logAiRequired(this.audit, { actor: actor.id, action: 'airs.draft.deleted', entityType: 'ai_risk', entityId: id,
+        metadata: { caseCode: item.workflowCase!.code, useCaseId: item.useCase.id, previousVersion: version, clientIp: clientIp ?? null } }, tx);
+      return { id, deleted: true };
     }, this.options);
   }
 

@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
 import { ToastService } from '../../../shared/toast.service';
+import { ConfirmService } from '../../../shared/confirm.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { AiRiskAssessment } from './ai-risk-assessment';
@@ -22,12 +23,17 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
+import { DrawerModule } from 'primeng/drawer';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { RippleModule } from 'primeng/ripple';
+import { TabsModule } from 'primeng/tabs';
+import { TooltipModule } from 'primeng/tooltip';
 
 interface RiskItem {
   controlPins:ControlTag[]|null;suggestedControlPins:{controlPins:ControlTag[]}|null;
   libraryVersion: {id:string;round:number;entry:{libraryRef:string}}|null;
   id: string; riskRef: string | null; version: number; title: string | null; cause: string | null; event: string | null; effect: string | null;
-  canEdit: boolean; canAssignOwner: boolean; intakeData: Record<string, unknown> | null; handoffPayload: Record<string, unknown> | null;
+  canEdit: boolean; canDelete: boolean; canAssignOwner: boolean; intakeData: Record<string, unknown> | null; handoffPayload: Record<string, unknown> | null;
   owner: { userId: string; fullNameEn: string; fullNameAr: string } | null;
   useCase: { useCaseRef: string; name: string; operationalStatusCode: string | null; asset: { code: string; nameEn: string; nameAr: string }; organizationUnit: { nameEn: string; nameAr: string } };
   obligations: Array<{ id: string; description: string }>;
@@ -39,16 +45,21 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule, DrawerModule, ProgressBarModule, RippleModule, TabsModule, TooltipModule],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly working = signal(false);
   protected readonly items = signal<RiskItem[]>([]);
   protected readonly selected = signal<RiskItem | null>(null);
+  protected readonly createOpen = signal(false);
+  protected readonly detailTab = signal<string | number | undefined>('identification');
+  protected readonly riskSearch = signal('');
+  protected readonly riskStatus = signal('all');
   protected readonly lookups = signal<RiskLookups>({ ready: false, lists: [], riskOwners: [] });
   protected readonly controls=signal<ControlTag[]>([]);
   protected readonly input = signal<Record<string, unknown>>({});
@@ -69,11 +80,33 @@ export class AiRisksPage implements OnInit {
     { field: 'evidence', kind: 'evidence', required: false },
   ] as const;
   protected readonly detailFields = computed(() => [
+    { field: 'title', kind: 'text', required: true },
+    ...this.lookups().lists.filter(list => list.field === 'risk_category').map(list => ({ field: list.field, kind: 'select', required: true })),
     ...this.lookups().lists.filter(list => list.field !== 'risk_category').map(list => ({ field: list.field, kind: 'select', required: true })),
     ...this.otherFields,
   ]);
+  protected readonly lifecycleSteps = [1, 2, 3, 4, 5, 6] as const;
+  protected readonly filteredItems = computed(() => {
+    const search = this.riskSearch().trim().toLocaleLowerCase(), status = this.riskStatus();
+    return this.items().filter(item => (status === 'all' || item.workflowCase.status === status)
+      && (!search || [item.riskRef, item.workflowCase.code, item.title, item.useCase.useCaseRef, item.useCase.name, item.owner?.fullNameEn, item.owner?.fullNameAr]
+        .some(value => value?.toLocaleLowerCase().includes(search))));
+  });
+  protected readonly draftCount = computed(() => this.items().filter(item => item.workflowCase.status === 'draft').length);
+  protected readonly reviewCount = computed(() => this.items().filter(item => ['submitted', 'under_review', 'awaiting_information'].includes(item.workflowCase.status)).length);
+  protected readonly activeCount = computed(() => this.items().filter(item => ['approved', 'implemented'].includes(item.workflowCase.status)).length);
   ngOnInit(): void { void this.load(); }
   protected t(key: string): string { return this.i18n.t(key); }
+  protected statusOptions() { return ['all', 'draft', 'under_review', 'implemented', 'closed'].map(value => ({ value, label: this.t(`aiRisk.filter.${value}`) })); }
+  protected stageNumber(item: RiskItem): number {
+    const status = item.workflowCase.status;
+    if (status === 'draft') return item.owner ? 2 : 1;
+    if (['submitted', 'under_review', 'awaiting_information'].includes(status)) return 3;
+    if (['decision_made', 'approved'].includes(status)) return 4;
+    if (['implemented', 'suspended'].includes(status)) return 5;
+    return 6;
+  }
+  protected stageProgress(item: RiskItem): number { return Math.round(this.stageNumber(item) / 6 * 100); }
   protected label(value: { nameEn: string; nameAr: string } | null): string { return value ? (this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn) : '—'; }
   protected ownerLabel(value: { fullNameEn: string; fullNameAr: string }): string { return this.i18n.lang() === 'ar' ? value.fullNameAr : value.fullNameEn; }
   protected optionLabel(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }
@@ -109,6 +142,8 @@ export class AiRisksPage implements OnInit {
     this.evidenceText.set(cached?.evidence ?? (Array.isArray(stored['evidence']) ? stored['evidence'].join('\n') : ''));
     this.dirty.set(!!cached);
   }
+  protected openRisk(item: RiskItem, tab: string = 'identification'): void { this.select(item); this.detailTab.set(tab); }
+  protected createdRisk(id: string): void { this.createOpen.set(false); void this.load(id); }
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
@@ -127,6 +162,17 @@ export class AiRisksPage implements OnInit {
       expectedVersion: item.version, ownerUserId: this.ownerUserId(), justification: this.ownerJustification().trim() }));
       this.toast.success(this.t('aiRisk.ownerSaved')); await this.load(item.id);
     } catch (error) { this.toast.errorFrom(error, this.t('aiRisk.error')); } finally { this.working.set(false); }
+  }
+  protected async deleteRisk(item: RiskItem): Promise<void> {
+    if (!item.canDelete || this.working() || !await this.confirm.ask('aiRisk.confirmDelete')) return;
+    this.working.set(true);
+    try {
+      await firstValueFrom(this.http.delete(`/api/ai/risks/${item.id}`, { body: { expectedVersion: item.version } }));
+      this.draftCache.update(cache => { const next = { ...cache }; delete next[item.id]; return next; });
+      this.toast.success(this.t('aiRisk.deleted'));
+      await this.load();
+    } catch (error) { this.toast.errorFrom(error, this.t('aiRisk.deleteError')); }
+    finally { this.working.set(false); }
   }
   protected async save(submit = false): Promise<void> {
     const item = this.selected();

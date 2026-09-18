@@ -7,9 +7,21 @@ import { I18nService } from '../../../core/i18n.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
+import { InputTextModule } from 'primeng/inputtext';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { RippleModule } from 'primeng/ripple';
+import { TabsModule } from 'primeng/tabs';
 
 type ReviewTab = 'triage' | 'classification' | 'verification' | 'specialist' | 'decision' | 'registration';
 type AssetLookup = { id: string; nameEn: string; nameAr: string };
+type ReferenceValue = { code: string; labelEn: string; labelAr: string };
+type DirectoryUser = { id: string; email: string; displayName: string; nameEn: string; nameAr: string };
+type IntakeLookups = {
+  lists: Record<string, { values: ReferenceValue[] }>;
+  proposedOwners: DirectoryUser[];
+  dataOwners: DirectoryUser[];
+  executiveSponsors: DirectoryUser[];
+};
 type CriterionCode = 'individual_impact' | 'affected_scope' | 'harm_likelihood' | 'decision_autonomy'
   | 'data_fairness_transparency' | 'technical_resilience';
 
@@ -92,7 +104,7 @@ const INTAKE_FIELDS = [
 @Component({
   selector: 'app-ai-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, AppIcon, StatusChip],
+  imports: [FormsModule, AppIcon, StatusChip, InputTextModule, ProgressBarModule, RippleModule, TabsModule],
   templateUrl: './ai-review.html',
   styleUrl: './ai-review.scss',
 })
@@ -104,6 +116,7 @@ export class AiReviewPage implements OnInit {
   protected readonly intakeFields = INTAKE_FIELDS;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly tab = signal<ReviewTab>('triage');
+  protected readonly queueSearch = signal('');
   protected readonly triageCases = signal<AiReviewCase[]>([]);
   protected readonly classificationCases = signal<AiReviewCase[]>([]);
   protected readonly verificationCases = signal<AiReviewCase[]>([]);
@@ -111,6 +124,7 @@ export class AiReviewPage implements OnInit {
   protected readonly decisionCases = signal<AiReviewCase[]>([]);
   protected readonly registrationCases = signal<AiReviewCase[]>([]);
   protected readonly assetLookups = signal<{ domains: AssetLookup[]; classifications: AssetLookup[] }>({ domains: [], classifications: [] });
+  protected readonly intakeLookups = signal<IntakeLookups | null>(null);
   protected readonly registrationMode = signal('create');
   protected readonly existingAssetId = signal('');
   protected readonly assetNameEn = signal('');
@@ -162,6 +176,15 @@ export class AiReviewPage implements OnInit {
   protected readonly specialistDecisionReady = computed(() => !!this.justification().trim() && this.evidenceIdList().length > 0);
   protected readonly adoptionReady = computed(() => !!this.adoptionOutcome() && this.specialistDecisionReady()
     && (this.adoptionOutcome() !== 'approve_with_conditions' || this.conditionList().length > 0));
+  protected readonly totalAssigned = computed(() => this.triageCases().length + this.classificationCases().length
+    + this.verificationCases().length + this.specialistCases().length + this.decisionCases().length + this.registrationCases().length);
+  protected readonly assessmentCount = computed(() => this.classificationCases().length + this.verificationCases().length + this.specialistCases().length);
+  protected readonly approvalCount = computed(() => this.decisionCases().length + this.registrationCases().length);
+  protected readonly filteredActiveCases = computed(() => {
+    const search = this.queueSearch().trim().toLocaleLowerCase();
+    return this.activeCases().filter(item => !search || [item.name, item.workflowCase.code, item.useCaseRef]
+      .some(value => value?.toLocaleLowerCase().includes(search)));
+  });
 
   ngOnInit(): void { void this.load(); }
 
@@ -172,7 +195,7 @@ export class AiReviewPage implements OnInit {
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
-      const [triage, classification, verification, specialist, decision, registration, assetLookups, configuration] = await Promise.all([
+      const [triage, classification, verification, specialist, decision, registration, assetLookups, configuration, intakeLookups] = await Promise.all([
         this.loadQueue('/api/ai/use-cases/triage'),
         this.loadQueue('/api/ai/use-cases/classification/queue'),
         this.loadQueue('/api/ai/use-cases/classification/verification/queue'),
@@ -181,6 +204,7 @@ export class AiReviewPage implements OnInit {
         this.loadQueue('/api/ai/use-cases/registration/queue'),
         this.loadAssetLookups(),
         this.loadConfiguration(),
+        this.loadIntakeLookups(),
       ]);
       this.triageCases.set(triage);
       this.classificationCases.set(classification);
@@ -190,6 +214,7 @@ export class AiReviewPage implements OnInit {
       this.registrationCases.set(registration);
       this.assetLookups.set(assetLookups);
       this.configuration.set(configuration);
+      this.intakeLookups.set(intakeLookups);
       const queues: Array<[ReviewTab, AiReviewCase[]]> = [
         ['triage', triage], ['classification', classification], ['verification', verification], ['specialist', specialist],
         ['decision', decision], ['registration', registration],
@@ -212,6 +237,16 @@ export class AiReviewPage implements OnInit {
     const rows = this.rowsFor(tab);
     this.select(rows[0] ?? null);
   }
+
+  protected changeTab(value: string | number | undefined): void {
+    if (typeof value === 'string') this.setTab(value as ReviewTab);
+  }
+
+  protected stageNumber(tab = this.tab()): number {
+    return ({ triage: 1, classification: 2, verification: 3, specialist: 4, decision: 5, registration: 6 } as const)[tab];
+  }
+
+  protected stageProgress(tab = this.tab()): number { return Math.round(this.stageNumber(tab) / 6 * 100); }
 
   protected select(item: AiReviewCase | null): void {
     this.selected.set(item);
@@ -287,7 +322,28 @@ export class AiReviewPage implements OnInit {
     }
   }
 
+  private async loadIntakeLookups(): Promise<IntakeLookups | null> {
+    try { return await firstValueFrom(this.http.get<IntakeLookups>('/api/ai/use-cases/lookups')); }
+    catch (error) { if (error instanceof HttpErrorResponse && error.status === 403) return null; throw error; }
+  }
+
   protected payload(): Record<string, unknown> { return this.selected()?.intakeRevisions[0]?.payload ?? {}; }
+
+  protected renderFieldValue(field: string, value: unknown): string {
+    if (typeof value !== 'string') return this.renderValue(value);
+    const lookups = this.intakeLookups();
+    if (!lookups) return this.renderValue(value);
+    if (['requester', 'proposed_owner', 'data_owner', 'executive_sponsor'].includes(field)) {
+      const users = [...lookups.proposedOwners, ...lookups.dataOwners, ...lookups.executiveSponsors];
+      const user = users.find(candidate => candidate.id === value);
+      if (user) {
+        const name = this.i18n.lang() === 'ar' ? user.nameAr : user.nameEn;
+        return `${name || user.displayName} · ${user.email}`;
+      }
+    }
+    const option = lookups.lists[field]?.values.find(candidate => candidate.code === value);
+    return option ? this.optionLabel(option) : this.renderValue(value);
+  }
 
   protected renderValue(value: unknown): string {
     if (value === null || value === undefined || value === '') return this.t('aiReview.notProvided');

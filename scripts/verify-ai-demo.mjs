@@ -49,14 +49,24 @@ for (const fixture of manifest.cases) {
     classification: row.assessments[0]?.result.approvedTierCode, inherentScore: 12,
     residualScore: residual.result.score, residualBand: residual.result.bandCode, completedActions: 2, completedReviews: 1, scheduledReviews: 1 });
 }
-const own = await get('/ai/use-cases', cookie); assert.equal(own.length, 2);
+const own = await get('/ai/use-cases', cookie);
+assert.ok(own.length >= 2 + (manifest.reviewExample ? 1 : 0));
+assert.ok(manifest.cases.every(fixture => own.some(row => row.id === fixture.useCaseId)));
 const risks = await get('/ai/risks', cookie), demoRiskIds=new Set(manifest.cases.map(c=>c.riskId));
 assert.equal(risks.filter(r=>demoRiskIds.has(r.id)).length, 2);
 assert.ok(risks.some(r=>r.riskRef===null), 'The preserved user-created AIRS draft must remain visible and unnumbered');
-for (const path of ['/ai/use-cases/triage', '/ai/use-cases/classification/queue', '/ai/use-cases/classification/verification/queue',
-  '/ai/use-cases/classification/reviews/queue', '/ai/use-cases/decisions/queue', '/ai/use-cases/registration/queue']) {
-  assert.equal((await get(path, cookie)).length, 0, 'Completed demo approvals must not appear as pending');
+const reviewQueues = [
+  ['triage', '/ai/use-cases/triage'], ['classification', '/ai/use-cases/classification/queue'],
+  ['verification', '/ai/use-cases/classification/verification/queue'], ['specialist', '/ai/use-cases/classification/reviews/queue'],
+  ['decision', '/ai/use-cases/decisions/queue'], ['registration', '/ai/use-cases/registration/queue'],
+];
+let reviewStage = null;
+for (const [stage, path] of reviewQueues) {
+  const queue = await get(path, cookie);
+  if (manifest.reviewExample && queue.some(row => row.id === manifest.reviewExample.useCaseId)) reviewStage = stage;
+  assert.ok(manifest.cases.every(fixture => !queue.some(row => row.id === fixture.useCaseId)), 'Completed demo approvals must not appear as pending');
 }
+if (manifest.reviewExample) assert.ok(reviewStage, 'The fully populated review example must appear in one active review stage');
 const report = await get('/ai/review-operations/report?filter=all', cookie);
 assert.equal(report.periodic.total, 4); assert.equal(report.periodic.completed, 2);
 const dashboard = await get('/ai/dashboard', cookie); assert.equal(dashboard.reconciliation.total, 2);
@@ -66,7 +76,7 @@ const preview = await get(`/ai/migration-previews/${manifest.sourcePreviewId}`, 
 assert.equal(preview.id, manifest.sourcePreviewId);
 const result = { verifiedAt: new Date().toISOString(), demoOnly: true, database: manifest.database,
   useCases: summaries, historyPaging: 'passed', unauthorizedAndAggregateHistory: 'denied',
-  reviewQueue: 'correctly empty after completion', calendar: { total: 4, completed: 2, scheduled: 2 },
+  reviewQueue: manifest.reviewExample ? { stage: reviewStage, completeInput: true, useCaseId: manifest.reviewExample.useCaseId } : 'correctly empty after completion', calendar: { total: 4, completed: 2, scheduled: 2 },
   dashboard: { total: 2, balanced: true }, migration: 'source validation preview available; real pilot acceptance remains open' };
 writeFileSync(resolve(root, '../../outputs/DGOP_AI_Demo_Verification.json'), JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

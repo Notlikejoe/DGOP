@@ -14,19 +14,40 @@
   } @else if (state() === 'error') {
     <section class="ds-card state-card state-card--error"><p>{{ t('aiReview.error.load') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section>
   } @else {
+    <section class="review-metrics" [attr.aria-label]="t('aiReview.metrics.title')">
+      <article><span>{{ t('aiReview.metrics.assigned') }}</span><strong>{{ totalAssigned() }}</strong><small>{{ t('aiReview.metrics.assignedHelp') }}</small></article>
+      <article><span>{{ t('aiReview.tab.triage') }}</span><strong>{{ triageCases().length }}</strong><small>{{ t('aiReview.metrics.triageHelp') }}</small></article>
+      <article><span>{{ t('aiReview.metrics.assessment') }}</span><strong>{{ assessmentCount() }}</strong><small>{{ t('aiReview.metrics.assessmentHelp') }}</small></article>
+      <article><span>{{ t('aiReview.metrics.approval') }}</span><strong>{{ approvalCount() }}</strong><small>{{ t('aiReview.metrics.approvalHelp') }}</small></article>
+    </section>
+
+    <section class="ds-card review-process">
+      <header><div><span class="eyebrow">{{ t('aiReview.process.kicker') }}</span><h2>{{ t('aiReview.process.title') }}</h2></div><p>{{ t('aiReview.process.help') }}</p></header>
+      <ol>
+        @for (step of ['triage','classification','verification','specialist','decision','registration']; track step; let index = $index) {
+          <li [class.is-active]="tab() === step" [class.is-complete]="stageNumber() > index + 1"><span>{{ index + 1 }}</span><strong>{{ t('aiReview.tab.' + step) }}</strong></li>
+        }
+      </ol>
+    </section>
+
+    <p-tabs class="review-queue-tabs" [value]="tab()" (valueChange)="changeTab($event)">
+      <p-tablist>
+        <p-tab value="triage">{{ t('aiReview.tab.triage') }} <span>{{ triageCases().length }}</span></p-tab>
+        <p-tab value="classification">{{ t('aiReview.tab.classification') }} <span>{{ classificationCases().length }}</span></p-tab>
+        <p-tab value="verification">{{ t('aiReview.tab.verification') }} <span>{{ verificationCases().length }}</span></p-tab>
+        <p-tab value="specialist">{{ t('aiReview.tab.specialist') }} <span>{{ specialistCases().length }}</span></p-tab>
+        <p-tab value="decision">{{ t('aiReview.tab.decision') }} <span>{{ decisionCases().length }}</span></p-tab>
+        <p-tab value="registration">{{ t('aiReview.tab.registration') }} <span>{{ registrationCases().length }}</span></p-tab>
+      </p-tablist>
+    </p-tabs>
+
     <div class="review-workspace">
       <aside class="ds-card queue-rail">
-        <div class="queue-tabs" role="tablist">
-          <button type="button" [class.active]="tab() === 'triage'" (click)="setTab('triage')">{{ t('aiReview.tab.triage') }} <span>{{ triageCases().length }}</span></button>
-          <button type="button" [class.active]="tab() === 'classification'" (click)="setTab('classification')">{{ t('aiReview.tab.classification') }} <span>{{ classificationCases().length }}</span></button>
-          <button type="button" [class.active]="tab() === 'verification'" (click)="setTab('verification')">{{ t('aiReview.tab.verification') }} <span>{{ verificationCases().length }}</span></button>
-          <button type="button" [class.active]="tab() === 'specialist'" (click)="setTab('specialist')">{{ t('aiReview.tab.specialist') }} <span>{{ specialistCases().length }}</span></button>
-          <button type="button" [class.active]="tab() === 'decision'" (click)="setTab('decision')">{{ t('aiReview.tab.decision') }} <span>{{ decisionCases().length }}</span></button>
-          <button type="button" [class.active]="tab() === 'registration'" (click)="setTab('registration')">{{ t('aiReview.tab.registration') }} <span>{{ registrationCases().length }}</span></button>
-        </div>
+        <header class="queue-head"><div><span class="eyebrow">{{ t('aiReview.workbench') }}</span><h2>{{ tabLabel() }}</h2></div><app-status-chip kind="info" [label]="activeCases().length + ''" /></header>
+        <label class="queue-search"><span class="sr-only">{{ t('aiReview.search') }}</span><input pInputText type="search" [placeholder]="t('aiReview.search')" [ngModel]="queueSearch()" [ngModelOptions]="{standalone:true}" (ngModelChange)="queueSearch.set($event)" /></label>
         <div class="queue-list">
-          @for (item of activeCases(); track item.id) {
-            <button type="button" class="queue-row" [class.queue-row--active]="selected()?.id === item.id" (click)="select(item)">
+          @for (item of filteredActiveCases(); track item.id) {
+            <button type="button" class="queue-row" pRipple [class.queue-row--active]="selected()?.id === item.id" (click)="select(item)">
               <span class="queue-icon"><app-icon name="shield" /></span><span><strong>{{ item.name }}</strong><small>{{ item.workflowCase.code }}</small><small>{{ item.useCaseRef || t('aiReview.pendingAiRef') }}</small></span><app-status-chip kind="info" [label]="tabLabel()" />
             </button>
           } @empty {
@@ -37,13 +58,13 @@
 
       <main class="review-main">
         @if (selected(); as item) {
-          <section class="ds-card review-toolbar"><div><span class="eyebrow">{{ item.workflowCase.code }} · {{ item.useCaseRef || t('aiReview.pendingAiRef') }}</span><h2>{{ item.name }}</h2></div><app-status-chip kind="info" [label]="tabLabel()" /></section>
+          <section class="ds-card review-toolbar review-toolbar--case"><div><span class="eyebrow">{{ item.workflowCase.code }} · {{ item.useCaseRef || t('aiReview.pendingAiRef') }}</span><h2>{{ item.name }}</h2><small>{{ t('aiReview.stageProgress') }} · {{ stageNumber() }}/6</small></div><div class="review-case-progress"><app-status-chip kind="info" [label]="tabLabel()" /><strong>{{ stageProgress() }}%</strong><p-progressbar [value]="stageProgress()" [showValue]="false" /></div></section>
 
           @if (tab() === 'triage') {
             <section class="ds-card intake-summary">
               <header class="section-head"><span>28</span><div><small>{{ t('aiReview.triage.context') }}</small><h2>{{ t('aiReview.triage.intake') }}</h2></div></header>
               <div class="summary-grid">
-                @for (field of intakeFields; track field) { <div><small>{{ fieldLabel(field) }}</small><p>{{ renderValue(payload()[field]) }}</p></div> }
+                @for (field of intakeFields; track field) { <div><small>{{ fieldLabel(field) }}</small><p>{{ renderFieldValue(field, payload()[field]) }}</p></div> }
               </div>
             </section>
             <section class="ds-card decision-card">

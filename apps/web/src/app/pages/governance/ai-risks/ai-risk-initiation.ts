@@ -29,7 +29,7 @@ import { AiRiskLibrary, LibraryRow } from './ai-risk-library';
         <fieldset class="risk-create-form" [disabled]="working()">
           <label class="risk-form-field">
             <span>{{ t('aiInitiation.useCase') }}</span>
-            <p-select [options]="parentOptions()" optionLabel="label" optionValue="value" [filter]="true" [showClear]="true" [placeholder]="t('aiuc.select')" [ngModel]="useCaseId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="useCaseId.set($event || '')" [ariaLabel]="t('aiInitiation.useCase')" />
+            <p-select [options]="parentOptions()" optionLabel="label" optionValue="value" [filter]="true" [showClear]="true" appendTo="body" [placeholder]="t('aiuc.select')" [ngModel]="useCaseId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="useCaseId.set($event || '')" [ariaLabel]="t('aiInitiation.useCase')" />
           </label>
           <section class="library-choice" [class.library-choice--selected]="library()">
             @if (library(); as selectedLibrary) {

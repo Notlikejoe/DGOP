@@ -23,7 +23,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
-import { DrawerModule } from 'primeng/drawer';
+import { DialogModule } from 'primeng/dialog';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { RippleModule } from 'primeng/ripple';
 import { TabsModule } from 'primeng/tabs';
@@ -45,7 +45,7 @@ interface RiskLookups {
   riskOwners: Array<{ userId: string; fullNameEn: string; fullNameAr: string }>;
 }
 
-@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule, DrawerModule, ProgressBarModule, RippleModule, TabsModule, TooltipModule],
+@Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiJourneyHistory, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule, DialogModule, ProgressBarModule, RippleModule, TabsModule, TooltipModule],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   private readonly http = inject(HttpClient);

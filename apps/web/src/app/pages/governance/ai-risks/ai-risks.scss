@@ -95,9 +95,12 @@
 .risk-tab-empty h3, .risk-tab-empty p { margin: 0; }
 .risk-tab-empty p { color: var(--command-muted); }
 
-.risk-drawer-head { display: grid; gap: .1rem; }
-:host ::ng-deep .risk-create-drawer { width: min(44rem, 100vw) !important; }
-.risk-drawer-head strong { font-size: 1.15rem; }
+.risk-dialog-head { display: grid; gap: .08rem; }
+.risk-dialog-head strong { font-size: 1.15rem; }
+.risk-dialog-head small { color: var(--command-muted); font-weight: 500; }
+:host ::ng-deep .risk-create-dialog { min-width: min(32rem, 96vw); min-height: min(32rem, 88vh); }
+:host ::ng-deep .risk-create-dialog .p-dialog-content { padding-block: var(--space-4); }
+:host ::ng-deep .risk-create-dialog .p-dialog-header { border-bottom: 1px solid var(--border); }
 .risk-create-card { display: grid; gap: var(--space-3); }
 .risk-create-head { display: flex; gap: .75rem; align-items: center; padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
 .risk-create-icon { display: grid; place-items: center; width: 2.5rem; aspect-ratio: 1; border-radius: var(--radius-md); color: var(--primary); background: var(--primary-soft); }

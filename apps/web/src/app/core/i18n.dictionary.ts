@@ -1040,6 +1040,7 @@ export const DICT: Dict = {
   'aiRisk.tableTitle': { en: 'AI risk register', ar: 'سجل مخاطر الذكاء الاصطناعي' },
   'aiRisk.tableHelp': { en: 'Search the register, then open a risk to update its identification or continue its governed lifecycle.', ar: 'ابحث في السجل، ثم افتح الخطر لتحديث بيانات التعريف أو متابعة دورة حياته المحكومة.' },
   'aiRisk.add': { en: 'Add AI risk', ar: 'إضافة خطر ذكاء اصطناعي' },
+  'aiRisk.windowHint': { en: 'Resize from an edge or maximize for more workspace', ar: 'غيّر الحجم من الحافة أو كبّر النافذة لمساحة عمل أكبر' },
   'aiRisk.search': { en: 'Search reference, risk, use case or owner', ar: 'البحث بالمرجع أو الخطر أو حالة الاستخدام أو المالك' },
   'aiRisk.filterLabel': { en: 'Filter risks by status', ar: 'تصفية المخاطر حسب الحالة' },
   'aiRisk.filter.all': { en: 'All statuses', ar: 'جميع الحالات' },

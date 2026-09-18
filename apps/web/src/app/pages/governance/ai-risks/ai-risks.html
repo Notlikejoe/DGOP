@@ -139,8 +139,8 @@
     </main>
   }
 
-  <p-drawer styleClass="risk-create-drawer" [visible]="createOpen()" (visibleChange)="createOpen.set($event)" position="right" [modal]="true">
-    <ng-template #header><div class="risk-drawer-head"><span class="eyebrow">{{ t('aiRisk.stage.1') }}</span><strong>{{ t('aiRisk.add') }}</strong></div></ng-template>
+  <p-dialog styleClass="risk-create-dialog" [visible]="createOpen()" (visibleChange)="createOpen.set($event)" [modal]="true" [resizable]="true" [draggable]="true" [maximizable]="true" [keepInViewport]="true" [blockScroll]="true" [style]="{width:'64rem',height:'min(52rem, 90vh)','max-width':'96vw','max-height':'92vh'}" [contentStyle]="{overflow:'auto'}" [breakpoints]="{'960px':'92vw','640px':'98vw'}">
+    <ng-template #header><div class="risk-dialog-head"><span class="eyebrow">{{ t('aiRisk.stage.1') }}</span><strong>{{ t('aiRisk.add') }}</strong><small>{{ t('aiRisk.windowHint') }}</small></div></ng-template>
     <app-ai-risk-initiation (created)="createdRisk($event)" />
-  </p-drawer>
+  </p-dialog>
 </section>

@@ -14,6 +14,7 @@ import { AccordionModule, type AccordionValue } from 'primeng/accordion';
 import { InputTextModule } from 'primeng/inputtext';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ProgressBarModule } from 'primeng/progressbar';
+import { RippleModule } from 'primeng/ripple';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 
@@ -134,7 +135,7 @@ const SECTIONS: IntakeSectionDefinition[] = [
   selector: 'app-ai-use-cases',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AiAuditQuery, AiRequestControls, DualDatePipe, FormsModule, AppIcon, StatusChip,
-    AccordionModule, InputTextModule, MultiSelectModule, ProgressBarModule, SelectModule, TextareaModule],
+    AccordionModule, InputTextModule, MultiSelectModule, ProgressBarModule, RippleModule, SelectModule, TextareaModule],
   templateUrl: './ai-use-cases.html',
   styleUrl: './ai-use-cases.scss',
 })
@@ -146,6 +147,7 @@ export class AiUseCasesPage implements OnInit {
   protected readonly sections = SECTIONS;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly cases = signal<AiUseCase[]>([]);
+  protected readonly caseSearch = signal('');
   protected readonly selected = signal<AiUseCase | null>(null);
   protected readonly payload = signal<Record<string, any>>({});
   protected readonly lookups = signal<IntakeLookups | null>(null);
@@ -168,6 +170,21 @@ export class AiUseCasesPage implements OnInit {
     return completed;
   });
   protected readonly completionPercent = computed(() => Math.round(this.completedRequired() / this.requiredTotal * 100));
+  protected readonly filteredCases = computed(() => {
+    const search = this.caseSearch().trim().toLocaleLowerCase();
+    return this.cases().filter(item => !search || [item.name, item.useCaseRef, item.workflowCase?.code]
+      .some(value => value?.toLocaleLowerCase().includes(search)));
+  });
+  protected readonly useCaseMetrics = computed(() => {
+    const rows = this.cases();
+    const terminal = new Set(['closed', 'rejected', 'cancelled']);
+    return {
+      total: rows.length,
+      drafts: rows.filter(item => !item.workflowCaseId).length,
+      review: rows.filter(item => item.workflowCase && !terminal.has(item.workflowCase.status)).length,
+      registered: rows.filter(item => item.workflowCase?.status === 'closed').length,
+    };
+  });
 
   ngOnInit(): void {
     void this.load();

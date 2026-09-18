@@ -1,6 +1,6 @@
 .aiuc-page {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
   width: 100%;
   max-width: 1760px;
   margin-inline: auto;
@@ -24,6 +24,8 @@
 }
 
 .header-actions, .toolbar-actions { flex-wrap: wrap; }
+.aiuc-hero { margin-bottom: 0; }
+.aiuc-metrics { margin-top: calc(var(--space-1) * -1); }
 .configuration-gate, .read-only-note, .warning-list, .issue-summary {
   display: flex;
   align-items: center;
@@ -53,14 +55,16 @@
   border-radius: var(--radius-pill);
   font-weight: 850;
 }
-.case-list { display: grid; gap: var(--space-2); margin-top: var(--space-3); max-height: calc(100vh - 245px); overflow: auto; }
+.case-search { display: block; margin-top: var(--space-2); }
+.case-search input { width: 100%; min-height: 36px; }
+.case-list { display: grid; gap: var(--space-2); margin-top: var(--space-2); max-height: calc(100vh - 270px); overflow: auto; }
 .case-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
   gap: var(--space-2);
   align-items: center;
   width: 100%;
-  padding: .6rem .7rem;
+  padding: .5rem .6rem;
   text-align: start;
   color: var(--on-surface);
   background: var(--surface-2);
@@ -80,7 +84,7 @@
 .case-row__copy small { color: var(--command-muted); }
 .case-row app-status-chip { grid-column: 2; justify-self: start; }
 
-.intake-main, .intake-form { display: grid; gap: var(--space-3); min-width: 0; }
+.intake-main, .intake-form { display: grid; gap: var(--space-2); min-width: 0; }
 .intake-toolbar { padding: var(--space-3); }
 .intake-toolbar > div:first-child { min-width: 0; flex: 1; }
 .intake-toolbar h2 { overflow: hidden; text-overflow: ellipsis; }
@@ -112,7 +116,7 @@
 .section-heading strong { color: var(--on-surface); }
 .section-progress { margin-inline-start: auto; flex: 0 0 auto; padding: .25rem .5rem; color: var(--primary); background: var(--primary-soft); border-radius: var(--radius-pill); font-size: var(--font-size-xs); font-weight: 800; }
 
-.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem 1rem; padding: .85rem 1rem; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem .85rem; padding: .7rem .85rem; }
 .form-field { display: grid; align-content: start; gap: .35rem; min-width: 0; color: var(--command-muted); font-weight: 750; }
 .form-field > span b { color: var(--danger); }
 .form-field--wide { grid-column: 1 / -1; }

@@ -1,4 +1,4 @@
-<section class="page ai-review-page governance-modern">
+<section class="page ai-review-page governance-modern admin-modern">
   <header class="page__header review-hero">
     <div><span class="eyebrow">{{ t('aiReview.eyebrow') }}</span><h1>{{ t('aiReview.title') }}</h1><p class="page__subtitle">{{ t('aiReview.subtitle') }}</p></div>
     <button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load(selected()?.id)"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
@@ -14,11 +14,11 @@
   } @else if (state() === 'error') {
     <section class="ds-card state-card state-card--error"><p>{{ t('aiReview.error.load') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section>
   } @else {
-    <section class="review-metrics" [attr.aria-label]="t('aiReview.metrics.title')">
-      <article><span>{{ t('aiReview.metrics.assigned') }}</span><strong>{{ totalAssigned() }}</strong><small>{{ t('aiReview.metrics.assignedHelp') }}</small></article>
-      <article><span>{{ t('aiReview.tab.triage') }}</span><strong>{{ triageCases().length }}</strong><small>{{ t('aiReview.metrics.triageHelp') }}</small></article>
-      <article><span>{{ t('aiReview.metrics.assessment') }}</span><strong>{{ assessmentCount() }}</strong><small>{{ t('aiReview.metrics.assessmentHelp') }}</small></article>
-      <article><span>{{ t('aiReview.metrics.approval') }}</span><strong>{{ approvalCount() }}</strong><small>{{ t('aiReview.metrics.approvalHelp') }}</small></article>
+    <section class="admin-metrics review-metrics" [attr.aria-label]="t('aiReview.metrics.title')">
+      <article class="admin-metric admin-metric--primary"><span class="admin-metric__icon"><app-icon name="listCheck" /></span><span><small>{{ t('aiReview.metrics.assigned') }}</small><strong>{{ totalAssigned() }}</strong></span></article>
+      <article class="admin-metric admin-metric--muted"><span class="admin-metric__icon"><app-icon name="filter" /></span><span><small>{{ t('aiReview.tab.triage') }}</small><strong>{{ triageCases().length }}</strong></span></article>
+      <article class="admin-metric admin-metric--warning"><span class="admin-metric__icon"><app-icon name="shield" /></span><span><small>{{ t('aiReview.metrics.assessment') }}</small><strong>{{ assessmentCount() }}</strong></span></article>
+      <article class="admin-metric admin-metric--success"><span class="admin-metric__icon"><app-icon name="check" /></span><span><small>{{ t('aiReview.metrics.approval') }}</small><strong>{{ approvalCount() }}</strong></span></article>
     </section>
 
     <section class="ds-card review-process">

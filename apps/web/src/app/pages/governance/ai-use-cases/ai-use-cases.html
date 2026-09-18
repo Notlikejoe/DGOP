@@ -1,4 +1,4 @@
-<section class="page aiuc-page governance-modern">
+<section class="page aiuc-page governance-modern admin-modern">
   <header class="page__header aiuc-hero">
     <div>
       <span class="eyebrow">{{ t('aiuc.eyebrow') }}</span>
@@ -16,6 +16,12 @@
       }
     </div>
   </header>
+  <div class="admin-metrics aiuc-metrics" [attr.aria-label]="t('aiuc.metrics.title')">
+    <article class="admin-metric admin-metric--primary"><span class="admin-metric__icon"><app-icon name="fileCheck" /></span><span><small>{{ t('aiuc.metrics.total') }}</small><strong>{{ useCaseMetrics().total }}</strong></span></article>
+    <article class="admin-metric admin-metric--muted"><span class="admin-metric__icon"><app-icon name="clipboard" /></span><span><small>{{ t('aiuc.metrics.drafts') }}</small><strong>{{ useCaseMetrics().drafts }}</strong></span></article>
+    <article class="admin-metric admin-metric--warning"><span class="admin-metric__icon"><app-icon name="filter" /></span><span><small>{{ t('aiuc.metrics.review') }}</small><strong>{{ useCaseMetrics().review }}</strong></span></article>
+    <article class="admin-metric admin-metric--success"><span class="admin-metric__icon"><app-icon name="check" /></span><span><small>{{ t('aiuc.metrics.registered') }}</small><strong>{{ useCaseMetrics().registered }}</strong></span></article>
+  </div>
   @if (lookups(); as refs) {
     @if (!refs.ready) {
       <section class="configuration-gate" role="status">
@@ -40,9 +46,10 @@
           <div><span class="eyebrow">{{ t('aiuc.rail.eyebrow') }}</span><h2>{{ t('aiuc.rail.title') }}</h2></div>
           <span class="count">{{ cases().length }}</span>
         </div>
+        <label class="case-search"><span class="sr-only">{{ t('aiuc.search') }}</span><input pInputText type="search" [placeholder]="t('aiuc.search')" [ngModel]="caseSearch()" [ngModelOptions]="{standalone:true}" (ngModelChange)="caseSearch.set($event)" /></label>
         <div class="case-list">
-          @for (item of cases(); track item.id) {
-            <button type="button" class="case-row" [class.case-row--active]="selected()?.id === item.id" (click)="selectCase(item)">
+          @for (item of filteredCases(); track item.id) {
+            <button type="button" class="case-row" pRipple [class.case-row--active]="selected()?.id === item.id" (click)="selectCase(item)">
               <span class="case-row__icon"><app-icon name="fileCheck" /></span>
               <span class="case-row__copy">
                 <strong>{{ item.name }}</strong>

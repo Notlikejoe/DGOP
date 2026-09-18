@@ -499,7 +499,7 @@ export class AccessManagementPage implements OnInit {
   }
 
   protected matrixMinWidth(principalCount: number): string {
-    return `${Math.max(64, 14 + principalCount * (this.matrixDensity() === 'compact' ? 10 : 13))}rem`;
+    return `${Math.max(50, 12.5 + principalCount * (this.matrixDensity() === 'compact' ? 8.25 : 10.75))}rem`;
   }
 
   protected selectedProfile(): ProfileRef | null {

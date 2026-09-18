@@ -125,7 +125,7 @@
     </section>
   }
 
-  <section class="workspace">
+  <section class="workspace" [class.workspace--matrix]="viewMode() === 'matrix'">
     @if (viewMode() === 'matrix') {
       <div class="grant-list ds-card matrix-panel">
         <div class="toolbar matrix-toolbar">
@@ -522,7 +522,7 @@
               [columns]="m.principals"
               dataKey="id"
               [scrollable]="true"
-              scrollHeight="clamp(22rem, 52vh, 34rem)"
+              scrollHeight="clamp(28rem, 60vh, 46rem)"
               [rowHover]="true"
               [stripedRows]="true"
               [tableStyle]="{ 'min-width': matrixMinWidth(m.principals.length) }"
@@ -531,13 +531,18 @@
               <ng-template #header let-columns>
                 <tr>
                   <th pFrozenColumn class="matrix-asset-heading">
-                    <strong>{{ t('access.matrix.assetHeading') }}</strong
-                    ><small>{{ t('access.matrix.assetHeadingHelp') }}</small>
+                    <strong>{{ t('access.matrix.assetHeading') }}</strong>
+                    @if (matrixDensity() === 'detailed') {
+                      <small>{{ t('access.matrix.assetHeadingHelp') }}</small>
+                    }
                   </th>
                   @for (principal of columns; track principal.type + ':' + principal.id) {
-                    <th>
+                    <th
+                      class="matrix-principal-heading"
+                      [attr.title]="principalName(principal) + ' · ' + principal.id"
+                    >
                       <strong>{{ principalName(principal) }}</strong
-                      ><small>{{ label(principal.type) }} · {{ principal.id }}</small>
+                      ><small>{{ label(principal.type) }}</small>
                     </th>
                   }
                 </tr>
@@ -639,7 +644,9 @@
             </p-table>
           </div>
           <div class="matrix-footer">
-            <span>{{ t('access.matrix.constraint') }}</span>
+            <span class="matrix-footer__constraint" [attr.title]="t('access.matrix.constraint')">{{
+              t('access.matrix.constraint')
+            }}</span>
             <div>
               <button
                 type="button"
@@ -1049,6 +1056,7 @@
     <aside
       class="grant-detail ds-card"
       [class.grant-detail--empty]="!selected() && !selectedMatrixCell()"
+      [class.grant-detail--matrix-hidden]="viewMode() === 'matrix' && !selectedMatrixCell()"
     >
       @if (selected(); as grant) {
         <div class="detail-head">

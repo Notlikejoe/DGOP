@@ -159,9 +159,15 @@
   gap: var(--space-4);
   align-items: start;
 }
+.workspace--matrix {
+  grid-template-columns: minmax(0, 1fr);
+}
 .grant-list,
 .grant-detail {
   min-width: 0;
+}
+.grant-detail--matrix-hidden {
+  display: none;
 }
 .toolbar {
   align-items: center;
@@ -498,7 +504,7 @@
   display: none;
 }
 .matrix-wrap {
-  overflow: hidden;
+  overflow: clip;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
@@ -526,7 +532,7 @@
   box-shadow: 0 1px 0 var(--border);
 }
 .matrix-table thead th {
-  padding: 0.65rem;
+  padding: 0.45rem 0.5rem;
 }
 .matrix-table tbody th {
   position: sticky;
@@ -599,8 +605,8 @@
   display: grid;
   align-content: start;
   width: 100%;
-  min-height: 112px;
-  padding: 0.6rem;
+  min-height: 92px;
+  padding: 0.5rem;
   color: inherit;
   text-align: start;
   background: transparent;
@@ -676,17 +682,33 @@
 }
 .matrix-wrap--compact .matrix-table th,
 .matrix-wrap--compact .matrix-table td {
-  min-width: 135px;
-  max-width: 165px;
+  min-width: 126px;
+  max-width: 148px;
 }
 .matrix-wrap--compact .matrix-table tbody th,
 .matrix-wrap--compact .matrix-asset-heading {
-  min-width: 205px !important;
-  max-width: 205px;
+  min-width: 190px !important;
+  max-width: 190px;
 }
 .matrix-wrap--compact .matrix-cell-button {
-  min-height: 66px;
-  padding: 0.45rem;
+  min-height: 54px;
+  padding: 0.38rem 0.45rem;
+}
+.matrix-wrap--compact .matrix-asset-cell > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.matrix-wrap--compact .matrix-asset-cell > div {
+  margin-top: 0.25rem;
+}
+.matrix-wrap--compact .matrix-asset-cell > div span {
+  padding-block: 0.1rem;
+}
+.matrix-wrap--compact .matrix-asset-cell > div span:nth-child(n + 3) {
+  display: none;
 }
 .matrix-footer {
   display: flex;
@@ -1396,27 +1418,44 @@
 }
 .matrix-panel {
   grid-column: 1 / -1;
-  padding: var(--space-3);
+  padding: 0.7rem;
 }
 .matrix-toolbar {
-  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) var(--space-3);
-  padding: var(--space-3);
+  margin: -0.7rem -0.7rem 0.65rem;
+  padding: 0.65rem 0.75rem;
   color: #f8fafc;
   background: linear-gradient(145deg, #374151, #1f2937 62%, #111827);
-  border-bottom: 3px solid #0f172a;
+  border-bottom: 2px solid #0f172a;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 4px 0 #9ca3af;
+    0 2px 0 #9ca3af;
 }
 .matrix-toolbar h2 {
   color: #fff;
+  font-size: var(--font-size-lg);
   text-shadow: 0 2px 0 #111827;
 }
 .matrix-toolbar p {
+  max-width: 66ch;
+  margin-top: 0.15rem;
   color: #cbd5e1;
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
 }
 .matrix-toolbar .eyebrow {
   color: #67e8f9;
+}
+.matrix-toolbar .ds-btn,
+.matrix-toolbar .icon-button,
+.matrix-toolbar .density-control {
+  min-height: 34px;
+}
+.matrix-toolbar .ds-btn {
+  padding-block: 0.38rem;
+}
+.matrix-toolbar .icon-button {
+  width: 34px;
+  height: 34px;
 }
 
 .access-page .ds-btn,
@@ -1450,7 +1489,8 @@
 }
 
 .matrix-filterbar {
-  padding: var(--space-3);
+  gap: 0.45rem 0.55rem;
+  padding: 0.55rem;
   background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--surface-2) 90%, white),
@@ -1459,10 +1499,10 @@
   border: 2px solid var(--access-edge);
   border-top-color: var(--access-highlight);
   border-left-color: var(--access-highlight);
-  border-radius: 0.6rem;
+  border-radius: 0.45rem;
   box-shadow:
     inset -1px -1px 0 color-mix(in srgb, var(--access-edge) 65%, transparent),
-    0 4px 0 color-mix(in srgb, var(--access-edge) 70%, #475569);
+    0 2px 0 color-mix(in srgb, var(--access-edge) 70%, #475569);
 }
 .access-page input:not([type='checkbox']),
 .access-page select,
@@ -1482,7 +1522,7 @@
 }
 :host ::ng-deep .matrix-filterbar .windows-select .p-multiselect {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   color: #1f2937;
   background: linear-gradient(#f7f8fa, #dfe3e8);
   border: 2px solid #7b8490;
@@ -1494,7 +1534,7 @@
   box-shadow: inset 1px 1px 2px rgba(15, 23, 42, 0.2);
 }
 :host ::ng-deep .matrix-filterbar .windows-select .p-multiselect-label {
-  padding-block: 0.48rem;
+  padding-block: 0.36rem;
 }
 :host ::ng-deep .matrix-filterbar .windows-select .p-multiselect:focus-within {
   border-color: #2563eb;
@@ -1540,20 +1580,29 @@
 
 .privilege-legend,
 .matrix-summary {
-  padding: 0.55rem;
+  gap: 0.4rem 0.65rem;
+  padding: 0.38rem 0.5rem;
   background: var(--surface-2);
   border: 1px solid var(--access-edge);
   border-top-color: var(--access-highlight);
   border-left-color: var(--access-highlight);
-  border-radius: 0.5rem;
-  box-shadow: 0 3px 0 color-mix(in srgb, var(--access-edge) 65%, #64748b);
+  border-radius: 0.4rem;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--access-edge) 60%, #64748b);
 }
 .matrix-summary span {
+  padding: 0.22rem 0.42rem;
   background: linear-gradient(#fff, #e5e7eb);
   border-color: #8b95a2;
   box-shadow:
     inset 1px 1px 0 #fff,
-    0 2px 0 #737d89;
+    0 1px 0 #737d89;
+}
+.matrix-summary {
+  margin-bottom: 0.55rem;
+}
+.matrix-scroll-hint {
+  margin-bottom: 0.4rem;
+  font-size: var(--font-size-xs);
 }
 
 .matrix-wrap {
@@ -1590,29 +1639,68 @@
 :host ::ng-deep .matrix-table .p-datatable-table-container {
   width: 100%;
   max-width: 100%;
-  overflow: scroll !important;
+  overflow: auto !important;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable both-edges;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #64748b color-mix(in srgb, var(--surface-2) 90%, #cbd5e1);
+  touch-action: pan-x pan-y;
+}
+:host ::ng-deep .matrix-table .p-datatable-table-container::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+:host ::ng-deep .matrix-table .p-datatable-table-container::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--surface-2) 90%, #cbd5e1);
+  border-top: 1px solid var(--border);
+}
+:host ::ng-deep .matrix-table .p-datatable-table-container::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border: 2px solid color-mix(in srgb, var(--surface-2) 90%, #cbd5e1);
+  border-radius: 999px;
+}
+:host ::ng-deep .matrix-table .p-datatable-table-container::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }
 :host ::ng-deep .matrix-table .p-datatable-table {
   width: max-content;
   border-collapse: separate;
   border-spacing: 0;
 }
+:host ::ng-deep .matrix-table .p-datatable-thead {
+  z-index: 10 !important;
+}
 :host ::ng-deep .matrix-table .p-datatable-thead > tr > th {
-  min-width: 10rem;
-  padding: 0.65rem;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  min-width: 8.25rem;
+  padding: 0.38rem 0.48rem;
   color: #f8fafc;
   background: linear-gradient(#4b5563, #1f2937);
   border-color: #111827;
-  border-bottom-width: 3px;
+  border-bottom-width: 2px;
   box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.16);
 }
 :host ::ng-deep .matrix-table .p-datatable-thead > tr > th small {
   color: #cbd5e1;
 }
+:host ::ng-deep .matrix-table .matrix-principal-heading strong {
+  display: -webkit-box;
+  min-height: 2.35em;
+  overflow: hidden;
+  line-height: 1.18;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+:host ::ng-deep .matrix-table .matrix-principal-heading small {
+  margin-top: 0.12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 :host ::ng-deep .matrix-table .p-datatable-tbody > tr > td {
-  min-width: 10rem;
+  min-width: 8.25rem;
   padding: 0;
   border-color: #aab1ba;
   transition:
@@ -1623,8 +1711,8 @@
   background-color: color-mix(in srgb, var(--primary) 7%, var(--surface));
 }
 :host ::ng-deep .matrix-table .p-datatable-tbody > tr > .matrix-asset-cell {
-  min-width: 15rem;
-  padding: 0.7rem;
+  min-width: 12.5rem;
+  padding: 0.48rem 0.55rem;
   color: var(--on-surface);
   background: linear-gradient(135deg, var(--surface), var(--surface-2));
   border-inline-end: 3px solid #64748b;
@@ -1633,7 +1721,11 @@
     3px 0 5px rgba(15, 23, 42, 0.16);
 }
 :host ::ng-deep .matrix-table .matrix-asset-heading {
-  min-width: 15rem !important;
+  position: sticky !important;
+  top: 0;
+  inset-inline-start: 0;
+  z-index: 12 !important;
+  min-width: 12.5rem !important;
   border-inline-end: 3px solid #0f172a !important;
 }
 :host ::ng-deep .matrix-table .p-datatable-frozen-view,
@@ -1662,16 +1754,26 @@
 }
 
 .matrix-footer {
-  min-height: 52px;
-  margin: var(--space-3) calc(-1 * var(--space-3)) calc(-1 * var(--space-3));
-  padding: 0.65rem var(--space-3);
+  min-height: 38px;
+  margin: 0.65rem -0.7rem -0.7rem;
+  padding: 0.35rem 0.7rem;
   color: #e5e7eb;
   background: linear-gradient(#4b5563, #252d38);
   border-top: 2px solid #64748b;
-  border-bottom: 3px solid #111827;
+  border-bottom: 2px solid #111827;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 -3px 0 #9ca3af;
+    0 -1px 0 #9ca3af;
+}
+.matrix-footer__constraint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.matrix-footer .icon-button {
+  width: 30px;
+  height: 30px;
 }
 .matrix-footer strong {
   color: #fff;

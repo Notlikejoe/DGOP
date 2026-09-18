@@ -1,6 +1,5 @@
 <section class="page ai-review-page governance-modern" [attr.aria-busy]="working()">
   <header class="page__header review-hero"><div><span class="eyebrow">{{ t('aiRisk.eyebrow') }}</span><h1>{{ t('aiReviews.title') }}</h1><p class="page__subtitle">{{ t('aiReviews.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || state() === 'loading'" (click)="load()"><app-icon name="refresh" />{{ t('crud.retry') }}</button></header>
-  <app-ai-journey-history />
   @if (state() === 'loading') { <section class="ds-card state-card" role="status">{{ t('crud.loading') }}</section> }
   @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiReviews.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section> }
   @else if (report(); as r) {

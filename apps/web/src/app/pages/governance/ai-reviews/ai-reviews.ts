@@ -1,5 +1,4 @@
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
-import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -22,7 +21,7 @@ interface ReviewDetail {id:string;round:number;dueAt:string;anchorAt:string;band
 interface MonthlyRow {id:string;periodMonth:string;capturedAt:string;sourceCount:number}
 interface MonthlySnapshot extends MonthlyRow {periodStart:string;periodEnd:string;measures:Measures}
 
-@Component({selector:'app-ai-reviews',standalone:true,imports: [AiJourneyHistory, DualDatePipe,FormsModule,TableModule,AppIcon,StatusChip],
+@Component({selector:'app-ai-reviews',standalone:true,imports: [DualDatePipe,FormsModule,TableModule,AppIcon,StatusChip],
   templateUrl:'./ai-reviews.html',styleUrls:['../ai-review/ai-review.scss','./ai-reviews.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiReviewsPage implements OnInit {
   private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);

@@ -3,8 +3,6 @@
     <div><span class="eyebrow">{{ t('aiReview.eyebrow') }}</span><h1>{{ t('aiReview.title') }}</h1><p class="page__subtitle">{{ t('aiReview.subtitle') }}</p></div>
     <button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load(selected()?.id)"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
   </header>
-  <app-ai-journey-history [expanded]="true" />
-
   @if (configuration(); as config) {
     @if (!config.ready) {
       <section class="configuration-gate" role="status"><app-icon name="alert" /><div><strong>{{ t('aiReview.config.title') }}</strong><p>{{ t('aiReview.config.body') }}</p></div><span>{{ config.issues.join(' · ') }}</span></section>

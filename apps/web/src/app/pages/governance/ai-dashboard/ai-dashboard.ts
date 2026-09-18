@@ -1,5 +1,4 @@
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
-import { AiJourneyHistory } from '../../../shared/ai-journey-history';
 import { AiDashboardReports } from './ai-dashboard-reports';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -14,7 +13,7 @@ interface Kpi {id:string;labelEn:string;labelAr:string;group:string;unit:string;
 interface Dashboard {governance:{assessmentDue:number;assessmentComplete:number;assessmentMissingDeadline:number;high:number;highReviewed:number;mandatory:number;mandatoryReviewed:number}|null;asOf:string;mode:string;aggregateOnly:boolean;cards:Kpi[];catalog:Kpi[];reconciliation:{total:number;high:number;unclassified:number;otherClassified:number;sum:number;balanced:boolean}|null;matrix:{cells:number[][];assessed:number;unassessed:number}|null;distribution:Array<{nameEn:string|null;nameAr:string|null;count:number}>;topRisks:Array<{id:string;riskRef:string;title:string;inherentScore:number|null;residualScore:number|null;residualBand:string;completionPct:number}>}
 interface CapturedBasis {savedAsOf:string|null;periodKey?:string;rows:Array<{id:string;unit:string;saved:number|null;changed:boolean|null}>}
 interface Drilldown {filter:string;page:number;pageSize:number;total:number;readOnly:boolean;asOf:string;rows:Array<{id:string;reference:string;title:string;approvedTier?:string;inherentScore?:number;residualScore?:number;completionPct?:number;dueAt?:string;riskRef?:string;kind?:string;round?:number;validDimensions?:number}>}
-@Component({selector:'app-ai-dashboard',standalone:true,imports: [AiJourneyHistory, AiDashboardReports,DualDatePipe,FormsModule,RouterLink,TableModule,AppIcon],templateUrl:'./ai-dashboard.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-dashboard.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-dashboard',standalone:true,imports: [AiDashboardReports,DualDatePipe,FormsModule,RouterLink,TableModule,AppIcon],templateUrl:'./ai-dashboard.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-dashboard.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiDashboardPage implements OnInit {
  private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
  protected readonly viewBasis=signal<'live'|'scheduled'>('live');protected readonly basisState=signal<'idle'|'loading'|'ok'|'error'>('idle');

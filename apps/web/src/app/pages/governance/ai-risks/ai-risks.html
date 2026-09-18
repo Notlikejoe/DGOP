@@ -7,7 +7,6 @@
     </div>
   </header>
 
-  <app-ai-journey-history />
   @if (!lookups().ready && state() === 'ok') { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiRisk.references') }}</p></div> }
 
   @if (state() === 'loading') {

@@ -1,0 +1,1327 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "workbook": "أداة_إدارة_مخاطر_الذكاء_الاصطناعي_سدايا (1).xlsx",
+    "sheet": "مكتبة المخاطر",
+    "rows": "5:70",
+    "language": "ar",
+    "englishTitlePolicy": "titleEn repeats the Arabic source title because the workbook has no English title column",
+    "sha256": "96fa526e69423c14103afa6fea339c219c0778a21b1cd308f2695e806dcc103c"
+  },
+  "references": {
+    "R_RISKCAT": [
+      {
+        "code": "SAFETY_LIMITATIONS",
+        "labelEn": "Safety and limitations",
+        "labelAr": "السلامة والمحدودية",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "PRIVACY_SECURITY",
+        "labelEn": "Privacy and security",
+        "labelAr": "الخصوصية والأمان",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "BIAS_DISCRIMINATION_ABUSE",
+        "labelEn": "Bias, discrimination and abuse",
+        "labelAr": "التحيز والتمييز والإساءة",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "HARMFUL_USE",
+        "labelEn": "Harmful use",
+        "labelAr": "الاستخدام الضار",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "HUMAN_MACHINE_INTERACTION",
+        "labelEn": "Human-machine interaction",
+        "labelAr": "تفاعل الإنسان والآلة",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "SOCIOECONOMIC_ENVIRONMENTAL_IMPACT",
+        "labelEn": "Social, economic and environmental impacts",
+        "labelAr": "الآثار الاجتماعية والاقتصادية والبيئية",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      }
+    ],
+    "R_ETHICS": [
+      {
+        "code": "HUMANITY",
+        "labelEn": "Humanity",
+        "labelAr": "الإنسانية",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "PRIVACY_SECURITY",
+        "labelEn": "Privacy and security",
+        "labelAr": "الخصوصية والأمان",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "TRANSPARENCY_EXPLAINABILITY",
+        "labelEn": "Transparency and explainability",
+        "labelAr": "الشفافية وقابلية التفسير",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "FAIRNESS",
+        "labelEn": "Fairness",
+        "labelAr": "العدالة",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "ACCOUNTABILITY_RESPONSIBILITY",
+        "labelEn": "Accountability and responsibility",
+        "labelAr": "المساءلة والمسؤولية",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "SOCIAL_ENVIRONMENTAL_BENEFIT",
+        "labelEn": "Social and environmental benefit",
+        "labelAr": "المنافع الاجتماعية والبيئية",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "RELIABILITY_SAFETY",
+        "labelEn": "Reliability and safety",
+        "labelAr": "الموثوقية والسلامة",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      }
+    ],
+    "R_LIFECYCLE": [
+      {
+        "code": "RETIRE_DISPOSE_REPLACE",
+        "labelEn": "Retirement, disposal or replacement",
+        "labelAr": "الإيقاف والإتلاف أو الاستبدال",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "TEST_VALIDATE_APPROVE",
+        "labelEn": "Testing, validation and approval",
+        "labelAr": "الاختبار والتحقق والاعتماد",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "PLAN_GOVERN",
+        "labelEn": "Planning and governance",
+        "labelAr": "التخطيط والحوكمة",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "PLAN_ANALYZE_USE_CASE",
+        "labelEn": "Planning and use-case analysis",
+        "labelAr": "التخطيط وتحليل حالة الاستخدام",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "OPERATE_MONITOR",
+        "labelEn": "Operation and monitoring",
+        "labelAr": "التشغيل والمراقبة",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "OPERATE_MONITOR_CHANGE",
+        "labelEn": "Operation, monitoring and change management",
+        "labelAr": "التشغيل والمراقبة وإدارة التغيير",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "OPERATE_MONITOR_INCIDENT",
+        "labelEn": "Operation, monitoring and incident management",
+        "labelAr": "التشغيل والمراقبة وإدارة الحوادث",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "DESIGN_DEVELOP",
+        "labelEn": "Design and development",
+        "labelAr": "التصميم والتطوير",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "DEPLOY_INTEGRATE",
+        "labelEn": "Deployment and integration",
+        "labelAr": "النشر والتكامل",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      },
+      {
+        "code": "COLLECT_PREPARE_DATA",
+        "labelEn": "Data collection and preparation",
+        "labelAr": "جمع البيانات وإعدادها",
+        "metadata": {
+          "source": "SDAIA AI risk-management workbook"
+        }
+      }
+    ]
+  },
+  "rows": [
+    {
+      "libraryRef": "AIRL-001",
+      "sourceRow": 5,
+      "content": {
+        "titleEn": "غياب سياسة معتمدة لاستخدام الذكاء الاصطناعي",
+        "titleAr": "غياب سياسة معتمدة لاستخدام الذكاء الاصطناعي",
+        "risk_domain": "الحوكمة والمساءلة",
+        "description": "تُستخدم أنظمة الذكاء الاصطناعي دون سياسة معتمدة تحدد الاستخدامات المسموحة والمحظورة وضوابطها.",
+        "probable_causes": "حداثة التقنية، تسارع التبني، عدم وجود جهة مسؤولة عن إصدار السياسة.",
+        "probable_impacts": "استخدامات غير منضبطة، تعارض مع متطلبات تنظيمية، صعوبة المساءلة.",
+        "example_controls": "إصدار سياسة معتمدة، تحديد الاستخدامات المحظورة، ربط الاعتماد بالسياسة.",
+        "attention_indicators": "تعدد الأدوات المستخدمة دون مرجعية، أسئلة متكررة عن ما هو مسموح.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-002",
+      "sourceRow": 6,
+      "content": {
+        "titleEn": "عدم وجود جهة أو لجنة مسؤولة عن حوكمة الذكاء الاصطناعي",
+        "titleAr": "عدم وجود جهة أو لجنة مسؤولة عن حوكمة الذكاء الاصطناعي",
+        "risk_domain": "الحوكمة والمساءلة",
+        "description": "لا توجد جهة محددة تعتمد حالات الاستخدام وتراقب المخاطر وترفع التقارير للإدارة.",
+        "probable_causes": "توزع المسؤوليات بين تقنية المعلومات والبيانات والمخاطر دون تكليف واضح.",
+        "probable_impacts": "قرارات غير موحدة، مخاطر غير مرفوعة للإدارة، تأخر المعالجة.",
+        "example_controls": "تكليف لجنة أو جهة مالكة للحوكمة، تحديد صلاحياتها ودورية اجتماعاتها.",
+        "attention_indicators": "عدم وجود محضر اجتماع أو تقرير مخاطر خلال آخر دورة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-003",
+      "sourceRow": 7,
+      "content": {
+        "titleEn": "عدم وجود سجل معتمد لحالات استخدام الذكاء الاصطناعي",
+        "titleAr": "عدم وجود سجل معتمد لحالات استخدام الذكاء الاصطناعي",
+        "risk_domain": "الحوكمة والمساءلة",
+        "description": "لا يوجد حصر مركزي محدّث لأنظمة وحالات استخدام الذكاء الاصطناعي في الجهة.",
+        "probable_causes": "التبني اللامركزي، مبادرات على مستوى الإدارات دون تسجيل مركزي.",
+        "probable_impacts": "مخاطر غير مكتشفة، وعدم القدرة على تحديد نطاق التعرض.",
+        "example_controls": "إلزام تسجيل كل حالة استخدام قبل التشغيل، ومراجعة دورية للسجل.",
+        "attention_indicators": "ظهور أنظمة ذكاء اصطناعي في العمل غير مدرجة في السجل.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-004",
+      "sourceRow": 8,
+      "content": {
+        "titleEn": "غياب تصنيف لمستوى خطورة أنظمة الذكاء الاصطناعي",
+        "titleAr": "غياب تصنيف لمستوى خطورة أنظمة الذكاء الاصطناعي",
+        "risk_domain": "الحوكمة والمساءلة",
+        "description": "تُعامل جميع الأنظمة بالمستوى نفسه من الضوابط دون تمييز بحسب الأثر ودرجة الاستقلالية.",
+        "probable_causes": "عدم وجود منهجية تصنيف معتمدة داخل الجهة.",
+        "probable_impacts": "ضوابط زائدة على أنظمة بسيطة وضوابط ناقصة على أنظمة عالية الأثر.",
+        "example_controls": "اعتماد منهجية تصنيف بحسب الأثر ودرجة الاعتماد والتدخل البشري.",
+        "attention_indicators": "تطبيق الإجراء نفسه على نظام إرشادي ونظام يتخذ قرارا آليا.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-005",
+      "sourceRow": 9,
+      "content": {
+        "titleEn": "عدم توثيق قرار الاعتماد قبل التشغيل",
+        "titleAr": "عدم توثيق قرار الاعتماد قبل التشغيل",
+        "risk_domain": "الحوكمة والمساءلة",
+        "description": "يُنقل النظام إلى بيئة التشغيل دون قرار اعتماد موثق يحدد المسؤول والمخاطر المقبولة.",
+        "probable_causes": "ضغط الجداول الزمنية، وغياب بوابة اعتماد إلزامية.",
+        "probable_impacts": "عدم وضوح من قبل المخاطر، وصعوبة المساءلة عند وقوع حادثة.",
+        "example_controls": "بوابة اعتماد إلزامية موثقة قبل التشغيل بتوقيع مالك حالة الاستخدام.",
+        "attention_indicators": "أنظمة تعمل في بيئة التشغيل دون سجل اعتماد.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-006",
+      "sourceRow": 10,
+      "content": {
+        "titleEn": "عدم تحديد مالك واضح لحالة الاستخدام أو للخطر",
+        "titleAr": "عدم تحديد مالك واضح لحالة الاستخدام أو للخطر",
+        "risk_domain": "الحوكمة والمساءلة",
+        "description": "لا يوجد شخص محدد بالاسم مسؤول عن متابعة النظام ومخاطره.",
+        "probable_causes": "إسناد المسؤولية لإدارة كاملة بدلا من شخص، وتغير الهياكل التنظيمية.",
+        "probable_impacts": "تعطل المتابعة، وبقاء المخاطر دون معالجة أو مراجعة.",
+        "example_controls": "تحديد مالك بالاسم لكل حالة استخدام وكل خطر، وتحديث السجل عند التغيير.",
+        "attention_indicators": "مخاطر مفتوحة دون مالك أو دون تحديث منذ فترة طويلة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-007",
+      "sourceRow": 11,
+      "content": {
+        "titleEn": "بيانات تدريب أو تشغيل ناقصة أو غير مكتملة",
+        "titleAr": "بيانات تدريب أو تشغيل ناقصة أو غير مكتملة",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "نقص في الحقول أو السجلات المستخدمة يؤدي إلى تعلّم غير صحيح أو مخرجات مضللة.",
+        "probable_causes": "ضعف ضوابط الإدخال في الأنظمة المصدرية، وتكامل غير مكتمل.",
+        "probable_impacts": "انخفاض دقة المخرجات، وقرارات مبنية على صورة ناقصة.",
+        "example_controls": "فحوص جودة آلية على كل دفعة بيانات، وتقارير اكتمال دورية.",
+        "attention_indicators": "ارتفاع نسبة القيم المفقودة في الحقول الأساسية.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-008",
+      "sourceRow": 12,
+      "content": {
+        "titleEn": "أخطاء في وسم البيانات (Labeling)",
+        "titleAr": "أخطاء في وسم البيانات (Labeling)",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "وسم غير صحيح أو غير متسق لبيانات التدريب ينتقل كخطأ منهجي إلى النموذج.",
+        "probable_causes": "غياب دليل وسم موحد، وتعدد القائمين على الوسم دون تحكيم.",
+        "probable_impacts": "نموذج يتعلم قواعد خاطئة ويكررها في التشغيل.",
+        "example_controls": "دليل وسم موثق، مراجعة مزدوجة، وقياس اتساق الوسم.",
+        "attention_indicators": "تفاوت واضح في نتائج الوسم بين المراجعين.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-009",
+      "sourceRow": 13,
+      "content": {
+        "titleEn": "بيانات قديمة لا تعبر عن الواقع الحالي",
+        "titleAr": "بيانات قديمة لا تعبر عن الواقع الحالي",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "تعتمد الأنظمة على بيانات تاريخية لم تُحدّث فتصبح المخرجات غير ملائمة للوضع الحالي.",
+        "probable_causes": "عدم تحديد دورية تحديث البيانات، وتغيّر الإجراءات دون تحديث المصدر.",
+        "probable_impacts": "توصيات ومخرجات لا تطابق الإجراءات المعتمدة حاليا.",
+        "example_controls": "تحديد دورية تحديث إلزامية، وربط النظام بالمصدر المعتمد.",
+        "attention_indicators": "فارق زمني كبير بين تاريخ آخر تحديث والوضع التشغيلي.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-010",
+      "sourceRow": 14,
+      "content": {
+        "titleEn": "تعارض تعريف البيانات بين الأنظمة المصدرية",
+        "titleAr": "تعارض تعريف البيانات بين الأنظمة المصدرية",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "اختلاف تعريف الحقل نفسه بين أنظمة مختلفة يؤدي إلى دمج غير صحيح للبيانات.",
+        "probable_causes": "غياب قاموس بيانات موحد ومعايير تكامل.",
+        "probable_impacts": "مخرجات غير قابلة للتفسير، ومؤشرات متعارضة.",
+        "example_controls": "قاموس بيانات مؤسسي، وقواعد تحويل موثقة قبل الدمج.",
+        "attention_indicators": "تعارض المؤشرات بين تقارير مصدرها أنظمة مختلفة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-011",
+      "sourceRow": 15,
+      "content": {
+        "titleEn": "تمثيل ناقص لفئات المستفيدين في بيانات التدريب",
+        "titleAr": "تمثيل ناقص لفئات المستفيدين في بيانات التدريب",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "لا تعكس بيانات التدريب توزيع المستفيدين الفعلي فيقل أداء النموذج على فئات محددة.",
+        "probable_causes": "اعتماد بيانات تاريخية غير متوازنة، وعدم قياس التمثيل قبل التدريب.",
+        "probable_impacts": "أداء غير متكافئ ومعالجة أقل جودة لفئة معينة.",
+        "example_controls": "قياس التمثيل قبل التدريب، وموازنة البيانات، واختبار المجموعات الفرعية.",
+        "attention_indicators": "فارق ملحوظ في دقة النموذج بين المجموعات.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-012",
+      "sourceRow": 16,
+      "content": {
+        "titleEn": "عدم توثيق مصدر البيانات وأساس استخدامها (Data Provenance)",
+        "titleAr": "عدم توثيق مصدر البيانات وأساس استخدامها (Data Provenance)",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "لا يوجد توثيق لمصدر بيانات التدريب والتشغيل ولا للأساس النظامي لاستخدامها.",
+        "probable_causes": "سرعة تنفيذ التجارب، وجمع البيانات من مصادر متعددة دون تسجيل.",
+        "probable_impacts": "تعرض تنظيمي، وصعوبة إثبات مشروعية الاستخدام.",
+        "example_controls": "سجل مصادر بيانات موثق، ومراجعة قانونية قبل الاستخدام.",
+        "attention_indicators": "عدم القدرة على تحديد مصدر مجموعة بيانات مستخدمة في نموذج قائم.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-013",
+      "sourceRow": 17,
+      "content": {
+        "titleEn": "استخدام البيانات لغرض مختلف عن الغرض الذي جُمعت له",
+        "titleAr": "استخدام البيانات لغرض مختلف عن الغرض الذي جُمعت له",
+        "risk_domain": "جودة البيانات وموثوقيتها",
+        "description": "تُستخدم بيانات جُمعت لغرض معين في تدريب أو تشغيل نموذج لغرض آخر.",
+        "probable_causes": "غياب ضبط للغرض، وسهولة إعادة استخدام البيانات المتاحة.",
+        "probable_impacts": "تعارض مع مبدأ تحديد الغرض، وأثر على الأفراد.",
+        "example_controls": "ربط كل استخدام بغرض موثق، ومراجعة قبل إعادة الاستخدام.",
+        "attention_indicators": "نماذج تُدرّب على بيانات لا يظهر في سجلها غرض متوافق.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-014",
+      "sourceRow": 18,
+      "content": {
+        "titleEn": "إدخال بيانات شخصية في مدخلات النموذج دون أساس",
+        "titleAr": "إدخال بيانات شخصية في مدخلات النموذج دون أساس",
+        "risk_domain": "الخصوصية وحماية البيانات الشخصية",
+        "description": "تُدرج بيانات شخصية في المدخلات أو في التلقين دون حاجة فعلية أو أساس واضح.",
+        "probable_causes": "غياب توعية المستخدمين، وعدم وجود إخفاء آلي للبيانات.",
+        "probable_impacts": "معالجة بيانات شخصية خارج الغرض، وزيادة نطاق التعرض.",
+        "example_controls": "إخفاء آلي للبيانات قبل الإرسال، وتنويه للمستخدم، وتقليل الحقول.",
+        "attention_indicators": "ظهور معرفات شخصية في سجلات المدخلات.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "DESIGN_DEVELOP"
+      }
+    },
+    {
+      "libraryRef": "AIRL-015",
+      "sourceRow": 19,
+      "content": {
+        "titleEn": "إمكانية استخراج بيانات شخصية من مخرجات النموذج",
+        "titleAr": "إمكانية استخراج بيانات شخصية من مخرجات النموذج",
+        "risk_domain": "الخصوصية وحماية البيانات الشخصية",
+        "description": "قد يعيد النموذج إنتاج بيانات شخصية وردت في بيانات التدريب أو في سياق سابق.",
+        "probable_causes": "تدريب على بيانات غير مجهّلة، وغياب فلترة للمخرجات.",
+        "probable_impacts": "إفصاح غير مصرح به عن بيانات أفراد.",
+        "example_controls": "تجهيل البيانات قبل التدريب، وفلترة المخرجات، واختبارات استرجاع.",
+        "attention_indicators": "ظهور بيانات فردية في مخرجات لا تتطلب ذلك.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-016",
+      "sourceRow": 20,
+      "content": {
+        "titleEn": "عدم تطبيق مبدأ تقليل البيانات",
+        "titleAr": "عدم تطبيق مبدأ تقليل البيانات",
+        "risk_domain": "الخصوصية وحماية البيانات الشخصية",
+        "description": "تُستخدم حقول وبيانات أكثر من اللازم لتحقيق الغرض من النظام.",
+        "probable_causes": "سهولة إتاحة البيانات، وعدم تحليل الحد الأدنى المطلوب.",
+        "probable_impacts": "توسع غير مبرر في نطاق التعرض، وأثر تنظيمي.",
+        "example_controls": "تحليل الحد الأدنى من البيانات المطلوبة، وحذف الحقول غير الضرورية.",
+        "attention_indicators": "استخدام حقول حساسة لا يظهر لها أثر في المخرجات.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-017",
+      "sourceRow": 21,
+      "content": {
+        "titleEn": "غياب تقييم أثر على الخصوصية قبل التشغيل",
+        "titleAr": "غياب تقييم أثر على الخصوصية قبل التشغيل",
+        "risk_domain": "الخصوصية وحماية البيانات الشخصية",
+        "description": "يُشغّل النظام دون تقييم موثق لأثره على خصوصية الأفراد وضوابط المعالجة.",
+        "probable_causes": "عدم إدراج التقييم كخطوة إلزامية في دورة الحياة.",
+        "probable_impacts": "مخاطر خصوصية غير مكتشفة قبل التشغيل.",
+        "example_controls": "إلزام تقييم الأثر على الخصوصية قبل الاعتماد، ومراجعة مسؤول حماية البيانات.",
+        "attention_indicators": "أنظمة تعالج بيانات شخصية دون تقرير تقييم أثر.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-018",
+      "sourceRow": 22,
+      "content": {
+        "titleEn": "الاحتفاظ بالمدخلات والمخرجات مدة تجاوز الحاجة",
+        "titleAr": "الاحتفاظ بالمدخلات والمخرجات مدة تجاوز الحاجة",
+        "risk_domain": "الخصوصية وحماية البيانات الشخصية",
+        "description": "تُحفظ سجلات التفاعل والمدخلات والمخرجات دون مدة احتفاظ محددة.",
+        "probable_causes": "إعدادات افتراضية للمزود، وغياب سياسة احتفاظ للبيانات الجديدة.",
+        "probable_impacts": "زيادة أثر أي حادثة تسريب، وتعارض مع ضوابط الاحتفاظ.",
+        "example_controls": "تحديد مدة احتفاظ موثقة، وإتلاف آلي عند انتهائها.",
+        "attention_indicators": "وجود سجلات تفاعل قديمة دون مبرر تشغيلي.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-019",
+      "sourceRow": 23,
+      "content": {
+        "titleEn": "عدم إتلاف البيانات والسجلات بعد انتهاء الغرض",
+        "titleAr": "عدم إتلاف البيانات والسجلات بعد انتهاء الغرض",
+        "risk_domain": "الخصوصية وحماية البيانات الشخصية",
+        "description": "لا تُتلف البيانات ونسخ النماذج والسجلات بعد انتهاء الغرض أو إيقاف النظام.",
+        "probable_causes": "غياب إجراء إتلاف موثق، وتعدد بيئات التخزين.",
+        "probable_impacts": "بقاء بيانات دون أساس، وزيادة التعرض.",
+        "example_controls": "إجراء إتلاف موثق يشمل النسخ الاحتياطية وبيئات التطوير.",
+        "attention_indicators": "بيانات نظام موقوف لا تزال متاحة في بيئات متعددة.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "RETIRE_DISPOSE_REPLACE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-020",
+      "sourceRow": 24,
+      "content": {
+        "titleEn": "حقن الأوامر (Prompt Injection)",
+        "titleAr": "حقن الأوامر (Prompt Injection)",
+        "risk_domain": "الأمن السيبراني",
+        "description": "مدخل مُصمم بعناية يعيد توجيه تعليمات النظام فيتجاوز الضوابط أو يفصح عن تعليماته.",
+        "probable_causes": "عدم فصل تعليمات النظام عن مدخلات المستخدم، وغياب تنقية المدخلات.",
+        "probable_impacts": "إفصاح غير مصرح به، أو سلوك خارج النطاق المعتمد.",
+        "example_controls": "فصل التعليمات، وتنقية المدخلات، وفلترة المخرجات، واختبار موجه.",
+        "attention_indicators": "محاولات متكررة لإعادة توجيه سلوك النظام في السجلات.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-021",
+      "sourceRow": 25,
+      "content": {
+        "titleEn": "تسريب البيانات عبر واجهات النماذج (Data Leakage)",
+        "titleAr": "تسريب البيانات عبر واجهات النماذج (Data Leakage)",
+        "risk_domain": "الأمن السيبراني",
+        "description": "تنتقل بيانات داخلية إلى خارج نطاق الجهة عبر واجهات النماذج أو سجلات المزود.",
+        "probable_causes": "غياب ضوابط منع فقدان البيانات على الاتصالات الصادرة.",
+        "probable_impacts": "تسريب معلومات داخلية، وأثر تنظيمي وسمعي.",
+        "example_controls": "ضوابط منع فقدان البيانات، وتقييد الاتصالات الصادرة، وتصنيف البيانات.",
+        "attention_indicators": "حجم بيانات صادر غير معتاد إلى واجهات خارجية.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-022",
+      "sourceRow": 26,
+      "content": {
+        "titleEn": "ضعف إدارة الوصول إلى النماذج وواجهاتها",
+        "titleAr": "ضعف إدارة الوصول إلى النماذج وواجهاتها",
+        "risk_domain": "الأمن السيبراني",
+        "description": "صلاحيات واسعة أو مفاتيح وصول غير مُدارة للنماذج وواجهاتها البرمجية.",
+        "probable_causes": "غياب مبدأ الحد الأدنى من الصلاحيات، ومشاركة المفاتيح بين الفرق.",
+        "probable_impacts": "استخدام غير مصرح به، وصعوبة تحديد المسؤول عن العملية.",
+        "example_controls": "صلاحيات بحسب الحاجة، وإدارة مفاتيح مركزية، ومراجعة دورية للصلاحيات.",
+        "attention_indicators": "حسابات ومفاتيح غير مستخدمة أو غير معروفة المالك.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-023",
+      "sourceRow": 27,
+      "content": {
+        "titleEn": "غياب تسجيل ومراقبة العمليات (Logging and Monitoring)",
+        "titleAr": "غياب تسجيل ومراقبة العمليات (Logging and Monitoring)",
+        "risk_domain": "الأمن السيبراني",
+        "description": "لا تُسجل المدخلات والمخرجات وقرارات النظام بصورة تمكّن من التحقيق والمراجعة.",
+        "probable_causes": "إعدادات افتراضية، وتحفظات على حجم السجلات.",
+        "probable_impacts": "عدم القدرة على التحقيق في حادثة أو إثبات سلامة القرار.",
+        "example_controls": "تسجيل العمليات الأساسية، وحفظ إصدار النموذج، ومراجعة السجلات دوريا.",
+        "attention_indicators": "عدم توفر سجل يوضح مدخلات ومخرجات حالة محددة.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-024",
+      "sourceRow": 28,
+      "content": {
+        "titleEn": "التلاعب بالمدخلات لتضليل النموذج (Adversarial Inputs)",
+        "titleAr": "التلاعب بالمدخلات لتضليل النموذج (Adversarial Inputs)",
+        "risk_domain": "الأمن السيبراني",
+        "description": "مدخلات مُعدّة بدقة تدفع النموذج إلى تصنيف أو قرار خاطئ.",
+        "probable_causes": "غياب اختبار مقاومة النموذج، وعدم فحص المدخلات الشاذة.",
+        "probable_impacts": "قرارات خاطئة يمكن استغلالها للحصول على ميزة غير مستحقة.",
+        "example_controls": "اختبار مقاومة، وكشف المدخلات الشاذة، ومراجعة بشرية للحالات الحدية.",
+        "attention_indicators": "نمط مدخلات متكرر ينتج نتائج غير منطقية.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-025",
+      "sourceRow": 29,
+      "content": {
+        "titleEn": "تسميم بيانات التدريب (Data Poisoning)",
+        "titleAr": "تسميم بيانات التدريب (Data Poisoning)",
+        "risk_domain": "الأمن السيبراني",
+        "description": "إدخال بيانات مغرضة في مصادر التدريب لتغيير سلوك النموذج.",
+        "probable_causes": "ضعف ضوابط سلامة مصادر البيانات، وتدريب آلي دون مراجعة.",
+        "probable_impacts": "سلوك منحرف للنموذج يصعب اكتشافه.",
+        "example_controls": "التحقق من سلامة المصادر، ومراجعة الدفعات، وضوابط تغيير بيانات التدريب.",
+        "attention_indicators": "تغير غير مبرر في سلوك النموذج بعد إعادة التدريب.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "COLLECT_PREPARE_DATA"
+      }
+    },
+    {
+      "libraryRef": "AIRL-026",
+      "sourceRow": 30,
+      "content": {
+        "titleEn": "استخراج النموذج أو محاكاة سلوكه (Model Extraction)",
+        "titleAr": "استخراج النموذج أو محاكاة سلوكه (Model Extraction)",
+        "risk_domain": "الأمن السيبراني",
+        "description": "استعلامات منظمة ومكثفة لاستنساخ سلوك النموذج أو استخراج معلومات عنه.",
+        "probable_causes": "غياب حدود على معدل الاستعلام، وعدم مراقبة أنماط الاستخدام.",
+        "probable_impacts": "فقدان قيمة الأصل التقني، وتسريب معلومات عن آلية العمل.",
+        "example_controls": "حدود على معدل الاستعلام، ومراقبة الأنماط، وضوابط توثيق الوصول.",
+        "attention_indicators": "معدل استعلامات مرتفع وغير معتاد من مصدر واحد.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-027",
+      "sourceRow": 31,
+      "content": {
+        "titleEn": "ثغرات في سلسلة التوريد البرمجية للنموذج",
+        "titleAr": "ثغرات في سلسلة التوريد البرمجية للنموذج",
+        "risk_domain": "الأمن السيبراني",
+        "description": "استخدام مكتبات أو نماذج مفتوحة من مصادر غير موثوقة أو غير محدّثة.",
+        "probable_causes": "ضغط سرعة التطوير، وغياب فحص المكونات قبل الاستخدام.",
+        "probable_impacts": "إدخال ثغرات أو سلوك خفي إلى بيئة التشغيل.",
+        "example_controls": "فحص المكونات، وقائمة مكونات معتمدة، وتحديث دوري.",
+        "attention_indicators": "استخدام مكونات غير مدرجة في القائمة المعتمدة.",
+        "risk_category": "PRIVACY_SECURITY",
+        "ethics_principle": "PRIVACY_SECURITY",
+        "dev_stage": "DESIGN_DEVELOP"
+      }
+    },
+    {
+      "libraryRef": "AIRL-028",
+      "sourceRow": 32,
+      "content": {
+        "titleEn": "انحياز في المخرجات تجاه فئة معينة",
+        "titleAr": "انحياز في المخرجات تجاه فئة معينة",
+        "risk_domain": "الانحياز والعدالة",
+        "description": "تختلف جودة المخرجات أو القرارات بين فئات المستفيدين دون مبرر موضوعي.",
+        "probable_causes": "عدم توازن بيانات التدريب، وغياب اختبار العدالة.",
+        "probable_impacts": "معالجة غير متكافئة، وأثر على الأفراد والسمعة.",
+        "example_controls": "اختبار العدالة على المجموعات الفرعية، وتقرير عدالة دوري.",
+        "attention_indicators": "فارق في معدلات القبول أو الدقة بين المجموعات.",
+        "risk_category": "BIAS_DISCRIMINATION_ABUSE",
+        "ethics_principle": "FAIRNESS",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-029",
+      "sourceRow": 33,
+      "content": {
+        "titleEn": "انحياز ناتج عن مؤشرات بديلة (Proxy Variables)",
+        "titleAr": "انحياز ناتج عن مؤشرات بديلة (Proxy Variables)",
+        "risk_domain": "الانحياز والعدالة",
+        "description": "حقول تبدو محايدة لكنها ترتبط ضمنا بخصائص حساسة فتنقل الانحياز.",
+        "probable_causes": "عدم تحليل ارتباط الحقول بالخصائص الحساسة قبل التدريب.",
+        "probable_impacts": "انحياز غير ظاهر يصعب اكتشافه بالمراجعة السطحية.",
+        "example_controls": "تحليل ارتباط الحقول، واستبعاد المؤشرات البديلة غير المبررة.",
+        "attention_indicators": "بقاء الفارق بين المجموعات بعد استبعاد الحقول الحساسة.",
+        "risk_category": "BIAS_DISCRIMINATION_ABUSE",
+        "ethics_principle": "FAIRNESS",
+        "dev_stage": "DESIGN_DEVELOP"
+      }
+    },
+    {
+      "libraryRef": "AIRL-030",
+      "sourceRow": 34,
+      "content": {
+        "titleEn": "غياب اختبار العدالة قبل التشغيل وبعده",
+        "titleAr": "غياب اختبار العدالة قبل التشغيل وبعده",
+        "risk_domain": "الانحياز والعدالة",
+        "description": "لا تُقاس عدالة المخرجات لا قبل الاعتماد ولا خلال التشغيل.",
+        "probable_causes": "عدم وجود مؤشرات عدالة معتمدة، ونقص الكفاءات.",
+        "probable_impacts": "بقاء انحياز مؤثر دون اكتشاف لفترة طويلة.",
+        "example_controls": "تحديد مؤشرات عدالة، وإدراج الاختبار في بوابة الاعتماد وفي المراقبة.",
+        "attention_indicators": "عدم توفر تقرير عدالة لأي نظام قائم.",
+        "risk_category": "BIAS_DISCRIMINATION_ABUSE",
+        "ethics_principle": "FAIRNESS",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-031",
+      "sourceRow": 35,
+      "content": {
+        "titleEn": "عدم إفصاح المستفيد بأن التفاعل يتضمن ذكاء اصطناعي",
+        "titleAr": "عدم إفصاح المستفيد بأن التفاعل يتضمن ذكاء اصطناعي",
+        "risk_domain": "الشفافية وقابلية التفسير",
+        "description": "لا يُوضح للمستفيد أن الرد أو التصنيف صادر عن نظام ذكاء اصطناعي.",
+        "probable_causes": "غياب متطلب إفصاح في التصميم، والتركيز على تجربة المستخدم فقط.",
+        "probable_impacts": "إضعاف الثقة، وشكاوى عند اكتشاف ذلك لاحقا.",
+        "example_controls": "إشعار إفصاح واضح في الواجهة، وبيان حدود النظام.",
+        "attention_indicators": "شكاوى أو استفسارات عن طبيعة الجهة المجيبة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "TRANSPARENCY_EXPLAINABILITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-032",
+      "sourceRow": 36,
+      "content": {
+        "titleEn": "غياب توثيق حدود النظام وقيوده للمستخدمين",
+        "titleAr": "غياب توثيق حدود النظام وقيوده للمستخدمين",
+        "risk_domain": "الشفافية وقابلية التفسير",
+        "description": "لا يعرف المستخدمون ما لا يستطيع النظام فعله ولا الحالات التي لا يصلح لها.",
+        "probable_causes": "الاعتماد على تدريب شفهي، وغياب دليل استخدام موثق.",
+        "probable_impacts": "استخدام النظام في حالات خارج نطاق صلاحيته.",
+        "example_controls": "دليل استخدام موثق يحدد النطاق والقيود، وتدريب موثق.",
+        "attention_indicators": "استخدام النظام في حالات لم تُختبر.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "TRANSPARENCY_EXPLAINABILITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-033",
+      "sourceRow": 37,
+      "content": {
+        "titleEn": "عدم القدرة على تفسير المخرجات عند الاعتراض",
+        "titleAr": "عدم القدرة على تفسير المخرجات عند الاعتراض",
+        "risk_domain": "الشفافية وقابلية التفسير",
+        "description": "لا يمكن تقديم تفسير مفهوم لسبب مخرج معين عند اعتراض مستفيد أو مراجعة.",
+        "probable_causes": "نماذج معقدة دون طبقة تفسير، وعدم حفظ عوامل القرار.",
+        "probable_impacts": "إضعاف المساءلة، وصعوبة الرد على الاعتراضات.",
+        "example_controls": "طبقة تفسير للعوامل المؤثرة، وحفظ عوامل القرار مع كل مخرج.",
+        "attention_indicators": "اعتراضات لا يمكن الرد عليها بتفسير موثق.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "TRANSPARENCY_EXPLAINABILITY",
+        "dev_stage": "DESIGN_DEVELOP"
+      }
+    },
+    {
+      "libraryRef": "AIRL-034",
+      "sourceRow": 38,
+      "content": {
+        "titleEn": "عدم حفظ إصدار النموذج والمدخلات المرتبطة بالمخرجات",
+        "titleAr": "عدم حفظ إصدار النموذج والمدخلات المرتبطة بالمخرجات",
+        "risk_domain": "الشفافية وقابلية التفسير",
+        "description": "لا يمكن إعادة إنتاج المخرج لاحقا لعدم معرفة الإصدار والمدخلات المستخدمة.",
+        "probable_causes": "غياب إدارة إصدارات للنماذج والتلقين.",
+        "probable_impacts": "عدم القدرة على التحقق أو التحقيق في حالة سابقة.",
+        "example_controls": "إدارة إصدارات موثقة، وربط كل مخرج بإصداره ومدخلاته.",
+        "attention_indicators": "عدم إمكانية إعادة إنتاج نتيجة سابقة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "TRANSPARENCY_EXPLAINABILITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-035",
+      "sourceRow": 39,
+      "content": {
+        "titleEn": "تنفيذ قرارات آلية في حالات عالية الأثر دون مراجعة بشرية",
+        "titleAr": "تنفيذ قرارات آلية في حالات عالية الأثر دون مراجعة بشرية",
+        "risk_domain": "الإشراف البشري",
+        "description": "يُنفذ النظام قرارا مؤثرا على المستفيد أو على العمل دون مراجعة بشرية مسبقة.",
+        "probable_causes": "السعي لرفع الكفاءة، وغياب تصنيف للحالات عالية الأثر.",
+        "probable_impacts": "قرار خاطئ يصعب تصحيحه بعد التنفيذ.",
+        "example_controls": "تحديد الحالات التي تتطلب مراجعة بشرية إلزامية قبل التنفيذ.",
+        "attention_indicators": "حالات عالية الأثر تُنفذ آليا دون سجل مراجعة.",
+        "risk_category": "HUMAN_MACHINE_INTERACTION",
+        "ethics_principle": "HUMANITY",
+        "dev_stage": "DESIGN_DEVELOP"
+      }
+    },
+    {
+      "libraryRef": "AIRL-036",
+      "sourceRow": 40,
+      "content": {
+        "titleEn": "غياب صلاحية التجاوز البشري (Override)",
+        "titleAr": "غياب صلاحية التجاوز البشري (Override)",
+        "risk_domain": "الإشراف البشري",
+        "description": "لا يستطيع الموظف المختص تعديل أو إيقاف مخرج النظام عند الحاجة.",
+        "probable_causes": "تصميم مغلق، وعدم تحديد صلاحيات التجاوز.",
+        "probable_impacts": "استمرار خطأ معروف دون إمكانية تصحيح فوري.",
+        "example_controls": "صلاحية تجاوز موثقة، وتسجيل كل حالة تجاوز ومبرراتها.",
+        "attention_indicators": "بلاغات موظفين عن عدم القدرة على تصحيح مخرج خاطئ.",
+        "risk_category": "HUMAN_MACHINE_INTERACTION",
+        "ethics_principle": "HUMANITY",
+        "dev_stage": "DESIGN_DEVELOP"
+      }
+    },
+    {
+      "libraryRef": "AIRL-037",
+      "sourceRow": 41,
+      "content": {
+        "titleEn": "الانحياز نحو الآلة (Automation Bias)",
+        "titleAr": "الانحياز نحو الآلة (Automation Bias)",
+        "risk_domain": "الإشراف البشري",
+        "description": "يقبل الموظف مخرج النظام دون تحقق كافٍ لأنه صادر عن نظام آلي.",
+        "probable_causes": "ضغط العمل، وثقة زائدة في التقنية، وغياب التدريب.",
+        "probable_impacts": "تحول المراجعة البشرية إلى إجراء شكلي.",
+        "example_controls": "تدريب موعّي، وقياس نسبة التعديل البشري، وفحص عيّنة مستقلة.",
+        "attention_indicators": "نسبة تعديل بشري قريبة من الصفر لفترة طويلة.",
+        "risk_category": "HUMAN_MACHINE_INTERACTION",
+        "ethics_principle": "HUMANITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-038",
+      "sourceRow": 42,
+      "content": {
+        "titleEn": "الاعتماد المفرط على المخرجات (Over-reliance)",
+        "titleAr": "الاعتماد المفرط على المخرجات (Over-reliance)",
+        "risk_domain": "الإشراف البشري",
+        "description": "تُستبدل الخبرة والإجراءات المعتمدة بمخرج النظام دون تحقق مستقل.",
+        "probable_causes": "سهولة الاستخدام، وضعف الوعي بحدود النظام.",
+        "probable_impacts": "تدهور الكفاءة البشرية، وتراكم أخطاء غير مكتشفة.",
+        "example_controls": "توضيح حدود النظام، وإبقاء إجراء تحقق مستقل للحالات المهمة.",
+        "attention_indicators": "اختفاء خطوات التحقق اليدوي من الإجراء الفعلي.",
+        "risk_category": "HUMAN_MACHINE_INTERACTION",
+        "ethics_principle": "HUMANITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-039",
+      "sourceRow": 43,
+      "content": {
+        "titleEn": "إجابات غير صحيحة تُقدم بثقة (Hallucination)",
+        "titleAr": "إجابات غير صحيحة تُقدم بثقة (Hallucination)",
+        "risk_domain": "أداء النموذج وموثوقيته",
+        "description": "يولّد النظام إجابة تبدو صحيحة لغويا لكنها غير مطابقة للمصدر المعتمد.",
+        "probable_causes": "توليد النص دون ربط إلزامي بالمصدر، ونقص تغطية قاعدة المعرفة.",
+        "probable_impacts": "معلومة خاطئة تُبنى عليها قرارات أو إجراءات.",
+        "example_controls": "الاستناد الإلزامي إلى مصدر معتمد، وإظهار المرجع، وقياس دقة دوري.",
+        "attention_indicators": "ارتفاع الشكاوى أو تكرار تصحيح الإجابات من الموظفين.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-040",
+      "sourceRow": 44,
+      "content": {
+        "titleEn": "تدهور الأداء مع الزمن (Model Drift)",
+        "titleAr": "تدهور الأداء مع الزمن (Model Drift)",
+        "risk_domain": "أداء النموذج وموثوقيته",
+        "description": "تتباعد بيانات التشغيل عن بيانات التدريب فتنخفض الدقة تدريجيا دون إشعار.",
+        "probable_causes": "غياب مراقبة مستمرة، وعدم تحديد عتبة إعادة تدريب.",
+        "probable_impacts": "انخفاض غير ملحوظ في جودة القرارات.",
+        "example_controls": "مراقبة دورية للدقة، وعتبة إعادة تدريب موثقة، وتنبيه آلي.",
+        "attention_indicators": "انخفاض تدريجي في مؤشرات الدقة أو ارتفاع حالات التصحيح.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-041",
+      "sourceRow": 45,
+      "content": {
+        "titleEn": "ضعف الأداء على الحالات الحدية والمجموعات الفرعية",
+        "titleAr": "ضعف الأداء على الحالات الحدية والمجموعات الفرعية",
+        "risk_domain": "أداء النموذج وموثوقيته",
+        "description": "يعمل النظام جيدا في المتوسط لكنه يفشل في حالات نادرة أو فئات محددة.",
+        "probable_causes": "الاعتماد على مؤشر دقة إجمالي واحد فقط.",
+        "probable_impacts": "فشل في الحالات الأكثر أهمية أو حساسية.",
+        "example_controls": "تقييم الأداء على المجموعات الفرعية والحالات الحدية قبل الاعتماد.",
+        "attention_indicators": "تركز الأخطاء في نوع محدد من الحالات.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-042",
+      "sourceRow": 46,
+      "content": {
+        "titleEn": "عدم تحديد معايير أداء مقبولة قبل التشغيل",
+        "titleAr": "عدم تحديد معايير أداء مقبولة قبل التشغيل",
+        "risk_domain": "أداء النموذج وموثوقيته",
+        "description": "لا توجد عتبة أداء معتمدة تحدد متى يكون النظام صالحا للتشغيل أو للإيقاف.",
+        "probable_causes": "تسرّع التبني، وغياب معايير قبول موثقة.",
+        "probable_impacts": "تشغيل نظام أداؤه غير كافٍ، وخلاف عند تقييم النتائج.",
+        "example_controls": "معايير قبول موثقة قبل التطوير، وربطها ببوابة الاعتماد.",
+        "attention_indicators": "خلاف بين الأطراف حول كفاية أداء النظام.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-043",
+      "sourceRow": 47,
+      "content": {
+        "titleEn": "اختبار غير كافٍ قبل التشغيل",
+        "titleAr": "اختبار غير كافٍ قبل التشغيل",
+        "risk_domain": "الاختبار والتحقق",
+        "description": "يُعتمد النظام دون اختبار شامل يغطي الحالات الواقعية والحدية.",
+        "probable_causes": "ضغط الجداول الزمنية، وغياب خطة اختبار موثقة.",
+        "probable_impacts": "أخطاء تشغيلية مبكرة، وإعادة عمل، وفقدان ثقة المستخدمين.",
+        "example_controls": "خطة اختبار معتمدة، ومعايير قبول موثقة، وبوابة اعتماد إلزامية.",
+        "attention_indicators": "اكتشاف أخطاء أساسية بعد التشغيل بفترة قصيرة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-044",
+      "sourceRow": 48,
+      "content": {
+        "titleEn": "غياب اختبار الانحدار بعد التغييرات",
+        "titleAr": "غياب اختبار الانحدار بعد التغييرات",
+        "risk_domain": "الاختبار والتحقق",
+        "description": "تُطبق تحديثات على النموذج أو التلقين دون إعادة اختبار الحالات السابقة.",
+        "probable_causes": "عدم وجود حزمة اختبار جاهزة، والتعامل مع التحديث كتغيير بسيط.",
+        "probable_impacts": "عودة أخطاء سابقة أو تدهور غير مقصود في الأداء.",
+        "example_controls": "حزمة اختبار انحدار تُنفذ إلزاميا مع كل تغيير.",
+        "attention_indicators": "ظهور أخطاء كانت قد عُولجت سابقا.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-045",
+      "sourceRow": 49,
+      "content": {
+        "titleEn": "تغييرات على النموذج أو التلقين دون ضبط تغيير",
+        "titleAr": "تغييرات على النموذج أو التلقين دون ضبط تغيير",
+        "risk_domain": "التشغيل وإدارة التغيير",
+        "description": "يُعدّل التلقين أو الإعدادات في بيئة التشغيل مباشرة دون توثيق أو موافقة.",
+        "probable_causes": "سهولة التعديل، وعدم إدراج التلقين ضمن إدارة التغيير.",
+        "probable_impacts": "سلوك غير متوقع، وعدم القدرة على تحديد سبب التغير.",
+        "example_controls": "إدراج التلقين والإعدادات في إدارة التغيير، وتوثيق كل تعديل.",
+        "attention_indicators": "تغير في المخرجات دون سجل تغيير مقابل.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-046",
+      "sourceRow": 50,
+      "content": {
+        "titleEn": "تغيير المزود لإصدار النموذج دون إشعار مسبق",
+        "titleAr": "تغيير المزود لإصدار النموذج دون إشعار مسبق",
+        "risk_domain": "التشغيل وإدارة التغيير",
+        "description": "يحدّث المزود النموذج فيتغير سلوك المخرجات دون علم الجهة.",
+        "probable_causes": "عدم وجود شرط إشعار في العقد، وغياب اختبار دوري.",
+        "probable_impacts": "تدهور غير ملحوظ في الجودة، وارتفاع الشكاوى.",
+        "example_controls": "شرط إشعار مسبق في العقد، واختبار انحدار عند كل تحديث.",
+        "attention_indicators": "تغير مفاجئ في نبرة أو دقة المخرجات.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-047",
+      "sourceRow": 51,
+      "content": {
+        "titleEn": "عدم وجود إجراء للتراجع عن التغيير (Rollback)",
+        "titleAr": "عدم وجود إجراء للتراجع عن التغيير (Rollback)",
+        "risk_domain": "التشغيل وإدارة التغيير",
+        "description": "لا يمكن الرجوع إلى إصدار سابق مستقر عند ظهور مشكلة.",
+        "probable_causes": "عدم حفظ الإصدارات السابقة، وغياب خطة تراجع موثقة.",
+        "probable_impacts": "استمرار الخلل في بيئة التشغيل لفترة أطول.",
+        "example_controls": "حفظ الإصدارات السابقة، وخطة تراجع موثقة ومختبرة.",
+        "attention_indicators": "حوادث استمرت طويلا بسبب عدم إمكانية الرجوع.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-048",
+      "sourceRow": 52,
+      "content": {
+        "titleEn": "الاعتماد على مزود واحد (Vendor Lock-in)",
+        "titleAr": "الاعتماد على مزود واحد (Vendor Lock-in)",
+        "risk_domain": "الأطراف الثالثة والاعتماد على المزودين",
+        "description": "يصعب استبدال المزود أو نقل الخدمة لارتباط الحل بمنصته وبياناته.",
+        "probable_causes": "تصميم مرتبط بالمزود، وعدم اشتراط قابلية النقل.",
+        "probable_impacts": "ارتفاع التكلفة، وضعف القدرة التفاوضية، وتعرض الاستمرارية.",
+        "example_controls": "اشتراط قابلية نقل البيانات، وتصميم قابل للاستبدال، وتقييم بدائل.",
+        "attention_indicators": "عدم وجود بديل تقني مدروس للمزود الحالي.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-049",
+      "sourceRow": 53,
+      "content": {
+        "titleEn": "غياب تقييم مخاطر المزود قبل التعاقد",
+        "titleAr": "غياب تقييم مخاطر المزود قبل التعاقد",
+        "risk_domain": "الأطراف الثالثة والاعتماد على المزودين",
+        "description": "يُتعاقد مع مزود دون تقييم موثق لضوابطه الأمنية وممارساته في معالجة البيانات.",
+        "probable_causes": "سرعة التعاقد، وعدم إدراج التقييم في إجراءات الشراء.",
+        "probable_impacts": "انتقال مخاطر المزود إلى الجهة دون إدراك.",
+        "example_controls": "تقييم مخاطر إلزامي قبل التعاقد، واستبيان ضوابط موثق.",
+        "attention_indicators": "مزودون فاعلون دون ملف تقييم مخاطر.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-050",
+      "sourceRow": 54,
+      "content": {
+        "titleEn": "غياب حق المراجعة والتدقيق في العقد",
+        "titleAr": "غياب حق المراجعة والتدقيق في العقد",
+        "risk_domain": "الأطراف الثالثة والاعتماد على المزودين",
+        "description": "لا تملك الجهة حق الحصول على أدلة أو تقارير عن ضوابط المزود.",
+        "probable_causes": "عقود قياسية للمزود، وضعف المراجعة القانونية للبنود التقنية.",
+        "probable_impacts": "عدم القدرة على التحقق من الضوابط أو تقديم أدلة للمراجعة.",
+        "example_controls": "تضمين حق المراجعة وتقارير الضوابط والإشعار بالحوادث في العقد.",
+        "attention_indicators": "طلب أدلة من المزود دون استجابة تعاقدية.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-051",
+      "sourceRow": 55,
+      "content": {
+        "titleEn": "استخدام المزود لمزودين فرعيين غير معلنين",
+        "titleAr": "استخدام المزود لمزودين فرعيين غير معلنين",
+        "risk_domain": "الأطراف الثالثة والاعتماد على المزودين",
+        "description": "يعتمد المزود على أطراف أخرى في المعالجة أو الاستضافة دون إفصاح.",
+        "probable_causes": "غياب شرط الإفصاح عن المزودين الفرعيين.",
+        "probable_impacts": "توسع غير معروف في نطاق معالجة البيانات.",
+        "example_controls": "شرط الإفصاح والموافقة المسبقة على المزودين الفرعيين.",
+        "attention_indicators": "اكتشاف أطراف إضافية في مسار البيانات.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-052",
+      "sourceRow": 56,
+      "content": {
+        "titleEn": "انقطاع خدمة النموذج وتأثر العمليات",
+        "titleAr": "انقطاع خدمة النموذج وتأثر العمليات",
+        "risk_domain": "الاستمرارية والتوافر",
+        "description": "يتوقف النظام أو واجهته فتتعطل خدمة أو عملية مرتبطة به.",
+        "probable_causes": "الاعتماد على خدمة خارجية، وغياب خطة استمرارية.",
+        "probable_impacts": "تعطل خدمة للمستفيدين، وتراكم الأعمال.",
+        "example_controls": "تحديد بديل يدوي، وقياس زمن التعافي، وبند مستوى خدمة في العقد.",
+        "attention_indicators": "تكرار انقطاعات قصيرة دون خطة معالجة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-053",
+      "sourceRow": 57,
+      "content": {
+        "titleEn": "غياب إجراء بديل يدوي عند تعطل النظام",
+        "titleAr": "غياب إجراء بديل يدوي عند تعطل النظام",
+        "risk_domain": "الاستمرارية والتوافر",
+        "description": "لا يوجد إجراء معتمد يمكّن الموظفين من إكمال العمل دون النظام.",
+        "probable_causes": "اعتماد كامل على الأتمتة، وعدم توثيق الإجراء البديل.",
+        "probable_impacts": "توقف تام للخدمة عند أي عطل.",
+        "example_controls": "إجراء بديل موثق ومجرّب دوريا، وتدريب الموظفين عليه.",
+        "attention_indicators": "عدم قدرة الفريق على العمل خلال فترة انقطاع سابقة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-054",
+      "sourceRow": 58,
+      "content": {
+        "titleEn": "تجاوز حدود الاستخدام أو تكلفة غير متوقعة",
+        "titleAr": "تجاوز حدود الاستخدام أو تكلفة غير متوقعة",
+        "risk_domain": "الاستمرارية والتوافر",
+        "description": "ارتفاع حجم الاستعمال يؤدي إلى تجاوز الحدود المتاحة أو ارتفاع التكلفة بشكل غير مخطط.",
+        "probable_causes": "غياب مراقبة الاستهلاك، وعدم تقدير النمو.",
+        "probable_impacts": "توقف الخدمة أو أثر مالي غير مخطط.",
+        "example_controls": "مراقبة الاستهلاك، وتنبيهات عند العتبات، وتقدير مالي دوري.",
+        "attention_indicators": "نمو مطرد في الاستهلاك دون مراجعة مالية.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "RELIABILITY_SAFETY",
+        "dev_stage": "PLAN_ANALYZE_USE_CASE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-055",
+      "sourceRow": 59,
+      "content": {
+        "titleEn": "مخرجات تتضمن محتوى محمي بحقوق ملكية",
+        "titleAr": "مخرجات تتضمن محتوى محمي بحقوق ملكية",
+        "risk_domain": "الملكية الفكرية",
+        "description": "قد يتضمن المخرج محتوى مشابها لمحتوى محمي وردت مصادره في بيانات التدريب.",
+        "probable_causes": "عدم وضوح مصادر تدريب النموذج، وغياب فحص للمخرجات.",
+        "probable_impacts": "تعرض قانوني، وأثر على السمعة.",
+        "example_controls": "فحص المخرجات المنشورة، ومراجعة قانونية للاستخدامات الخارجية.",
+        "attention_indicators": "تشابه ملحوظ بين مخرج ومحتوى منشور.",
+        "risk_category": "HARMFUL_USE",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-056",
+      "sourceRow": 60,
+      "content": {
+        "titleEn": "عدم وضوح ملكية المخرجات المولدة",
+        "titleAr": "عدم وضوح ملكية المخرجات المولدة",
+        "risk_domain": "الملكية الفكرية",
+        "description": "لا يحدد العقد أو السياسة ملكية المخرجات وحقوق استخدامها.",
+        "probable_causes": "عقود لا تعالج المخرجات المولدة، وحداثة الموضوع.",
+        "probable_impacts": "خلاف حول حقوق الاستخدام والنشر وإعادة الاستخدام.",
+        "example_controls": "تحديد ملكية المخرجات وحقوق الاستخدام في العقد والسياسة.",
+        "attention_indicators": "استخدامات للمخرجات دون أساس تعاقدي واضح.",
+        "risk_category": "HARMFUL_USE",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-057",
+      "sourceRow": 61,
+      "content": {
+        "titleEn": "معالجة أو استضافة البيانات خارج المملكة دون تقييم",
+        "titleAr": "معالجة أو استضافة البيانات خارج المملكة دون تقييم",
+        "risk_domain": "الالتزام التنظيمي",
+        "description": "تُعالج البيانات أو تُستضاف خارج المملكة دون تقييم موثق لمتطلبات نقلها.",
+        "probable_causes": "عدم توثيق موقع المعالجة قبل التعاقد، وغياب تقييم متطلبات النقل.",
+        "probable_impacts": "تعرض تنظيمي، وصعوبة الاستجابة لطلبات المراجعة.",
+        "example_controls": "توثيق موقع المعالجة والاستضافة، وتقييم متطلبات النقل قبل الاستخدام.",
+        "attention_indicators": "عدم معرفة موقع معالجة البيانات لنظام قائم.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-058",
+      "sourceRow": 62,
+      "content": {
+        "titleEn": "استخدام النظام في غرض يتطلب موافقات لم تُستكمل",
+        "titleAr": "استخدام النظام في غرض يتطلب موافقات لم تُستكمل",
+        "risk_domain": "الالتزام التنظيمي",
+        "description": "يُوسَّع استخدام النظام إلى غرض جديد قبل استكمال الموافقات الداخلية اللازمة.",
+        "probable_causes": "توسع تدريجي في الاستخدام دون إعادة اعتماد.",
+        "probable_impacts": "استخدام دون أساس موثق، وتعرض تنظيمي.",
+        "example_controls": "إلزام إعادة الاعتماد عند أي توسع في الغرض أو نطاق البيانات.",
+        "attention_indicators": "استخدامات فعلية لا يشملها قرار الاعتماد.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-059",
+      "sourceRow": 63,
+      "content": {
+        "titleEn": "عدم القدرة على تقديم أدلة عند المراجعة أو التدقيق",
+        "titleAr": "عدم القدرة على تقديم أدلة عند المراجعة أو التدقيق",
+        "risk_domain": "الالتزام التنظيمي",
+        "description": "لا تتوفر مستندات وسجلات تُثبت تطبيق الضوابط عند الطلب.",
+        "probable_causes": "عدم تحديد الأدلة المطلوبة مسبقا، وتشتت المستندات.",
+        "probable_impacts": "ملاحظات مراجعة، وضعف الثقة في الحوكمة.",
+        "example_controls": "تحديد الأدلة المطلوبة لكل ضابط، وحفظها في مكان موحد.",
+        "attention_indicators": "طلب أدلة يستغرق وقتا طويلا أو ينتهي دون نتيجة.",
+        "risk_category": "SAFETY_LIMITATIONS",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-060",
+      "sourceRow": 64,
+      "content": {
+        "titleEn": "استخدام أدوات ذكاء اصطناعي عامة غير معتمدة",
+        "titleAr": "استخدام أدوات ذكاء اصطناعي عامة غير معتمدة",
+        "risk_domain": "الاستخدام غير المصرح به - Shadow AI",
+        "description": "يستخدم الموظفون أدوات عامة لمعالجة محتوى العمل خارج القنوات المعتمدة.",
+        "probable_causes": "غياب سياسة معلنة، وعدم توفر بديل معتمد سهل الوصول.",
+        "probable_impacts": "تسريب معلومات داخلية، وفقدان السيطرة على البيانات.",
+        "example_controls": "سياسة واضحة، وبديل داخلي معتمد، وتقييد الوصول، وتوعية دورية.",
+        "attention_indicators": "حركة شبكية إلى أدوات غير معتمدة، أو مستندات بصياغة آلية.",
+        "risk_category": "HARMFUL_USE",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-061",
+      "sourceRow": 65,
+      "content": {
+        "titleEn": "إعادة استخدام النظام لغرض خارج نطاقه المعتمد",
+        "titleAr": "إعادة استخدام النظام لغرض خارج نطاقه المعتمد",
+        "risk_domain": "الاستخدام غير المصرح به - Shadow AI",
+        "description": "يُستخدم نظام معتمد لغرض لم يُقيّم ولم يُختبر له.",
+        "probable_causes": "سهولة إعادة التوجيه، وغياب رقابة على الاستخدام الفعلي.",
+        "probable_impacts": "مخاطر غير مقيّمة، ومخرجات غير موثوقة في السياق الجديد.",
+        "example_controls": "تحديد النطاق في وثيقة الاعتماد، ومراقبة الاستخدام الفعلي.",
+        "attention_indicators": "حالات استخدام فعلية لا تطابق الوصف المسجل.",
+        "risk_category": "HARMFUL_USE",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "OPERATE_MONITOR_CHANGE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-062",
+      "sourceRow": 66,
+      "content": {
+        "titleEn": "مشاركة صلاحيات الوصول إلى الأدوات",
+        "titleAr": "مشاركة صلاحيات الوصول إلى الأدوات",
+        "risk_domain": "الاستخدام غير المصرح به - Shadow AI",
+        "description": "يتشارك عدة موظفين حسابا واحدا للوصول إلى أدوات الذكاء الاصطناعي.",
+        "probable_causes": "محدودية الرخص، وضعف الرقابة على الحسابات.",
+        "probable_impacts": "عدم القدرة على تحديد المسؤول عن أي عملية.",
+        "example_controls": "حساب فردي لكل مستخدم، ومراجعة الرخص والاستخدام دوريا.",
+        "attention_indicators": "نشاط حساب واحد من أجهزة ومواقع متعددة.",
+        "risk_category": "HARMFUL_USE",
+        "ethics_principle": "ACCOUNTABILITY_RESPONSIBILITY",
+        "dev_stage": "OPERATE_MONITOR"
+      }
+    },
+    {
+      "libraryRef": "AIRL-063",
+      "sourceRow": 67,
+      "content": {
+        "titleEn": "مخرجات غير لائقة أو غير مناسبة للسياق المؤسسي",
+        "titleAr": "مخرجات غير لائقة أو غير مناسبة للسياق المؤسسي",
+        "risk_domain": "السمعة والثقة المؤسسية",
+        "description": "يُنتج النظام صياغة أو محتوى لا يناسب الطابع الرسمي للجهة.",
+        "probable_causes": "غياب ضوابط على الأسلوب والمحتوى، وعدم اختبار السياق.",
+        "probable_impacts": "إضعاف صورة الجهة، وشكاوى من المستفيدين.",
+        "example_controls": "ضوابط أسلوب ومحتوى، وفلترة المخرجات، ومراجعة قبل النشر.",
+        "attention_indicators": "ملاحظات متكررة على أسلوب أو مضمون المخرجات.",
+        "risk_category": "SOCIOECONOMIC_ENVIRONMENTAL_IMPACT",
+        "ethics_principle": "SOCIAL_ENVIRONMENTAL_BENEFIT",
+        "dev_stage": "TEST_VALIDATE_APPROVE"
+      }
+    },
+    {
+      "libraryRef": "AIRL-064",
+      "sourceRow": 68,
+      "content": {
+        "titleEn": "تداول عام لخطأ صادر عن النظام",
+        "titleAr": "تداول عام لخطأ صادر عن النظام",
+        "risk_domain": "السمعة والثقة المؤسسية",
+        "description": "ينتشر خطأ في مخرجات النظام على نطاق عام قبل معالجته.",
+        "probable_causes": "غياب قناة إبلاغ سريعة، وعدم وجود خطة اتصال للحوادث.",
+        "probable_impacts": "أثر سمعي واسع يتجاوز الأثر التشغيلي للخطأ.",
+        "example_controls": "قناة إبلاغ سريعة، وخطة اتصال للحوادث، وإجراء تصحيح معلن.",
+        "attention_indicators": "انتشار حالة خطأ خارجيا قبل معرفتها داخليا.",
+        "risk_category": "SOCIOECONOMIC_ENVIRONMENTAL_IMPACT",
+        "ethics_principle": "SOCIAL_ENVIRONMENTAL_BENEFIT",
+        "dev_stage": "OPERATE_MONITOR_INCIDENT"
+      }
+    },
+    {
+      "libraryRef": "AIRL-065",
+      "sourceRow": 69,
+      "content": {
+        "titleEn": "نقص الكفاءات المتخصصة لتشغيل ومراقبة الأنظمة",
+        "titleAr": "نقص الكفاءات المتخصصة لتشغيل ومراقبة الأنظمة",
+        "risk_domain": "الأفراد والكفاءات",
+        "description": "لا تتوفر كفاءات كافية لمراقبة أداء النماذج وتقييم مخاطرها.",
+        "probable_causes": "حداثة التخصص، ومنافسة سوق العمل، وغياب خطة بناء قدرات.",
+        "probable_impacts": "مراقبة سطحية، وتأخر اكتشاف الخلل، واعتماد كامل على المزود.",
+        "example_controls": "خطة بناء قدرات، ونقل معرفة تعاقدي، وتوزيع مسؤوليات واضح.",
+        "attention_indicators": "اعتماد كامل على المزود في تقييم أداء النموذج.",
+        "risk_category": "SOCIOECONOMIC_ENVIRONMENTAL_IMPACT",
+        "ethics_principle": "HUMANITY",
+        "dev_stage": "PLAN_GOVERN"
+      }
+    },
+    {
+      "libraryRef": "AIRL-066",
+      "sourceRow": 70,
+      "content": {
+        "titleEn": "غياب التوعية والتدريب على الاستخدام المسؤول",
+        "titleAr": "غياب التوعية والتدريب على الاستخدام المسؤول",
+        "risk_domain": "الأفراد والكفاءات",
+        "description": "لا يعرف المستخدمون الضوابط الواجبة ولا حدود الاستخدام المقبول.",
+        "probable_causes": "عدم إدراج الموضوع في برامج التوعية، وحداثة الأدوات.",
+        "probable_impacts": "أخطاء استخدام متكررة، وارتفاع الاستخدام غير المصرح به.",
+        "example_controls": "برنامج توعية دوري، وإرشادات مختصرة عند نقطة الاستخدام.",
+        "attention_indicators": "تكرار مخالفات الاستخدام أو أسئلة أساسية متكررة.",
+        "risk_category": "SOCIOECONOMIC_ENVIRONMENTAL_IMPACT",
+        "ethics_principle": "HUMANITY",
+        "dev_stage": "DEPLOY_INTEGRATE"
+      }
+    }
+  ]
+}

@@ -23,6 +23,7 @@ if(manifest.demoOnly!==true||manifest.database!==connection.pathname.slice(1))th
 const credentials=existsSync(credentialsPath)?JSON.parse(readFileSync(credentialsPath,'utf8')):{previewUrl:'http://localhost:4206/',demoOnly:true,accounts:[]};
 const save=()=>{writeFileSync(manifestPath,JSON.stringify(manifest,null,2));writeFileSync(credentialsPath,JSON.stringify(credentials,null,2));};
 const digest=v=>createHash('sha256').update(typeof v==='string'||Buffer.isBuffer(v)?v:JSON.stringify(v)).digest('hex');
+const riskLibrarySource=JSON.parse(readFileSync(resolve(root,'scripts/data/sdaia-ai-risk-library.json'),'utf8'));
 const reason='User-requested isolated demonstration; synthetic evidence/configuration, no actual organization approval or migration pilot acceptance';
 const actors={};
 try {
@@ -43,6 +44,7 @@ try {
  const {AI_CLASSIFICATION_CRITERIA}=require(resolve(root,'apps/api/dist/ai-governance/ai-governance.contracts'));
  const {RISK_DIMENSION_ROLES}=require(resolve(root,'apps/api/dist/ai-governance/ai-risk-scoring'));
  const value=(code,labelEn=code,labelAr=labelEn,metadata={})=>({code,labelEn,labelAr,metadata});
+ const sourceValues=(base,listCode)=>[...new Map([...base,...riskLibrarySource.references[listCode]].map(v=>[v.code,v])).values()];
  const bands=[['LOW',1,2,'P4',365,'منخفض'],['MEDIUM',3,6,'P3',180,'متوسط'],['HIGH',8,12,'P2',90,'مرتفع'],['CRITICAL',16,16,'P1',1,'حرج']];
  const refs={
   L_STREAMS:[value('EFFICIENCY','Service efficiency','كفاءة الخدمات')],L_PROGRAMS:[value('OPERATIONS','Operations','العمليات')],L_HUMAN:[value('HUMAN_APPROVAL','Human approval','اعتماد بشري')],L_STAGE:[value('PILOT','Pilot','تجربة محدودة',{airsLifecycleCode:'PILOT'})],L_MODEL:[value('INTERNAL','Internal','داخلي',{thirdParty:false})],L_AVAIL:[value('AVAILABLE','Available','متاحة')],R_YN:[value('YES','Yes','نعم'),value('NO','No','لا')],L_CLASS:[value('RESTRICTED','Restricted','مقيدة',{assetClassificationCode:classification.code})],L_BUDGET:[value('FUNDED','Funded','معتمدة')],
@@ -53,8 +55,8 @@ try {
   R_LEVEL:bands.map(([code,minScore,maxScore,severityCode,,ar])=>value(code,code,ar||code,{minScore,maxScore,severityCode})),
   R_LEVEL_DAYS:bands.map(([code,,,,days,ar])=>value(code,code,ar,{days,intervalDays:days,firstReviewImmediate:code==='CRITICAL'})),
   R_CADENCE:bands.map(([code,,,,intervalDays,ar])=>value('CADENCE_'+code,`${intervalDays} days`,`${intervalDays} يوم`,{residualBandCode:code,intervalDays})),
-  R_LIFECYCLE:[value('PILOT','Pilot','تجربة محدودة')],R_DEPT:[value('OPERATIONS','Operations','العمليات',{adoptionFunction:true,organizationUnitId:unit.id})],R_TECH:[value('ML','Machine learning','تعلم الآلة')],R_RELIANCE:[value('ASSISTED','Assisted','مساعد')],R_HITL:[value('REQUIRED','Human review required','مراجعة بشرية إلزامية')],R_UCSTATUS:[value('ACTIVE','Active','نشط')],
-  R_RISKCAT:[value('PRIVACY','Privacy','الخصوصية'),value('QUALITY','Quality','الجودة')],R_ETHICS:[value('PRIVACY','Privacy','الخصوصية'),value('FAIRNESS','Fairness','العدالة')],R_CTRLEFF:[value('EFFECTIVE','Effective','فعالة'),value('PARTIAL','Partial','جزئية')],R_STRATEGY:['AVOID','MITIGATE','TRANSFER','ACCEPT','ESCALATE'].map(c=>value(c)),R_SOURCE:[value('INTERNAL','Internal','داخلي')],R_INTENT:[value('UNINTENDED','Unintended','غير مقصود')],R_TIMING:[value('CURRENT','Current','حالي')],R_ACTTYPE:['PREVENTIVE','DETECTIVE','CORRECTIVE','IMPROVEMENT'].map(c=>value(c)),R_PRIORITY:['LOW','NORMAL','HIGH','CRITICAL'].map(c=>value(c,c,c,{dgopPriorityCode:c})),R_TREATSTATUS:[value('PLANNED'),value('IN_PROGRESS'),value('COMPLETED')]
+  R_LIFECYCLE:sourceValues([value('PILOT','Pilot','تجربة محدودة')],'R_LIFECYCLE'),R_DEPT:[value('OPERATIONS','Operations','العمليات',{adoptionFunction:true,organizationUnitId:unit.id})],R_TECH:[value('ML','Machine learning','تعلم الآلة')],R_RELIANCE:[value('ASSISTED','Assisted','مساعد')],R_HITL:[value('REQUIRED','Human review required','مراجعة بشرية إلزامية')],R_UCSTATUS:[value('ACTIVE','Active','نشط')],
+  R_RISKCAT:sourceValues([value('PRIVACY','Privacy','الخصوصية'),value('QUALITY','Quality','الجودة')],'R_RISKCAT'),R_ETHICS:sourceValues([value('PRIVACY','Privacy','الخصوصية'),value('FAIRNESS','Fairness','العدالة')],'R_ETHICS'),R_CTRLEFF:[value('EFFECTIVE','Effective','فعالة'),value('PARTIAL','Partial','جزئية')],R_STRATEGY:['AVOID','MITIGATE','TRANSFER','ACCEPT','ESCALATE'].map(c=>value(c)),R_SOURCE:[value('INTERNAL','Internal','داخلي')],R_INTENT:[value('UNINTENDED','Unintended','غير مقصود')],R_TIMING:[value('CURRENT','Current','حالي')],R_ACTTYPE:['PREVENTIVE','DETECTIVE','CORRECTIVE','IMPROVEMENT'].map(c=>value(c)),R_PRIORITY:['LOW','NORMAL','HIGH','CRITICAL'].map(c=>value(c,c,c,{dgopPriorityCode:c})),R_TREATSTATUS:[value('PLANNED'),value('IN_PROGRESS'),value('COMPLETED')]
  };
  const publications=retryService(app.get(load('master-data/ai-reference-publication.service','AiReferencePublicationService')));
  for(const [code,values] of Object.entries(refs)){

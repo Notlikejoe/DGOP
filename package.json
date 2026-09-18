@@ -12,6 +12,7 @@
     "db:seed": "node scripts/db.mjs seed",
     "db:seed:local": "node scripts/seed-local.mjs",
     "db:seed:ai-review-demo": "node scripts/seed-ai-review-example.mjs --local-demo",
+    "db:seed:ai-risk-library": "node scripts/seed-ai-risk-library.mjs --local-demo",
     "db:sync-demo-credentials": "node scripts/sync-demo-credentials.mjs",
     "db:local:start": "node scripts/local-postgres.mjs start",
     "db:local:stop": "node scripts/local-postgres.mjs stop",

@@ -393,7 +393,7 @@ export class AccessManagementPage implements OnInit {
     assetSearch: '',
     assetType: [] as string[],
     principalType: [] as string[],
-    principalSearch: '',
+    principalKey: [] as string[],
     profileId: [] as string[],
     permissionCode: [] as string[],
     status: [] as string[],
@@ -474,6 +474,25 @@ export class AccessManagementPage implements OnInit {
 
   protected matrixPrincipalTypeOptions() {
     return ['role', 'group'].map((value) => ({ label: this.label(value), value }));
+  }
+
+  protected matrixPrincipalOptions() {
+    const selectedTypes = new Set(this.matrixFilters.principalType);
+    return this.principals()
+      .filter((principal) => !selectedTypes.size || selectedTypes.has(principal.type))
+      .map((principal) => ({
+        label: `${this.principalName(principal)} · ${this.label(principal.type)}`,
+        value: `${principal.type}:${principal.id}`,
+      }));
+  }
+
+  protected updateMatrixPrincipalTypes(types: string[]): void {
+    this.matrixFilters.principalType = types;
+    if (!types.length) return;
+    const selectedTypes = new Set(types);
+    this.matrixFilters.principalKey = this.matrixFilters.principalKey.filter((key) =>
+      selectedTypes.has(key.slice(0, key.indexOf(':'))),
+    );
   }
 
   protected matrixProfileOptions() {
@@ -683,7 +702,7 @@ export class AccessManagementPage implements OnInit {
       assetSearch: '',
       assetType: [],
       principalType: [],
-      principalSearch: '',
+      principalKey: [],
       profileId: [],
       permissionCode: [],
       status: [],

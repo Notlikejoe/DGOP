@@ -331,6 +331,21 @@ export class AccessGrantsService {
     const principalTypes = query.principalType?.length
       ? query.principalType
       : ["role", "group"];
+    const principalSelections = (query.principalKey ?? []).map((key) => {
+      const separator = key.indexOf(":");
+      return { type: key.slice(0, separator), id: key.slice(separator + 1) };
+    });
+    const selectedPrincipalKeys = new Set(query.principalKey ?? []);
+    const selectedRoleIds = principalSelections
+      .filter((principal) => principal.type === "role")
+      .map((principal) => principal.id);
+    const selectedGroupIds = principalSelections
+      .filter((principal) => principal.type === "group")
+      .map((principal) => principal.id);
+    const selectedPrincipalWhere = principalSelections.map((principal) => ({
+      principalType: principal.type,
+      principalId: principal.id,
+    }));
     const grantFilter: Prisma.AccessGrantWhereInput = {
       principalType: { in: principalTypes },
       ...(query.profileId?.length
@@ -416,11 +431,15 @@ export class AccessGrantsService {
     const principalSearch = query.principalSearch?.trim();
     const [roles, groups, referencedPrincipals, permissions] =
       await Promise.all([
-        principalTypes.includes("role")
+        principalTypes.includes("role") &&
+        (!principalSelections.length || selectedRoleIds.length)
           ? this.prisma.role.findMany({
               where: {
                 isActive: true,
                 deletedAt: null,
+                ...(principalSelections.length
+                  ? { code: { in: selectedRoleIds } }
+                  : {}),
                 ...(principalSearch
                   ? {
                       OR: [
@@ -451,12 +470,16 @@ export class AccessGrantsService {
               take: principalLimit,
             })
           : Promise.resolve([]),
-        principalTypes.includes("group")
+        principalTypes.includes("group") &&
+        (!principalSelections.length || selectedGroupIds.length)
           ? this.prisma.accessPrincipalDirectory.findMany({
               where: {
                 principalType: "group",
                 isActive: true,
                 deletedAt: null,
+                ...(principalSelections.length
+                  ? { externalId: { in: selectedGroupIds } }
+                  : {}),
                 ...(principalSearch
                   ? {
                       OR: [
@@ -497,6 +520,9 @@ export class AccessGrantsService {
               where: {
                 assetId: { in: assetIds },
                 ...grantFilter,
+                ...(selectedPrincipalWhere.length
+                  ? { OR: selectedPrincipalWhere }
+                  : {}),
                 ...(principalSearch
                   ? {
                       principalId: {
@@ -582,6 +608,11 @@ export class AccessGrantsService {
       ),
     );
     const principals = [...principalMap.values()]
+      .filter(
+        (principal) =>
+          !selectedPrincipalKeys.size ||
+          selectedPrincipalKeys.has(`${principal.type}:${principal.id}`),
+      )
       .sort((left, right) => {
         const leftReferenced = referencedPrincipalKeys.has(
           `${left.type}:${left.id}`,

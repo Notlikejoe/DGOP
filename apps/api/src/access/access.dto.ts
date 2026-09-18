@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -175,6 +176,15 @@ export class AccessMatrixQueryDto {
   @IsIn(["role", "group"], { each: true })
   principalType?: string[];
   @IsOptional() @IsString() @MaxLength(160) principalSearch?: string;
+  @IsOptional()
+  @Transform(queryArray)
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(200, { each: true })
+  @Matches(/^(role|group):.{1,160}$/, { each: true })
+  principalKey?: string[];
   @IsOptional()
   @Transform(queryArray)
   @IsArray()

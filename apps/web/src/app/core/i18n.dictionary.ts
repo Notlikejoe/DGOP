@@ -6872,6 +6872,7 @@ export const DICT: Dict = {
   'access.field.outcome': { en: 'Outcome', ar: 'النتيجة' },
   'access.option.allAssetTypes': { en: 'All six types', ar: 'جميع الأنواع الستة' },
   'access.option.rolesGroups': { en: 'Roles and groups', ar: 'الأدوار والمجموعات' },
+  'access.option.selectRolesGroups': { en: 'Select roles or groups', ar: 'اختر الأدوار أو المجموعات' },
   'access.option.allProfiles': { en: 'All profiles and rights', ar: 'جميع الملفات والحقوق' },
   'access.option.allPrivileges': { en: 'All privileges', ar: 'جميع الصلاحيات' },
   'access.option.allStatuses': { en: 'All statuses', ar: 'جميع الحالات' },

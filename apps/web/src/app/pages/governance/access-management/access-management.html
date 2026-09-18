@@ -221,14 +221,22 @@
               [placeholder]="t('access.option.rolesGroups')"
               [showClear]="true"
               [maxSelectedLabels]="2"
-              [(ngModel)]="matrixFilters.principalType"
+              [ngModel]="matrixFilters.principalType"
+              (ngModelChange)="updateMatrixPrincipalTypes($event)"
           /></label>
           <label
             ><span>{{ t('access.field.roleGroup') }}</span
-            ><input
-              [(ngModel)]="matrixFilters.principalSearch"
-              (keyup.enter)="applyMatrixFilters()"
-              [placeholder]="t('access.placeholder.searchColumns')"
+            ><p-multiselect
+              class="windows-select"
+              panelStyleClass="windows-select-panel"
+              [options]="matrixPrincipalOptions()"
+              optionLabel="label"
+              optionValue="value"
+              [placeholder]="t('access.option.selectRolesGroups')"
+              [filter]="true"
+              [showClear]="true"
+              [maxSelectedLabels]="2"
+              [(ngModel)]="matrixFilters.principalKey"
           /></label>
           <label
             ><span>{{ t('access.field.profile') }}</span

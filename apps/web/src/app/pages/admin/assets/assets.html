@@ -148,260 +148,154 @@
 
   <!-- Asset 360 -->
   @if (view() === 'detail' && detail(); as a) {
-    <header class="page__header">
-      <div>
-        <button type="button" class="link-btn" (click)="backToList()">‹ {{ t('assets.back') }}</button>
-        <h1>{{ name(a) }}</h1>
-        <p class="page__subtitle"><code>{{ a.code }}</code></p>
-      </div>
-      <div class="header-actions">
-        @if (canEdit) {
-          <button type="button" class="ds-btn ds-btn--primary" (click)="openEdit(a)">{{ t('crud.edit') }}</button>
-        }
-      </div>
-    </header>
-
-    @if(a.assetType==='ai_data_product'&&canViewAiRisks){<section class="ds-card ai-asset-risk"><header class="section-head"><h2 class="card-title">{{ t('aiAsset.title') }}</h2><button type="button" class="ds-btn ds-btn--ghost" [disabled]="aiRiskState()==='loading'" (click)="loadAiAssetSummary()">{{ t('crud.retry') }}</button></header><p>{{ t('aiAsset.visibility') }}</p>@if(aiSummary();as s){<dl class="facts"><div class="fact"><dt>{{ t('aiAsset.openRisks') }}</dt><dd>{{ s.openRiskCount }}</dd></div><div class="fact"><dt>{{ t('aiAsset.highestResidual') }}</dt><dd>{{ s.highestResidualScore??'—' }} · {{ s.highestResidualBand?(t('aiAsset.band.'+s.highestResidualBand)):'—' }}</dd></div><div class="fact"><dt>{{ t('aiAsset.unscored') }}</dt><dd>{{ s.unscoredOpenCount }}</dd></div><div class="fact"><dt>{{ t('aiAsset.nextReview') }}</dt><dd>{{ (s.nextReviewAt | dgopDualDate:'mediumDate':i18n.lang())||'—' }}</dd></div><div class="fact"><dt>{{ t('aiAsset.mitigation') }}</dt><dd>{{ s.completedActionCount }}/{{ s.approvedActionCount }} · {{ s.completionPct??'—' }}%</dd></div><div class="fact"><dt>{{ t('aiAsset.overdue') }}</dt><dd>{{ s.overdueActionCount }}</dd></div></dl><p>{{ s.asOf | dgopDualDate:'medium':i18n.lang() }}</p>@if(!s.aggregateOnly){<app-ai-audit-query [assetScopeId]="a.id" kind="all" /><nav class="header-actions" [attr.aria-label]="t('aiAsset.title')">@for(tab of ['risks','actions','reviews'];track tab){<button type="button" class="ds-btn" [class.ds-btn--primary]="aiRiskTab()===tab" [disabled]="aiRiskState()==='loading'" (click)="changeAiRiskTab(tab)">{{ t('aiAsset.tab.'+tab) }}</button>}</nav>@if(aiRiskTab()==='actions'||aiRiskTab()==='reviews'){<label>{{ t('aiAsset.filterLabel') }}<select [ngModel]="aiRiskFilter()" (ngModelChange)="aiRiskFilter.set($event);loadAiAssetRows()">@for(filter of (aiRiskTab()==='actions'?['all','overdue','completed','pending']:['all','active','completed','overdue','superseded']);track filter){<option [value]="filter">{{ t('aiAsset.filter.'+filter) }}</option>}</select></label>}
-@if(aiRiskState()==='ok'){<p-table [value]="aiRiskRows().rows" [stripedRows]="true" [scrollable]="true"><ng-template #header><tr><th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiAsset.tab.'+aiRiskTab()) }}</th><th>{{ t('aiMigration.status') }}</th><th>{{ t('aiReviews.details') }}</th></tr></ng-template><ng-template #body let-r><tr><td>{{ r.riskRef||r.actionRef||r.kind }}<p>{{ r.useCaseRef||'' }} · {{ r.caseCode||'' }}</p></td><td>{{ r.title||r.round }}@if(aiRiskTab()==='risks'){<p>{{ t('aiAsset.inherent') }}: {{ r.inherentScore??'—' }} · {{ t('aiAsset.residual') }}: {{ r.residualScore??'—' }}</p>}@if(r.dueAt){<p>{{ r.dueAt | date:'medium':'+0300' }}</p>}@if(r.createdAt){<p>{{ r.createdAt | date:'medium':'+0300' }}</p>}</td><td>@if(aiRiskTab()==='actions'){<p>{{ r.completionPct }}% · {{ t(r.overdue?'aiAsset.filter.overdue':r.completed?'aiAsset.filter.completed':'aiAsset.filter.pending') }}</p>}@else if(r.status){<p>{{ r.status }}</p>}</td><td>@if(aiRiskTab()==='risks'){<button type="button" class="ds-btn ds-btn--ghost" (click)="loadAiAssetRows('history',1,r.id)">{{ t('aiAsset.tab.history') }}</button>@for(p of r.controlPins??[];track p.versionId){<p>{{ p.controlCode }} · {{ i18n.lang()==='ar'?p.titleAr:p.titleEn }}</p>}}@if(r.result){<details><summary>{{ t('aiReviews.details') }}</summary><pre>{{ r.result | json }}</pre><pre>{{ r.decisions | json }}</pre></details>}</td></tr></ng-template><ng-template #emptymessage><tr><td colspan="4">{{ t('aiAsset.empty') }}</td></tr></ng-template></p-table><div class="header-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="aiRiskRows().page===1" (click)="loadAiAssetRows(aiRiskTab(),aiRiskRows().page-1)">{{ t('aiReviews.previous') }}</button><span>{{ aiRiskRows().page }} · {{ aiRiskRows().total }}</span><button type="button" class="ds-btn ds-btn--ghost" [disabled]="aiRiskRows().page*aiRiskRows().pageSize>=aiRiskRows().total" (click)="loadAiAssetRows(aiRiskTab(),aiRiskRows().page+1)">{{ t('aiReviews.next') }}</button></div>}}@else{<p>{{ t('aiAsset.aggregateOnly') }}</p>}}
-@if(aiRiskState()==='loading'){<p role="status">{{ t('crud.loading') }}</p>}@else if(aiRiskState()==='error'){<p>{{ t('aiAsset.error') }}</p>}</section>}
-
-    <div class="detail-grid">
-      <div class="ds-card">
-        <h2 class="card-title">{{ t('assets.overview') }}</h2>
-        <dl class="facts">
-          <div class="fact"><dt>{{ t('assets.field.lifecycle') }}</dt><dd><app-status-chip [kind]="lifecycleKind(a.lifecycleStatus)" [label]="t('assets.lifecycle.' + a.lifecycleStatus)" /></dd></div>
-          <div class="fact"><dt>{{ t('assets.field.v6Lifecycle') }}</dt><dd>{{ v6LifecycleLabel(a.v6LifecycleState) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.lifecyclePhase') }}</dt><dd>{{ lifecyclePhaseLabel(a.lifecyclePhase) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.assetType') }}</dt><dd>{{ assetTypeLabel(a.assetType) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.assetSubtype') }}</dt><dd>{{ assetSubtypeLabel(a.assetSubtype) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.col.owner') }}</dt><dd><app-status-chip [kind]="ownerKind(a.ownerStatus)" [label]="a.ownerName || t('assets.owner.' + a.ownerStatus)" /></dd></div>
-          <div class="fact"><dt>{{ t('assets.field.domain') }}</dt><dd>{{ name(a.domain) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.classification') }}</dt>
-            <dd>
-              @if (a.classification) {
-                <span class="swatch-cell"><span class="swatch-dot" [style.background]="a.classification.color"></span>{{ name(a.classification) }}</span>
-              } @else { {{ t('assets.none') }} }
-            </dd>
+    <section class="asset360-shell">
+      <header class="asset360-hero">
+        <button type="button" class="asset360-back" pRipple (click)="backToList()">‹ {{ t('assets.back') }}</button>
+        <div class="asset360-identity">
+          <span class="asset360-mark" aria-hidden="true"><span></span></span>
+          <div>
+            <span class="asset360-eyebrow">{{ t('assets.view360') }} · {{ assetTypeLabel(a.assetType) }}</span>
+            <h1>{{ name(a) }}</h1>
+            <div class="asset360-meta"><code>{{ a.code }}</code><app-status-chip [kind]="lifecycleKind(a.lifecycleStatus)" [label]="t('assets.lifecycle.' + a.lifecycleStatus)" /></div>
           </div>
-          <div class="fact"><dt>{{ t('assets.field.orgUnit') }}</dt><dd>{{ name(a.orgUnit) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.system') }}</dt><dd>{{ name(a.system) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.capability') }}</dt><dd>{{ name(a.capability) }}</dd></div>
-          <div class="fact"><dt>{{ t('assets.field.subjects') }}</dt><dd>{{ subjectNames(a) }}</dd></div>
-          @if (a.description) {
-            <div class="fact fact--wide"><dt>{{ t('assets.field.description') }}</dt><dd>{{ a.description }}</dd></div>
-          }
-        </dl>
-        @if (a.assetTypePanel) {
-          <section class="asset-type-panel">
-            <div>
-              <span class="asset-type-panel__eyebrow">{{ assetTypeLabel(a.assetTypePanel.code) }}</span>
-              <h3>{{ a.assetTypePanel.title }}</h3>
-              <p>{{ a.assetTypePanel.emptyState }}</p>
-            </div>
-            <div class="evidence-strip">
-              @for (evidence of a.assetTypePanel.expectedEvidence; track evidence) {
-                <span>{{ evidenceLabel(evidence) }}</span>
-              }
-            </div>
-          </section>
-        }
-      </div>
-
-      <div class="ds-card">
-        <h2 class="card-title">{{ t('assets.relationships') }}</h2>
-
-        @if (!(a.outgoingRelations?.length) && !(a.incomingRelations?.length)) {
-          <p class="muted">{{ t('assets.relationships.none') }}</p>
-        } @else {
-          @if (a.outgoingRelations?.length) {
-            <h3 class="rel-head">{{ t('assets.relationships.outgoing') }}</h3>
-            <ul class="rel-list">
-              @for (r of a.outgoingRelations; track r.id) {
-                <li>
-                  <span class="rel-type">{{ relTypeLabel(r.type) }}</span>
-                  <span>{{ name(r.targetAsset) }}</span>
-                  @if (canEdit) {
-                    <button type="button" class="link-btn danger" (click)="removeRelationship(r)">✕</button>
-                  }
-                </li>
-              }
-            </ul>
-          }
-          @if (a.incomingRelations?.length) {
-            <h3 class="rel-head">{{ t('assets.relationships.incoming') }}</h3>
-            <ul class="rel-list">
-              @for (r of a.incomingRelations; track r.id) {
-                <li>
-                  <span class="rel-type">{{ relTypeLabel(r.type) }}</span>
-                  <span>{{ name(r.sourceAsset) }}</span>
-                </li>
-              }
-            </ul>
-          }
-        }
-
-        @if (canEdit) {
-          <div class="rel-add">
-            <h3 class="rel-head">{{ t('assets.relationships.add') }}</h3>
-            <div class="rel-form">
-              <select class="field__input" [ngModel]="relType()" (ngModelChange)="relType.set($event)" [attr.aria-label]="t('assets.rel.type')">
-                @for (rt of relTypes; track rt) { <option [value]="rt">{{ relTypeLabel(rt) }}</option> }
-              </select>
-              <select class="field__input" [ngModel]="relTargetId()" (ngModelChange)="relTargetId.set($event)" [attr.aria-label]="t('assets.rel.target')">
-                <option value="">{{ t('assets.rel.target') }}</option>
-                @for (o of otherAssets(); track o.id) { <option [value]="o.id">{{ name(o) }}</option> }
-              </select>
-              <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="!relTargetId() || relSaving()" (click)="addRelationship()">
-                {{ t('assets.relationships.add') }}
-              </button>
-            </div>
-          </div>
-        }
-      </div>
-
-      @if (canViewIntegrations) {
-        <div class="ds-card catalog-card">
-          <div class="catalog-card__head">
-            <div>
-              <h2 class="card-title">{{ t('assets.catalog.title') }}</h2>
-              <p class="muted">{{ t('assets.catalog.subtitle') }}</p>
-            </div>
-            <app-status-chip
-              [kind]="catalogKind(a.catalogSyncStatus)"
-              [label]="t('assets.catalog.status.' + (a.catalogSyncStatus || 'not_synced'))"
-            />
-          </div>
-          <dl class="facts">
-            <div class="fact"><dt>{{ t('assets.catalog.externalId') }}</dt><dd>{{ a.externalCatalogId || '-' }}</dd></div>
-            <div class="fact"><dt>{{ t('assets.catalog.source') }}</dt><dd>{{ a.catalogSource || '-' }}</dd></div>
-            <div class="fact"><dt>{{ t('assets.catalog.trust') }}</dt><dd>{{ a.catalogTrustLevel ? t('integrations.trust.' + a.catalogTrustLevel) : '-' }}</dd></div>
-            <div class="fact"><dt>{{ t('assets.catalog.lastSynced') }}</dt><dd>{{ date(a.catalogLastSyncedAt) }}</dd></div>
-            <div class="fact"><dt>{{ t('assets.catalog.writeback') }}</dt><dd>{{ a.catalogWritebackStatus ? t('integrations.writeback.status.' + a.catalogWritebackStatus) : '-' }}</dd></div>
-          </dl>
-          <a class="ds-btn ds-btn--ghost btn-sm self-start" routerLink="/admin/integrations">{{ t('assets.catalog.openIntegrations') }}</a>
         </div>
-      }
+        <div class="asset360-actions">
+          <span class="classification-pill" [style.--classification-color]="a.classification?.color || 'var(--primary)'" [pTooltip]="t('assets.field.classification')">
+            <span></span>{{ a.classification ? name(a.classification) : t('assets.none') }}
+          </span>
+          @if (canEdit) { <button type="button" class="ds-btn ds-btn--primary" pRipple (click)="openEdit(a)">{{ t('crud.edit') }}</button> }
+        </div>
+      </header>
 
-      @if (canViewOpenData) {
-        <div class="ds-card open-data-card">
-          <div class="catalog-card__head">
-            <div>
-              <h2 class="card-title">{{ t('assets.openData.title') }}</h2>
-              <p class="muted">{{ t('assets.openData.subtitle') }}</p>
+      <section class="asset360-vitals" [attr.aria-label]="t('assets.summary')">
+        <article class="vital-card"><span>{{ t('assets.field.v6Lifecycle') }}</span><strong>{{ v6LifecycleLabel(a.v6LifecycleState) }}</strong><p-progressbar [value]="lifecycleProgress(a.v6LifecycleState)" [showValue]="false" [attr.aria-label]="t('assets.field.v6Lifecycle')" /></article>
+        <article class="vital-card"><span>{{ t('assets.col.owner') }}</span><strong>{{ a.ownerName || t('assets.owner.' + a.ownerStatus) }}</strong><small>{{ t('assets.owner.' + a.ownerStatus) }}</small></article>
+        <article class="vital-card"><span>{{ t('assets.relationships') }}</span><strong>{{ relationshipCount(a) }}</strong><small>{{ t('assets.summary.connectedAssets') }}</small></article>
+        <article class="vital-card"><span>{{ t('assets.ownership') }}</span><strong>{{ governanceCount() }} / {{ visibleRecommendations().length }}</strong><small>{{ t('assets.summary.assignedRoles') }}</small></article>
+        @if (a.assetType === 'ai_data_product' && canViewAiRisks) { <article class="vital-card vital-card--accent"><span>{{ t('aiAsset.openRisks') }}</span><strong>{{ aiSummary()?.openRiskCount ?? '—' }}</strong><small>{{ aiSummary()?.highestResidualBand ? t('aiAsset.band.' + aiSummary()?.highestResidualBand) : t('assets.summary.noRiskBand') }}</small></article> }
+      </section>
+
+      <p-tabs class="asset360-tabs" [value]="assetTab()" (valueChange)="assetTab.set($event)" [lazy]="true">
+        <p-tablist>
+          <p-tab value="overview">{{ t('assets.overview') }}</p-tab>
+          <p-tab value="relationships">{{ t('assets.relationships') }} <span class="tab-count">{{ relationshipCount(a) }}</span></p-tab>
+          @if (canViewOwnership) { <p-tab value="stewardship">{{ t('assets.ownership') }} <span class="tab-count">{{ visibleRecommendations().length }}</span></p-tab> }
+          @if (canViewIntegrations || canViewOpenData) { <p-tab value="connections">{{ t('assets.connections') }}</p-tab> }
+          @if (a.assetType === 'ai_data_product' && canViewAiRisks) { <p-tab value="ai-risk">{{ t('aiAsset.title') }} <span class="tab-count">{{ aiSummary()?.openRiskCount ?? 0 }}</span></p-tab> }
+        </p-tablist>
+
+        <p-tabpanels>
+          <p-tabpanel value="overview">
+            <div class="asset360-panel-grid">
+              <section class="ds-card asset360-card asset360-card--wide">
+                <header class="compact-card-head"><div><span class="card-kicker">{{ t('assets.summary.identity') }}</span><h2>{{ t('assets.overview') }}</h2></div><span class="phase-badge">{{ lifecyclePhaseLabel(a.lifecyclePhase) }}</span></header>
+                <dl class="asset-facts">
+                  <div><dt>{{ t('assets.field.assetType') }}</dt><dd>{{ assetTypeLabel(a.assetType) }}</dd></div>
+                  <div><dt>{{ t('assets.field.assetSubtype') }}</dt><dd>{{ assetSubtypeLabel(a.assetSubtype) }}</dd></div>
+                  <div><dt>{{ t('assets.field.domain') }}</dt><dd>{{ name(a.domain) }}</dd></div>
+                  <div><dt>{{ t('assets.field.orgUnit') }}</dt><dd>{{ name(a.orgUnit) }}</dd></div>
+                  <div><dt>{{ t('assets.field.system') }}</dt><dd>{{ name(a.system) }}</dd></div>
+                  <div><dt>{{ t('assets.field.capability') }}</dt><dd>{{ name(a.capability) }}</dd></div>
+                  <div><dt>{{ t('assets.field.subjects') }}</dt><dd>{{ subjectNames(a) }}</dd></div>
+                  <div><dt>{{ t('assets.field.lifecycle') }}</dt><dd>{{ t('assets.lifecycle.' + a.lifecycleStatus) }}</dd></div>
+                  @if (a.description) { <div class="asset-fact--wide"><dt>{{ t('assets.field.description') }}</dt><dd>{{ a.description }}</dd></div> }
+                </dl>
+              </section>
+              @if (a.assetTypePanel) {
+                <section class="ds-card asset360-card asset360-type-card">
+                  <header class="compact-card-head"><div><span class="card-kicker">{{ assetTypeLabel(a.assetTypePanel.code) }}</span><h2>{{ a.assetTypePanel.title }}</h2></div></header>
+                  <p>{{ a.assetTypePanel.emptyState }}</p>
+                  <div class="evidence-strip">@for (evidence of a.assetTypePanel.expectedEvidence; track evidence) { <span>{{ evidenceLabel(evidence) }}</span> }</div>
+                </section>
+              }
             </div>
-            <a class="ds-btn ds-btn--ghost btn-sm" [routerLink]="['/governance/open-data']" [queryParams]="{ assetId: a.id }">{{ t('assets.openData.open') }}</a>
-          </div>
+          </p-tabpanel>
 
-          @if (a.openDataCandidates?.length) {
-            <div class="open-data-list">
-              @for (candidate of a.openDataCandidates; track candidate.id) {
-                <article class="open-data-row">
-                  <div>
-                    <span class="badge-code">{{ candidate.code }}</span>
-                    <strong>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</strong>
-                  </div>
-                  <app-status-chip [kind]="openDataKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" />
-                  <span class="open-data-score">{{ candidate.eligibilityScore }}%</span>
-                </article>
-                <div class="open-data-signals">
-                  <app-status-chip [kind]="signalKind(candidate.classificationSignal)" [label]="t('openData.signal.classification') + ': ' + t('openData.signal.' + candidate.classificationSignal)" />
-                  <app-status-chip [kind]="signalKind(candidate.dataQualitySignal)" [label]="t('openData.signal.quality') + ': ' + t('openData.signal.' + candidate.dataQualitySignal)" />
-                  <app-status-chip [kind]="signalKind(candidate.personalDataSignal)" [label]="t('openData.signal.personal') + ': ' + t('openData.signal.' + candidate.personalDataSignal)" />
-                  <app-status-chip [kind]="signalKind(candidate.ownershipSignal)" [label]="t('openData.signal.ownership') + ': ' + t('openData.signal.' + candidate.ownershipSignal)" />
+          <p-tabpanel value="relationships">
+            <section class="ds-card asset360-card">
+              <header class="compact-card-head"><div><span class="card-kicker">{{ relationshipCount(a) }} {{ t('assets.summary.connectedAssets') }}</span><h2>{{ t('assets.relationships') }}</h2></div></header>
+              <p-table [value]="(a.outgoingRelations || []).concat(a.incomingRelations || [])" dataKey="id" [stripedRows]="true" [rowHover]="true" [scrollable]="true" [tableStyle]="{'min-width':'38rem'}">
+                <ng-template #header><tr><th>{{ t('assets.summary.direction') }}</th><th>{{ t('assets.rel.type') }}</th><th>{{ t('assets.rel.target') }}</th><th class="actions-col">{{ t('crud.actions') }}</th></tr></ng-template>
+                <ng-template #body let-r><tr><td>{{ r.targetAsset ? t('assets.relationships.outgoing') : t('assets.relationships.incoming') }}</td><td><span class="rel-type">{{ relTypeLabel(r.type) }}</span></td><td><strong>{{ name(r.targetAsset || r.sourceAsset) }}</strong></td><td class="actions-col">@if (r.targetAsset && canEdit) { <button type="button" class="ds-btn ds-btn--ghost btn-sm danger" pRipple (click)="removeRelationship(r)">✕</button> }</td></tr></ng-template>
+                <ng-template #emptymessage><tr><td colspan="4" class="asset360-empty">{{ t('assets.relationships.none') }}</td></tr></ng-template>
+              </p-table>
+              @if (canEdit) {
+                <div class="relationship-composer">
+                  <p-select [options]="relationshipTypeOptions()" optionLabel="label" optionValue="value" [ngModel]="relType()" (ngModelChange)="relType.set($event)" [ariaLabel]="t('assets.rel.type')" />
+                  <p-select class="relationship-target" [options]="relationshipAssetOptions()" optionLabel="label" optionValue="value" [filter]="true" [placeholder]="t('assets.rel.target')" [ngModel]="relTargetId() || null" (ngModelChange)="relTargetId.set($event)" [ariaLabel]="t('assets.rel.target')" />
+                  <button type="button" class="ds-btn ds-btn--primary btn-sm" pRipple [disabled]="!relTargetId() || relSaving()" (click)="addRelationship()">{{ t('assets.relationships.add') }}</button>
                 </div>
               }
-            </div>
-          } @else {
-            <div class="open-data-empty">
-              <p>{{ t('assets.openData.none') }}</p>
-              @if (canCreateOpenData) {
-                <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="registerOpenDataCandidate(a)">{{ t('assets.openData.register') }}</button>
-              }
-            </div>
-          }
-        </div>
-      }
+            </section>
+          </p-tabpanel>
 
-      @if (canViewOwnership) {
-        <div class="ds-card card--wide">
-          <h2 class="card-title">{{ t('assets.ownership') }}</h2>
-          @if (visibleRecommendations().length === 0) {
-            <p class="muted">{{ t('assets.ownership.none') }}</p>
-          } @else {
-            <div class="table-wrap">
-              <table class="ds-table">
-                <thead>
-                  <tr>
-                    <th>{{ t('assets.own.role') }}</th>
-                    <th>{{ t('assets.own.assigned') }}</th>
-                    <th>{{ t('assets.own.recommended') }}</th>
-                    <th class="actions-col">{{ t('crud.actions') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (r of visibleRecommendations(); track r.roleType.id) {
-                    <tr>
-                      <td>
-                        {{ name(r.roleType) }}
-                        <app-status-chip [kind]="ownStatusKind(r.status)" [label]="t('assets.own.' + r.status)" />
-                      </td>
-                      <td>{{ personName(r.current?.person) }}</td>
-                      <td>
-                        @if (r.recommended) {
-                          {{ personName(r.recommended.person) }}
-                          <span class="hint">({{ t('assets.own.via') }} {{ scopeLabel(r.recommended.scopeType) }})</span>
-                        } @else { {{ t('assets.own.noRec') }} }
-                      </td>
-                      <td class="actions-col">
-                        @if (r.status === 'recommended' && canApplyOwnership) {
-                          <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="applyingRole() === r.roleType.id" (click)="applyRecommendation(r)">
-                            {{ t('assets.own.apply') }}
-                          </button>
-                        }
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
-        </div>
-      }
-
-      @if (canViewOwnership && assetAssignments().length > 0) {
-        <div class="ds-card card--wide">
-          <h2 class="card-title">{{ t('assets.approvals') }}</h2>
-          <div class="table-wrap">
-            <table class="ds-table">
-              <thead>
-                <tr>
-                  <th>{{ t('assets.own.role') }}</th>
-                  <th>{{ t('assets.approval.person') }}</th>
-                  <th>{{ t('assets.approval.status') }}</th>
-                  <th class="actions-col">{{ t('crud.actions') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (a of assetAssignments(); track a.id) {
-                  <tr>
-                    <td>{{ name(a.roleType) }} @if (a.isPrimary) { <span class="hint">({{ t('assets.approval.primary') }})</span> }</td>
-                    <td>{{ personName(a.person) }}</td>
-                    <td><app-status-chip [kind]="approvalKind(a.approvalStatus)" [label]="t('approval.' + a.approvalStatus)" /></td>
-                    <td class="actions-col">
-                      @if (canSubmit(a)) {
-                        <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openSubmit(a)">{{ t('assets.approval.submit') }}</button>
-                      } @else if (a.approvalStatus === 'pending') {
-                        <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/governance/workflow">{{ t('assets.approval.viewInbox') }}</a>
-                      }
-                    </td>
-                  </tr>
+          @if (canViewOwnership) {
+            <p-tabpanel value="stewardship">
+              <div class="asset360-panel-grid">
+                <section class="ds-card asset360-card asset360-card--wide">
+                  <header class="compact-card-head"><div><span class="card-kicker">{{ governanceCount() }} / {{ visibleRecommendations().length }} {{ t('assets.summary.assignedRoles') }}</span><h2>{{ t('assets.ownership') }}</h2></div></header>
+                  <p-table [value]="visibleRecommendations()" dataKey="roleType.id" [stripedRows]="true" [rowHover]="true" [scrollable]="true" [tableStyle]="{'min-width':'44rem'}">
+                    <ng-template #header><tr><th>{{ t('assets.own.role') }}</th><th>{{ t('assets.own.assigned') }}</th><th>{{ t('assets.own.recommended') }}</th><th>{{ t('assets.approval.status') }}</th><th class="actions-col">{{ t('crud.actions') }}</th></tr></ng-template>
+                    <ng-template #body let-r><tr><td><strong>{{ name(r.roleType) }}</strong></td><td>{{ personName(r.current?.person) }}</td><td>@if (r.recommended) { {{ personName(r.recommended.person) }} <small class="hint">{{ t('assets.own.via') }} {{ scopeLabel(r.recommended.scopeType) }}</small> } @else { {{ t('assets.own.noRec') }} }</td><td><app-status-chip [kind]="ownStatusKind(r.status)" [label]="t('assets.own.' + r.status)" /></td><td class="actions-col">@if (r.status === 'recommended' && canApplyOwnership) { <button type="button" class="ds-btn ds-btn--primary btn-sm" pRipple [disabled]="applyingRole() === r.roleType.id" (click)="applyRecommendation(r)">{{ t('assets.own.apply') }}</button> }</td></tr></ng-template>
+                    <ng-template #emptymessage><tr><td colspan="5" class="asset360-empty">{{ t('assets.ownership.none') }}</td></tr></ng-template>
+                  </p-table>
+                </section>
+                @if (assetAssignments().length > 0) {
+                  <section class="ds-card asset360-card asset360-card--wide">
+                    <header class="compact-card-head"><div><span class="card-kicker">{{ assetAssignments().length }}</span><h2>{{ t('assets.approvals') }}</h2></div></header>
+                    <p-table [value]="assetAssignments()" dataKey="id" [stripedRows]="true" [rowHover]="true" [scrollable]="true" [tableStyle]="{'min-width':'38rem'}">
+                      <ng-template #header><tr><th>{{ t('assets.own.role') }}</th><th>{{ t('assets.approval.person') }}</th><th>{{ t('assets.approval.status') }}</th><th class="actions-col">{{ t('crud.actions') }}</th></tr></ng-template>
+                      <ng-template #body let-assignment><tr><td>{{ name(assignment.roleType) }} @if (assignment.isPrimary) { <small class="hint">{{ t('assets.approval.primary') }}</small> }</td><td>{{ personName(assignment.person) }}</td><td><app-status-chip [kind]="approvalKind(assignment.approvalStatus)" [label]="t('approval.' + assignment.approvalStatus)" /></td><td class="actions-col">@if (canSubmit(assignment)) { <button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple (click)="openSubmit(assignment)">{{ t('assets.approval.submit') }}</button> } @else if (assignment.approvalStatus === 'pending') { <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/governance/workflow">{{ t('assets.approval.viewInbox') }}</a> }</td></tr></ng-template>
+                    </p-table>
+                  </section>
                 }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      }
-    </div>
+              </div>
+            </p-tabpanel>
+          }
+
+          @if (canViewIntegrations || canViewOpenData) {
+            <p-tabpanel value="connections">
+              <div class="asset360-panel-grid">
+                @if (canViewIntegrations) {
+                  <section class="ds-card asset360-card">
+                    <header class="compact-card-head"><div><span class="card-kicker">{{ t('assets.catalog.subtitle') }}</span><h2>{{ t('assets.catalog.title') }}</h2></div><app-status-chip [kind]="catalogKind(a.catalogSyncStatus)" [label]="t('assets.catalog.status.' + (a.catalogSyncStatus || 'not_synced'))" /></header>
+                    <dl class="asset-facts asset-facts--single"><div><dt>{{ t('assets.catalog.externalId') }}</dt><dd>{{ a.externalCatalogId || '—' }}</dd></div><div><dt>{{ t('assets.catalog.source') }}</dt><dd>{{ a.catalogSource || '—' }}</dd></div><div><dt>{{ t('assets.catalog.trust') }}</dt><dd>{{ a.catalogTrustLevel ? t('integrations.trust.' + a.catalogTrustLevel) : '—' }}</dd></div><div><dt>{{ t('assets.catalog.lastSynced') }}</dt><dd>{{ date(a.catalogLastSyncedAt) }}</dd></div><div><dt>{{ t('assets.catalog.writeback') }}</dt><dd>{{ a.catalogWritebackStatus ? t('integrations.writeback.status.' + a.catalogWritebackStatus) : '—' }}</dd></div></dl>
+                    <a class="ds-btn ds-btn--ghost btn-sm self-start" routerLink="/admin/integrations">{{ t('assets.catalog.openIntegrations') }}</a>
+                  </section>
+                }
+                @if (canViewOpenData) {
+                  <section class="ds-card asset360-card">
+                    <header class="compact-card-head"><div><span class="card-kicker">{{ t('assets.openData.subtitle') }}</span><h2>{{ t('assets.openData.title') }}</h2></div><a class="ds-btn ds-btn--ghost btn-sm" [routerLink]="['/governance/open-data']" [queryParams]="{ assetId: a.id }">{{ t('assets.openData.open') }}</a></header>
+                    @if (a.openDataCandidates?.length) { <div class="open-data-list">@for (candidate of a.openDataCandidates; track candidate.id) { <article class="open-data-row"><div><span class="badge-code">{{ candidate.code }}</span><strong>{{ i18n.lang() === 'ar' ? candidate.titleAr : candidate.titleEn }}</strong></div><app-status-chip [kind]="openDataKind(candidate.status)" [label]="t('openData.status.' + candidate.status)" /><span class="open-data-score">{{ candidate.eligibilityScore }}%</span></article><p-progressbar [value]="candidate.eligibilityScore" [showValue]="false" [attr.aria-label]="t('assets.openData.title')" /><div class="open-data-signals"><app-status-chip [kind]="signalKind(candidate.classificationSignal)" [label]="t('openData.signal.classification') + ': ' + t('openData.signal.' + candidate.classificationSignal)" /><app-status-chip [kind]="signalKind(candidate.dataQualitySignal)" [label]="t('openData.signal.quality') + ': ' + t('openData.signal.' + candidate.dataQualitySignal)" /><app-status-chip [kind]="signalKind(candidate.personalDataSignal)" [label]="t('openData.signal.personal') + ': ' + t('openData.signal.' + candidate.personalDataSignal)" /><app-status-chip [kind]="signalKind(candidate.ownershipSignal)" [label]="t('openData.signal.ownership') + ': ' + t('openData.signal.' + candidate.ownershipSignal)" /></div> }</div> } @else { <div class="asset360-empty"><p>{{ t('assets.openData.none') }}</p>@if (canCreateOpenData) { <button type="button" class="ds-btn ds-btn--primary btn-sm" pRipple (click)="registerOpenDataCandidate(a)">{{ t('assets.openData.register') }}</button> }</div> }
+                  </section>
+                }
+              </div>
+            </p-tabpanel>
+          }
+
+          @if (a.assetType === 'ai_data_product' && canViewAiRisks) {
+            <p-tabpanel value="ai-risk">
+              <section class="ds-card asset360-card ai-asset-risk">
+                <header class="compact-card-head"><div><span class="card-kicker">{{ t('aiAsset.visibility') }}</span><h2>{{ t('aiAsset.title') }}</h2></div><button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple [disabled]="aiRiskState() === 'loading'" (click)="loadAiAssetSummary()">{{ t('crud.retry') }}</button></header>
+                @if (aiSummary(); as s) {
+                  <div class="risk-vitals"><div><span>{{ t('aiAsset.openRisks') }}</span><strong>{{ s.openRiskCount }}</strong></div><div><span>{{ t('aiAsset.highestResidual') }}</span><strong>{{ s.highestResidualScore ?? '—' }} · {{ s.highestResidualBand ? t('aiAsset.band.' + s.highestResidualBand) : '—' }}</strong></div><div><span>{{ t('aiAsset.nextReview') }}</span><strong>{{ (s.nextReviewAt | dgopDualDate:'mediumDate':i18n.lang()) || '—' }}</strong></div><div><span>{{ t('aiAsset.mitigation') }}</span><strong>{{ s.completedActionCount }}/{{ s.approvedActionCount }} · {{ s.completionPct ?? 0 }}%</strong><p-progressbar [value]="s.completionPct ?? 0" [showValue]="false" /></div></div>
+                  @if (!s.aggregateOnly) {
+                    <app-ai-audit-query [assetScopeId]="a.id" kind="all" />
+                    <nav class="risk-tabs" [attr.aria-label]="t('aiAsset.title')">@for (tab of ['risks','actions','reviews']; track tab) { <button type="button" class="ds-btn btn-sm" pRipple [class.ds-btn--primary]="aiRiskTab() === tab" [disabled]="aiRiskState() === 'loading'" (click)="changeAiRiskTab(tab)">{{ t('aiAsset.tab.' + tab) }}</button> }</nav>
+                    @if (aiRiskTab() === 'actions' || aiRiskTab() === 'reviews') { <label class="compact-filter"><span>{{ t('aiAsset.filterLabel') }}</span><select [ngModel]="aiRiskFilter()" (ngModelChange)="aiRiskFilter.set($event);loadAiAssetRows()">@for (filter of (aiRiskTab() === 'actions' ? ['all','overdue','completed','pending'] : ['all','active','completed','overdue','superseded']); track filter) { <option [value]="filter">{{ t('aiAsset.filter.' + filter) }}</option> }</select></label> }
+                    @if (aiRiskState() === 'ok') {
+                      <p-table [value]="aiRiskRows().rows" [stripedRows]="true" [rowHover]="true" [scrollable]="true"><ng-template #header><tr><th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiAsset.tab.' + aiRiskTab()) }}</th><th>{{ t('aiMigration.status') }}</th><th>{{ t('aiReviews.details') }}</th></tr></ng-template><ng-template #body let-r><tr><td><strong>{{ r.riskRef || r.actionRef || r.kind }}</strong><small>{{ r.useCaseRef || '' }} · {{ r.caseCode || '' }}</small></td><td>{{ r.title || r.round }} @if (aiRiskTab() === 'risks') { <small>{{ t('aiAsset.inherent') }}: {{ r.inherentScore ?? '—' }} · {{ t('aiAsset.residual') }}: {{ r.residualScore ?? '—' }}</small> } @if (r.dueAt) { <small>{{ date(r.dueAt) }}</small> } @if (r.createdAt) { <small>{{ date(r.createdAt) }}</small> }</td><td>@if (aiRiskTab() === 'actions') { {{ r.completionPct }}% · {{ t(r.overdue ? 'aiAsset.filter.overdue' : r.completed ? 'aiAsset.filter.completed' : 'aiAsset.filter.pending') }} } @else { {{ r.status || '—' }} }</td><td>@if (aiRiskTab() === 'risks') { <button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple (click)="loadAiAssetRows('history',1,r.id)">{{ t('aiAsset.tab.history') }}</button>@for (pin of r.controlPins || []; track pin.versionId) { <small>{{ pin.controlCode }} · {{ i18n.lang() === 'ar' ? pin.titleAr : pin.titleEn }}</small> } } @if (r.result) { <details><summary>{{ t('aiReviews.details') }}</summary><pre>{{ jsonText(r.result) }}</pre><pre>{{ jsonText(r.decisions) }}</pre></details> }</td></tr></ng-template><ng-template #emptymessage><tr><td colspan="4" class="asset360-empty">{{ t('aiAsset.empty') }}</td></tr></ng-template></p-table>
+                      <div class="asset360-pager"><button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple [disabled]="aiRiskRows().page === 1" (click)="loadAiAssetRows(aiRiskTab(), aiRiskRows().page - 1)">{{ t('aiReviews.previous') }}</button><span>{{ aiRiskRows().page }} · {{ aiRiskRows().total }}</span><button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple [disabled]="aiRiskRows().page * aiRiskRows().pageSize >= aiRiskRows().total" (click)="loadAiAssetRows(aiRiskTab(), aiRiskRows().page + 1)">{{ t('aiReviews.next') }}</button></div>
+                    }
+                  } @else { <p>{{ t('aiAsset.aggregateOnly') }}</p> }
+                }
+                @if (aiRiskState() === 'loading') { <p role="status">{{ t('crud.loading') }}</p> } @else if (aiRiskState() === 'error') { <p>{{ t('aiAsset.error') }}</p> }
+              </section>
+            </p-tabpanel>
+          }
+        </p-tabpanels>
+      </p-tabs>
+    </section>
   }
 
   @if (submitTarget(); as a) {

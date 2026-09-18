@@ -2642,6 +2642,13 @@ export const DICT: Dict = {
   // Asset 360
   'assets.view360': { en: 'Asset 360', ar: 'عرض الأصل 360' },
   'assets.overview': { en: 'Overview', ar: 'نظرة عامة' },
+  'assets.connections': { en: 'Connections & readiness', ar: 'الاتصالات والجاهزية' },
+  'assets.summary': { en: 'Asset summary', ar: 'ملخص الأصل' },
+  'assets.summary.identity': { en: 'Governed identity', ar: 'الهوية المحكومة' },
+  'assets.summary.connectedAssets': { en: 'connected assets', ar: 'أصول مترابطة' },
+  'assets.summary.assignedRoles': { en: 'assigned roles', ar: 'أدوار معينة' },
+  'assets.summary.direction': { en: 'Direction', ar: 'الاتجاه' },
+  'assets.summary.noRiskBand': { en: 'No residual band', ar: 'لا يوجد نطاق خطر متبقٍ' },
   'assets.relationships': { en: 'Relationships', ar: 'العلاقات' },
   'assets.relationships.none': { en: 'No relationships defined.', ar: 'لا توجد علاقات معرّفة.' },
   'assets.relationships.add': { en: 'Add relationship', ar: 'إضافة علاقة' },

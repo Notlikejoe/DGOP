@@ -1,7 +1,11 @@
 import { AiAuditQuery } from '../../../shared/ai-audit-query';
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
-import { DatePipe, JsonPipe } from '@angular/common';
 import { TableModule } from 'primeng/table';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { RippleModule } from 'primeng/ripple';
+import { SelectModule } from 'primeng/select';
+import { TabsModule } from 'primeng/tabs';
+import { TooltipModule } from 'primeng/tooltip';
 import { firstValueFrom } from 'rxjs';
 import {
   ChangeDetectionStrategy,
@@ -239,7 +243,7 @@ const MIN_PERSONAL_DATA_CLASSIFICATION_RANK = 2;
 @Component({
   selector: 'app-admin-assets',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AiAuditQuery,DualDatePipe,DatePipe,JsonPipe,TableModule,FormsModule, RouterLink, Modal, StatusChip],
+  imports: [AiAuditQuery,DualDatePipe,TableModule,ProgressBarModule,RippleModule,SelectModule,TabsModule,TooltipModule,FormsModule, RouterLink, Modal, StatusChip],
   templateUrl: './assets.html',
   styleUrl: './assets.scss',
 })
@@ -256,6 +260,7 @@ export class AssetsPage implements OnInit {
   protected readonly view = signal<'list' | 'detail'>('list');
   protected readonly aiSummary=signal<AiAssetSummary|null>(null);protected readonly aiRiskState=signal<'idle'|'loading'|'ok'|'error'>('idle');protected readonly aiRiskTab=signal('risks');protected readonly aiRiskRows=signal<AiAssetRows>({rows:[],total:0,page:1,pageSize:20});protected readonly aiRiskFilter=signal('all');protected readonly aiHistoryRisk=signal('');private aiRiskSequence=0;private aiSummarySequence=0;
   protected readonly detail = signal<Asset | null>(null);
+  protected readonly assetTab = signal<string | number | undefined>('overview');
 
   // Lookups
   protected readonly domains = signal<Ref[]>([]);
@@ -691,6 +696,7 @@ export class AssetsPage implements OnInit {
       next: (a) => {
         this.detail.set(a);
         this.view.set('detail');
+        this.assetTab.set('overview');
         this.relType.set('related_to');
         this.relTargetId.set('');
         void this.loadAiAssetSummary(id);
@@ -702,6 +708,15 @@ export class AssetsPage implements OnInit {
   }
 
   protected get canViewAiRisks(){return ['case.view.airs.own','case.view.airs.org','case.view.airs.all'].some(p=>this.auth.hasPermission(p));}
+  protected relationshipCount(asset: Asset): number { return (asset.outgoingRelations?.length ?? 0) + (asset.incomingRelations?.length ?? 0); }
+  protected jsonText(value: unknown): string { return JSON.stringify(value, null, 2); }
+  protected relationshipTypeOptions() { return this.relTypes.map(value => ({ value, label: this.relTypeLabel(value) })); }
+  protected relationshipAssetOptions() { return this.otherAssets().map(asset => ({ value: asset.id, label: `${asset.code} · ${this.name(asset)}` })); }
+  protected lifecycleProgress(state: string): number {
+    const index = V6_LIFECYCLE_STATES.indexOf(state);
+    return index < 0 ? 0 : Math.round(((index + 1) / V6_LIFECYCLE_STATES.length) * 100);
+  }
+  protected governanceCount(): number { return this.visibleRecommendations().filter(row => row.status === 'assigned').length; }
   protected async loadAiAssetSummary(id=this.detail()?.id){const seq=++this.aiSummarySequence;++this.aiRiskSequence;this.aiSummary.set(null);this.aiRiskRows.set({rows:[],total:0,page:1,pageSize:20});this.aiRiskState.set('idle');if(!id||!this.canViewAiRisks||this.detail()?.assetType!=='ai_data_product')return;this.aiRiskState.set('loading');try{const summary=await firstValueFrom(this.http.get<AiAssetSummary>('/api/ai/assets/'+id+'/risk-summary'));if(seq!==this.aiSummarySequence||id!==this.detail()?.id)return;this.aiSummary.set(summary);this.aiRiskState.set('ok');if(!summary.aggregateOnly)await this.loadAiAssetRows('risks');}catch(e){if(seq===this.aiSummarySequence){this.aiRiskState.set('error');this.toast.errorFrom(e,this.t('aiAsset.error'));}}}
   protected async loadAiAssetRows(tab=this.aiRiskTab(),page=1,riskId=this.aiHistoryRisk()){const id=this.detail()?.id;if(!id||this.aiSummary()?.aggregateOnly)return;const seq=++this.aiRiskSequence;this.aiRiskTab.set(tab);this.aiHistoryRisk.set(riskId);this.aiRiskState.set('loading');const path=tab==='history'?'risks/'+riskId+'/history':tab;const filter=tab==='actions'||tab==='reviews'?'&filter='+encodeURIComponent(this.aiRiskFilter()):'';try{const rows=await firstValueFrom(this.http.get<AiAssetRows>('/api/ai/assets/'+id+'/'+path+'?page='+page+filter));if(seq===this.aiRiskSequence&&id===this.detail()?.id){this.aiRiskRows.set(rows);this.aiRiskState.set('ok');}}catch(e){if(seq===this.aiRiskSequence){this.aiRiskState.set('error');this.toast.errorFrom(e,this.t('aiAsset.error'));}}}
   protected changeAiRiskTab(tab:string){this.aiRiskFilter.set('all');void this.loadAiAssetRows(tab);}

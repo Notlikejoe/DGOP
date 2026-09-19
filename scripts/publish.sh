@@ -13,7 +13,7 @@ export NODE_ENV=production
 export DGOP_REQUIRE_STRICT_RUNTIME=true
 export HEALTH_INCLUDE_DETAILS=false
 
-PORT="${PORT:-3005}"
+PORT="${PORT:-3006}"
 TOOLS="$ROOT/tools"
 CF="$TOOLS/cloudflared"
 mkdir -p "$TOOLS"

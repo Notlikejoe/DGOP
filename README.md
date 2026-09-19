@@ -35,7 +35,7 @@ npm run local:prepare
 npm run local:setup
 npm run build
 npm run start:local
-# open http://localhost:3005/login
+# open http://localhost:3006/login
 ```
 
 Sign in with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` from your ignored root
@@ -55,19 +55,19 @@ Use `db:deploy`, not `db:migrate`, to apply another developer's committed migrat
 
 ## 3. Run locally
 
-Development (API on :3005, Angular dev server on :4205 with /api proxy):
+Development (API on :3006, Angular dev server on :4206 with `/api` proxy):
 
 ```bash
 npm run dev
-# open http://localhost:4205
+# open http://localhost:4206
 ```
 
-Built local app (API serves the UI on a single loopback port :3005):
+Built local app (API serves the UI on its configured loopback port, `:3006` by default):
 
 ```bash
 npm run build
 npm run start:local
-# open http://localhost:3005
+# open http://localhost:3006
 ```
 
 ### PrimeNG-ready frontend
@@ -120,10 +120,10 @@ npm run demo:prepare
 npm run db:sync-demo-credentials
 npm run build
 npm run start:demo
-# open http://localhost:3005
+# open http://localhost:3006
 ```
 
-Health check: `GET http://localhost:3005/api/health`
+Health check: `GET http://localhost:3006/api/health`
 
 **Do not run `demo:prepare` for everyday local startup:** it rotates weak local
 passwords for shared demos. After preparing a strict demo, use the new password

@@ -52,8 +52,8 @@ function shutdown(code = 0) {
 }
 
 const env = loadRootEnv();
-console.log(`API  -> http://localhost:${env.PORT || 3005}/api/health`);
-console.log(`Web  -> http://localhost:4205`);
+console.log(`API  -> http://localhost:${env.PORT || 3006}/api/health`);
+console.log(`Web  -> http://localhost:4206`);
 const webEnv = { ...env };
 delete webEnv.PORT;
 
@@ -65,4 +65,4 @@ process.on('uncaughtException', (error) => {
 });
 
 start('API', ['--prefix', 'apps/api', 'run', 'start:dev'], env);
-start('Web', ['--prefix', 'apps/web', 'start', '--', '--port', '4205'], webEnv);
+start('Web', ['--prefix', 'apps/web', 'start', '--', '--port', '4206'], webEnv);

@@ -161,7 +161,7 @@ async function main() {
   env.NODE_ENV = 'production';
   env.DGOP_REQUIRE_STRICT_RUNTIME = 'true';
   env.HEALTH_INCLUDE_DETAILS = 'false';
-  const port = env.PORT || '3005';
+  const port = env.PORT || '3006';
 
   run(npmCmd, ['run', 'qa:release'], env);
   const cf = await ensureCloudflared();

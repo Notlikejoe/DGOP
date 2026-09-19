@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const webRoot = resolve(root, 'apps', 'web', 'dist', 'web', 'browser');
-const port = Number(process.env.DGOP_WEB_PORT ?? 4205);
-const apiPort = Number(process.env.DGOP_API_PORT ?? 3005);
+const port = Number(process.env.DGOP_WEB_PORT ?? 4206);
+const apiPort = Number(process.env.DGOP_API_PORT ?? 3006);
 
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',

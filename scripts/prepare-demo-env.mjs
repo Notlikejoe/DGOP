@@ -117,8 +117,8 @@ if (secretIsUnsafe(state.values.get('DGOP_WEBHOOK_TOKEN'))) {
 }
 
 if (!state.values.get('SEED_ADMIN_EMAIL')) setValue(state, 'SEED_ADMIN_EMAIL', 'admin@dgop.local');
-if (!state.values.get('PUBLIC_ORIGIN')) setValue(state, 'PUBLIC_ORIGIN', 'http://localhost:4205');
-if (!state.values.get('CORS_ORIGINS')) setValue(state, 'CORS_ORIGINS', 'http://localhost:4205');
+if (!state.values.get('PUBLIC_ORIGIN')) setValue(state, 'PUBLIC_ORIGIN', 'http://localhost:4206');
+if (!state.values.get('CORS_ORIGINS')) setValue(state, 'CORS_ORIGINS', 'http://localhost:4206,http://127.0.0.1:4206,http://localhost:3006');
 if (!state.values.get('JWT_EXPIRES_IN')) setValue(state, 'JWT_EXPIRES_IN', '8h');
 if (!state.values.get('DGOP_AUDIT_FAIL_CLOSED')) setValue(state, 'DGOP_AUDIT_FAIL_CLOSED', 'true');
 if (!state.values.get('DGOP_SEED_RISK_SCENARIO')) setValue(state, 'DGOP_SEED_RISK_SCENARIO', 'false');

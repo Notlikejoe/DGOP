@@ -65,7 +65,7 @@ function fail(message, detail) {
 }
 
 const env = loadRootEnv();
-const baseUrl = env.DGOP_UI_BASE_URL ?? 'http://localhost:4205';
+const baseUrl = env.DGOP_UI_BASE_URL ?? 'http://localhost:4206';
 const email = env.DGOP_SMOKE_EMAIL ?? 'admin@dgop.local';
 const password = env.DGOP_SMOKE_PASSWORD ?? env.SEED_ADMIN_PASSWORD;
 if (!password) fail('DGOP UI smoke requires DGOP_SMOKE_PASSWORD or SEED_ADMIN_PASSWORD.');
@@ -160,7 +160,7 @@ try {
         const shape = shapes.nth(index);
         const elementId = (await shape.getAttribute('data-element-id')) ?? '';
         if (!elementId || elementId.endsWith('_label')) continue;
-        await shape.click({ force: true });
+        await shape.dispatchEvent('click');
         splitEnabled = await splitButton.isEnabled();
         if (splitEnabled) break;
       }

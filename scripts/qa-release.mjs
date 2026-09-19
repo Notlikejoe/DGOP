@@ -122,7 +122,7 @@ function readHealth(port) {
 }
 
 async function assertDemoApiIsStopped(env) {
-  const port = Number(env.PORT ?? 3005);
+  const port = Number(env.PORT ?? 3006);
   if (!Number.isFinite(port) || port <= 0) return;
   const health = await readHealth(port);
   if (health?.service !== 'dgop-api') return;

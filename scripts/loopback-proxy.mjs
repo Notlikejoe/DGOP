@@ -1,6 +1,6 @@
 import { createServer, connect } from "node:net";
 
-const port = Number(process.argv[2] ?? 4205);
+const port = Number(process.argv[2] ?? 4206);
 
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   console.error("loopback-proxy requires a valid TCP port.");

@@ -30,7 +30,7 @@ export function localConfig(env) {
   if (decodeURIComponent(database.password) === 'change-me') {
     throw new Error('Replace the DATABASE_URL placeholder in .env with your local PostgreSQL connection.');
   }
-  const port = Number(env.PORT || 3005);
+  const port = Number(env.PORT || 3006);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be between 1 and 65535.');
   if (env.DGOP_BIND_HOST && env.DGOP_BIND_HOST !== '127.0.0.1') {
     throw new Error('start:local uses DGOP_BIND_HOST=127.0.0.1. Set it in your development .env.');

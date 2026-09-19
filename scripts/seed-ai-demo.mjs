@@ -27,7 +27,12 @@ const riskLibrarySource=JSON.parse(readFileSync(resolve(root,'scripts/data/sdaia
 const reason='User-requested isolated demonstration; synthetic evidence/configuration, no actual organization approval or migration pilot acceptance';
 const actors={};
 try {
- for(const [key,roles] of Object.entries({showcase:['AI_GOVERNANCE_OFFICER','AI_WORKING_GROUP','dmo_admin'],working:['AI_WORKING_GROUP'],officer:['AI_GOVERNANCE_OFFICER'],owner:['AI_USECASE_OWNER'],riskOwner:['AI_RISK_OWNER'],dataOwner:['data_owner'],executive:['AI_EXECUTIVE_TEAM'],ethics:['AI_ETHICS_COMMITTEE'],custodian:['dmo_admin'],privacy:['privacy_officer'],security:['security_reviewer'],model:['AI_MODEL_OWNER'],mlops:['AI_MLOPS_LEAD'],business:['business_steward'],steering:['STEERING_COMMITTEE']})){
+ const demoActorRoles={
+  showcase:['AI_GOVERNANCE_OFFICER','AI_WORKING_GROUP','dmo_admin'],working:['AI_WORKING_GROUP'],officer:['AI_GOVERNANCE_OFFICER'],owner:['AI_USECASE_OWNER'],riskOwner:['AI_RISK_OWNER'],dataOwner:['data_owner'],executive:['AI_EXECUTIVE_TEAM'],ethics:['AI_ETHICS_COMMITTEE'],custodian:['dmo_admin'],privacy:['privacy_officer'],security:['security_reviewer'],model:['AI_MODEL_OWNER'],mlops:['AI_MLOPS_LEAD'],business:['business_steward'],steering:['STEERING_COMMITTEE'],
+  compliance:['AI_COMPLIANCE_OFFICER'],auditor:['auditor'],executiveViewer:['executive'],workflowDesigner:['workflow_designer'],workflowPublisher:['workflow_publisher'],workflowReviewer:['workflow_reviewer'],administrator:['system_admin'],
+ };
+ credentials.previewUrl='http://localhost:4206/';
+ for(const [key,roles] of Object.entries(demoActorRoles)){
   const email=`demo.${key.toLowerCase()}@dgop.local`;let user=await db.user.findUnique({where:{email}});
   if(!user){const password=randomBytes(18).toString('base64url'),passwordHash=await require('bcryptjs').hash(password,12);
    user=await db.$transaction(async tx=>{const roleRows=await tx.role.findMany({where:{code:{in:roles},isActive:true,deletedAt:null}});if(roleRows.length!==roles.length)throw Error('Required installed demo role missing');const u=await tx.user.create({data:{email,displayName:`Demo · ${key}`,passwordHash,userRoles:{create:roleRows.map(r=>({roleId:r.id}))}}});await audit.logRequired({actor:'local-ai-demo',action:'ai.demo.actor.created',entityType:'user',entityId:u.id,metadata:{roles,reason,demoOnly:true}},tx);return u;});

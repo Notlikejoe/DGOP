@@ -82,9 +82,10 @@
 
         <p-tabs class="risk-detail-tabs" [value]="detailTab()" (valueChange)="detailTab.set($event)" [lazy]="true">
           <p-tablist>
-            <p-tab value="identification"><span class="risk-tab-option"><span class="risk-tab-icon"><app-icon name="idCard" /></span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.identification') }}</strong><small>{{ t('aiRisk.details.identificationHelp') }}</small></span><span class="tab-count">{{ identificationCount(item) }}/{{ detailFields().length }}</span></span></p-tab>
-            <p-tab value="lifecycle"><span class="risk-tab-option"><span class="risk-tab-icon"><app-icon name="workflow" /></span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.lifecycle') }}</strong><small>{{ t('aiRisk.details.lifecycleHelp') }}</small></span><span class="tab-count">{{ stageNumber(item) }}/6</span></span></p-tab>
-            <p-tab value="audit"><span class="risk-tab-option"><span class="risk-tab-icon"><app-icon name="scrollText" /></span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.audit') }}</strong><small>{{ t('aiRisk.details.auditHelp') }}</small></span><span class="tab-count tab-count--audit">{{ t('aiRisk.details.recorded') }}</span></span></p-tab>
+            <p-tab value="identification"><span class="risk-tab-option"><span class="risk-tab-index">1</span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.identification') }}</strong><small>{{ t('aiRisk.details.identificationHelp') }}</small></span><span class="tab-count">{{ identificationCount(item) }}/{{ detailFields().length }}</span></span></p-tab>
+            <p-tab value="assessment"><span class="risk-tab-option"><span class="risk-tab-index">2</span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.assessment') }}</strong><small>{{ t('aiRisk.details.assessmentHelp') }}</small></span><app-status-chip [kind]="workspaceStateKind('assessment', item)" [label]="t('aiRisk.lifecycle.state.' + workspaceState('assessment', item))" /></span></p-tab>
+            <p-tab value="treatment"><span class="risk-tab-option"><span class="risk-tab-index">3</span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.treatment') }}</strong><small>{{ t('aiRisk.details.treatmentHelp') }}</small></span><app-status-chip [kind]="workspaceStateKind('treatment', item)" [label]="t('aiRisk.lifecycle.state.' + workspaceState('treatment', item))" /></span></p-tab>
+            <p-tab value="audit"><span class="risk-tab-option"><span class="risk-tab-index">4</span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.audit') }}</strong><small>{{ t('aiRisk.details.auditHelp') }}</small></span><span class="tab-count tab-count--audit">{{ t('aiRisk.details.recorded') }}</span></span></p-tab>
           </p-tablist>
           <p-tabpanels>
             <p-tabpanel value="identification">
@@ -151,23 +152,14 @@
               </section>
             </p-tabpanel>
 
-            <p-tabpanel value="lifecycle">
+            <p-tabpanel value="assessment">
               @if (item.riskRef) {
-                <div class="risk-lifecycle-stack">
-                  <section class="ds-card risk-lifecycle-overview">
-                    <header class="risk-lifecycle-overview__head">
-                      <span class="risk-lifecycle-overview__icon"><app-icon name="workflow" /></span>
-                      <div><span class="eyebrow">{{ t('aiRisk.lifecycle.workspace') }}</span><h2>{{ t('aiRisk.details.lifecycle') }}</h2><p>{{ t('aiRisk.lifecycle.workspaceHelp') }}</p></div>
-                      <div class="risk-lifecycle-overview__progress"><strong>{{ stageProgress(item) }}%</strong><small>{{ t('aiRisk.stage.' + stageNumber(item)) }}</small><p-progressbar [value]="stageProgress(item)" [showValue]="false" /></div>
-                    </header>
-                    <p-table class="risk-lifecycle-table" [value]="lifecycleSteps" size="small" [stripedRows]="true" [showGridlines]="true" [tableStyle]="{'width':'100%'}">
-                      <ng-template #header><tr><th>{{ t('aiRisk.lifecycle.phase') }}</th><th>{{ t('aiRisk.lifecycle.activity') }}</th><th>{{ t('aiRisk.lifecycle.state') }}</th></tr></ng-template>
-                      <ng-template #body let-step><tr [class.risk-lifecycle-row--current]="lifecycleState(step, item) === 'current'">
-                        <td><span class="risk-phase-number">{{ step }}</span></td>
-                        <td><strong>{{ t('aiRisk.stage.' + step) }}</strong><small>{{ t('aiRisk.stage.' + step + '.help') }}</small></td>
-                        <td><app-status-chip [kind]="lifecycleStateKind(step, item)" [label]="t('aiRisk.lifecycle.state.' + lifecycleState(step, item))" /></td>
-                      </tr></ng-template>
-                    </p-table>
+                <div class="risk-lifecycle-stack risk-stage-workspace">
+                  <section class="ds-card risk-stage-summary risk-stage-summary--assessment">
+                    <span class="risk-stage-summary__icon"><app-icon name="searchAlert" /></span>
+                    <div><span class="eyebrow">{{ t('aiRisk.workspace.assessment.eyebrow') }}</span><h2>{{ t('aiRisk.workspace.assessment.title') }}</h2><p>{{ t('aiRisk.workspace.assessment.help') }}</p></div>
+                    <app-status-chip [kind]="workspaceStateKind('assessment', item)" [label]="t('aiRisk.lifecycle.state.' + workspaceState('assessment', item))" />
+                    <div class="risk-stage-next"><span><app-icon name="workflow" /></span><div><small>{{ t('aiRisk.workspace.nextAction') }}</small><strong>{{ t(assessmentNextAction(item)) }}</strong></div></div>
                   </section>
 
                   <section class="ds-card risk-lifecycle-phase">
@@ -193,6 +185,19 @@
                       <div class="risk-lifecycle-module"><app-ai-severity [riskId]="item.id" (updated)="load(item.id)" /></div>
                       <div class="risk-lifecycle-module"><app-ai-risk-strategy [riskId]="item.id" (updated)="load(item.id)" /></div>
                     </div>
+                  </section>
+                </div>
+              } @else { <section class="ds-card risk-tab-empty"><app-icon name="info" /><h3>{{ t('aiRisk.lifecycle.locked') }}</h3><p>{{ t('aiRisk.lifecycle.lockedHelp') }}</p></section> }
+            </p-tabpanel>
+
+            <p-tabpanel value="treatment">
+              @if (item.riskRef) {
+                <div class="risk-lifecycle-stack risk-stage-workspace">
+                  <section class="ds-card risk-stage-summary risk-stage-summary--treatment">
+                    <span class="risk-stage-summary__icon"><app-icon name="shield" /></span>
+                    <div><span class="eyebrow">{{ t('aiRisk.workspace.treatment.eyebrow') }}</span><h2>{{ t('aiRisk.workspace.treatment.title') }}</h2><p>{{ t('aiRisk.workspace.treatment.help') }}</p></div>
+                    <app-status-chip [kind]="workspaceStateKind('treatment', item)" [label]="t('aiRisk.lifecycle.state.' + workspaceState('treatment', item))" />
+                    <div class="risk-stage-next"><span><app-icon name="workflow" /></span><div><small>{{ t('aiRisk.workspace.nextAction') }}</small><strong>{{ t(treatmentNextAction(item)) }}</strong></div></div>
                   </section>
 
                   <section class="ds-card risk-lifecycle-phase">
@@ -220,7 +225,10 @@
               } @else { <section class="ds-card risk-tab-empty"><app-icon name="info" /><h3>{{ t('aiRisk.lifecycle.locked') }}</h3><p>{{ t('aiRisk.lifecycle.lockedHelp') }}</p></section> }
             </p-tabpanel>
 
-            <p-tabpanel value="audit"><app-ai-audit-query class="risk-audit-panel" [caseId]="item.workflowCase.id" [expanded]="true" /></p-tabpanel>
+            <p-tabpanel value="audit">
+              <section class="ds-card risk-audit-intro"><span class="risk-stage-summary__icon"><app-icon name="scrollText" /></span><div><span class="eyebrow">{{ t('aiRisk.workspace.audit.eyebrow') }}</span><h2>{{ t('aiRisk.details.audit') }}</h2><p>{{ t('aiRisk.workspace.audit.help') }}</p></div><app-status-chip kind="success" [label]="t('aiRisk.details.recorded')" /></section>
+              <app-ai-audit-query class="risk-audit-panel" [caseId]="item.workflowCase.id" [expanded]="true" />
+            </p-tabpanel>
           </p-tabpanels>
         </p-tabs>
       } @else {

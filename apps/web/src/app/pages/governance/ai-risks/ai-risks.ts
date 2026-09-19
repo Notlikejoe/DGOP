@@ -104,7 +104,7 @@ export class AiRisksPage implements OnInit {
     if (status === 'draft') return item.owner ? 2 : 1;
     if (['submitted', 'under_review', 'awaiting_information'].includes(status)) return 3;
     if (['decision_made', 'approved'].includes(status)) return 4;
-    if (['implemented', 'suspended'].includes(status)) return 5;
+    if (['implemented', 'suspended'].includes(status)) return 6;
     return 6;
   }
   protected stageProgress(item: RiskItem): number { return Math.round(this.stageNumber(item) / 6 * 100); }
@@ -115,6 +115,30 @@ export class AiRisksPage implements OnInit {
   protected lifecycleStateKind(step: number, item: RiskItem): 'success' | 'info' | 'muted' {
     const state = this.lifecycleState(step, item);
     return state === 'complete' ? 'success' : state === 'current' ? 'info' : 'muted';
+  }
+  protected workspaceState(workspace: 'assessment' | 'treatment', item: RiskItem): 'complete' | 'current' | 'upcoming' {
+    const stage = this.stageNumber(item);
+    if (workspace === 'assessment') return stage > 4 ? 'complete' : stage >= 3 ? 'current' : 'upcoming';
+    if (item.workflowCase.status === 'closed') return 'complete';
+    return stage >= 5 ? 'current' : 'upcoming';
+  }
+  protected workspaceStateKind(workspace: 'assessment' | 'treatment', item: RiskItem): 'success' | 'info' | 'muted' {
+    const state = this.workspaceState(workspace, item);
+    return state === 'complete' ? 'success' : state === 'current' ? 'info' : 'muted';
+  }
+  protected assessmentNextAction(item: RiskItem): string {
+    const stage = this.stageNumber(item);
+    if (stage < 3) return 'aiRisk.workspace.assessment.action.locked';
+    if (stage === 3) return 'aiRisk.workspace.assessment.action.score';
+    if (stage === 4) return 'aiRisk.workspace.assessment.action.decide';
+    return 'aiRisk.workspace.assessment.action.complete';
+  }
+  protected treatmentNextAction(item: RiskItem): string {
+    const stage = this.stageNumber(item);
+    if (stage < 5) return 'aiRisk.workspace.treatment.action.locked';
+    if (stage === 5) return 'aiRisk.workspace.treatment.action.execute';
+    if (item.workflowCase.status === 'closed') return 'aiRisk.workspace.treatment.action.complete';
+    return 'aiRisk.workspace.treatment.action.monitor';
   }
   protected label(value: { nameEn: string; nameAr: string } | null): string { return value ? (this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn) : '—'; }
   protected ownerLabel(value: { fullNameEn: string; fullNameAr: string }): string { return this.i18n.lang() === 'ar' ? value.fullNameAr : value.fullNameEn; }

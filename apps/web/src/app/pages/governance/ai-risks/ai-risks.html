@@ -66,11 +66,14 @@
           <div class="risk-detail-status"><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /><strong>{{ stageProgress(item) }}%</strong><p-progressbar [value]="stageProgress(item)" [showValue]="false" /></div>
         </section>
 
-        @if (!item.libraryVersion && item.workflowCase.status === 'draft') {
+        @if (item.workflowCase.status === 'draft') {
           <section class="ds-card risk-manual-next" role="status">
             <span class="risk-create-icon risk-create-icon--small"><app-icon name="edit" /></span>
-            <div><strong>{{ t('aiRisk.manualNext.title') }}</strong><p>{{ t(item.owner ? (item.canEdit ? 'aiRisk.manualNext.complete' : 'aiRisk.manualNext.owner') : 'aiRisk.manualNext.assign') }}</p></div>
-            <span class="risk-manual-next__step">{{ item.owner ? (item.canEdit ? '3/3' : '2/3') : '1/3' }}</span>
+            <div><strong>{{ t('aiRisk.nextAction.title') }}</strong><p>{{ t(item.owner ? (item.canEdit ? 'aiRisk.nextAction.complete' : 'aiRisk.nextAction.owner') : 'aiRisk.nextAction.assign') }}</p>@if (item.owner) { <small>{{ t('aiRisk.nextAction.outcome') }}</small> }</div>
+            <div class="risk-manual-next__actions">
+              <app-status-chip [kind]="item.owner ? (item.canEdit ? 'success' : 'info') : 'muted'" [label]="item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned')" />
+              @if (item.owner) { <button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple (click)="scrollToIntake()">{{ t('aiRisk.nextAction.openForm') }}</button> }
+            </div>
           </section>
         }
 
@@ -105,20 +108,27 @@
                   <section class="ds-card risk-owner-card">
                     <header class="risk-compact-head risk-compact-head--owner">
                       <span class="risk-phase-number">2</span>
-                      <div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t('aiRisk.assignOwner') }}</h2><p>{{ t('aiRisk.assignOwnerHelp') }}</p></div>
-                      <app-status-chip kind="muted" [label]="t('aiRisk.unassigned')" />
+                      <div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t(item.owner ? 'aiRisk.reassignOwner' : 'aiRisk.assignOwner') }}</h2><p>{{ t('aiRisk.assignOwnerHelp') }}</p></div>
+                      <app-status-chip [kind]="item.owner ? 'info' : 'muted'" [label]="item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned')" />
                     </header>
                     <div class="risk-owner-form">
                       <label><span>{{ t('aiRisk.owner') }}</span><p-select [options]="lookups().riskOwners" optionValue="userId" [optionLabel]="i18n.lang() === 'ar' ? 'fullNameAr' : 'fullNameEn'" [filter]="true" [placeholder]="t('aiuc.select')" [ngModel]="ownerUserId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerUserId.set($event || '')" [ariaLabel]="t('aiRisk.owner')" /></label>
                       <label><span>{{ t('aiReview.justification') }}</span><textarea pTextarea rows="2" maxlength="2000" [placeholder]="t('aiRisk.ownerJustificationHint')" [ngModel]="ownerJustification()" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerJustification.set($event)"></textarea></label>
-                      <button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t('aiRisk.assignOwner') }}</button>
+                      <button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t(item.owner ? 'aiRisk.reassignOwner' : 'aiRisk.assignOwner') }}</button>
                     </div>
                   </section>
                 }
               </div>
 
-              <section class="ds-card specialist-decision risk-intake">
+              <section #riskIntake class="ds-card specialist-decision risk-intake">
                 <header class="risk-intake-head"><div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t('aiRisk.intake') }}</h2><p>{{ t(item.canEdit ? 'aiRisk.editHint' : 'aiRisk.readOnlyHint') }}</p></div>@if (item.canEdit) { <app-status-chip kind="success" [label]="t('aiRisk.editable')" /> }</header>
+                @if (item.workflowCase.status === 'draft' && item.owner) {
+                  <div class="risk-intake-next" [class.risk-intake-next--active]="item.canEdit" role="status">
+                    <span class="risk-phase-number">{{ item.canEdit ? '3' : '2' }}</span>
+                    <div><strong>{{ t(item.canEdit ? 'aiRisk.nextAction.editorTitle' : 'aiRisk.nextAction.ownerTitle') }}</strong><p>{{ t(item.canEdit ? 'aiRisk.nextAction.editorHelp' : 'aiRisk.nextAction.ownerHelp') }}</p></div>
+                    <app-status-chip [kind]="item.canEdit ? 'success' : 'info'" [label]="item.canEdit ? t('aiRisk.submit') : ownerLabel(item.owner)" />
+                  </div>
+                }
                 @if (item.suggestedControlPins; as suggestions) { <section class="risk-suggestions"><strong>{{ t('aiControls.librarySuggestions') }}</strong><div>@for (pin of suggestions.controlPins; track pin.versionId) { <span>{{ pin.controlCode }} · {{ i18n.lang() === 'ar' ? pin.titleAr : pin.titleEn }}</span> }</div><small>{{ t('aiControls.suggestions') }}</small></section> }
                 <p-table [value]="detailFields()" dataKey="field" [stripedRows]="true" [tableStyle]="{'width':'100%','table-layout':'fixed'}">
                   <ng-template #header><tr><th>{{ t('aiRisk.tableField') }}</th><th>{{ t('aiRisk.tableValue') }}</th></tr></ng-template>
@@ -137,7 +147,7 @@
                 </p-table>
                 @if (item.canEdit) {
                   <div class="decision-actions risk-save-actions"><button type="button" class="ds-btn ds-btn--ghost" pRipple [disabled]="working()" (click)="save()">{{ t('aiRisk.save') }}</button><button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !lookups().ready" (click)="save(true)">{{ t('aiRisk.submit') }}</button></div>
-                } @else { <div class="review-gate-note"><app-icon name="info" /><span>{{ t(item.workflowCase.status === 'draft' ? 'aiRisk.ownerOnly' : 'aiRisk.awaitingAssessment') }}</span></div> }
+                } @else { <div class="review-gate-note"><app-icon name="info" /><span>{{ t(item.workflowCase.status === 'draft' ? 'aiRisk.nextAction.ownerHelp' : 'aiRisk.awaitingAssessment') }}</span></div> }
               </section>
             </p-tabpanel>
 

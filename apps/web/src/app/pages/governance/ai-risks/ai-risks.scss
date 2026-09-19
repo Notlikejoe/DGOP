@@ -65,6 +65,9 @@
 .risk-manual-next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: .65rem .8rem; border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); background: linear-gradient(110deg, color-mix(in srgb, var(--primary-soft) 45%, var(--surface)), var(--surface) 72%); }
 .risk-manual-next strong { font-size: .82rem; }
 .risk-manual-next p { margin: .12rem 0 0; color: var(--command-muted); font-size: .72rem; }
+.risk-manual-next small { display: block; margin-top: .18rem; color: var(--primary); font-size: .66rem; font-weight: 750; }
+.risk-manual-next__actions { display: grid; justify-items: end; gap: .35rem; }
+.risk-manual-next__actions .ds-btn { min-height: 1.8rem; padding: .2rem .5rem; font-size: .67rem; white-space: nowrap; }
 .risk-manual-next__step { display: inline-flex; align-items: center; justify-content: center; min-width: 2.6rem; padding: .22rem .45rem; border-radius: var(--radius-pill); color: var(--primary); background: var(--primary-soft); font-size: .72rem; font-weight: 850; }
 :host ::ng-deep .risk-detail-tabs .p-tablist { overflow: hidden; }
 :host ::ng-deep .risk-detail-tabs .p-tablist-content { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface-2) 72%, var(--surface)); padding: .35rem; gap: .35rem; overflow: hidden; }
@@ -106,6 +109,10 @@
 .risk-owner-form .ds-btn { justify-content: center; min-height: 2rem; width: 100%; }
 .risk-intake { padding: .7rem; }
 .risk-intake-head { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
+.risk-intake-next { display: grid; grid-template-columns: 1.7rem minmax(0, 1fr) auto; align-items: center; gap: .55rem; margin-top: .55rem; padding: .5rem .6rem; border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--primary-soft) 28%, var(--surface)); }
+.risk-intake-next--active { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); background: color-mix(in srgb, var(--success-soft) 42%, var(--surface)); }
+.risk-intake-next strong { font-size: .75rem; }
+.risk-intake-next p { margin: .08rem 0 0; color: var(--command-muted); font-size: .67rem; }
 .risk-intake b { color: var(--danger); }
 .risk-unsaved { display: inline-block; margin-top: .38rem; padding: .18rem .52rem; color: var(--warning); background: var(--warning-soft); border-radius: var(--radius-pill); font-weight: 800; }
 .risk-suggestions { margin: var(--space-3) 0; padding: .7rem .8rem; border-radius: var(--radius-md); background: color-mix(in srgb, var(--primary-soft) 36%, var(--surface)); }

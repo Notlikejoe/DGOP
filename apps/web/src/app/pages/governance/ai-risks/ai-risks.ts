@@ -48,6 +48,7 @@ interface RiskLookups {
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
   @ViewChild('riskDetail') private riskDetail?: ElementRef<HTMLElement>;
+  @ViewChild('riskIntake') private riskIntake?: ElementRef<HTMLElement>;
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
@@ -165,6 +166,9 @@ export class AiRisksPage implements OnInit {
     await this.load(id);
     requestAnimationFrame(() => this.riskDetail?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
+  protected scrollToIntake(): void {
+    requestAnimationFrame(() => this.riskIntake?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
@@ -183,7 +187,7 @@ export class AiRisksPage implements OnInit {
     this.working.set(true);
     try { await firstValueFrom(this.http.post(`/api/ai/risks/${item.id}/owner`, {
       expectedVersion: item.version, ownerUserId: this.ownerUserId(), justification: this.ownerJustification().trim() }));
-      this.toast.success(this.t('aiRisk.ownerSaved')); await this.load(item.id);
+      this.toast.success(this.t('aiRisk.ownerSaved')); await this.load(item.id); this.scrollToIntake();
     } catch (error) { this.toast.errorFrom(error, this.t('aiRisk.error')); } finally { this.working.set(false); }
   }
   protected async deleteRisk(item: RiskItem): Promise<void> {

@@ -115,14 +115,61 @@
 .risk-intake td app-ai-control-picker fieldset { margin: 0; border: 0; padding: 0; }
 .risk-cell-value { white-space: pre-wrap; overflow-wrap: anywhere; }
 .risk-save-actions { position: sticky; inset-block-end: .5rem; justify-content: flex-end; margin-top: .6rem; padding: .45rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: var(--shadow-sm); backdrop-filter: blur(10px); z-index: 2; }
-.risk-lifecycle-stack { gap: .65rem; }
-:host ::ng-deep .risk-lifecycle-stack .assessment-heading,
-:host ::ng-deep .risk-lifecycle-stack .decision-card,
-:host ::ng-deep .risk-lifecycle-stack .criterion-card,
-:host ::ng-deep .risk-lifecycle-stack .journey-panel { padding: .7rem; gap: .65rem; }
-:host ::ng-deep .risk-lifecycle-stack h2 { font-size: .95rem; }
-:host ::ng-deep .risk-lifecycle-stack textarea { min-height: 44px; }
-:host ::ng-deep .risk-lifecycle-stack .assessment-progress { margin-block: .35rem; }
+.risk-lifecycle-stack { gap: .75rem; }
+.risk-lifecycle-overview { display: grid; gap: .65rem; padding: .75rem; overflow: hidden; }
+.risk-lifecycle-overview__head { display: grid; grid-template-columns: 2.35rem minmax(0, 1fr) minmax(9rem, 15rem); align-items: center; gap: .7rem; }
+.risk-lifecycle-overview__head h2, .risk-lifecycle-overview__head p { margin: 0; }
+.risk-lifecycle-overview__head h2 { font-size: 1rem; }
+.risk-lifecycle-overview__head p { margin-top: .12rem; color: var(--command-muted); font-size: .73rem; }
+.risk-lifecycle-overview__icon { display: grid; place-items: center; width: 2.35rem; aspect-ratio: 1; border-radius: var(--radius-md); color: var(--primary); background: var(--primary-soft); }
+.risk-lifecycle-overview__progress { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: .15rem .45rem; }
+.risk-lifecycle-overview__progress strong { color: var(--primary); font-size: 1.05rem; }
+.risk-lifecycle-overview__progress small { color: var(--command-muted); font-size: .68rem; font-weight: 750; text-align: end; }
+.risk-lifecycle-overview__progress p-progressbar { grid-column: 1 / -1; }
+:host ::ng-deep .risk-lifecycle-overview__progress .p-progressbar { height: .32rem; }
+:host ::ng-deep .risk-lifecycle-table .p-datatable { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
+:host ::ng-deep .risk-lifecycle-table .p-datatable-thead > tr > th { padding: .38rem .55rem; color: var(--command-muted); background: color-mix(in srgb, var(--surface-2) 78%, var(--surface)); font-size: .67rem; letter-spacing: .045em; text-transform: uppercase; }
+:host ::ng-deep .risk-lifecycle-table .p-datatable-tbody > tr > td { padding: .35rem .55rem; vertical-align: middle; font-size: .74rem; }
+:host ::ng-deep .risk-lifecycle-table .p-datatable-thead > tr > th:first-child,
+:host ::ng-deep .risk-lifecycle-table .p-datatable-tbody > tr > td:first-child { width: 4.25rem; text-align: center; }
+:host ::ng-deep .risk-lifecycle-table .p-datatable-thead > tr > th:last-child,
+:host ::ng-deep .risk-lifecycle-table .p-datatable-tbody > tr > td:last-child { width: 8.5rem; }
+:host ::ng-deep .risk-lifecycle-table .p-datatable-tbody > tr > td:nth-child(2) { display: grid; gap: .02rem; }
+:host ::ng-deep .risk-lifecycle-table .p-datatable-tbody > tr > td:nth-child(2) small { color: var(--command-muted); font-size: .66rem; }
+:host ::ng-deep .risk-lifecycle-table .risk-lifecycle-row--current > td { background: color-mix(in srgb, var(--primary-soft) 44%, var(--surface)); }
+.risk-phase-number { display: inline-grid; place-items: center; width: 1.7rem; aspect-ratio: 1; border-radius: .48rem; color: var(--primary); background: var(--primary-soft); font-size: .72rem; font-weight: 900; }
+.risk-lifecycle-phase { padding: 0; overflow: hidden; }
+.risk-lifecycle-phase__head { display: grid; grid-template-columns: 1.9rem minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: .58rem .7rem; border-bottom: 1px solid var(--border); background: linear-gradient(90deg, color-mix(in srgb, var(--primary-soft) 35%, var(--surface)), var(--surface) 55%); }
+.risk-lifecycle-phase__head h3, .risk-lifecycle-phase__head p { margin: 0; }
+.risk-lifecycle-phase__head h3 { font-size: .9rem; }
+.risk-lifecycle-phase__head p { margin-top: .08rem; color: var(--command-muted); font-size: .68rem; }
+.risk-lifecycle-phase__body { display: grid; gap: .55rem; padding: .55rem; background: color-mix(in srgb, var(--surface-2) 58%, var(--surface)); }
+.risk-lifecycle-phase__body--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.risk-lifecycle-phase__body--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.risk-lifecycle-module { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 1px 2px rgb(15 23 42 / 4%); }
+.risk-lifecycle-module--wide { grid-column: 1 / -1; }
+.risk-lifecycle-module > * { display: block; min-width: 0; }
+:host ::ng-deep .risk-lifecycle-module .assessment-workspace { gap: .5rem; }
+:host ::ng-deep .risk-lifecycle-module .assessment-heading { padding: .55rem .65rem; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: color-mix(in srgb, var(--surface-2) 72%, var(--surface)); box-shadow: none; }
+:host ::ng-deep .risk-lifecycle-module .assessment-heading app-icon { color: var(--primary); }
+:host ::ng-deep .risk-lifecycle-module .assessment-heading h2 { font-size: .84rem; }
+:host ::ng-deep .risk-lifecycle-module .assessment-heading p { font-size: .67rem; }
+:host ::ng-deep .risk-lifecycle-module .decision-card,
+:host ::ng-deep .risk-lifecycle-module .criterion-card,
+:host ::ng-deep .risk-lifecycle-module .journey-panel { margin: 0 .5rem .5rem; padding: .6rem; gap: .5rem; border-radius: var(--radius-sm); box-shadow: none; }
+:host ::ng-deep .risk-lifecycle-module h2 { font-size: .84rem; }
+:host ::ng-deep .risk-lifecycle-module p { font-size: .72rem; }
+:host ::ng-deep .risk-lifecycle-module label { gap: .25rem; font-size: .7rem; }
+:host ::ng-deep .risk-lifecycle-module input,
+:host ::ng-deep .risk-lifecycle-module select,
+:host ::ng-deep .risk-lifecycle-module textarea { min-height: 34px; padding: .35rem .45rem; font-size: .73rem; }
+:host ::ng-deep .risk-lifecycle-module textarea { min-height: 44px; }
+:host ::ng-deep .risk-lifecycle-module .assessment-progress { margin-block: .25rem; }
+:host ::ng-deep .risk-lifecycle-module .review-summary { margin: 0 .5rem; gap: .45rem; }
+:host ::ng-deep .risk-lifecycle-module .review-summary__item { padding: .55rem; box-shadow: none; }
+:host ::ng-deep .risk-lifecycle-module > .assessment-workspace > p,
+:host ::ng-deep .risk-lifecycle-module > .assessment-workspace > button,
+:host ::ng-deep .risk-lifecycle-module > .assessment-workspace > .override-notice { margin-inline: .5rem; }
 :host ::ng-deep .risk-audit-panel .journey-panel { margin: 0; padding: .7rem; }
 :host ::ng-deep .risk-audit-panel .journey-panel > details > summary { display: flex; align-items: center; min-height: 2rem; font-size: .85rem; }
 :host ::ng-deep .risk-audit-panel .journey-panel > details > p { margin: .25rem 0 .55rem; color: var(--command-muted); font-size: .75rem; }
@@ -217,6 +264,7 @@
   .risk-cycle ol { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .risk-cycle li:nth-child(3)::after { display: none; }
   .risk-identification-grid { grid-template-columns: 1fr; }
+  .risk-lifecycle-phase__body--three { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .risk-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -235,6 +283,9 @@
   .risk-create-footer > span { max-width: none; }
   .risk-create-submit { width: 100%; }
   .risk-library-details .annual-completion { grid-template-columns: 1fr; }
+  .risk-lifecycle-overview__head { grid-template-columns: 2.35rem minmax(0, 1fr); }
+  .risk-lifecycle-overview__progress { grid-column: 1 / -1; }
+  .risk-lifecycle-phase__body--two { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .risk-manual-path { grid-template-columns: 1fr; }

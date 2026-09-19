@@ -85,7 +85,7 @@ export class AiRisksPage implements OnInit {
     ...this.lookups().lists.filter(list => list.field !== 'risk_category').map(list => ({ field: list.field, kind: 'select', required: true })),
     ...this.otherFields,
   ]);
-  protected readonly lifecycleSteps = [1, 2, 3, 4, 5, 6] as const;
+  protected readonly lifecycleSteps = [1, 2, 3, 4, 5, 6];
   protected readonly filteredItems = computed(() => {
     const search = this.riskSearch().trim().toLocaleLowerCase(), status = this.riskStatus();
     return this.items().filter(item => (status === 'all' || item.workflowCase.status === status)
@@ -107,6 +107,14 @@ export class AiRisksPage implements OnInit {
     return 6;
   }
   protected stageProgress(item: RiskItem): number { return Math.round(this.stageNumber(item) / 6 * 100); }
+  protected lifecycleState(step: number, item: RiskItem): 'complete' | 'current' | 'upcoming' {
+    const current = this.stageNumber(item);
+    return step < current ? 'complete' : step === current ? 'current' : 'upcoming';
+  }
+  protected lifecycleStateKind(step: number, item: RiskItem): 'success' | 'info' | 'muted' {
+    const state = this.lifecycleState(step, item);
+    return state === 'complete' ? 'success' : state === 'current' ? 'info' : 'muted';
+  }
   protected label(value: { nameEn: string; nameAr: string } | null): string { return value ? (this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn) : '—'; }
   protected ownerLabel(value: { fullNameEn: string; fullNameAr: string }): string { return this.i18n.lang() === 'ar' ? value.fullNameAr : value.fullNameEn; }
   protected optionLabel(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }

@@ -394,3 +394,288 @@
     overflow-x: auto;
   }
 }
+
+/* AI Governance workbench: compact PrimeNG treatment shared by all six tools. */
+.content .page.governance-modern.ai-governance-screen {
+  --ai-workbench-gap: .65rem;
+  --ai-control-height: 34px;
+  gap: var(--ai-workbench-gap);
+  width: 100%;
+  max-width: 1800px;
+}
+
+.content .page.governance-modern.ai-governance-screen > .page__header {
+  min-height: 82px;
+  padding: .72rem 1rem .72rem 1.3rem;
+  border-width: 1px;
+  border-color: #334155;
+  border-radius: 11px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, .2);
+}
+
+.content .page.governance-modern.ai-governance-screen > .page__header::before {
+  inset-block: .72rem;
+  inset-inline-start: .65rem;
+  width: 3px;
+}
+
+.content .page.governance-modern.ai-governance-screen > .page__header h1 {
+  margin-bottom: .16rem;
+  font-size: clamp(1.28rem, 1.55vw, 1.65rem);
+  line-height: 1.08;
+}
+
+.content .page.governance-modern.ai-governance-screen > .page__header .eyebrow {
+  margin-bottom: .14rem;
+  font-size: .66rem;
+}
+
+.content .page.governance-modern.ai-governance-screen > .page__header .page__subtitle {
+  max-width: 110ch;
+  margin: 0;
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
+.content .page.governance-modern.ai-governance-screen .ds-card,
+.content .page.governance-modern.ai-governance-screen .panel,
+.content .page.governance-modern.ai-governance-screen .case-card,
+.content .page.governance-modern.ai-governance-screen .row-card {
+  background: var(--surface);
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--border) 82%, #94a3b8);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .08), 0 5px 12px rgba(15, 23, 42, .045);
+}
+
+.content .page.ai-governance-screen.admin-modern .admin-metrics {
+  gap: .45rem;
+  padding: .38rem;
+  background: color-mix(in srgb, var(--surface-2) 82%, var(--surface));
+  border-width: 1px;
+  border-color: var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+}
+
+.content .page.ai-governance-screen.admin-modern .admin-metric {
+  min-height: 54px;
+  gap: .55rem;
+  padding: .42rem .62rem;
+  background: color-mix(in srgb, var(--metric-soft) 74%, var(--surface));
+  border-width: 1px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.content .page.ai-governance-screen.admin-modern .admin-metric:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--metric-accent) 12%, transparent);
+}
+
+.content .page.ai-governance-screen.admin-modern .admin-metric__icon {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.content .page.ai-governance-screen.admin-modern .admin-metric small { font-size: .68rem; }
+.content .page.ai-governance-screen.admin-modern .admin-metric strong { font-size: 1.3rem; }
+
+.content .page.ai-governance-screen .ds-btn,
+.content .page.ai-governance-screen button:not(.p-tab):not(.p-select-option):not(.p-multiselect-option):not(.p-checkbox-box):not(.djs-palette-entry) {
+  min-height: 32px;
+  padding: .34rem .62rem;
+  border-width: 1px;
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .12);
+  font-size: .75rem;
+  transform: none;
+}
+
+.content .page.ai-governance-screen .ds-btn:hover:not(:disabled),
+.content .page.ai-governance-screen button:hover:not(:disabled):not(.p-tab):not(.p-select-option):not(.p-multiselect-option):not(.p-checkbox-box):not(.djs-palette-entry) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 7px rgba(15, 23, 42, .15);
+}
+
+.content .page.ai-governance-screen input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.content .page.ai-governance-screen select,
+.content .page.ai-governance-screen textarea,
+.content .page.ai-governance-screen .p-select,
+.content .page.ai-governance-screen .p-multiselect {
+  min-height: var(--ai-control-height);
+  padding-block: .32rem;
+  background: var(--surface);
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--border) 80%, #94a3b8);
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: .78rem;
+}
+
+.content .page.ai-governance-screen textarea { min-height: 62px; }
+.content .page.ai-governance-screen label { gap: .3rem; font-size: .75rem; }
+
+.content .page.ai-governance-screen input:focus,
+.content .page.ai-governance-screen select:focus,
+.content .page.ai-governance-screen textarea:focus,
+.content .page.ai-governance-screen .p-select.p-focus,
+.content .page.ai-governance-screen .p-multiselect.p-focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+.content .page.ai-governance-screen .p-tablist-tab-list,
+.content .page.ai-governance-screen .p-tablist-content {
+  gap: .2rem;
+  padding: .25rem;
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.content .page.ai-governance-screen .p-tab {
+  min-height: 34px;
+  padding: .38rem .62rem;
+  border-radius: 7px;
+  font-size: .74rem;
+  font-weight: 750;
+}
+
+.content .page.ai-governance-screen .p-tab-active {
+  color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+}
+
+.content .page.ai-governance-screen .p-tablist-active-bar { display: none; }
+
+.content .page.ai-governance-screen .p-datatable-table-container {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  scrollbar-gutter: stable;
+}
+
+.content .page.ai-governance-screen .p-datatable-thead > tr > th {
+  padding: .42rem .52rem;
+  color: var(--on-surface);
+  background: color-mix(in srgb, var(--primary-soft) 35%, var(--surface));
+  border-color: var(--border);
+  font-size: .69rem;
+  font-weight: 800;
+  letter-spacing: .025em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.content .page.ai-governance-screen .p-datatable-tbody > tr > td {
+  padding: .38rem .52rem;
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  font-size: .76rem;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+
+.content .page.ai-governance-screen .p-datatable-tbody > tr {
+  transition: background-color .14s ease, box-shadow .14s ease;
+}
+
+.content .page.ai-governance-screen .p-datatable-tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--primary-soft) 24%, var(--surface));
+}
+
+.content .page.ai-governance-screen .p-paginator {
+  min-height: 38px;
+  padding: .18rem .4rem;
+  border-top: 1px solid var(--border);
+  font-size: .74rem;
+}
+
+.content .page.ai-governance-screen .p-paginator .p-paginator-page,
+.content .page.ai-governance-screen .p-paginator .p-paginator-first,
+.content .page.ai-governance-screen .p-paginator .p-paginator-prev,
+.content .page.ai-governance-screen .p-paginator .p-paginator-next,
+.content .page.ai-governance-screen .p-paginator .p-paginator-last {
+  min-width: 30px;
+  height: 30px;
+}
+
+.content .page.ai-governance-screen .decision-card,
+.content .page.ai-governance-screen .review-calendar,
+.content .page.ai-governance-screen .review-process,
+.content .page.ai-governance-screen .review-toolbar,
+.content .page.ai-governance-screen .intake-toolbar {
+  gap: .6rem;
+  padding: .68rem .76rem;
+}
+
+.content .page.ai-governance-screen .section-head {
+  gap: .55rem;
+  padding: .58rem .72rem;
+}
+
+.content .page.ai-governance-screen .section-head > span,
+.content .page.ai-governance-screen .section-head > app-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.content .page.ai-governance-screen h2 { font-size: .96rem; line-height: 1.25; }
+.content .page.ai-governance-screen h3 { font-size: .86rem; line-height: 1.25; }
+.content .page.ai-governance-screen p { line-height: 1.38; }
+
+.content .page.ai-governance-screen .review-kpis,
+.content .page.ai-governance-screen .dashboard-kpis,
+.content .page.ai-governance-screen .criterion-grid,
+.content .page.ai-governance-screen .annual-findings {
+  gap: .58rem;
+}
+
+.content .page.ai-governance-screen .review-kpi,
+.content .page.ai-governance-screen .dashboard-kpi,
+.content .page.ai-governance-screen .criterion-card {
+  gap: .5rem;
+  min-height: 0;
+  padding: .65rem;
+}
+
+.content .page.ai-governance-screen .dashboard-kpi > strong,
+.content .page.ai-governance-screen .review-kpi > strong,
+.content .page.ai-governance-screen .review-kpi div > strong { font-size: 1.45rem; }
+
+.content .page.ai-governance-screen .configuration-gate,
+.content .page.ai-governance-screen .override-notice,
+.content .page.ai-governance-screen .state-card {
+  padding: .65rem .75rem;
+}
+
+.content .page.ai-governance-screen .p-progressbar { height: .32rem; border-radius: 999px; }
+.content .page.ai-governance-screen .p-tag { font-size: .67rem; }
+
+.content .page.ai-governance-screen ::-webkit-scrollbar { width: 9px; height: 9px; }
+.content .page.ai-governance-screen ::-webkit-scrollbar-track { background: color-mix(in srgb, var(--surface-2) 72%, var(--surface)); }
+.content .page.ai-governance-screen ::-webkit-scrollbar-thumb { background: #94a3b8; border: 2px solid var(--surface); border-radius: 999px; }
+.content .page.ai-governance-screen ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+[data-theme='dark'] .content .page.ai-governance-screen.admin-modern .admin-metrics,
+[data-theme='dark'] .content .page.ai-governance-screen .p-tablist-tab-list,
+[data-theme='dark'] .content .page.ai-governance-screen .p-tablist-content {
+  background: color-mix(in srgb, var(--surface-2) 86%, #020617);
+}
+
+@media (max-width: 900px) {
+  .content .page.governance-modern.ai-governance-screen > .page__header { min-height: 0; }
+  .content .page.ai-governance-screen .review-kpis,
+  .content .page.ai-governance-screen .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .content .page.governance-modern.ai-governance-screen > .page__header { padding: .72rem .78rem .72rem 1.15rem; }
+  .content .page.ai-governance-screen .review-kpis,
+  .content .page.ai-governance-screen .dashboard-kpis { grid-template-columns: 1fr; }
+}

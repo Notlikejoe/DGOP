@@ -59,12 +59,20 @@
       </p-table>
     </section>
 
-    <main class="review-main risk-detail">
+    <main #riskDetail class="review-main risk-detail">
       @if (selected(); as item) {
         <section class="ds-card risk-detail-head">
           <div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.riskRef || item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2><p>{{ t('aiRisk.detailHelp') }}</p>@if (dirty()) { <small class="risk-unsaved" role="status">{{ t('aiRisk.unsaved') }}</small> }</div>
           <div class="risk-detail-status"><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /><strong>{{ stageProgress(item) }}%</strong><p-progressbar [value]="stageProgress(item)" [showValue]="false" /></div>
         </section>
+
+        @if (!item.libraryVersion && item.workflowCase.status === 'draft') {
+          <section class="ds-card risk-manual-next" role="status">
+            <span class="risk-create-icon risk-create-icon--small"><app-icon name="edit" /></span>
+            <div><strong>{{ t('aiRisk.manualNext.title') }}</strong><p>{{ t(item.owner ? (item.canEdit ? 'aiRisk.manualNext.complete' : 'aiRisk.manualNext.owner') : 'aiRisk.manualNext.assign') }}</p></div>
+            <span class="risk-manual-next__step">{{ item.owner ? (item.canEdit ? '3/3' : '2/3') : '1/3' }}</span>
+          </section>
+        }
 
         @if (item.useCase.operationalStatusCode) { <section class="ds-card risk-alert" role="status"><app-icon name="info" /><div><strong>{{ t('aiJourney.operational.' + item.useCase.operationalStatusCode) }}</strong><p>{{ t('aiJourney.intakePaused') }}</p></div></section> }
         @if (item.libraryVersion; as libraryVersion) { <section class="ds-card risk-alert"><app-icon name="shield" /><div><strong>{{ libraryVersion.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ libraryVersion.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></div></section> }

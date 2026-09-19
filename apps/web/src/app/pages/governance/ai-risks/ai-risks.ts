@@ -3,7 +3,7 @@ import { AiSeverity } from './ai-severity';
 import { AiRiskStrategy } from './ai-risk-strategy';
 import { AiControlPicker, ControlTag } from './ai-control-picker';
 import { AiRiskInitiation } from './ai-risk-initiation';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -47,6 +47,7 @@ interface RiskLookups {
 @Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule, DialogModule, ProgressBarModule, RippleModule, TabsModule, TooltipModule],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRisksPage implements OnInit {
+  @ViewChild('riskDetail') private riskDetail?: ElementRef<HTMLElement>;
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
@@ -150,7 +151,12 @@ export class AiRisksPage implements OnInit {
     this.dirty.set(!!cached);
   }
   protected openRisk(item: RiskItem, tab: string = 'identification'): void { this.select(item); this.detailTab.set(tab); }
-  protected createdRisk(id: string): void { this.createOpen.set(false); void this.load(id); }
+  protected async createdRisk(id: string): Promise<void> {
+    this.createOpen.set(false);
+    this.detailTab.set('identification');
+    await this.load(id);
+    requestAnimationFrame(() => this.riskDetail?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {

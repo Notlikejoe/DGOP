@@ -28,6 +28,11 @@ import { AiRiskLibrary, LibraryRow } from './ai-risk-library';
         </p-tablist>
         <p-tabpanels>
           <p-tabpanel value="create">
+            <ol class="risk-manual-path" [attr.aria-label]="t('aiRisk.manualPath.title')">
+              <li><span>1</span><div><strong>{{ t('aiRisk.manualPath.create') }}</strong><small>{{ t('aiInitiation.useCase') }}</small></div></li>
+              <li><span>2</span><div><strong>{{ t('aiRisk.manualPath.assign') }}</strong><small>{{ t('aiRisk.owner') }}</small></div></li>
+              <li><span>3</span><div><strong>{{ t('aiRisk.manualPath.complete') }}</strong><small>{{ t('aiRisk.intake') }}</small></div></li>
+            </ol>
             @if (state() === 'loading') {
               <div class="risk-create-state" role="status">{{ t('crud.loading') }}</div>
             } @else if (state() === 'error') {

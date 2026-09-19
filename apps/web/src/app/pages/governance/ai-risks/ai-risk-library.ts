@@ -12,6 +12,7 @@ interface LibraryLookups {canPropose:boolean;canPublish:boolean;lists:Array<{fie
 @Component({selector:'app-ai-risk-library',standalone:true,imports:[AiCategoryControls,FormsModule,TableModule,AiLibraryControlLinks],templateUrl:'./ai-risk-library.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-risks.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiRiskLibrary implements OnInit {
  @Input() allowChoose=false;
+ @Input() pickerMode=false;
  @Output() chosen=new EventEmitter<LibraryRow>();
  private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
  protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly working=signal(false);protected readonly search=signal('');

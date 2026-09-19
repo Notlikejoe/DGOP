@@ -136,23 +136,70 @@
 .risk-dialog-head { display: grid; gap: .08rem; }
 .risk-dialog-head strong { font-size: 1.15rem; }
 .risk-dialog-head small { color: var(--command-muted); font-weight: 500; }
-:host ::ng-deep .risk-create-dialog { min-width: min(32rem, 96vw); min-height: min(32rem, 88vh); }
-:host ::ng-deep .risk-create-dialog .p-dialog-content { padding-block: var(--space-4); }
-:host ::ng-deep .risk-create-dialog .p-dialog-header { border-bottom: 1px solid var(--border); }
-.risk-create-card { display: grid; gap: var(--space-3); }
-.risk-create-head { display: flex; gap: .75rem; align-items: center; padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+:host ::ng-deep .risk-create-dialog { min-width: min(42rem, 96vw); border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border)); box-shadow: 0 22px 55px rgb(15 23 42 / 22%); }
+:host ::ng-deep .risk-create-dialog .p-dialog-content { padding: .75rem; overflow-x: hidden !important; background: color-mix(in srgb, var(--surface-2) 55%, var(--surface)); }
+:host ::ng-deep .risk-create-dialog .p-dialog-header { min-height: 3.5rem; padding: .65rem .9rem; border-bottom: 1px solid var(--border); background: var(--surface); }
+.risk-create-card { display: grid; gap: .65rem; min-width: 0; }
+.risk-create-head { display: flex; gap: .75rem; align-items: center; }
+.risk-create-banner { padding: .65rem .75rem; border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border)); border-radius: var(--radius-lg); background: linear-gradient(120deg, color-mix(in srgb, var(--primary-soft) 52%, var(--surface)), var(--surface) 66%); }
+.risk-create-banner > div { min-width: 0; }
+.risk-create-banner p { margin: .18rem 0 0; color: var(--command-muted); font-size: .75rem; line-height: 1.35; }
 .risk-create-icon { display: grid; place-items: center; width: 2.5rem; aspect-ratio: 1; border-radius: var(--radius-md); color: var(--primary); background: var(--primary-soft); }
-.risk-create-help { margin: 0; color: var(--command-muted); }
-.risk-create-form { display: grid; gap: var(--space-4); min-width: 0; margin: 0; padding: 0; border: 0; }
-.risk-form-field { display: grid; gap: .4rem; color: var(--on-surface); font-weight: 800; }
+.risk-create-icon--small { width: 2rem; flex: 0 0 2rem; }
+:host ::ng-deep .risk-create-tabs .p-tablist-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; padding: .3rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface-2) 75%, var(--surface)); overflow: hidden; }
+:host ::ng-deep .risk-create-tabs .p-tablist-nav-button { display: none; }
+:host ::ng-deep .risk-create-tabs .p-tablist-active-bar { display: none; }
+:host ::ng-deep .risk-create-tabs .p-tab { justify-content: stretch; min-width: 0; padding: .42rem .58rem; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--command-muted); }
+:host ::ng-deep .risk-create-tabs .p-tab-active { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 38%, var(--border)); background: var(--surface); box-shadow: var(--shadow-sm); }
+:host ::ng-deep .risk-create-tabs .p-tabpanels { padding: .65rem 0 0; background: transparent; }
+.risk-create-tab { display: grid; grid-template-columns: 1.65rem minmax(0, 1fr); align-items: center; gap: .5rem; width: 100%; text-align: start; }
+.risk-create-tab > app-icon { display: grid; place-items: center; width: 1.65rem; height: 1.65rem; border-radius: .48rem; color: var(--primary); background: var(--primary-soft); }
+.risk-create-tab > span { display: grid; min-width: 0; }
+.risk-create-tab strong, .risk-create-tab small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.risk-create-tab strong { font-size: .78rem; }
+.risk-create-tab small { color: var(--command-muted); font-size: .65rem; }
+.risk-create-form { display: grid; gap: .7rem; min-width: 0; margin: 0; padding: .75rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.risk-create-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: .7rem; align-items: stretch; }
+.risk-form-field { display: grid; align-content: start; gap: .35rem; min-width: 0; color: var(--on-surface); font-size: .76rem; font-weight: 800; }
+.risk-form-field > small { color: var(--command-muted); font-size: .66rem; font-weight: 650; }
 .risk-form-field p-select, .risk-form-field textarea { width: 100%; }
-.library-choice { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: .8rem; border: 1px dashed var(--border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--primary-soft) 18%, var(--surface)); }
+.risk-form-field textarea { min-height: 4.8rem; resize: vertical; }
+.library-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .6rem; min-width: 0; padding: .62rem; border: 1px dashed var(--border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--primary-soft) 18%, var(--surface)); }
 .library-choice--selected { border-style: solid; border-color: color-mix(in srgb, var(--primary) 42%, var(--border)); }
-.library-choice small, .library-choice strong { display: block; }
-.library-choice small { color: var(--command-muted); }
-.risk-create-submit { width: 100%; justify-content: center; }
+.library-choice > div { min-width: 0; }
+.library-choice small, .library-choice strong, .library-choice div > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-choice small, .library-choice div > span { color: var(--command-muted); font-size: .65rem; }
+.library-choice strong { margin-block: .08rem; font-size: .75rem; }
+.risk-create-footer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding-top: .65rem; border-top: 1px solid var(--border); }
+.risk-create-footer > span { display: flex; align-items: flex-start; gap: .38rem; max-width: 72%; color: var(--command-muted); font-size: .67rem; line-height: 1.3; }
+.risk-create-submit { flex: 0 0 auto; justify-content: center; min-width: 10rem; }
 .risk-create-state { padding: 1rem; border-radius: var(--radius-md); background: var(--surface-muted); text-align: center; }
-.risk-library-picker { margin-top: var(--space-4); }
+.risk-library-picker { display: grid; gap: .6rem; min-width: 0; max-width: 100%; overflow: hidden; }
+.risk-library-head { gap: .55rem; padding: .7rem; }
+.risk-library-head .section-head { align-items: start; padding: 0; }
+.risk-library-head .section-head h2 { margin: .08rem 0; font-size: .95rem; }
+.risk-library-head .section-head p { margin: 0; color: var(--command-muted); font-size: .7rem; }
+.risk-library-toolbar { display: flex; align-items: center; gap: .45rem; }
+.risk-library-toolbar label { flex: 1; }
+.risk-library-toolbar input { width: 100%; min-height: 2.15rem; }
+.risk-library-table { padding: 0; overflow: hidden; }
+:host ::ng-deep .risk-library-table .p-datatable-thead > tr > th { padding: .38rem .5rem; color: var(--on-surface); background: color-mix(in srgb, var(--primary-soft) 38%, var(--surface)); font-size: .7rem; font-weight: 850; text-transform: uppercase; }
+:host ::ng-deep .risk-library-table .p-datatable-tbody > tr > td { padding: .34rem .5rem; vertical-align: middle; font-size: .72rem; }
+:host ::ng-deep .risk-library-table .p-datatable-tbody > tr.risk-library-row--selected > td { background: color-mix(in srgb, var(--primary-soft) 45%, var(--surface)); }
+.risk-library-table td strong, .risk-library-table td small { display: block; }
+.risk-library-table td small { margin-top: .08rem; color: var(--command-muted); font-size: .63rem; }
+.risk-library-actions { display: flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.risk-library-actions .ds-btn { min-height: 1.75rem; padding: .18rem .45rem; font-size: .66rem; }
+.risk-library-table .review-pagination { min-height: 2.5rem; margin: 0; padding: .3rem .55rem; border-top: 1px solid var(--border); }
+.risk-library-details { gap: .5rem; padding: .7rem; }
+.risk-library-details .section-head { padding: 0; }
+.risk-library-details .section-head h2 { margin: .1rem 0; font-size: .9rem; }
+.risk-library-details .annual-completion { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+.risk-library-details .annual-completion > div { padding: .45rem .55rem; }
+.risk-library-details .annual-completion dt { font-size: .62rem; }
+.risk-library-details .annual-completion dd { font-size: .7rem; line-height: 1.3; }
+.risk-library-use { position: sticky; inset-block-end: 0; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .55rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow-sm); }
+.risk-library-use span { color: var(--command-muted); font-size: .67rem; }
 
 @media (max-width: 1050px) {
   .risk-cycle ol { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -171,4 +218,9 @@
   :host ::ng-deep .risk-intake .p-datatable-thead > tr > th:first-child,
   :host ::ng-deep .risk-intake .p-datatable-tbody > tr > th { width: 40%; }
   .risk-intake { padding: var(--space-3); }
+  .risk-create-grid { grid-template-columns: 1fr; }
+  .risk-create-footer { align-items: stretch; flex-direction: column; }
+  .risk-create-footer > span { max-width: none; }
+  .risk-create-submit { width: 100%; }
+  .risk-library-details .annual-completion { grid-template-columns: 1fr; }
 }

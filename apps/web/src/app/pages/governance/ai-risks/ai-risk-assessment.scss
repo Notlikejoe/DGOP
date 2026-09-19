@@ -6,6 +6,37 @@
 .assessment-heading p, .assessment-progress, .criterion-card small { color: var(--command-muted); }
 .criterion-card header { flex-wrap: wrap; }
 .assessment-progress { margin: 0; }
+.assessment-progress strong { color: var(--primary); font-size: .9rem; }
+.assessment-guide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem; margin: 0; padding: 0; list-style: none; }
+.assessment-guide li { position: relative; display: grid; grid-template-columns: 1.55rem minmax(0, 1fr); gap: .42rem; align-items: center; min-width: 0; padding: .48rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface-2) 72%, var(--surface)); }
+.assessment-guide li > span { display: grid; place-items: center; width: 1.55rem; aspect-ratio: 1; border-radius: .48rem; color: var(--command-muted); background: var(--surface); font-size: .68rem; font-weight: 900; }
+.assessment-guide li > div { display: grid; min-width: 0; }
+.assessment-guide strong, .assessment-guide small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assessment-guide strong { color: var(--on-surface); font-size: .68rem; }
+.assessment-guide small { color: var(--command-muted); font-size: .6rem; }
+.assessment-guide app-status-chip { grid-column: 1 / -1; justify-self: start; }
+.assessment-guide__step--current { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)) !important; background: color-mix(in srgb, var(--primary-soft) 38%, var(--surface)) !important; }
+.assessment-guide__step--current > span { color: var(--primary-contrast) !important; background: var(--primary) !important; }
+.assessment-guide__step--complete > span { color: var(--success) !important; background: var(--success-soft) !important; }
+.assessment-gate { border-inline-start: .24rem solid var(--border); }
+.assessment-gate--ready { border-inline-start-color: var(--success); background: color-mix(in srgb, var(--success-soft) 20%, var(--surface)); }
+.assessment-gate > header { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.assessment-gate__actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .45rem; }
+.assessment-gate h2, .assessment-gate p { margin: 0; }
+.assessment-gate p { color: var(--command-muted); font-size: .72rem; }
+.assessment-gate__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+.assessment-gate__facts > div { display: grid; gap: .08rem; padding: .45rem .55rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.assessment-gate__facts small { color: var(--command-muted); font-size: .61rem; font-weight: 800; text-transform: uppercase; }
+.assessment-gate__facts strong { font-size: .72rem; }
+.assessment-gate .ds-btn { justify-self: start; }
+.assessment-active { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .65rem .75rem; border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--primary-soft) 42%, var(--surface)); box-shadow: var(--shadow-xs); }
+.assessment-active > div:first-child { display: grid; gap: .1rem; }
+.assessment-active strong, .assessment-active p { margin: 0; }
+.assessment-active > div:first-child > strong { font-size: .82rem; color: var(--text); }
+.assessment-active p { color: var(--command-muted); font-size: .68rem; }
+.assessment-active__progress { display: flex; align-items: center; justify-content: flex-end; gap: .45rem; flex-wrap: wrap; }
+.assessment-active__progress > strong { min-width: 2.3rem; color: var(--primary); font-size: .86rem; text-align: center; }
+.assessment-admin-note { margin: 0; }
 details p { overflow-wrap: anywhere; }
 summary { cursor: pointer; font-weight: 750; }
-@media (max-width: 760px) { .assessment-heading, .assessment-result { flex-wrap: wrap; } }
+@media (max-width: 760px) { .assessment-heading, .assessment-result, .assessment-gate > header, .assessment-active { align-items: stretch; flex-direction: column; } .assessment-gate__actions, .assessment-active__progress { justify-content: flex-start; } .assessment-guide, .assessment-gate__facts { grid-template-columns: 1fr; } }

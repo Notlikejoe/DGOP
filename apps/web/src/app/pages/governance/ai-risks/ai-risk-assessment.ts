@@ -10,6 +10,7 @@ import { StatusChip } from '../../../shared/status-chip';
 type Anchor = { en: string; ar: string };
 interface AssessmentContext {
   eligible?: boolean; prerequisite?: string | null; planned?: number; completed?: number;
+  administratorOverride?: boolean; assignedOwner?: { userId: string | null; fullNameEn: string; fullNameAr: string } | null;
   controlReference?: { versionId: string; values: Array<{code:string;labelEn:string;labelAr:string}> };
   version: number; canStart: boolean; canComplete: boolean; started: boolean; canRestart: boolean; referencesCurrent: boolean;
   configuration: { ready: boolean; issues: string[]; scores: Array<{ score: number; anchors: { likelihood: Anchor; impact: Anchor } }>;
@@ -55,6 +56,24 @@ export class AiRiskAssessment {
   }
   protected bilingual(value: { labelEn: string; labelAr: string }): string { return this.i18n.lang() === 'ar' ? value.labelAr : value.labelEn; }
   protected reduction(value: number): string { return new Intl.NumberFormat(this.i18n.lang(), { maximumFractionDigits: 1 }).format(value) + '%'; }
+  protected ownerName(context: AssessmentContext): string {
+    const owner = context.assignedOwner;
+    return owner ? (this.i18n.lang() === 'ar' ? owner.fullNameAr : owner.fullNameEn) : this.t('aiRisk.unassigned');
+  }
+  protected completedTaskCount(context: AssessmentContext): number { return context.tasks.filter(task => task.status === 'completed').length; }
+  protected guideState(step: number, context: AssessmentContext): 'complete' | 'current' | 'upcoming' {
+    const scored = context.tasks.length === 8 && this.completedTaskCount(context) === 8;
+    const round = context.rounds.at(-1);
+    const adopted = !!round?.decisions.some(decision => decision.kind === 'adoption' && decision.decision === 'approve');
+    if (step === 1) return context.started ? 'complete' : 'current';
+    if (step === 2) return !context.started ? 'upcoming' : scored ? 'complete' : 'current';
+    if (step === 3) return !scored ? 'upcoming' : context.rounds.length ? 'complete' : 'current';
+    return adopted ? 'complete' : context.rounds.length ? 'current' : 'upcoming';
+  }
+  protected guideStateKind(step: number, context: AssessmentContext): 'success' | 'info' | 'muted' {
+    const state = this.guideState(step, context);
+    return state === 'complete' ? 'success' : state === 'current' ? 'info' : 'muted';
+  }
   protected dimensionLabel(dimension: string): string {
     const value = this.context()?.configuration.dimensions.find(value => value.dimension === dimension);
     const label=value?this.bilingual(value):null;

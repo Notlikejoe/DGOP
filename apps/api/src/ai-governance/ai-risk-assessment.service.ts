@@ -47,6 +47,7 @@ export class AiRiskAssessmentService {
     return { actor, risk, tasks, coordinator: coordinators[0] };
   }
   private owner(actor: { id: string; roles: string[] }, risk: Risk) {
+    if (actor.roles.includes('system_admin')) return;
     if (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== risk.owner?.userId) throw new ForbiddenException('Only the assigned Risk Owner coordinates this assessment');
   }
 
@@ -92,18 +93,20 @@ export class AiRiskAssessmentService {
       const config = pinned ? { ...pinned, ready: scoringConfigurationIssues(pinned).length === 0, issues: scoringConfigurationIssues(pinned) } : await this.configuration(tx);
       const referencesCurrent = !!pinned && await this.referencesCurrent(tx, pinned);
       const canAssess = risk.workflowCase?.status === 'under_review' && permissions.has('airs.risk.assess') && !actor.roles.includes('auditor');
-      const owner = canAssess && actor.id === risk.owner?.userId && actor.roles.includes('AI_RISK_OWNER') && risk.workflowCase?.status === 'under_review';
+      const administratorOverride = actor.roles.includes('system_admin');
+      const owner = canAssess && (administratorOverride || actor.id === risk.owner?.userId && actor.roles.includes('AI_RISK_OWNER'));
       const contributions = tasks.filter(task => jsonRecord(task.formDataJson)['coordinatorTaskId'] === coordinator?.id && jsonRecord(task.formDataJson)['dimension']);
       return { version: risk.version, configuration: config, canStart: !!owner && !!coordinator && !pinned && config.ready,
         canComplete: !!owner && !!pinned && referencesCurrent && contributions.length === 8 && contributions.every(task => task.status === TaskStatus.completed),
         canRestart: !!owner && !!coordinator && !!pinned, referencesCurrent,
-        started: !!pinned, tasks: contributions.map(task => {
+        started: !!pinned, administratorOverride, assignedOwner: risk.owner ? { userId:risk.owner.userId,
+          fullNameEn:risk.owner.fullNameEn,fullNameAr:risk.owner.fullNameAr } : null, tasks: contributions.map(task => {
           const data = jsonRecord(task.formDataJson), dimension = data['dimension'] as RiskDimension;
           const mapping = config.dimensions.find(value => value.dimension === dimension);
           return { id: task.id, dimension, status: task.status, dueDate: task.dueDate, assessorRoleCode: task.assigneeRoleCode,
             score: data['score'] ?? null, submittedBy: task.formSubmittedBy, canContribute: referencesCurrent && !!canAssess && !!mapping && task.status === TaskStatus.pending
-              && actor.roles.includes(mapping.assessorRoleCode) && (!task.assigneeUserId || task.assigneeUserId === actor.id)
-              && (mapping.assessorRoleCode !== 'AI_RISK_OWNER' || actor.id === risk.owner?.userId) };
+              && (administratorOverride || actor.roles.includes(mapping.assessorRoleCode) && (!task.assigneeUserId || task.assigneeUserId === actor.id)
+              && (mapping.assessorRoleCode !== 'AI_RISK_OWNER' || actor.id === risk.owner?.userId)) };
         }), rounds: risk.assessments };
     }, options);
   }
@@ -151,7 +154,7 @@ export class AiRiskAssessmentService {
       await tx.workflowEvent.create({ data: { caseId: risk.workflowCase!.id, taskId: coordinator.id, actor: actor.id, action: restart ? 'airs.impact.restarted' : 'airs.impact.started', comment: `Round ${round}` } });
       await this.audit.logRequired({ actor: actor.id, action: restart ? 'airs.impact.restarted' : 'airs.impact.started', entityType: 'ai_risk', entityId: id,
         metadata: { coordinatorTaskId: coordinator.id, restartedFromTaskId: restart ? currentCoordinator.id : null, justification: restart ? restartReason.trim() : null,
-          round, referenceVersions: config.referenceVersions, clientIp: clientIp ?? null } }, tx);
+          round, referenceVersions: config.referenceVersions, administratorOverride: actor.roles.includes('system_admin'), clientIp: clientIp ?? null } }, tx);
       return { id, version: expectedVersion + 1 };
     }, options);
   }
@@ -166,8 +169,9 @@ export class AiRiskAssessmentService {
       const task = tasks.find(task => task.id === taskId && jsonRecord(task.formDataJson)['coordinatorTaskId'] === coordinator.id);
       const data = jsonRecord(task?.formDataJson), mapping = config.dimensions.find(value => value.dimension === data['dimension']);
       if (!task || task.status !== TaskStatus.pending || !mapping || task.assigneeRoleCode !== mapping.assessorRoleCode) throw new ConflictException('Active dimension task not found');
-      if (!actor.roles.includes(mapping.assessorRoleCode) || task.assigneeUserId && task.assigneeUserId !== actor.id
-        || mapping.assessorRoleCode === 'AI_RISK_OWNER' && risk.owner?.userId !== actor.id) throw new ForbiddenException('Only the competent assigned role can score this dimension');
+      const administratorOverride = actor.roles.includes('system_admin');
+      if (!administratorOverride && (!actor.roles.includes(mapping.assessorRoleCode) || task.assigneeUserId && task.assigneeUserId !== actor.id
+        || mapping.assessorRoleCode === 'AI_RISK_OWNER' && risk.owner?.userId !== actor.id)) throw new ForbiddenException('Only the competent assigned role can score this dimension');
       const now = new Date(), score = { value: dto.value, justification: dto.justification.trim() };
       await tx.workflowTask.update({ where: { id: task.id }, data: { status: TaskStatus.completed, assigneeUserId: actor.id,
         completedAt: now, formSubmittedAt: now, formSubmittedBy: actor.id,
@@ -175,7 +179,7 @@ export class AiRiskAssessmentService {
       await tx.aiRisk.update({ where: { id }, data: { version: { increment: 1 } } });
       await tx.workflowEvent.create({ data: { caseId: risk.workflowCase!.id, taskId: task.id, actor: actor.id, action: 'airs.dimension.scored', comment: `${mapping.dimension}: ${dto.value}` } });
       await this.audit.logRequired({ actor: actor.id, action: 'airs.dimension.scored', entityType: 'ai_risk', entityId: id,
-        metadata: { dimension: mapping.dimension, taskId, score, referenceVersions: config.referenceVersions, clientIp: clientIp ?? null } }, tx);
+        metadata: { dimension: mapping.dimension, taskId, score, referenceVersions: config.referenceVersions, administratorOverride, clientIp: clientIp ?? null } }, tx);
       return { id, version: dto.expectedVersion + 1 };
     }, options);
   }
@@ -217,7 +221,8 @@ export class AiRiskAssessmentService {
       await tx.workflowEvent.create({ data: { caseId: risk.workflowCase!.id, taskId: adoption.id, actor: actor.id,
         action: 'airs.inherent.scored', comment: `${computed.score}: ${computed.bandCode}; pending adoption` } });
       await this.audit.logRequired({ actor: actor.id, action: 'airs.inherent.scored', entityType: 'ai_risk', entityId: id,
-        metadata: { assessmentId: assessment.id, round, result, adoptionTaskId: adoption.id, clientIp: clientIp ?? null } }, tx);
+        metadata: { assessmentId: assessment.id, round, result, adoptionTaskId: adoption.id,
+          administratorOverride: actor.roles.includes('system_admin'), clientIp: clientIp ?? null } }, tx);
       return { id, version: dto.expectedVersion + 1, assessmentId: assessment.id, result, nextTaskId: adoption.id };
     }, options);
   }

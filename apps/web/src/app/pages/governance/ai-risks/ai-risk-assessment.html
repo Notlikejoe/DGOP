@@ -7,12 +7,36 @@
     @if (isResidual() && context.prerequisite) { <div class="override-notice" role="status"><p>{{ t('aiResidual.prerequisite') }} · {{ context.completed }}/{{ context.planned }}</p></div> }
     @if (isResidual() && !context.controlReference?.versionId) { <div class="override-notice" role="status">{{ t('aiResidual.controlsReference') }}</div> }
     @if (!context.configuration.ready) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAssessment.references') }}</p></div> }
-    @if (context.canStart) { <section class="ds-card decision-card"><p>{{ t(isResidual() ? 'aiResidual.startHelp' : 'aiAssessment.startHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="start()">{{ t(isResidual() ? 'aiResidual.start' : 'aiAssessment.start') }}</button></section> }
+    @if (!isResidual() && !context.started) {
+      <section class="ds-card decision-card assessment-gate" [class.assessment-gate--ready]="context.canStart">
+        <header><div><span class="eyebrow">{{ t('aiAssessment.gate.eyebrow') }}</span><h2>{{ t(isResidual() ? 'aiResidual.start' : 'aiAssessment.start') }}</h2></div><div class="assessment-gate__actions"><app-status-chip [kind]="context.canStart ? 'success' : 'muted'" [label]="t(context.canStart ? 'aiAssessment.gate.ready' : 'aiAssessment.gate.waiting')" />@if (context.canStart) { <button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="start()">{{ t(isResidual() ? 'aiResidual.start' : 'aiAssessment.start') }}</button> }</div></header>
+        <div class="assessment-gate__facts"><div><small>{{ t('aiAssessment.gate.owner') }}</small><strong>{{ ownerName(context) }}</strong></div><div><small>{{ t('aiAssessment.gate.configuration') }}</small><strong>{{ t(context.configuration.ready ? 'aiAssessment.gate.ready' : 'aiAssessment.gate.notReady') }}</strong></div></div>
+        <p>{{ t(isResidual() ? 'aiResidual.startHelp' : context.canStart ? 'aiAssessment.startHelp' : 'aiAssessment.gate.ownerRequired') }}</p>
+        @if (context.administratorOverride) { <div class="review-gate-note assessment-admin-note"><app-icon name="info" /><span>{{ t('aiAssessment.gate.adminOverride') }}</span></div> }
+      </section>
+    }
+    @if (isResidual() && context.canStart) { <section class="ds-card decision-card"><p>{{ t('aiResidual.startHelp') }}</p><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="start()">{{ t('aiResidual.start') }}</button></section> }
+    @if (!isResidual() && context.started && context.tasks.length) {
+      <section class="assessment-active" role="status">
+        <div><span class="eyebrow">{{ t('aiAssessment.active.eyebrow') }}</span><strong>{{ t('aiAssessment.active.title') }}</strong><p>{{ t('aiAssessment.active.help') }}</p></div>
+        <div class="assessment-active__progress"><app-status-chip kind="info" [label]="t('aiAssessment.guide.2')" /><strong>{{ completedTaskCount(context) }}/{{ context.tasks.length }}</strong><a class="ds-btn ds-btn--primary" href="#impact-dimension-tasks">{{ t('aiAssessment.active.continue') }}</a></div>
+      </section>
+    }
+    @if (!isResidual()) {
+      <ol class="assessment-guide" [attr.aria-label]="t('aiAssessment.guide.title')">
+        @for (step of [1, 2, 3, 4]; track step) {
+          <li [class.assessment-guide__step--current]="guideState(step, context) === 'current'" [class.assessment-guide__step--complete]="guideState(step, context) === 'complete'">
+            <span>{{ step }}</span><div><strong>{{ t('aiAssessment.guide.' + step) }}</strong><small>{{ t('aiAssessment.guide.' + step + '.help') }}</small></div><app-status-chip [kind]="guideStateKind(step, context)" [label]="t('aiRisk.lifecycle.state.' + guideState(step, context))" />
+          </li>
+        }
+      </ol>
+    }
     @if (context.started && context.tasks.length && !context.referencesCurrent) { <div class="override-notice" role="status"><app-icon name="info" /><p>{{ t('aiAssessment.changedReferences') }}</p></div> }
+    @if (context.started && context.administratorOverride) { <div class="review-gate-note assessment-admin-note"><app-icon name="info" /><span>{{ t('aiAssessment.tasks.adminOverride') }}</span></div> }
     @if (context.canRestart) { <details class="ds-card decision-card"><summary>{{ t('aiAssessment.restart') }}</summary><p>{{ t('aiAssessment.restartHelp') }}</p><label><span>{{ t('aiAssessment.justification') }}</span><textarea rows="2" maxlength="2000" [ngModel]="restartJustification()" (ngModelChange)="restartJustification.set($event)"></textarea></label><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !restartJustification().trim()" (click)="restart()">{{ t('aiAssessment.restart') }}</button></details> }
     @if (context.started && context.tasks.length) {
-      <p class="assessment-progress">{{ t('aiAssessment.progress') }} · {{ context.tasks.length }} {{ t('aiAssessment.dimensions') }}</p>
-      <div class="criterion-grid">
+      <p class="assessment-progress"><strong>{{ completedTaskCount(context) }}/{{ context.tasks.length }}</strong> {{ t('aiAssessment.dimensionsComplete') }} · {{ t('aiAssessment.progress') }}</p>
+      <div class="criterion-grid" id="impact-dimension-tasks">
         @for (task of context.tasks; track task.id) {
           <article class="ds-card criterion-card"><header><h2>{{ dimensionLabel(task.dimension) }}</h2><app-status-chip kind="info" [label]="t('aiAssessment.task.' + task.status)" /></header><small>{{ t('aiAssessment.role.' + task.assessorRoleCode) }}</small>
             @if (task.canContribute) {
@@ -21,7 +45,7 @@
               <label><span>{{ t('aiAssessment.justification') }} <b>*</b></span><textarea rows="3" maxlength="5000" [ngModel]="drafts()[task.id].justification" (ngModelChange)="patch(task.id, 'justification', $event)"></textarea></label>
               <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !drafts()[task.id].value || !drafts()[task.id].justification.trim()" (click)="contribute(task.id)">{{ t('aiAssessment.submitDimension') }}</button>
             } @else if (task.score; as score) { <strong class="score-badge">{{ score.value }}</strong><p>{{ score.justification }}</p> }
-            @else { <p>{{ t('aiAssessment.waitingRole') }}</p> }
+            @else { <p>{{ t('aiAssessment.waitingRole') }}</p><small>{{ t('aiAssessment.waitingRoleHelp') }} {{ t('aiAssessment.role.' + task.assessorRoleCode) }}</small> }
           </article>
         }
       </div>

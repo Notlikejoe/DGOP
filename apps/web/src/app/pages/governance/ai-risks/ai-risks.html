@@ -86,23 +86,33 @@
           <p-tabpanels>
             <p-tabpanel value="identification">
               <div class="risk-identification-grid">
-                <section class="ds-card specialist-context risk-context">
-                  <header class="section-head"><span><app-icon name="shield" /></span><div><small>{{ t('aiRisk.handover') }}</small><h2>{{ item.useCase.name }}</h2></div></header>
-                  <div class="specialist-facts">
-                    <div><small>{{ t('aiRisk.asset') }}</small><strong>{{ item.useCase.asset.code }} · {{ label(item.useCase.asset) }}</strong></div>
-                    <div><small>{{ t('aiRisk.department') }}</small><strong>{{ label(item.useCase.organizationUnit) }}</strong></div>
-                    <div><small>{{ t('aiRisk.approvedTier') }}</small><strong>{{ item.handoffPayload?.['approvedTierCode'] ? t('aiRisk.tier.' + item.handoffPayload?.['approvedTierCode']) : '—' }}</strong></div>
-                    <div><small>{{ t('aiRisk.owner') }}</small><strong>{{ item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned') }}</strong></div>
-                  </div>
-                  @if (item.obligations.length) { <div class="risk-obligations"><strong>{{ t('aiReview.adoption.conditions') }}</strong><ul>@for (condition of item.obligations; track condition.id) { <li>{{ condition.description }}</li> }</ul></div> }
+                <section class="ds-card risk-handover-card">
+                  <header class="risk-compact-head">
+                    <span class="risk-compact-head__icon"><app-icon name="shield" /></span>
+                    <div><span class="eyebrow">{{ t('aiRisk.handover') }}</span><h2>{{ item.useCase.name }}</h2><p>{{ t('aiRisk.handoverHelp') }}</p></div>
+                    <app-status-chip kind="success" [label]="item.useCase.useCaseRef" />
+                  </header>
+                  <dl class="risk-handover-facts">
+                    <div><dt>{{ t('aiRisk.asset') }}</dt><dd>{{ item.useCase.asset.code }} · {{ label(item.useCase.asset) }}</dd></div>
+                    <div><dt>{{ t('aiRisk.department') }}</dt><dd>{{ label(item.useCase.organizationUnit) }}</dd></div>
+                    <div><dt>{{ t('aiRisk.approvedTier') }}</dt><dd>{{ item.handoffPayload?.['approvedTierCode'] ? t('aiRisk.tier.' + item.handoffPayload?.['approvedTierCode']) : '—' }}</dd></div>
+                    <div><dt>{{ t('aiRisk.owner') }}</dt><dd>{{ item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned') }}</dd></div>
+                  </dl>
+                  @if (item.obligations.length) { <div class="risk-obligations"><span><app-icon name="info" /></span><div><strong>{{ t('aiReview.adoption.conditions') }}</strong><ul>@for (condition of item.obligations; track condition.id) { <li>{{ condition.description }}</li> }</ul></div></div> }
                 </section>
 
                 @if (item.canAssignOwner) {
-                  <section class="ds-card decision-card specialist-decision risk-owner-card">
-                    <div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t('aiRisk.assignOwner') }}</h2></div>
-                    <label><span>{{ t('aiRisk.owner') }}</span><p-select [options]="lookups().riskOwners" optionValue="userId" [optionLabel]="i18n.lang() === 'ar' ? 'fullNameAr' : 'fullNameEn'" [filter]="true" [placeholder]="t('aiuc.select')" [ngModel]="ownerUserId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerUserId.set($event || '')" [ariaLabel]="t('aiRisk.owner')" /></label>
-                    <label><span>{{ t('aiReview.justification') }}</span><textarea pTextarea rows="2" maxlength="2000" [ngModel]="ownerJustification()" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerJustification.set($event)"></textarea></label>
-                    <button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t('aiRisk.assignOwner') }}</button>
+                  <section class="ds-card risk-owner-card">
+                    <header class="risk-compact-head risk-compact-head--owner">
+                      <span class="risk-phase-number">2</span>
+                      <div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t('aiRisk.assignOwner') }}</h2><p>{{ t('aiRisk.assignOwnerHelp') }}</p></div>
+                      <app-status-chip kind="muted" [label]="t('aiRisk.unassigned')" />
+                    </header>
+                    <div class="risk-owner-form">
+                      <label><span>{{ t('aiRisk.owner') }}</span><p-select [options]="lookups().riskOwners" optionValue="userId" [optionLabel]="i18n.lang() === 'ar' ? 'fullNameAr' : 'fullNameEn'" [filter]="true" [placeholder]="t('aiuc.select')" [ngModel]="ownerUserId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerUserId.set($event || '')" [ariaLabel]="t('aiRisk.owner')" /></label>
+                      <label><span>{{ t('aiReview.justification') }}</span><textarea pTextarea rows="2" maxlength="2000" [placeholder]="t('aiRisk.ownerJustificationHint')" [ngModel]="ownerJustification()" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerJustification.set($event)"></textarea></label>
+                      <button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t('aiRisk.assignOwner') }}</button>
+                    </div>
                   </section>
                 }
               </div>

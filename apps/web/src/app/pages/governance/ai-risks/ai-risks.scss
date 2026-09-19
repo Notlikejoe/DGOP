@@ -81,18 +81,29 @@
 .risk-tab-copy small { overflow: hidden; color: var(--command-muted); font-size: .64rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.7rem; margin-inline-start: .35rem; padding: .08rem .35rem; border-radius: var(--radius-pill); background: var(--primary-soft); color: var(--primary); font-size: .72rem; }
 .tab-count--audit { font-size: .62rem; }
-.risk-identification-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(16rem, .7fr); gap: .65rem; margin-bottom: .65rem; }
-.risk-context, .risk-owner-card { padding: .7rem; }
-:host ::ng-deep .risk-context .section-head { padding: .6rem .7rem; }
-:host ::ng-deep .risk-context .section-head > span { width: 32px; height: 32px; }
-:host ::ng-deep .risk-context .specialist-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-:host ::ng-deep .risk-context .specialist-facts > div { gap: .25rem; padding: .58rem .65rem; }
-:host ::ng-deep .risk-context .specialist-facts strong { font-size: .76rem; line-height: 1.2; }
-:host ::ng-deep .risk-context .specialist-facts small { font-size: .66rem; }
-.risk-obligations { margin-top: var(--space-3); }
-.risk-obligations ul { margin: .4rem 0 0; padding-inline-start: 1.25rem; }
+.risk-identification-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(17rem, .75fr); gap: .65rem; margin-bottom: .65rem; align-items: start; }
+.risk-handover-card, .risk-owner-card { padding: 0; overflow: hidden; }
+.risk-compact-head { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; gap: .58rem; padding: .55rem .65rem; border-bottom: 1px solid var(--border); background: linear-gradient(90deg, color-mix(in srgb, var(--primary-soft) 38%, var(--surface)), var(--surface) 62%); }
+.risk-compact-head__icon { display: grid; place-items: center; width: 2rem; aspect-ratio: 1; border-radius: .55rem; color: var(--primary); background: var(--primary-soft); }
+.risk-compact-head h2, .risk-compact-head p { margin: 0; }
+.risk-compact-head h2 { overflow: hidden; font-size: .88rem; text-overflow: ellipsis; white-space: nowrap; }
+.risk-compact-head p { margin-top: .08rem; color: var(--command-muted); font-size: .65rem; }
+.risk-handover-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.risk-handover-facts > div { display: grid; gap: .1rem; min-width: 0; padding: .5rem .65rem; border-bottom: 1px solid var(--border); }
+.risk-handover-facts > div:nth-child(odd) { border-inline-end: 1px solid var(--border); }
+.risk-handover-facts > div:nth-last-child(-n + 2) { border-bottom: 0; }
+.risk-handover-facts dt { color: var(--command-muted); font-size: .63rem; font-weight: 800; letter-spacing: .035em; text-transform: uppercase; }
+.risk-handover-facts dd { margin: 0; overflow: hidden; color: var(--on-surface); font-size: .74rem; font-weight: 800; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.risk-obligations { display: flex; align-items: flex-start; gap: .45rem; margin: .45rem; padding: .45rem .55rem; border-radius: var(--radius-sm); color: var(--on-surface); background: var(--primary-soft); font-size: .69rem; }
+.risk-obligations > span { color: var(--primary); }
+.risk-obligations ul { margin: .18rem 0 0; padding-inline-start: 1rem; }
 .risk-owner-card { align-content: start; }
-.risk-owner-card p-select, .risk-owner-card textarea { display: block; width: 100%; }
+.risk-compact-head--owner { grid-template-columns: 1.7rem minmax(0, 1fr) auto; }
+.risk-owner-form { display: grid; gap: .48rem; padding: .55rem .65rem .65rem; }
+.risk-owner-form label { display: grid; gap: .22rem; min-width: 0; color: var(--command-muted); font-size: .68rem; font-weight: 800; }
+.risk-owner-form p-select, .risk-owner-form textarea { display: block; width: 100%; }
+.risk-owner-form textarea { min-height: 2.7rem; resize: vertical; }
+.risk-owner-form .ds-btn { justify-content: center; min-height: 2rem; width: 100%; }
 .risk-intake { padding: .7rem; }
 .risk-intake-head { display: flex; align-items: start; justify-content: space-between; gap: var(--space-3); }
 .risk-intake b { color: var(--danger); }

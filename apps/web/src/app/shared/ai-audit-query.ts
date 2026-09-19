@@ -14,7 +14,7 @@ interface Chain {scope:string;valid:boolean;checked:number;totalRows:number;lega
 @Component({selector:'app-ai-audit-query',standalone:true,imports:[FormsModule,TableModule,DualDatePipe,JsonPipe],changeDetection:ChangeDetectionStrategy.OnPush,
  templateUrl:'./ai-audit-query.html',styleUrl:'./ai-journey-history.scss'})
 export class AiAuditQuery {
- readonly caseId=input('');readonly assetScopeId=input('');readonly kind=input<'airs'|'aiuc'|'all'>('airs');protected readonly auth=inject(AuthService);private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);
+ readonly caseId=input('');readonly assetScopeId=input('');readonly kind=input<'airs'|'aiuc'|'all'>('airs');readonly expanded=input(false);protected readonly auth=inject(AuthService);private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);
  protected readonly data=signal<AuditPage|null>(null);protected readonly state=signal<'loading'|'ok'|'error'|'hidden'>('loading');protected readonly downloading=signal(false);
  protected readonly census=signal<Census|null>(null);protected readonly chain=signal<Chain|null>(null);protected readonly checking=signal(false);protected readonly verificationError=signal(false);
  protected actorId='';protected assetId='';protected from='';protected to='';protected allCases=false;protected fullDetails=false;private sequence=0;

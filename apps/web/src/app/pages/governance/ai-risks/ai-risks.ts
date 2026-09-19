@@ -121,6 +121,14 @@ export class AiRisksPage implements OnInit {
     if (this.lookup(field)) return this.lookupLabel(field, value);
     return typeof value === 'string' && value ? value : '—';
   }
+  protected identificationCount(item: RiskItem): number {
+    return this.detailFields().filter(({ field }) => {
+      const value = field === 'title' ? item.title : item.intakeData?.[field];
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'boolean') return true;
+      return value !== null && value !== undefined && String(value).trim().length > 0;
+    }).length;
+  }
   protected selectedControls():string[]{const v=this.input()['control_domain_version_ids'];return Array.isArray(v)?v:[];}
   protected patch(field: string, value: unknown): void {
     this.input.update(input => ({ ...input, [field]: value }));
@@ -150,7 +158,9 @@ export class AiRisksPage implements OnInit {
         firstValueFrom(this.http.get<RiskLookups>('/api/ai/risks/lookups'))]);
       if(preferredId&&!items.some(i=>i.id===preferredId))items.unshift(await firstValueFrom(this.http.get<RiskItem>(`/api/ai/risks/${preferredId}`)));
       this.controls.set((await firstValueFrom(this.http.get<{rows:ControlTag[]}>('/api/ai/control-domains'))).rows);
-      this.items.set(items); this.lookups.set(lookups); this.select(items.find(item => item.id === preferredId) ?? items[0] ?? null); this.state.set('ok');
+      const preferred = items.find(item => item.id === preferredId);
+      const completeExample = items.find(item => item.riskRef && ['implemented', 'approved', 'closed'].includes(item.workflowCase.status));
+      this.items.set(items); this.lookups.set(lookups); this.select(preferred ?? completeExample ?? items[0] ?? null); this.state.set('ok');
     } catch (error) { this.state.set('error'); this.toast.errorFrom(error, this.t('aiRisk.error')); }
   }
   protected async assignOwner(): Promise<void> {

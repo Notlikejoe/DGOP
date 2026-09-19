@@ -1,4 +1,4 @@
-<section class="page ai-review-page governance-modern risk-page">
+<section class="page ai-review-page governance-modern admin-modern risk-page">
   <header class="page__header review-hero risk-hero">
     <div><span class="eyebrow">{{ t('aiRisk.eyebrow') }}</span><h1>{{ t('aiRisk.title') }}</h1><p class="page__subtitle">{{ t('aiRisk.subtitle') }}</p></div>
     <div class="risk-hero-actions">
@@ -14,11 +14,11 @@
   } @else if (state() === 'error') {
     <section class="ds-card state-card"><p>{{ t('aiRisk.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section>
   } @else {
-    <section class="risk-metrics" [attr.aria-label]="t('aiRisk.metrics.title')">
-      <article><span>{{ t('aiRisk.metrics.all') }}</span><strong>{{ items().length }}</strong><small>{{ t('aiRisk.metrics.allHelp') }}</small></article>
-      <article><span>{{ t('aiRisk.metrics.drafts') }}</span><strong>{{ draftCount() }}</strong><small>{{ t('aiRisk.metrics.draftsHelp') }}</small></article>
-      <article><span>{{ t('aiRisk.metrics.review') }}</span><strong>{{ reviewCount() }}</strong><small>{{ t('aiRisk.metrics.reviewHelp') }}</small></article>
-      <article><span>{{ t('aiRisk.metrics.active') }}</span><strong>{{ activeCount() }}</strong><small>{{ t('aiRisk.metrics.activeHelp') }}</small></article>
+    <section class="risk-metrics admin-metrics review-metrics" [attr.aria-label]="t('aiRisk.metrics.title')">
+      <article class="admin-metric admin-metric--primary" [pTooltip]="t('aiRisk.metrics.allHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="listCheck" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.all') }}</small><strong>{{ items().length }}</strong></span></article>
+      <article class="admin-metric admin-metric--muted" [pTooltip]="t('aiRisk.metrics.draftsHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="edit" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.drafts') }}</small><strong>{{ draftCount() }}</strong></span></article>
+      <article class="admin-metric admin-metric--warning" [pTooltip]="t('aiRisk.metrics.reviewHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="searchAlert" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.review') }}</small><strong>{{ reviewCount() }}</strong></span></article>
+      <article class="admin-metric admin-metric--success" [pTooltip]="t('aiRisk.metrics.activeHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="shield" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.active') }}</small><strong>{{ activeCount() }}</strong></span></article>
     </section>
 
     <section class="ds-card risk-cycle">
@@ -39,7 +39,7 @@
           <p-select [options]="statusOptions()" optionLabel="label" optionValue="value" [ngModel]="riskStatus()" [ngModelOptions]="{standalone:true}" (ngModelChange)="riskStatus.set($event)" [ariaLabel]="t('aiRisk.filterLabel')" />
         </div>
       </header>
-      <p-table [value]="filteredItems()" dataKey="id" [rowHover]="true" [stripedRows]="true" [scrollable]="true" [paginator]="filteredItems().length > 10" [rows]="10" [tableStyle]="{'min-width':'61rem'}">
+      <p-table class="risk-register-grid" [value]="filteredItems()" dataKey="id" size="small" [rowHover]="true" [stripedRows]="true" [showGridlines]="true" [scrollable]="true" [paginator]="filteredItems().length > 8" [rows]="8" [tableStyle]="{'min-width':'58rem'}">
         <ng-template #header><tr>
           <th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiRisk.tableRisk') }}</th><th>{{ t('aiInitiation.useCase') }}</th><th>{{ t('aiRisk.field.risk_category') }}</th><th>{{ t('aiRisk.owner') }}</th><th>{{ t('aiRisk.lifecycle.column') }}</th><th>{{ t('crud.actions') }}</th>
         </tr></ng-template>
@@ -71,9 +71,9 @@
 
         <p-tabs class="risk-detail-tabs" [value]="detailTab()" (valueChange)="detailTab.set($event)" [lazy]="true">
           <p-tablist>
-            <p-tab value="identification">{{ t('aiRisk.details.identification') }}</p-tab>
-            <p-tab value="lifecycle">{{ t('aiRisk.details.lifecycle') }} <span class="tab-count">{{ stageNumber(item) }}/6</span></p-tab>
-            <p-tab value="audit">{{ t('aiRisk.details.audit') }}</p-tab>
+            <p-tab value="identification"><span class="risk-tab-option"><span class="risk-tab-icon"><app-icon name="idCard" /></span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.identification') }}</strong><small>{{ t('aiRisk.details.identificationHelp') }}</small></span><span class="tab-count">{{ identificationCount(item) }}/{{ detailFields().length }}</span></span></p-tab>
+            <p-tab value="lifecycle"><span class="risk-tab-option"><span class="risk-tab-icon"><app-icon name="workflow" /></span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.lifecycle') }}</strong><small>{{ t('aiRisk.details.lifecycleHelp') }}</small></span><span class="tab-count">{{ stageNumber(item) }}/6</span></span></p-tab>
+            <p-tab value="audit"><span class="risk-tab-option"><span class="risk-tab-icon"><app-icon name="scrollText" /></span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.audit') }}</strong><small>{{ t('aiRisk.details.auditHelp') }}</small></span><span class="tab-count tab-count--audit">{{ t('aiRisk.details.recorded') }}</span></span></p-tab>
           </p-tablist>
           <p-tabpanels>
             <p-tabpanel value="identification">
@@ -129,7 +129,7 @@
               } @else { <section class="ds-card risk-tab-empty"><app-icon name="info" /><h3>{{ t('aiRisk.lifecycle.locked') }}</h3><p>{{ t('aiRisk.lifecycle.lockedHelp') }}</p></section> }
             </p-tabpanel>
 
-            <p-tabpanel value="audit"><app-ai-audit-query [caseId]="item.workflowCase.id" /></p-tabpanel>
+            <p-tabpanel value="audit"><app-ai-audit-query class="risk-audit-panel" [caseId]="item.workflowCase.id" [expanded]="true" /></p-tabpanel>
           </p-tabpanels>
         </p-tabs>
       } @else {

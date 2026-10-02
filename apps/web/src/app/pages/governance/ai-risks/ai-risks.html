@@ -80,6 +80,22 @@
         @if (item.useCase.operationalStatusCode) { <section class="ds-card risk-alert" role="status"><app-icon name="info" /><div><strong>{{ t('aiJourney.operational.' + item.useCase.operationalStatusCode) }}</strong><p>{{ t('aiJourney.intakePaused') }}</p></div></section> }
         @if (item.libraryVersion; as libraryVersion) { <section class="ds-card risk-alert"><app-icon name="shield" /><div><strong>{{ libraryVersion.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ libraryVersion.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></div></section> }
 
+        <section class="ds-card risk-owner-strip" [class.risk-owner-strip--unassigned]="!item.owner">
+          <span class="risk-owner-strip__icon"><app-icon name="userCheck" /></span>
+          <div class="risk-owner-strip__identity"><small>{{ t('aiRisk.currentOwner') }}</small><strong>{{ item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned') }}</strong><span>{{ t(item.owner ? 'aiRisk.currentOwnerHelp' : 'aiRisk.assignOwnerHelp') }}</span></div>
+          <app-status-chip [kind]="item.owner ? 'success' : 'muted'" [label]="item.owner ? t('aiRisk.ownerAssigned') : t('aiRisk.ownerRequired')" />
+          @if (item.canAssignOwner && !ownerEditorOpen()) {
+            <button type="button" class="ds-btn ds-btn--primary btn-sm" pRipple (click)="editOwner(item)"><app-icon name="edit" />{{ t(item.owner ? 'aiRisk.changeOwner' : 'aiRisk.assignOwner') }}</button>
+          }
+          @if (item.canAssignOwner && ownerEditorOpen()) {
+            <div class="risk-owner-editor">
+              <label><span>{{ t('aiRisk.newOwner') }}</span><p-select [options]="lookups().riskOwners" optionValue="userId" [optionLabel]="i18n.lang() === 'ar' ? 'fullNameAr' : 'fullNameEn'" [filter]="true" [placeholder]="t('aiuc.select')" [ngModel]="ownerUserId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerUserId.set($event || '')" [ariaLabel]="t('aiRisk.newOwner')" /></label>
+              <label><span>{{ t('aiRisk.changeReason') }}</span><textarea pTextarea rows="2" maxlength="2000" [placeholder]="t('aiRisk.ownerJustificationHint')" [ngModel]="ownerJustification()" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerJustification.set($event)"></textarea></label>
+              <div class="risk-owner-editor__actions"><button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="cancelOwnerEdit(item)">{{ t('crud.cancel') }}</button><button type="button" class="ds-btn ds-btn--primary btn-sm" pRipple [disabled]="working() || !ownerChangeReady(item)" (click)="assignOwner()">{{ t(item.owner ? 'aiRisk.confirmOwnerChange' : 'aiRisk.assignOwner') }}</button></div>
+            </div>
+          }
+        </section>
+
         <p-tabs class="risk-detail-tabs" [value]="detailTab()" (valueChange)="detailTab.set($event)" [lazy]="true">
           <p-tablist>
             <p-tab value="identification"><span class="risk-tab-option"><span class="risk-tab-index">1</span><span class="risk-tab-copy"><strong>{{ t('aiRisk.details.identification') }}</strong><small>{{ t('aiRisk.details.identificationHelp') }}</small></span><span class="tab-count">{{ identificationCount(item) }}/{{ detailFields().length }}</span></span></p-tab>
@@ -105,20 +121,6 @@
                   @if (item.obligations.length) { <div class="risk-obligations"><span><app-icon name="info" /></span><div><strong>{{ t('aiReview.adoption.conditions') }}</strong><ul>@for (condition of item.obligations; track condition.id) { <li>{{ condition.description }}</li> }</ul></div></div> }
                 </section>
 
-                @if (item.canAssignOwner) {
-                  <section class="ds-card risk-owner-card">
-                    <header class="risk-compact-head risk-compact-head--owner">
-                      <span class="risk-phase-number">2</span>
-                      <div><span class="eyebrow">{{ t('aiRisk.stage.2') }}</span><h2>{{ t(item.owner ? 'aiRisk.reassignOwner' : 'aiRisk.assignOwner') }}</h2><p>{{ t('aiRisk.assignOwnerHelp') }}</p></div>
-                      <app-status-chip [kind]="item.owner ? 'info' : 'muted'" [label]="item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned')" />
-                    </header>
-                    <div class="risk-owner-form">
-                      <label><span>{{ t('aiRisk.owner') }}</span><p-select [options]="lookups().riskOwners" optionValue="userId" [optionLabel]="i18n.lang() === 'ar' ? 'fullNameAr' : 'fullNameEn'" [filter]="true" [placeholder]="t('aiuc.select')" [ngModel]="ownerUserId() || null" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerUserId.set($event || '')" [ariaLabel]="t('aiRisk.owner')" /></label>
-                      <label><span>{{ t('aiReview.justification') }}</span><textarea pTextarea rows="2" maxlength="2000" [placeholder]="t('aiRisk.ownerJustificationHint')" [ngModel]="ownerJustification()" [ngModelOptions]="{standalone:true}" (ngModelChange)="ownerJustification.set($event)"></textarea></label>
-                      <button type="button" class="ds-btn ds-btn--primary" pRipple [disabled]="working() || !ownerUserId() || !ownerJustification().trim()" (click)="assignOwner()">{{ t(item.owner ? 'aiRisk.reassignOwner' : 'aiRisk.assignOwner') }}</button>
-                    </div>
-                  </section>
-                }
               </div>
 
               <section #riskIntake class="ds-card specialist-decision risk-intake">

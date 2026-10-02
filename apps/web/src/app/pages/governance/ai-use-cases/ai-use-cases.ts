@@ -34,6 +34,11 @@ interface IntakeSectionDefinition {
   fields: IntakeFieldDefinition[];
 }
 
+interface IntakeStepDefinition {
+  number: number;
+  sectionNumbers: number[];
+}
+
 interface ReferenceValue { code: string; labelEn: string; labelAr: string; }
 interface DirectoryUser {
   id: string;
@@ -77,6 +82,7 @@ interface AiUseCase {
   intakeRevisions: IntakeRevision[];
   warnings?: IntakeWarning[];
   conditions?: { personalDataInvolved: boolean; sensitiveDataInvolved: boolean };
+  canEdit?: boolean;
 }
 interface ValidationIssue { field: string; code: string; message: string; }
 
@@ -130,6 +136,13 @@ const SECTIONS: IntakeSectionDefinition[] = [
     { code: 'attachments', kind: 'attachments', required: OPTIONAL, wide: true },
   ] },
 ];
+const STEPS: IntakeStepDefinition[] = [
+  { number: 1, sectionNumbers: [1, 2] },
+  { number: 2, sectionNumbers: [3, 4] },
+  { number: 3, sectionNumbers: [5, 6] },
+  { number: 4, sectionNumbers: [7, 8, 9] },
+  { number: 5, sectionNumbers: [] },
+];
 
 @Component({
   selector: 'app-ai-use-cases',
@@ -145,6 +158,7 @@ export class AiUseCasesPage implements OnInit {
   private readonly toast = inject(ToastService);
   protected readonly i18n = inject(I18nService);
   protected readonly sections = SECTIONS;
+  protected readonly steps = STEPS;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly cases = signal<AiUseCase[]>([]);
   protected readonly caseSearch = signal('');
@@ -157,10 +171,13 @@ export class AiUseCasesPage implements OnInit {
   protected readonly warnings = signal<IntakeWarning[]>([]);
   protected readonly attachmentInput = signal('');
   protected readonly activeSection = signal<AccordionValue>(1);
+  protected readonly activeStep = signal(1);
   protected readonly requiredTotal = 26;
   protected readonly isReadOnly = computed(() => {
     const item = this.selected();
-    return !this.lookups()?.canCreate || item?.requesterUserId !== this.auth.currentUser()?.id || !!item?.workflowCase && item.workflowCase.status !== 'awaiting_information';
+    if (!this.lookups()?.canCreate) return true;
+    if (typeof item?.canEdit === 'boolean') return !item.canEdit;
+    return item?.requesterUserId !== this.auth.currentUser()?.id || !!item?.workflowCase && item.workflowCase.status !== 'awaiting_information';
   });
   protected readonly completedRequired = computed(() => {
     let completed = 0;
@@ -197,6 +214,33 @@ export class AiUseCasesPage implements OnInit {
   protected sectionCompleted(section: IntakeSectionDefinition): number {
     return section.fields.filter(field => field.required && this.hasValue(this.payload()[field.code])).length;
   }
+  protected sectionsForStep(step = this.activeStep()): IntakeSectionDefinition[] {
+    const numbers = STEPS.find(item => item.number === step)?.sectionNumbers ?? [];
+    return SECTIONS.filter(section => numbers.includes(section.number));
+  }
+  protected stepRequired(step: IntakeStepDefinition): number {
+    return SECTIONS.filter(section => step.sectionNumbers.includes(section.number))
+      .flatMap(section => section.fields).filter(field => field.required).length;
+  }
+  protected stepCompleted(step: IntakeStepDefinition): number {
+    return SECTIONS.filter(section => step.sectionNumbers.includes(section.number))
+      .flatMap(section => section.fields).filter(field => field.required && this.hasValue(this.payload()[field.code])).length;
+  }
+  protected stepState(step: IntakeStepDefinition): 'complete' | 'current' | 'upcoming' {
+    if (step.number === this.activeStep()) return 'current';
+    if (step.number === 5) return this.completedRequired() === this.requiredTotal ? 'complete' : 'upcoming';
+    return this.stepCompleted(step) === this.stepRequired(step) ? 'complete' : 'upcoming';
+  }
+  protected goToStep(step: number): void {
+    if (step < 1 || step > STEPS.length) return;
+    this.activeStep.set(step);
+    const firstSection = STEPS.find(item => item.number === step)?.sectionNumbers[0];
+    if (firstSection) this.activeSection.set(firstSection);
+  }
+  protected stepForSection(sectionNumber: number): number {
+    return STEPS.find(step => step.sectionNumbers.includes(sectionNumber))?.number ?? 1;
+  }
+  protected fieldComplete(field: IntakeFieldDefinition): boolean { return this.hasValue(this.value(field.code)); }
   protected value(code: string): any { return this.payload()[code]; }
   protected fieldIssues(code: string): ValidationIssue[] { return this.issues().filter(issue => issue.field === code); }
 
@@ -229,6 +273,7 @@ export class AiUseCasesPage implements OnInit {
     this.dirty.set(false);
     this.attachmentInput.set('');
     this.activeSection.set(1);
+    this.activeStep.set(1);
   }
 
   protected async createDraft(): Promise<void> {
@@ -303,6 +348,30 @@ export class AiUseCasesPage implements OnInit {
   protected userLabel(user: DirectoryUser): string {
     const name = this.i18n.lang() === 'ar' ? user.nameAr : user.nameEn;
     return `${name} · ${user.email}`;
+  }
+
+  protected reviewValue(field: IntakeFieldDefinition): string {
+    const value = this.value(field.code);
+    if (!this.hasValue(value)) return this.t('aiuc.review.notProvided');
+    if (field.code === 'requester') return this.requesterLabel();
+    if (field.kind === 'user') {
+      const user = this.usersFor(field.code).find(item => item.id === value);
+      return user ? this.userLabel(user) : String(value);
+    }
+    if (field.kind === 'select') {
+      const option = this.options(field.code).find(item => item.code === value);
+      return option ? this.optionLabel(option) : String(value);
+    }
+    if (field.kind === 'multiselect' && Array.isArray(value)) {
+      return value.map(code => this.options(field.code).find(item => item.code === code))
+        .map(option => option ? this.optionLabel(option) : '').filter(Boolean).join(', ');
+    }
+    if (field.kind === 'boolean-detail') {
+      return `${this.t(value.answer ? 'aiuc.yes' : 'aiuc.no')} · ${value.justification ?? value.details ?? ''}`;
+    }
+    if (field.kind === 'constraints') return value.none ? this.t('aiuc.none') : String(value.text ?? '');
+    if (Array.isArray(value)) return value.join(', ');
+    return String(value);
   }
 
   protected requesterLabel(): string {
@@ -390,7 +459,10 @@ export class AiUseCasesPage implements OnInit {
       this.issues.set(issues);
       const firstField = issues.find((issue: ValidationIssue) => SECTIONS.some(section => section.fields.some(field => field.code === issue.field)))?.field;
       const section = SECTIONS.find(row => row.fields.some(field => field.code === firstField));
-      if (section) this.activeSection.set(section.number);
+      if (section) {
+        this.activeSection.set(section.number);
+        this.activeStep.set(STEPS.find(step => step.sectionNumbers.includes(section.number))?.number ?? 1);
+      }
     }
     this.toast.errorFrom(error, this.t(fallbackKey));
   }

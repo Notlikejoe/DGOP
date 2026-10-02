@@ -101,9 +101,24 @@
             </section>
           }
 
-          <form class="intake-form" (submit)="$event.preventDefault()">
+          <nav class="intake-stepper" [attr.aria-label]="t('aiuc.steps.aria')">
+            @for (step of steps; track step.number) {
+              <button type="button" pRipple [class.is-active]="activeStep() === step.number" [class.is-complete]="stepState(step) === 'complete'" (click)="goToStep(step.number)" [attr.aria-current]="activeStep() === step.number ? 'step' : null">
+                <span class="step-marker">@if (stepState(step) === 'complete') { <app-icon name="check" /> } @else { {{ step.number }} }</span>
+                <span class="step-copy"><small>{{ t('aiuc.steps.step') }} {{ step.number }}</small><strong>{{ t('aiuc.steps.' + step.number) }}</strong></span>
+                @if (step.number < 5) { <span class="step-count">{{ stepCompleted(step) }}/{{ stepRequired(step) }}</span> }
+              </button>
+            }
+          </nav>
+
+          <form class="intake-form guided-intake" (submit)="$event.preventDefault()">
+            @if (activeStep() < 5) {
+            <header class="guided-step-head">
+              <div><span class="eyebrow">{{ t('aiuc.steps.step') }} {{ activeStep() }} / 5</span><h2>{{ t('aiuc.steps.' + activeStep()) }}</h2><p>{{ t('aiuc.steps.help.' + activeStep()) }}</p></div>
+              <app-status-chip [kind]="stepCompleted(steps[activeStep() - 1]) === stepRequired(steps[activeStep() - 1]) ? 'success' : 'info'" [label]="stepCompleted(steps[activeStep() - 1]) + ' / ' + stepRequired(steps[activeStep() - 1])" />
+            </header>
             <p-accordion class="intake-accordion" [value]="activeSection()" (valueChange)="activeSection.set($event)">
-            @for (section of sections; track section.number) {
+            @for (section of sectionsForStep(); track section.number) {
               <p-accordion-panel [value]="section.number">
                 <p-accordion-header>
                   <span class="section-head">
@@ -180,6 +195,33 @@
               </p-accordion-panel>
             }
             </p-accordion>
+            } @else {
+              <section class="intake-review">
+                <header class="guided-step-head review-step-head">
+                  <div><span class="eyebrow">{{ t('aiuc.review.kicker') }}</span><h2>{{ t('aiuc.review.title') }}</h2><p>{{ t('aiuc.review.help') }}</p></div>
+                  <app-status-chip [kind]="completedRequired() === requiredTotal ? 'success' : 'info'" [label]="completedRequired() + ' / ' + requiredTotal" />
+                </header>
+                @for (section of sections; track section.number) {
+                  <article class="review-section">
+                    <header><span>{{ section.number }}</span><div><h3>{{ sectionLabel(section.number) }}</h3><small>{{ sectionCompleted(section) }} / {{ sectionRequired(section) || t('aiuc.optional') }}</small></div><button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="goToStep(stepForSection(section.number))">{{ t('aiuc.review.edit') }}</button></header>
+                    <dl>
+                      @for (field of section.fields; track field.code) {
+                        <div [class.is-missing]="field.required && !fieldComplete(field)"><dt>{{ fieldLabel(field.code) }}</dt><dd>{{ reviewValue(field) }}</dd></div>
+                      }
+                    </dl>
+                  </article>
+                }
+                <div class="review-submit">
+                  <div><strong>{{ completedRequired() === requiredTotal ? t('aiuc.review.ready') : t('aiuc.review.incomplete') }}</strong><p>{{ t(completedRequired() === requiredTotal ? 'aiuc.review.readyHelp' : 'aiuc.review.incompleteHelp') }}</p></div>
+                  <button type="button" class="ds-btn ds-btn--primary" [disabled]="isReadOnly() || saving() || !lookups()?.ready || completedRequired() < requiredTotal" (click)="submit()"><app-icon name="shield" />{{ t('aiuc.submit') }}</button>
+                </div>
+              </section>
+            }
+            <footer class="guided-actions">
+              <button type="button" class="ds-btn ds-btn--ghost" [disabled]="activeStep() === 1" (click)="goToStep(activeStep() - 1)">{{ t('aiuc.steps.previous') }}</button>
+              <span>{{ t('aiuc.steps.autosaveHint') }}</span>
+              @if (activeStep() < 5) { <button type="button" class="ds-btn ds-btn--primary" (click)="goToStep(activeStep() + 1)">{{ t('aiuc.steps.next') }}<app-icon name="chevronRight" /></button> }
+            </footer>
           </form>
         } @else {
           <section class="ds-card empty-state empty-state--main"><app-icon name="fileCheck" /><h2>{{ t('aiuc.empty.title') }}</h2><p>{{ t('aiuc.empty.body') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="createDraft()">{{ t('aiuc.new') }}</button></section>

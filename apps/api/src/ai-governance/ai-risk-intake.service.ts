@@ -91,11 +91,12 @@ export class AiRiskIntakeService {
 
   private decorate(item: Prisma.AiRiskGetPayload<{ select: typeof riskSelect }>, actor: { id: string; roles: string[] }, permissions: Set<string>) {
     const draft = !['SUSPENDED','ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '') && item.workflowCase?.status === 'draft' && !item.riskRef && !actor.roles.includes('auditor');
+    const administratorOverride = isSystemAdministrator(actor.roles);
     const { createdBy, initiationKey, ...publicItem } = item;
-    return { ...publicItem, canAssignOwner: draft && actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs'),
-      canEdit: draft && item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs'),
-      canDelete: draft && !!initiationKey && permissions.has('case.create.airs')
-        && (createdBy === actor.id || actor.roles.includes('AI_WORKING_GROUP')) };
+    return { ...publicItem, canAssignOwner: draft && (administratorOverride || actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')),
+      canEdit: draft && (administratorOverride || item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs')),
+      canDelete: draft && !!initiationKey && (administratorOverride || permissions.has('case.create.airs'))
+        && (administratorOverride || createdBy === actor.id || actor.roles.includes('AI_WORKING_GROUP')) };
   }
 
   async list(userId: string) {
@@ -122,7 +123,7 @@ export class AiRiskIntakeService {
   async lookups(userId: string) {
     const { actor, permissions } = await this.visibility(userId);
     const lists = await this.references();
-    const riskOwners = actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs') ? await this.prisma.person.findMany({ where: {
+    const riskOwners = (isSystemAdministrator(actor.roles) || actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')) ? await this.prisma.person.findMany({ where: {
       isActive: true, deletedAt: null, user: { is: { isActive: true, userRoles: { none: { role: { is: { code: 'auditor', isActive: true, deletedAt: null } } }, some: { role: { is: { code: 'AI_RISK_OWNER', isActive: true, deletedAt: null,
         permissions: { some: { permission: { is: splitAiPermission('case.create.airs') } } } } } } } } },
     }, select: { userId: true, fullNameEn: true, fullNameAr: true }, orderBy: { fullNameEn: 'asc' }, take: 500 }) : [];
@@ -144,7 +145,7 @@ export class AiRiskIntakeService {
     if (!dto.justification.trim()) throw new BadRequestException('Owner assignment justification is required');
     return this.prisma.$transaction(async tx => {
       const { actor, item } = await this.writable(tx, userId, id, dto.expectedVersion, false);
-      if (!actor.roles.includes('AI_WORKING_GROUP')) throw new ForbiddenException('The working group assigns the risk intake owner');
+      if (!isSystemAdministrator(actor.roles) && !actor.roles.includes('AI_WORKING_GROUP')) throw new ForbiddenException('The working group or System Administrator assigns the risk intake owner');
       const nominee = await this.authorization.authorize(dto.ownerUserId, 'case.create.airs', tx);
       if (!nominee.roles.includes('AI_RISK_OWNER')) throw new BadRequestException('Select an existing eligible AI Risk Owner');
       const person = await tx.person.findFirst({ where: { userId: nominee.id, isActive: true, deletedAt: null } });

@@ -68,6 +68,7 @@ export class AiRisksPage implements OnInit {
   protected readonly dirty = signal(false);
   protected readonly ownerUserId = signal('');
   protected readonly ownerJustification = signal('');
+  protected readonly ownerEditorOpen = signal(false);
   protected readonly evidenceText = signal('');
   protected readonly textFields = ['cause', 'event', 'effect', 'current_controls', 'notes'];
   protected readonly otherFields = [
@@ -173,6 +174,7 @@ export class AiRisksPage implements OnInit {
     const previous = this.selected();
     if (previous?.canEdit && this.dirty()) this.draftCache.update(cache => ({ ...cache, [previous.id]: { fields: this.input(), evidence: this.evidenceText() } }));
     this.selected.set(item); this.ownerUserId.set(item?.owner?.userId ?? ''); this.ownerJustification.set('');
+    this.ownerEditorOpen.set(false);
     const stored = item?.intakeData ?? {};
     const initial = Object.fromEntries(['title', ...this.textFields, ...this.lookups().lists.map(list => list.field)].map(field => [field,
       stored[field] ?? (field === 'title' ? item?.title ?? '' : field === 'dev_stage' ? item?.handoffPayload?.['lifecycleStage'] ?? '' : '')]));
@@ -193,6 +195,19 @@ export class AiRisksPage implements OnInit {
   protected scrollToIntake(): void {
     requestAnimationFrame(() => this.riskIntake?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
+  protected editOwner(item: RiskItem): void {
+    this.ownerUserId.set(item.owner?.userId ?? '');
+    this.ownerJustification.set('');
+    this.ownerEditorOpen.set(true);
+  }
+  protected cancelOwnerEdit(item: RiskItem): void {
+    this.ownerUserId.set(item.owner?.userId ?? '');
+    this.ownerJustification.set('');
+    this.ownerEditorOpen.set(false);
+  }
+  protected ownerChangeReady(item: RiskItem): boolean {
+    return !!this.ownerUserId() && !!this.ownerJustification().trim() && this.ownerUserId() !== item.owner?.userId;
+  }
   protected async load(preferredId?: string): Promise<void> {
     this.state.set('loading');
     try {
@@ -211,7 +226,7 @@ export class AiRisksPage implements OnInit {
     this.working.set(true);
     try { await firstValueFrom(this.http.post(`/api/ai/risks/${item.id}/owner`, {
       expectedVersion: item.version, ownerUserId: this.ownerUserId(), justification: this.ownerJustification().trim() }));
-      this.toast.success(this.t('aiRisk.ownerSaved')); await this.load(item.id); this.scrollToIntake();
+      this.ownerEditorOpen.set(false); this.toast.success(this.t(item.owner ? 'aiRisk.ownerChanged' : 'aiRisk.ownerSaved')); await this.load(item.id); this.scrollToIntake();
     } catch (error) { this.toast.errorFrom(error, this.t('aiRisk.error')); } finally { this.working.set(false); }
   }
   protected async deleteRisk(item: RiskItem): Promise<void> {

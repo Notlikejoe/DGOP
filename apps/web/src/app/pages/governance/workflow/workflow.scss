@@ -254,30 +254,6 @@
   line-height: 1;
 }
 
-.registry-strip {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.registry-strip span {
-  max-width: 18rem;
-  padding: 0.28rem 0.55rem;
-  border: 1px solid color-mix(in srgb, var(--success) 44%, var(--command-border));
-  border-radius: 999px;
-  color: var(--success);
-  background: color-mix(in srgb, var(--success) 10%, transparent);
-  font-size: 0.78rem;
-  font-weight: 800;
-  overflow-wrap: anywhere;
-}
-
-.registry-strip--variables span {
-  border-color: color-mix(in srgb, var(--command-accent) 45%, var(--command-border));
-  color: var(--command-accent);
-  background: color-mix(in srgb, var(--command-accent) 10%, transparent);
-}
-
 .route-directory,
 .route-insight {
   border: 1px solid var(--command-border);
@@ -1044,11 +1020,6 @@
 .workflow-surface--map .configuration-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
-}
-
-.workflow-surface--map .registry-strip span {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.72rem;
 }
 
 .workflow-surface--map .route-workspace {

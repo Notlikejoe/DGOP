@@ -215,13 +215,6 @@
                   <small>{{ t('wf.config.automationEventsHelp') }}</small>
                 </article>
               </div>
-              @if (cfg.variableRegistry?.length) {
-                <div class="registry-strip registry-strip--variables">
-                  @for (variable of cfg.variableRegistry!.slice(0, 8); track variable.code) {
-                    <span>{{ variable.code }} &middot; {{ variable.variableType }}</span>
-                  }
-                </div>
-              }
             </section>
           }
 

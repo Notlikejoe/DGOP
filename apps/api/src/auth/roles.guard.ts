@@ -9,6 +9,7 @@ import { Request } from 'express';
 import { ROLES_KEY } from './decorators';
 import { AuthUser } from './auth.types';
 import { AuditService } from '../audit/audit.service';
+import { isSystemAdministrator } from './system-admin';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -26,7 +27,7 @@ export class RolesGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     const user = request.user;
-    const allowed = !!user && user.roles.some((r) => required.includes(r));
+    const allowed = !!user && (isSystemAdministrator(user.roles) || user.roles.some((r) => required.includes(r)));
 
     if (!allowed) {
       await this.audit.log({

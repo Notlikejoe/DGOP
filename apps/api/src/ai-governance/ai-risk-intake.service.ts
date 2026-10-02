@@ -11,6 +11,7 @@ import { AiIdentifiersService } from './ai-identifiers.service';
 import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
 import { AIRS_STAGE, AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { AssignAiRiskOwnerDto } from './ai-risk-intake.dto';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 export const RISK_INTAKE_LISTS = { risk_category: 'R_RISKCAT', ethics_principle: 'R_ETHICS', dev_stage: 'R_LIFECYCLE',
   control_effectiveness: 'R_CTRLEFF', risk_source: 'R_SOURCE', risk_intent: 'R_INTENT', risk_timing: 'R_TIMING' } as const;
@@ -135,7 +136,7 @@ export class AiRiskIntakeService {
     if (!item || item.workflowCase?.status !== 'draft' || item.riskRef) throw new NotFoundException('AI risk draft not available');
     if (['SUSPENDED','ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '')) throw new ConflictException('New risk intake is paused because the linked AI use case is suspended or archived');
     if (item.version !== version) throw new ConflictException('AI risk changed; reload before editing');
-    if (ownerOnly && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id)) throw new ForbiddenException('Only the assigned Risk Owner can edit or submit this intake');
+    if (ownerOnly && !isSystemAdministrator(actor.roles) && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id)) throw new ForbiddenException('Only the assigned Risk Owner or System Administrator can edit or submit this intake');
     return { actor, item };
   }
 

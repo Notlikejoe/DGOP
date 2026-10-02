@@ -361,7 +361,7 @@ export class DataSharingService {
 
   async saveReview(roleCodes: string[], id: string, dto: SaveDataSharingReviewDto, actor: string) {
     const request = await this.getRequest(roleCodes, id);
-    if (dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
+    if (!roleCodes.includes('system_admin') && dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
       throw new ForbiddenException('Request creators cannot approve or reject their own data sharing request');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');

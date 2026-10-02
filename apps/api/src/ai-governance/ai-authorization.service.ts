@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 /** Server-resolved facts only. Never bind these facts to a public request DTO. */
 export interface AiDutyFacts {
@@ -20,6 +21,7 @@ export type AiDutyAction = 'approve_aiuc' | 'approve_plan' | 'execute_plan' | 'e
   | 'accept_low' | 'accept_medium' | 'accept_high' | 'restrict_critical' | 'task';
 
 export function aiDutyViolation(actorId: string, roles: readonly string[], action: AiDutyAction, facts: AiDutyFacts, completion = true): string | null {
+  if (isSystemAdministrator(roles)) return null;
   if (roles.includes('auditor')) return 'GEN-30';
   if (roles.includes('executive') && !roles.some(r => r.startsWith('AI_') || r === 'STEERING_COMMITTEE')) return 'GEN-104';
   if (action === 'approve_aiuc' && [facts.requesterId, facts.useCaseOwnerId].includes(actorId)) return 'GEN-26';
@@ -55,21 +57,28 @@ export class AiAuthorizationService {
       select: { id:true, email:true, userRoles:{where:{role:{isActive:true,deletedAt:null}},select:{role:{select:{id:true,code:true}}}} },
     });
     const roles = user?.userRoles.map(x=>x.role) ?? [];
-    // Explicit grants only, even for system_admin. Role claims in a JWT are not trusted here.
+    const administratorOverride = isSystemAdministrator(roles.map(role => role.code));
+    // Normal AI actors require explicit eligible grants. System Administrator is resolved
+    // from the live active role row and receives the platform-wide audited override.
     const alternatives=permissions.map(permission=>{
       const isRead=permission.startsWith('case.view.') || permission.startsWith('dashboard.view.');
       const eligible=!isRead && roles.some(r=>r.code==='auditor') ? [] : roles.filter(r=>aiRoleMayHold(r.code,permission));
       return {roleId:{in:eligible.map(r=>r.id)},permission:splitAiPermission(permission)};
     });
     const grant = alternatives.length ? await client.rolePermission.findFirst({where:{OR:alternatives}}) : null;
-    if (!user || !grant) {
+    if (!user || (!grant && !administratorOverride)) {
       await this.audit.logRequired({actor:userId,action:'ai.permission.denied',entityType:'ai_permission',metadata:{permissions:[...permissions]}});
       throw new ForbiddenException('AI action requires an explicit eligible role grant');
     }
-    return { id:user.id,email:user.email,roles:roles.map(r=>r.code) };
+    return { id:user.id,email:user.email,roles:roles.map(r=>r.code),administratorOverride };
   }
 
   async enforceDuty(actor: {id:string;roles:string[]}, action: AiDutyAction, facts: AiDutyFacts, entityId: string, completion = true) {
+    if (isSystemAdministrator(actor.roles)) {
+      await this.audit.logRequired({actor:actor.id,action:'ai.system_admin.override',entityType:'ai_case',entityId,
+        metadata:{attemptedAction:action,completion,reason:'platform_wide_administrator_authority'}});
+      return;
+    }
     const rule = aiDutyViolation(actor.id,actor.roles,action,facts,completion);
     if (!rule) return;
     // Standalone audit persists even though the caller's business operation is rejected.

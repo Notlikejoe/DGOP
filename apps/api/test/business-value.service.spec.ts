@@ -105,7 +105,7 @@ test('glossary creators cannot make their own final review decision', async () =
   await assert.rejects(
     () =>
       service.decideGlossaryTerm(
-        ['system_admin'],
+        ['dmo_admin'],
         'term-1',
         { status: BusinessGlossaryStatus.approved },
         'creator@dgop.local',
@@ -139,7 +139,7 @@ test('lifecycle creators cannot approve their own lifecycle decision', async () 
   await assert.rejects(
     () =>
       service.decideLifecycle(
-        ['system_admin'],
+        ['dmo_admin'],
         'lifecycle-1',
         { status: LifecycleDecisionStatus.approved },
         'creator@dgop.local',

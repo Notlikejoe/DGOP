@@ -11,6 +11,7 @@ import { AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-rout
 import { AiPermission } from './ai-permissions';
 import { computeInherentRisk, jsonRecord, RiskScoringConfiguration } from './ai-risk-scoring';
 import { DecideResidualRiskDto } from './ai-residual-decision.dto';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 export const RESIDUAL_STAGES = {
   adoption: 'airs-residual-adoption', ethics: 'airs-residual-ethics', low: 'airs-accept-low',
@@ -67,11 +68,12 @@ export class AiResidualDecisionService {
   private decision(g:Awaited<ReturnType<AiResidualDecisionService['gate']>>,kind:string) {return g.assessment?.decisions.find(d=>d.kind===kind);}
   private allowed(g:Awaited<ReturnType<AiResidualDecisionService['gate']>>,task:Awaited<ReturnType<AiResidualDecisionService['gate']>>['current'][number]) {
     const rule=stageRules[task.templateStage!.code];
-    if(!rule||!g.active||task.assigneeRoleCode!==rule.role||!g.permissions.has(rule.permission)||!g.actor.roles.includes(rule.role)||(task.assigneeUserId&&task.assigneeUserId!==g.actor.id)||aiDutyViolation(g.actor.id,g.actor.roles,rule.action,g.facts,false))return false;
+    const administratorOverride=isSystemAdministrator(g.actor.roles);
+    if(!rule||!g.active||task.assigneeRoleCode!==rule.role||!administratorOverride&&(!g.permissions.has(rule.permission)||!g.actor.roles.includes(rule.role)||(task.assigneeUserId&&task.assigneeUserId!==g.actor.id)||!!aiDutyViolation(g.actor.id,g.actor.roles,rule.action,g.facts,false)))return false;
     if(rule.band&&rule.band!==g.result['bandCode'])return false;
-    if(rule.kind==='accept_owner'&&(!g.ownerActive||g.actor.id!==g.facts.useCaseOwnerId))return false;
-    if(rule.kind==='countersign'&&(this.decision(g,'accept_owner')?.decision!=='accept'||this.decision(g,'accept_owner')?.actorId===g.actor.id||g.facts.useCaseOwnerId===g.actor.id))return false;
-    if(rule.kind==='executive'&&(this.decision(g,'ethics')?.decision!=='approve'||this.decision(g,'ethics')?.actorId===g.actor.id))return false;
+    if(rule.kind==='accept_owner'&&(!g.ownerActive||!administratorOverride&&g.actor.id!==g.facts.useCaseOwnerId))return false;
+    if(rule.kind==='countersign'&&(this.decision(g,'accept_owner')?.decision!=='accept'||!administratorOverride&&(this.decision(g,'accept_owner')?.actorId===g.actor.id||g.facts.useCaseOwnerId===g.actor.id)))return false;
+    if(rule.kind==='executive'&&(this.decision(g,'ethics')?.decision!=='approve'||!administratorOverride&&this.decision(g,'ethics')?.actorId===g.actor.id))return false;
     if(rule.kind!=='adoption'&&this.decision(g,'adoption')?.decision!=='approve')return false;
     return g.current.filter(t=>t.templateStage?.code===task.templateStage!.code).length===1;
   }
@@ -87,7 +89,7 @@ export class AiResidualDecisionService {
     const g=await this.gate(tx,userId,id),referencesCurrent=!!g.assessment&&await this.references(tx,g.input);
     const accepted=g.parentCurrent&&!!g.assessment&&!g.assessment.decisions.some(d=>d.decision==='return')&&g.assessment.decisions.some(d=>d.decision==='accept'&&
       (d.kind==='countersign'||d.kind==='executive'||d.kind==='accept_owner'&&g.result['bandCode']==='LOW'));
-    return {version:g.risk.version,assessmentId:g.assessment?.id??null,round:g.assessment?.round??null,bandCode:g.result['bandCode']??null,
+    return {version:g.risk.version,administratorOverride:isSystemAdministrator(g.actor.roles),assessmentId:g.assessment?.id??null,round:g.assessment?.round??null,bandCode:g.result['bandCode']??null,
       score:g.result['score']??null,adopted:g.parentCurrent&&!g.assessment?.decisions.some(d=>d.decision==='return')&&this.decision(g,'adoption')?.decision==='approve',riskAccepted:accepted,operationalStatusCode:g.useCase.operationalStatusCode,
       referencesCurrent,prerequisitesReady:g.prerequisites.ready,tasks:g.current.map(task=>{
         const rule=stageRules[task.templateStage!.code],canReturn=this.allowed(g,task);

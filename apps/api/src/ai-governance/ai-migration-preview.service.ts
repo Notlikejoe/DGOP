@@ -13,6 +13,7 @@ import { AI_MIGRATION_SOURCES, parseMigrationWorkbook, SourceWorkbook } from './
 import { buildMigrationPreview, MIGRATION_PREVIEW_VERSION, PreviewEnvironment, PreviewRow } from './ai-migration-preview';
 import { jsonRecord } from './ai-risk-scoring';
 import { reportCsvCell } from './ai-dashboard-reports.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 const include=Prisma.validator<Prisma.AiMigrationPreviewInclude>()({dispositions:{orderBy:[{createdAt:'asc'},{id:'asc'}]},review:true});
 type Saved=Prisma.AiMigrationPreviewGetPayload<{include:typeof include}>;
@@ -45,7 +46,7 @@ export class AiMigrationPreviewService {
  async context(userId:string){
   const a=await this.access(this.prisma,userId),permissions=await this.prisma.rolePermission.findMany({where:{role:{code:{in:a.actor.roles},isActive:true,deletedAt:null}},include:{permission:true,role:{select:{code:true}}}});
   const holds=(role:string,code:string)=>permissions.some(p=>p.role.code===role&&p.permission.resource+'.'+p.permission.action===code);
-  return {version:MIGRATION_PREVIEW_VERSION,canPropose:!a.actor.roles.includes('auditor')&&holds('AI_GOVERNANCE_OFFICER','refdata.propose.ai'),canReview:!a.actor.roles.includes('auditor')&&holds('dmo_admin','airs.library.import')&&holds('dmo_admin','refdata.publish'),sources:AI_MIGRATION_SOURCES.map(s=>({source:s.source,file:s.file,sha256:s.sha256})),productionReady:false};
+  const administratorOverride=isSystemAdministrator(a.actor.roles);return {version:MIGRATION_PREVIEW_VERSION,administratorOverride,canPropose:administratorOverride||!a.actor.roles.includes('auditor')&&holds('AI_GOVERNANCE_OFFICER','refdata.propose.ai'),canReview:administratorOverride||!a.actor.roles.includes('auditor')&&holds('dmo_admin','airs.library.import')&&holds('dmo_admin','refdata.publish'),sources:AI_MIGRATION_SOURCES.map(s=>({source:s.source,file:s.file,sha256:s.sha256})),productionReady:false};
  }
  async create(userId:string,dto:{requestKey:string;justification:string;evidenceIds:string[]}){
   const justification=governanceText(dto.justification);if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(dto.requestKey))throw new BadRequestException('Use a stable source-preparation request key');
@@ -66,11 +67,11 @@ export class AiMigrationPreviewService {
  async get(userId:string,id:string){await this.access(this.prisma,userId);const row=await this.prisma.aiMigrationPreview.findUnique({where:{id},include});if(!row)throw new NotFoundException('Source preview not found');return this.view(row);}
  /** Internal governed-mapping facade. No additional HTTP endpoint or client-supplied scope facts. */
  async mappingBase(tx:Prisma.TransactionClient,userId:string,id:string,operation:'read'|'propose'|'review'='read',fresh=false){
-  await this.access(tx,userId,operation);const row=await tx.aiMigrationPreview.findUnique({where:{id},include});if(!row)throw new NotFoundException('Source preview not found');
+  const access=await this.access(tx,userId,operation);const row=await tx.aiMigrationPreview.findUnique({where:{id},include});if(!row)throw new NotFoundException('Source preview not found');
   const report=this.report(row),environment=await this.environment(tx);
   if(operation!=='read'&&row.review?.outcome!=='accept')throw new ConflictException('Accept source preparation before proposing source mappings');
   if(fresh){const books=await this.sources();if(governanceDigest(environment)!==row.environmentDigest||governanceDigest(books.map(b=>({source:b.source,sha256:b.sha256})))!==governanceDigest(report['sources']))throw new ConflictException('Source or reference/identity configuration changed; propose a fresh preview');await governanceEvidence(tx,row.evidenceIds);if(row.review)await governanceEvidence(tx,row.review.evidenceIds);}
-  return {row,report,environment};
+  return {row,report,environment,actor:access.actor};
  }
  async disposition(userId:string,id:string,dto:{rowKey:string;outcome:string;expectedDigest:string;justification:string;evidenceIds:string[]}){
   if(!['defer','reject'].includes(dto.outcome)||typeof dto.rowKey!=='string'||dto.rowKey.length>300)throw new BadRequestException('Use an evidenced defer or reject disposition; corrections require a new verified source');
@@ -89,9 +90,9 @@ export class AiMigrationPreviewService {
   if(!['accept','reject'].includes(dto.outcome))throw new BadRequestException('Use a source-preparation accept or reject outcome');const justification=governanceText(dto.justification);
   await this.access(this.prisma,userId,'review');const books=dto.outcome==='accept'?await this.sources():null;
   return governanceTransaction(this.prisma,async tx=>{
-   await this.access(tx,userId,'review');await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ai-source-preview'),hashtext(${id}))`;
+   const access=await this.access(tx,userId,'review');await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ai-source-preview'),hashtext(${id}))`;
    const row=await tx.aiMigrationPreview.findUnique({where:{id},include});if(!row)throw new NotFoundException('Source preview not found');const report=this.report(row);
-   if(row.createdBy===userId)throw new ForbiddenException('Source-preparation reviewer must be independent of its proposer');
+   if(!isSystemAdministrator(access.actor.roles)&&row.createdBy===userId)throw new ForbiddenException('Source-preparation reviewer must be independent of its proposer');
    if(row.review||dto.expectedDigest!==row.digest)throw new ConflictException('Source preview changed or its review is closed');
    if(dto.outcome==='accept'){
     if(governanceDigest(await this.environment(tx))!==row.environmentDigest||governanceDigest(books!.map(b=>({source:b.source,sha256:b.sha256})))!==governanceDigest(report['sources']))throw new ConflictException('Source or reference/identity configuration changed; propose a fresh preview');

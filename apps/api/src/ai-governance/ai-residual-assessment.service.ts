@@ -10,6 +10,7 @@ import { AiRiskAssessmentService } from './ai-risk-assessment.service';
 import { AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { CompleteResidualAssessmentDto, RiskDimensionScoreDto } from './ai-risk-assessment.dto';
 import { computeInherentRisk, jsonRecord, RiskDimension, RiskScoringConfiguration, scoringConfigurationIssues } from './ai-risk-scoring';
+import { isSystemAdministrator } from '../auth/system-admin';
 const STAGE='airs-residual-assessment', REVIEW='airs-residual-adoption';
 const options={isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:15000,maxWait:15000};
 function justified(value:number,reason:string){if(!Number.isInteger(value)||value<1||value>4||typeof reason!=='string'||!reason.trim()||reason.length>5000)throw new BadRequestException('A justified 1–4 residual grade is required');}
@@ -63,7 +64,7 @@ export class AiResidualAssessmentService {
   const ownerActive=!!await tx.person.findFirst({where:{id:risk.ownerPersonId??'',isActive:true,deletedAt:null},select:{id:true}});
   return {...access,risk,inherent,response,plan,actions,completed,reason:!integrity?'Treatment completion provenance/evidence is inconsistent':reason,ready,tasks,coordinator,rounds,hasRound,acceptanceTasks,ownerActive,returnTasks,responseRound};
  }
- private owner(gate:Awaited<ReturnType<AiResidualAssessmentService['gate']>>){if(!gate.ownerActive||!gate.permissions.has('airs.risk.assess')||!gate.actor.roles.includes('AI_RISK_OWNER')||gate.actor.roles.includes('auditor')||gate.actor.id!==gate.risk.owner?.userId)throw new ForbiddenException('Only the active assigned Risk Owner coordinates residual assessment');}
+ private owner(gate:Awaited<ReturnType<AiResidualAssessmentService['gate']>>){if(!isSystemAdministrator(gate.actor.roles)&&(!gate.ownerActive||!gate.permissions.has('airs.risk.assess')||!gate.actor.roles.includes('AI_RISK_OWNER')||gate.actor.roles.includes('auditor')||gate.actor.id!==gate.risk.owner?.userId))throw new ForbiddenException('Only the active assigned Risk Owner coordinates residual assessment');}
  private version(gate:{ready:boolean;reason:string|null;risk:{version:number}},version:number){if(!gate.ready)throw new ConflictException(gate.reason??'Approved treatment prerequisites are required');if(gate.risk.version!==version)throw new ConflictException('AI risk changed; reload before residual scoring');}
  private async controls(tx:Prisma.TransactionClient){const now=new Date(),versions=await tx.governedReferenceVersion.findMany({where:{listCode:'R_CTRLEFF',state:'published',effectiveFrom:{lte:now},OR:[{effectiveTo:null},{effectiveTo:{gt:now}}]},include:{values:{orderBy:{sortOrder:'asc'}}},take:2});const v=versions.length===1?versions[0]:null;return {versionId:v?.id??'',values:v?.values.map(value=>({code:value.code,labelEn:value.labelEn,labelAr:value.labelAr}))??[]};}
  private async current(tx:Prisma.TransactionClient,config:RiskScoringConfiguration,controlsVersion:string,lock=false){
@@ -75,13 +76,13 @@ export class AiResidualAssessmentService {
   const gate=await this.gate(tx,userId,id),data=jsonRecord(gate.coordinator?.formDataJson),pinned=data['configuration'] as RiskScoringConfiguration|undefined;
   const config=pinned?{...pinned,ready:!scoringConfigurationIssues(pinned).length,issues:scoringConfigurationIssues(pinned)}:await this.scoring.configuration(tx);
   const controls=pinned?data['controlReference'] as Awaited<ReturnType<AiResidualAssessmentService['controls']>>:await this.controls(tx);
-  const current=!!pinned&&await this.current(tx,pinned,controls.versionId),owner=gate.ownerActive&&gate.actor.id===gate.risk.owner?.userId&&gate.actor.roles.includes('AI_RISK_OWNER')&&gate.permissions.has('airs.risk.assess')&&!gate.actor.roles.includes('auditor');
+  const current=!!pinned&&await this.current(tx,pinned,controls.versionId),administratorOverride=isSystemAdministrator(gate.actor.roles),owner=administratorOverride||gate.ownerActive&&gate.actor.id===gate.risk.owner?.userId&&gate.actor.roles.includes('AI_RISK_OWNER')&&gate.permissions.has('airs.risk.assess')&&!gate.actor.roles.includes('auditor');
   const contributions=gate.coordinator?gate.tasks.filter(task=>jsonRecord(task.formDataJson)['coordinatorTaskId']===gate.coordinator!.id):[];
-  return {version:gate.risk.version,eligible:!!gate.response,prerequisite:gate.reason,planned:gate.actions.length,completed:gate.completed,configuration:config,controlReference:controls,started:!!pinned,referencesCurrent:current,
+  return {version:gate.risk.version,administratorOverride,eligible:!!gate.response,prerequisite:gate.reason,planned:gate.actions.length,completed:gate.completed,configuration:config,controlReference:controls,started:!!pinned,referencesCurrent:current,
    canStart:owner&&gate.ready&&!gate.coordinator&&!gate.hasRound&&(!gate.responseRound||gate.returnTasks.length===1)&&config.ready&&!!controls.versionId&&!!controls.values.length,
    canRestart:owner&&gate.ready&&!!pinned&&!gate.hasRound,canComplete:owner&&gate.ready&&current&&contributions.length===8&&contributions.every(t=>t.status==='completed'),
    tasks:contributions.map(task=>{const data=jsonRecord(task.formDataJson),mapping=config.dimensions.find(value=>value.dimension===data['dimension']);return {id:task.id,dimension:data['dimension'],status:task.status,assessorRoleCode:task.assigneeRoleCode,score:data['score']??null,
-    canContribute:gate.ready&&current&&gate.permissions.has('airs.risk.assess')&&!gate.actor.roles.includes('auditor')&&!!mapping&&task.status==='pending'&&gate.actor.roles.includes(mapping.assessorRoleCode)&&(!task.assigneeUserId||task.assigneeUserId===userId)&&(mapping.assessorRoleCode!=='AI_RISK_OWNER'||owner)};}),rounds:gate.rounds};
+    canContribute:gate.ready&&current&&gate.permissions.has('airs.risk.assess')&&!!mapping&&task.status==='pending'&&(administratorOverride||!gate.actor.roles.includes('auditor')&&gate.actor.roles.includes(mapping.assessorRoleCode)&&(!task.assigneeUserId||task.assigneeUserId===userId)&&(mapping.assessorRoleCode!=='AI_RISK_OWNER'||owner))};}),rounds:gate.rounds};
  },options);}
  async start(userId:string,id:string,expectedVersion:number,clientIp?:string,restart=false,justification=''){
   if(restart&&(!justification.trim()||justification.length>2000))throw new BadRequestException('Residual restart requires written justification');
@@ -115,7 +116,7 @@ export class AiResidualAssessmentService {
  async contribute(userId:string,id:string,taskId:string,dto:RiskDimensionScoreDto,clientIp?:string){justified(dto.value,dto.justification);return this.prisma.$transaction(async tx=>{
   const gate=await this.writable(tx,userId,id,dto.expectedVersion),task=gate.tasks.find(t=>t.id===taskId&&jsonRecord(t.formDataJson)['coordinatorTaskId']===gate.coordinator!.id),mapping=gate.config.dimensions.find(m=>m.dimension===jsonRecord(task?.formDataJson)['dimension']);
   if(!task||task.status!=='pending'||!mapping||task.assigneeRoleCode!==mapping.assessorRoleCode)throw new ConflictException('Active residual dimension task is required');
-  if(!gate.actor.roles.includes(mapping.assessorRoleCode)||task.assigneeUserId&&task.assigneeUserId!==userId||mapping.assessorRoleCode==='AI_RISK_OWNER'&&gate.risk.owner?.userId!==userId)throw new ForbiddenException('Only the competent assigned residual assessor can contribute');
+  if(!isSystemAdministrator(gate.actor.roles)&&(!gate.actor.roles.includes(mapping.assessorRoleCode)||task.assigneeUserId&&task.assigneeUserId!==userId||mapping.assessorRoleCode==='AI_RISK_OWNER'&&gate.risk.owner?.userId!==userId))throw new ForbiddenException('Only the competent assigned residual assessor can contribute');
   await tx.workflowTask.update({where:{id:taskId},data:{status:TaskStatus.completed,assigneeUserId:userId,completedAt:new Date(),formSubmittedAt:new Date(),formSubmittedBy:userId,formDataJson:{...jsonRecord(task.formDataJson),score:{value:dto.value,justification:dto.justification.trim()},assessedBy:userId,assessedRoleCode:mapping.assessorRoleCode} as Prisma.InputJsonObject}});
   await this.commit(tx,gate.risk,dto.expectedVersion,userId,'airs.residual.dimension.scored',{taskId,dimension:mapping.dimension,value:dto.value,justification:dto.justification.trim(),clientIp:clientIp??null});return {id,version:dto.expectedVersion+1};
  },options);}

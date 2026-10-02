@@ -8,6 +8,7 @@ import { AiRiskIntakeService, riskSelect } from './ai-risk-intake.service';
 import { AIRS_STAGE, AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { computeInherentRisk, jsonRecord, RiskScoringConfiguration } from './ai-risk-scoring';
 import { ReviewRiskAssessmentDto } from './ai-risk-adoption.dto';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 const options = { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 15000 };
 const open = [TaskStatus.pending, TaskStatus.in_progress];
@@ -57,6 +58,7 @@ export class AiRiskAdoptionService {
   async context(userId: string, id: string) {
     return this.prisma.$transaction(async tx => {
       const gate = await this.gate(tx, userId, id), { actor, permissions, risk, assessment } = gate;
+      const administratorOverride = isSystemAdministrator(actor.roles);
       const referencesCurrent = !!assessment && await this.currentReferences(tx, jsonRecord(assessment.inputs)['configuration']);
       const officer = gate.active && permissions.has('case.approve.airs') && actor.roles.includes('AI_GOVERNANCE_OFFICER')
         && !aiDutyViolation(actor.id, actor.roles, 'adopt_assessment', gate.facts);
@@ -65,11 +67,11 @@ export class AiRiskAdoptionService {
       return { version: risk.version, assessmentId: assessment?.id ?? null, round: assessment?.round ?? null, ethicsRequired: gate.ethicsRequired,
         ethicsApproved: gate.ethicsApproved, referencesCurrent, recused: actor.roles.includes('AI_ETHICS_COMMITTEE')
           && aiDutyViolation(actor.id, actor.roles, 'ethics_review', gate.facts) === 'GEN-29',
-        canPrepare: !!officer && gate.adoptionTasks.length === 1 && (!gate.adoptionTasks[0].assigneeUserId || gate.adoptionTasks[0].assigneeUserId === actor.id)
+        administratorOverride, canPrepare: !!officer && gate.adoptionTasks.length === 1 && (administratorOverride || !gate.adoptionTasks[0].assigneeUserId || gate.adoptionTasks[0].assigneeUserId === actor.id)
           && gate.ethicsRequired && !gate.ethicsApproved && !gate.ethicsTasks.length,
         tasks: [...gate.adoptionTasks, ...gate.ethicsTasks].map(task => {
           const isEthics = task.assigneeRoleCode === 'AI_ETHICS_COMMITTEE';
-          const eligible = (isEthics ? committee : officer) && (!task.assigneeUserId || task.assigneeUserId === actor.id);
+          const eligible = (isEthics ? committee : officer) && (administratorOverride || !task.assigneeUserId || task.assigneeUserId === actor.id);
           return { id: task.id, kind: isEthics ? 'ethics' : 'adoption', canReturn: !!eligible,
             canApprove: !!eligible && referencesCurrent && (isEthics || !gate.ethicsRequired || gate.ethicsApproved) };
         }), history: risk.assessments.map(round => ({ id: round.id, round: round.round, decisions: round.decisions })) };
@@ -84,7 +86,7 @@ export class AiRiskAdoptionService {
       await this.authorization.enforceDuty(actor, 'adopt_assessment', gate.facts, id);
       if (!gate.active || gate.risk.version !== expectedVersion || gate.adoptionTasks.length !== 1 || !gate.ethicsRequired || gate.ethicsApproved || gate.ethicsTasks.length)
         throw new ConflictException('Assessment review gate changed; reload before preparation');
-      if (gate.adoptionTasks[0].assigneeUserId && gate.adoptionTasks[0].assigneeUserId !== actor.id) throw new ForbiddenException('The adoption coordinator is assigned to another officer');
+      if (!isSystemAdministrator(actor.roles) && gate.adoptionTasks[0].assigneeUserId && gate.adoptionTasks[0].assigneeUserId !== actor.id) throw new ForbiddenException('The adoption coordinator is assigned to another officer');
       const task = await this.routing.createStageTask(tx, gate.risk.workflowCase!.id, AIRS_STAGE.ethics, new Date(), { templateCode: AIRS_TEMPLATE_CODE,
         formDataJson: { assessmentId: gate.assessment!.id, ethicsReviewRequired: true, riskRef: gate.risk.riskRef } });
       await tx.aiRisk.update({ where: { id }, data: { version: { increment: 1 } } });
@@ -107,7 +109,8 @@ export class AiRiskAdoptionService {
       if (!gate.active || !assessment) throw new ConflictException('Risk assessment is not awaiting review/adoption');
       if (risk.version !== dto.expectedVersion) throw new ConflictException('AI risk changed; reload before recording the decision');
       const task = [...gate.adoptionTasks, ...gate.ethicsTasks].find(task => task.id === taskId);
-      if (!task || task.status !== TaskStatus.pending || (task.assigneeUserId && task.assigneeUserId !== userId)) throw new ConflictException('Active assessment decision task not found');
+      const administratorOverride = isSystemAdministrator(gate.actor.roles);
+      if (!task || task.status !== TaskStatus.pending || (!administratorOverride && task.assigneeUserId && task.assigneeUserId !== userId)) throw new ConflictException('Active assessment decision task not found');
       const kind = task.assigneeRoleCode === 'AI_ETHICS_COMMITTEE' ? 'ethics' : 'adoption';
       const actor = await this.authorization.authorize(userId, kind === 'ethics' ? 'case.view.airs.org' : 'case.approve.airs', tx);
       if (!actor.roles.includes(task.assigneeRoleCode!)) throw new ForbiddenException('The assessment task requires its configured competent role');
@@ -153,7 +156,7 @@ export class AiRiskAdoptionService {
       const action = `airs.assessment.${kind}.${dto.decision}`;
       await tx.workflowEvent.create({ data: { caseId: risk.workflowCase!.id, taskId: task.id, actor: actor.id, action, comment: justification } });
       await this.audit.logRequired({ actor: actor.id, action, entityType: 'ai_risk', entityId: id,
-        metadata: { assessmentId: assessment.id, round: assessment.round, decisionId: decision.id, taskId, actorRoleCode: task.assigneeRoleCode,
+        metadata: { assessmentId: assessment.id, round: assessment.round, decisionId: decision.id, taskId, actorRoleCode: task.assigneeRoleCode, administratorOverride,
           decision: dto.decision, justification, evidenceIds, nextTaskId, clientIp: clientIp ?? null } }, tx);
       return { id, version: dto.expectedVersion + 1, decisionId: decision.id, nextTaskId };
     }, options);

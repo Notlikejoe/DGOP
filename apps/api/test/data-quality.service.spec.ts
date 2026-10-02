@@ -445,7 +445,7 @@ test('transitionRule prevents creators from approving their own rule', async () 
   );
 
   await assert.rejects(
-    () => service.transitionRule('rule-1', ['system_admin'], 'approve', {}, 'creator@dgop.local'),
+    () => service.transitionRule('rule-1', ['dmo_admin'], 'approve', {}, 'creator@dgop.local'),
     /cannot approve their own rule/,
   );
 });

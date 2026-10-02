@@ -268,7 +268,7 @@ export class BusinessValueService {
 
   async decideGlossaryTerm(roleCodes: string[], id: string, dto: DecideGlossaryTermDto, actor: string) {
     const existing = await this.findVisibleGlossary(roleCodes, id);
-    if (existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
+    if (!roleCodes.includes('system_admin') && existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Glossary term creators cannot make the final review decision');
     }
     const definitionChanged = dto.definition && dto.definition !== existing.definition;
@@ -333,7 +333,7 @@ export class BusinessValueService {
 
   async updateLineage(roleCodes: string[], id: string, dto: UpdateBusinessLineageDto, actor: string) {
     const existing = await this.findVisibleLineage(roleCodes, id);
-    if (existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
+    if (!roleCodes.includes('system_admin') && existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
       throw new ForbiddenException('Lineage creators cannot verify their own lineage map');
     }
     const impactScore = dto.impactScore === undefined ? existing.impactScore : clampScore(dto.impactScore, existing.impactScore);
@@ -433,7 +433,7 @@ export class BusinessValueService {
 
   async decideLifecycle(roleCodes: string[], id: string, dto: DecideLifecycleDecisionDto, actor: string) {
     const existing = await this.findVisibleLifecycle(roleCodes, id);
-    if (existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
+    if (!roleCodes.includes('system_admin') && existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Lifecycle decision creators cannot approve or reject their own decision');
     }
     const isApproved = dto.status === LifecycleDecisionStatus.approved || dto.status === LifecycleDecisionStatus.implemented;

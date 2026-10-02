@@ -221,7 +221,7 @@ test('request creators cannot record their own approving review', async () => {
   await assert.rejects(
     () =>
       service.saveReview(
-        ['system_admin'],
+        ['dmo_admin'],
         'request-1',
         { step: DataSharingReviewStep.privacy, decision: DataSharingReviewDecision.approved },
         'creator@dgop.local',

@@ -12,6 +12,7 @@ import { AIRS_STAGE, AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-w
 import { CreateAiRiskDto } from './ai-risk-library.dto';
 import { governanceText, governanceTransaction } from './ai-governance-ledger';
 import { jsonRecord } from './ai-risk-scoring';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 @Injectable()
 export class AiRiskInitiationService {
@@ -25,10 +26,10 @@ export class AiRiskInitiationService {
     ...(s.orgUnits==='all'?{}:{orgUnitId:{in:s.orgUnits}}),...(s.domains==='all'?{}:{domainId:{in:s.domains}}),...(s.maxClassRank===null?{}:{classification:{is:{rank:{lte:s.maxClassRank}}}})}}} satisfies Prisma.AiUseCaseWhereInput;
  }
  async context(userId:string){
-  const a=await this.risks.visibility(userId),canCreate=a.permissions.has('case.create.airs')&&a.actor.roles.some(r=>['AI_RISK_OWNER','AI_WORKING_GROUP'].includes(r))&&!a.actor.roles.includes('auditor');
+  const a=await this.risks.visibility(userId),administratorOverride=isSystemAdministrator(a.actor.roles),canCreate=administratorOverride||a.permissions.has('case.create.airs')&&a.actor.roles.some(r=>['AI_RISK_OWNER','AI_WORKING_GROUP'].includes(r))&&!a.actor.roles.includes('auditor');
   const parents=canCreate?await this.prisma.aiUseCase.findMany({where:await this.parentWhere(a.actor.roles),select:{id:true,useCaseRef:true,name:true,assessments:{where:{kind:'classification',riskId:null},orderBy:{round:'desc'},take:1,select:{result:true}}},orderBy:{useCaseRef:'asc'},take:500}):[];
   const owner=a.actor.roles.includes('AI_RISK_OWNER')?await this.prisma.person.findFirst({where:{userId,isActive:true,deletedAt:null},select:{id:true}}):null;
-  return {canCreate:canCreate&&(!a.actor.roles.includes('AI_RISK_OWNER')||!!owner),parents:parents.filter(p=>['MINIMAL','LIMITED','HIGH'].includes(String(jsonRecord(p.assessments[0]?.result)['approvedTierCode']))).map(({assessments,...p})=>p),librarySuggestionsOnly:true};
+  return {administratorOverride,canCreate:canCreate&&(administratorOverride||!a.actor.roles.includes('AI_RISK_OWNER')||!!owner),parents:parents.filter(p=>['MINIMAL','LIMITED','HIGH'].includes(String(jsonRecord(p.assessments[0]?.result)['approvedTierCode']))).map(({assessments,...p})=>p),librarySuggestionsOnly:true};
  }
  async create(userId:string,dto:CreateAiRiskDto){
   return governanceTransaction(this.prisma,tx=>this.createInTransaction(tx,userId,dto));

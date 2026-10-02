@@ -447,6 +447,7 @@ export class OpenDataService {
     approval: { step: string; workflowTaskId?: string | null },
     actor: string,
   ): void {
+    if (roleCodes.includes('system_admin')) return;
     if (approval.step === 'odiao' && candidate.createdBy === actor) {
       throw new ForbiddenException('The submitter cannot make the final ODIAO approval decision');
     }

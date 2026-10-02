@@ -9,6 +9,7 @@ import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { AiIdentifiersService } from './ai-identifiers.service';
 import { governanceDigest, governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import { jsonRecord } from './ai-risk-scoring';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 export const LIBRARY_LISTS={risk_category:'R_RISKCAT',ethics_principle:'R_ETHICS',dev_stage:'R_LIFECYCLE',default_strategy:'R_STRATEGY'} as const;
 export const LIBRARY_TEXT=['titleEn','titleAr','risk_domain','description','probable_causes','probable_impacts','example_controls','attention_indicators'] as const;
@@ -22,7 +23,7 @@ export class AiRiskLibraryService {
   const a=await this.risks.visibility(userId),now=new Date();
   const lists=await this.prisma.governedReferenceVersion.findMany({where:{listCode:{in:Object.values(LIBRARY_LISTS)},state:'published',effectiveFrom:{lte:now},OR:[{effectiveTo:null},{effectiveTo:{gt:now}}]},include:{values:true}});
   const roleGrants=await this.prisma.rolePermission.findMany({where:{role:{is:{code:{in:a.actor.roles},isActive:true,deletedAt:null}}},include:{permission:true,role:{select:{code:true}}}}),permissions=new Set(roleGrants.filter(g=>['refdata.propose.ai','airs.library.import','refdata.publish'].includes(g.permission.resource+'.'+g.permission.action)&&aiRoleMayHold(g.role.code,(g.permission.resource+'.'+g.permission.action) as AiPermission)).map(g=>g.permission.resource+'.'+g.permission.action));
-  return {canPropose:a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&permissions.has('refdata.propose.ai')&&!a.actor.roles.includes('auditor'),canPublish:a.actor.roles.includes('dmo_admin')&&permissions.has('airs.library.import')&&permissions.has('refdata.publish')&&!a.actor.roles.includes('auditor'),lists:Object.entries(LIBRARY_LISTS).map(([field,code])=>{const v=lists.filter(v=>v.listCode===code);return {field,ready:v.length===1,values:v.length===1?v[0].values.map(x=>({code:x.code,labelEn:x.labelEn,labelAr:x.labelAr})):[]};})};
+  const administratorOverride=isSystemAdministrator(a.actor.roles);return {administratorOverride,canPropose:administratorOverride||a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&permissions.has('refdata.propose.ai')&&!a.actor.roles.includes('auditor'),canPublish:administratorOverride||a.actor.roles.includes('dmo_admin')&&permissions.has('airs.library.import')&&permissions.has('refdata.publish')&&!a.actor.roles.includes('auditor'),lists:Object.entries(LIBRARY_LISTS).map(([field,code])=>{const v=lists.filter(v=>v.listCode===code);return {field,ready:v.length===1,values:v.length===1?v[0].values.map(x=>({code:x.code,labelEn:x.labelEn,labelAr:x.labelAr})):[]};})};
  }
  private async pins(tx:Prisma.TransactionClient,content:Record<string,unknown>){
   const result:Record<string,unknown>={};
@@ -74,7 +75,7 @@ export class AiRiskLibraryService {
    const actor=await this.authorization.authorize(userId,'airs.library.import',tx);await this.authorization.authorize(userId,'refdata.publish',tx);
    if(!actor.roles.includes('dmo_admin'))throw new ForbiddenException('DMO administration publishes library records');
    const v=await tx.aiRiskLibraryVersion.findUnique({where:{id},include:{entry:true,publication:true}});if(!v)throw new NotFoundException('Library version not found');
-   if(v.proposedBy===userId)throw new ForbiddenException('Library publisher must be independent of its proposer');
+   if(!isSystemAdministrator(actor.roles)&&v.proposedBy===userId)throw new ForbiddenException('Library publisher must be independent of its proposer');
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ai-risk-library'),hashtext(${v.entryId}))`;
    const latest=await tx.aiRiskLibraryVersion.findFirst({where:{entryId:v.entryId},orderBy:{round:'desc'}});
    if(v.publication||latest?.id!==v.id)throw new ConflictException('Publish only the latest unpublished proposal');

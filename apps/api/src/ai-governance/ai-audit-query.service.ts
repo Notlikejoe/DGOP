@@ -7,6 +7,7 @@ import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { jsonRecord } from './ai-risk-scoring';
 import { reportCsvCell } from './ai-dashboard-reports.service';
 import { AuditService } from '../audit/audit.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 export interface AuditFilter {kind?:'airs'|'aiuc'|'all';detail?:'redacted'|'full';caseId?:string;assetId?:string;actorId?:string;from?:string;to?:string;page?:number;pageSize?:number}
 @Injectable()
 export class AiAuditQueryService {
@@ -31,7 +32,7 @@ export class AiAuditQueryService {
    const actor=await this.authorization.authorizeAny(userId,kind==='aiuc'?['case.view.aiuc.org','case.view.aiuc.all']:['case.view.airs.org','case.view.airs.all'],tx);
    if(kind==='all')await this.authorization.authorizeAny(userId,['case.view.aiuc.org','case.view.aiuc.all'],tx);
    if(detail==='full'){
-    if(!actor.roles.includes('auditor'))throw new ForbiddenException('Full native AI audit metadata requires a live Auditor');
+    if(!isSystemAdministrator(actor.roles)&&!actor.roles.includes('auditor'))throw new ForbiddenException('Full native AI audit metadata requires a live Auditor or System Administrator');
     await this.authorization.authorize(userId,kind==='aiuc'?'case.view.aiuc.all':'case.view.airs.all',tx);
     if(kind==='all')await this.authorization.authorize(userId,'case.view.aiuc.all',tx);
    }
@@ -82,7 +83,7 @@ export class AiAuditQueryService {
   return this.db.$transaction(async tx=>{
   const actor=await this.authorization.authorize(userId,'case.view.aiuc.all',tx);
   await this.authorization.authorize(userId,'case.view.airs.all',tx);
-  if(!actor.roles.includes('auditor'))throw new ForbiddenException('Global chain verification requires a live Auditor');
+  if(!isSystemAdministrator(actor.roles)&&!actor.roles.includes('auditor'))throw new ForbiddenException('Global chain verification requires a live Auditor or System Administrator');
   const scope=await new ScopeService(tx as PrismaService).resolve(actor.roles);
   if(scope.orgUnits!=='all'||scope.domains!=='all'||scope.maxClassRank!==null)throw new ForbiddenException('Global chain verification requires unrestricted native audit scope');
   return {scope:'global_dgop_chain',...await this.audit.verifyChain(undefined,tx)};

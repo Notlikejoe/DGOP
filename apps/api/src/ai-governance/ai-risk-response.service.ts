@@ -9,6 +9,7 @@ import { AIRS_STAGE, AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-w
 import { jsonRecord } from './ai-risk-scoring';
 import { ProposeRiskResponseDto, RESPONSE_STRATEGIES } from './ai-risk-response.dto';
 import { ReviewRiskAssessmentDto } from './ai-risk-adoption.dto';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 const options = { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15000, timeout: 15000 };
 const stages = { MITIGATE: 'airs-treatment-plan', TRANSFER: 'airs-treatment-plan', AVOID: 'airs-avoidance-review',
@@ -69,7 +70,7 @@ export class AiRiskResponseService {
     return { ...access, risk, assessment, adoption, tasks, coordinator, response, proposals, consultations, active, facts };
   }
   private owner(actor: { id: string; roles: string[] }, ownerId: string | null | undefined) {
-    if (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== ownerId) throw new ForbiddenException('Only the assigned Risk Owner proposes the response');
+    if (!isSystemAdministrator(actor.roles) && (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== ownerId)) throw new ForbiddenException('Only the assigned Risk Owner proposes the response');
   }
   private version(gate: { active: boolean; risk: { version: number } }, expectedVersion: number) {
     if (!gate.active) throw new ConflictException('An adopted assessment and one pending response coordinator are required');
@@ -82,19 +83,20 @@ export class AiRiskResponseService {
   async context(userId: string, id: string) {
     return this.prisma.$transaction(async tx => {
       const gate = await this.gate(tx, userId, id), refs = await this.references(tx), { actor, permissions, response } = gate;
-      const owner = gate.active && permissions.has('airs.risk.assess') && actor.roles.includes('AI_RISK_OWNER') && actor.id === gate.risk.owner?.userId && !actor.roles.includes('auditor');
+      const administratorOverride = isSystemAdministrator(actor.roles);
+      const owner = gate.active && permissions.has('airs.risk.assess') && (administratorOverride || actor.roles.includes('AI_RISK_OWNER') && actor.id === gate.risk.owner?.userId && !actor.roles.includes('auditor'));
       const current = !!response && await this.referenceCurrent(tx, response.referenceVersionId);
       const consultationRequired = jsonRecord(response?.payload)['consultationRequired'] === true;
       const consulted = !consultationRequired || ['privacy','security'].every(kind => response?.decisions.some(value => value.kind === kind && value.decision === 'approve'));
       const officer = gate.active && permissions.has('case.approve.airs') && actor.roles.includes(roles.officer)
         && !aiDutyViolation(actor.id, actor.roles, 'adopt_assessment', gate.facts);
       const queue = response ? [gate.coordinator!, ...gate.consultations] : [];
-      return { version: gate.risk.version, references: refs, awaitingProposal: gate.active && !response, canPrepare: !!owner && !response && !gate.proposals.length,
+      return { version: gate.risk.version, administratorOverride, references: refs, awaitingProposal: gate.active && !response, canPrepare: !!owner && !response && !gate.proposals.length,
         canPropose: !!owner && !response && gate.proposals.length === 1 && refs.ready, response, consultationRequired, consulted, referencesCurrent: current,
         tasks: queue.map(task => {
           const kind = task.templateStage?.code === AIRS_STAGE.response ? 'officer' : jsonRecord(task.formDataJson)['kind'] as 'privacy' | 'security';
-          const eligible = kind === 'officer' ? officer : gate.active && permissions.has('case.view.airs.org') && actor.roles.includes(roles[kind]) && !actor.roles.includes('auditor');
-          const assigned = !task.assigneeUserId || task.assigneeUserId === actor.id;
+          const eligible = administratorOverride || (kind === 'officer' ? officer : gate.active && permissions.has('case.view.airs.org') && actor.roles.includes(roles[kind]) && !actor.roles.includes('auditor'));
+          const assigned = administratorOverride || !task.assigneeUserId || task.assigneeUserId === actor.id;
           return { id: task.id, kind, canReturn: !!eligible && assigned, canApprove: !!eligible && assigned && current && (kind !== 'officer' || consulted) };
         }), history: await tx.aiRiskResponse.findMany({ where: { riskId: id }, orderBy: { round: 'desc' }, take: 20, include: { decisions: true } }) };
     }, options);
@@ -147,7 +149,7 @@ export class AiRiskResponseService {
       if (!gate.response) throw new ConflictException('A submitted response is required');
       const task = [gate.coordinator!, ...gate.consultations].find(task => task.id === taskId);
       const kind = task?.templateStage?.code === AIRS_STAGE.response ? 'officer' : jsonRecord(task?.formDataJson)['kind'] as 'privacy' | 'security';
-      if (!task || !roles[kind] || task.assigneeRoleCode !== roles[kind] || (task.assigneeUserId && task.assigneeUserId !== userId)) throw new ConflictException('Active response decision task not found');
+      if (!task || !roles[kind] || task.assigneeRoleCode !== roles[kind] || (!isSystemAdministrator(gate.actor.roles) && task.assigneeUserId && task.assigneeUserId !== userId)) throw new ConflictException('Active response decision task not found');
       const actor = await this.authorization.authorize(userId, kind === 'officer' ? 'case.approve.airs' : 'case.view.airs.org', tx);
       if (!actor.roles.includes(roles[kind])) throw new ForbiddenException('The configured response role is required');
       await this.authorization.enforceDuty(actor, kind === 'officer' ? 'adopt_assessment' : 'task', gate.facts, id);

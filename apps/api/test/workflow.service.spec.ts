@@ -1476,7 +1476,7 @@ test('workflow designer lifecycle: submit, approve and publish records reviewer 
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn.publish'));
 });
 
-test('workflow designer lifecycle: administrators cannot override three-actor segregation of duties', async () => {
+test('workflow designer lifecycle: system administrator override is explicit and audited', async () => {
   const template = designerTemplateFixture();
   const xml = designerFixtureBpmn(template);
   const over: Over = { template, workflowCases: [], templateUpdates: [], templateVersionCreates: [], auditEntries: [] };
@@ -1484,20 +1484,11 @@ test('workflow designer lifecycle: administrators cannot override three-actor se
   const designer = { id: 'admin-designer', email: 'admin-designer@dgop.local', roles: ['system_admin'] };
 
   await svc.submitTemplateReview(template.id, { bpmnXml: xml, comment: 'Ready' }, designer);
-  await assert.rejects(
-    () => svc.approveTemplateReview(template.id, { comment: 'Self approval' }, designer),
-    /Segregation of duties/,
-  );
-  await svc.approveTemplateReview(
-    template.id,
-    { comment: 'Independent approval' },
-    { id: 'reviewer', email: 'reviewer@dgop.local', roles: ['workflow_reviewer'] },
-  );
-  await assert.rejects(
-    () => svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Self publish' }, designer),
-    /Segregation of duties/,
-  );
-  assert.ok(!over.templateVersionCreates?.length);
+  await svc.approveTemplateReview(template.id, { comment: 'Administrator approval' }, designer);
+  await svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Administrator publish' }, designer);
+  assert.equal(over.templateVersionCreates?.length, 1);
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
+  assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn.publish'));
 });
 
 test('workflow designer lifecycle: publish rejects diagrams changed after approval', async () => {
@@ -2676,14 +2667,14 @@ test('decideTask: routed task activates the next route stage', async () => {
 });
 
 // ---------- segregation of duties ----------
-test('decideTask: submitter cannot decide their own approval case', async () => {
-  const svc = makeService({
+test('decideTask: system administrator can decide their own approval case', async () => {
+  const over: Over = {
     task: { id: 't1', assigneeUserId: 'u1', status: 'pending', caseId: 'c1', case: { type: 'owner_assignment_approval', createdBy: 'u1@dgop.local', assignmentId: 'as1' } },
-  });
-  await assert.rejects(
-    () => svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin'] } as never),
-    /cannot decide an approval you submitted/,
-  );
+    assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
+  };
+  const svc = makeService(over);
+  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin'] } as never);
+  assert.equal(over.assignmentUpdate?.approvalStatus, 'approved');
 });
 
 test('submitAssignmentForApproval: approver must differ from submitter', async () => {

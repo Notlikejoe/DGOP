@@ -70,6 +70,6 @@ export class AuthService {
 
   hasAnyRole(codes: string[]): boolean {
     const roles = this.currentUser()?.roles.map((r) => r.code) ?? [];
-    return codes.some((c) => roles.includes(c));
+    return roles.includes('system_admin') || codes.some((c) => roles.includes(c));
   }
 }

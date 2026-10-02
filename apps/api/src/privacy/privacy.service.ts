@@ -472,7 +472,7 @@ export class PrivacyService {
 
   async saveGate(roleCodes: string[], id: string, dto: SavePrivacyGateDto, actor: string) {
     const dpia = await this.getDpia(roleCodes, id);
-    if (dto.status && dto.status !== PrivacyGateStatus.pending && dpia.createdBy === actor) {
+    if (!roleCodes.includes('system_admin') && dto.status && dto.status !== PrivacyGateStatus.pending && dpia.createdBy === actor) {
       throw new ForbiddenException('DPIA creators cannot approve or block their own privacy gates');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
@@ -564,7 +564,7 @@ export class PrivacyService {
     const exists = await this.prisma.privacyDsrRequest.findFirst({ where: { AND: [{ id }, this.scopedWhere<Prisma.PrivacyDsrRequestWhereInput>(scope, assetIds)] } });
     if (!exists) throw new NotFoundException('DSR request not found');
     const finalDsrStatuses: DsrRequestStatus[] = [DsrRequestStatus.fulfilled, DsrRequestStatus.rejected, DsrRequestStatus.closed];
-    if (dto.status && finalDsrStatuses.includes(dto.status) && exists.createdBy === actor) {
+    if (!roleCodes.includes('system_admin') && dto.status && finalDsrStatuses.includes(dto.status) && exists.createdBy === actor) {
       throw new ForbiddenException('DSR creators cannot close or reject their own request');
     }
     await this.assertPerson(dto.assignedPersonId, 'Assignee');
@@ -646,7 +646,7 @@ export class PrivacyService {
     const exists = await this.prisma.privacyBreach.findFirst({ where: { AND: [{ id }, this.scopedWhere<Prisma.PrivacyBreachWhereInput>(scope, assetIds)] } });
     if (!exists) throw new NotFoundException('privacy breach not found');
     const finalBreachStatuses: BreachStatus[] = [BreachStatus.closed, BreachStatus.false_positive];
-    if (dto.status && finalBreachStatuses.includes(dto.status) && exists.createdBy === actor) {
+    if (!roleCodes.includes('system_admin') && dto.status && finalBreachStatuses.includes(dto.status) && exists.createdBy === actor) {
       throw new ForbiddenException('Privacy breach creators cannot close their own incident');
     }
     const row = await this.prisma.privacyBreach.update({

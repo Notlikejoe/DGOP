@@ -16,6 +16,7 @@ import { ScopeService } from '../access/scope.service';
 import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
 import { AI_INTAKE_SCHEMA_VERSION, AiIntakeDraftV1, AiIntakeField, AiIntakeV1 } from './ai-governance.contracts';
 import { AiIdentifiersService } from './ai-identifiers.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   AI_INTAKE_REFERENCE_FIELDS,
   AiIntakeValidationIssue,
@@ -236,7 +237,7 @@ export class AiIntakeService {
   }
 
   async createDraftInTransaction(tx: Prisma.TransactionClient, userId: string, supplied: Record<string, unknown>) {
-      await this.authorization.authorize(userId, 'case.create.aiuc', tx);
+      const actor = await this.authorization.authorize(userId, 'case.create.aiuc', tx);
       const now = new Date();
       const payload: unknown = { request_date: dateInRiyadh(now), requester: userId, ...supplied };
       this.assertDraft(payload);
@@ -267,10 +268,11 @@ export class AiIntakeService {
 
   async updateDraft(userId: string, id: string, expectedVersion: number, changes: Record<string, unknown>) {
     return this.prisma.$transaction(async tx => {
-      await this.authorization.authorize(userId, 'case.create.aiuc', tx);
+      const actor = await this.authorization.authorize(userId, 'case.create.aiuc', tx);
       const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
       if (!current) throw new NotFoundException('AI use-case draft not found');
-      if (current.requesterUserId !== userId) throw new ForbiddenException('Only the requester can edit this AI intake draft');
+      const administratorOverride = isSystemAdministrator(actor.roles);
+      if (current.requesterUserId !== userId && !administratorOverride) throw new ForbiddenException('Only the requester can edit this AI intake draft');
       const returnedTask = current.workflowCaseId && current.workflowCase?.status === CaseStatus.awaiting_information
         ? await tx.workflowTask.findFirst({
           where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeUserId: userId, type: 'information' },
@@ -325,8 +327,9 @@ export class AiIntakeService {
     const task=await tx.workflowTask.findFirst({where:{caseId:uc.workflowCaseId,status:'pending',assigneeUserId:uc.requesterUserId,templateStage:{code:'aiuc-completion',isActive:true,template:{code:'AIUC_APPROVAL_V1',isActive:true,deletedAt:null}}}});
     const grants=await tx.rolePermission.findMany({where:{role:{isActive:true,deletedAt:null,userRoles:{some:{userId}}},permission:{OR:[{resource:'case.create',action:'aiuc'},{resource:'case.approve',action:'aiuc'}]}},include:{role:true,permission:true}});
     const withdrawRole=grants.filter(g=>g.permission.resource==='case.create'&&aiRoleMayHold(g.role.code,'case.create.aiuc')).map(g=>g.role.code).sort()[0];
-    return {uc,access,task,withdrawRole,canWithdraw:open&&uc.requesterUserId===userId&&!access.roles.includes('auditor')&&!!withdrawRole,
-      canCloseNoAction:open&&uc.workflowCase?.status==='awaiting_information'&&!!task?.dueDate&&task.dueDate<=new Date()&&!access.roles.includes('auditor')&&grants.some(g=>g.role.code==='AI_GOVERNANCE_OFFICER'&&g.permission.resource==='case.approve')};
+    const administratorOverride=isSystemAdministrator(access.roles);
+    return {uc,access,task,withdrawRole,administratorOverride,canWithdraw:open&&(administratorOverride||uc.requesterUserId===userId&&!access.roles.includes('auditor')&&!!withdrawRole),
+      canCloseNoAction:open&&(administratorOverride||uc.workflowCase?.status==='awaiting_information'&&!!task?.dueDate&&task.dueDate<=new Date()&&!access.roles.includes('auditor')&&grants.some(g=>g.role.code==='AI_GOVERNANCE_OFFICER'&&g.permission.resource==='case.approve'))};
   }
   async closureContext(userId:string,id:string) {
     return governanceTransaction(this.prisma,async tx=>{const g=await this.closureGate(tx,userId,id);return {version:g.uc.version,canWithdraw:g.canWithdraw,canCloseNoAction:g.canCloseNoAction,informationDueAt:g.task?.dueDate??null};});
@@ -358,10 +361,11 @@ export class AiIntakeService {
 
   async submit(userId: string, id: string, expectedVersion: number) {
     return this.prisma.$transaction(async tx => {
-      await this.authorization.authorize(userId, 'case.create.aiuc', tx);
+      const actor = await this.authorization.authorize(userId, 'case.create.aiuc', tx);
       const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
       if (!current) throw new NotFoundException('AI use-case draft not found');
-      if (current.requesterUserId !== userId) throw new ForbiddenException('Only the requester can submit this AI intake');
+      const administratorOverride = isSystemAdministrator(actor.roles);
+      if (current.requesterUserId !== userId && !administratorOverride) throw new ForbiddenException('Only the requester can submit this AI intake');
       if (current.workflowCaseId || current.intakeRevisions[0]?.submittedAt) throw new ConflictException('AI intake is already submitted');
       if (current.version !== expectedVersion) throw new ConflictException('AI use-case draft changed; reload before submitting');
       const payload = current.intakeRevisions[0]?.payload ?? {};
@@ -436,16 +440,17 @@ export class AiIntakeService {
 
   async resubmit(userId: string, id: string, expectedVersion: number) {
     return this.prisma.$transaction(async tx => {
-      await this.authorization.authorize(userId, 'case.create.aiuc', tx);
+      const actor = await this.authorization.authorize(userId, 'case.create.aiuc', tx);
       const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
       if (!current) throw new NotFoundException('AI use case not found');
-      if (current.requesterUserId !== userId) throw new ForbiddenException('Only the requester can resubmit this AI intake');
+      const administratorOverride = isSystemAdministrator(actor.roles);
+      if (current.requesterUserId !== userId && !administratorOverride) throw new ForbiddenException('Only the requester can resubmit this AI intake');
       if (!current.workflowCaseId || current.workflowCase?.status !== CaseStatus.awaiting_information) {
         throw new ConflictException('AI intake is not awaiting requester information');
       }
       if (current.version !== expectedVersion) throw new ConflictException('AI use-case draft changed; reload before resubmitting');
       const completionTask = await tx.workflowTask.findFirst({
-        where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeUserId: userId, type: 'information' },
+        where: { caseId: current.workflowCaseId, status: TaskStatus.pending, assigneeUserId: administratorOverride ? current.requesterUserId : userId, type: 'information' },
       });
       if (!completionTask) throw new ConflictException('No active requester completion task exists');
       const payload = current.intakeRevisions[0]?.payload ?? {};
@@ -609,7 +614,7 @@ export class AiIntakeService {
     return this.prisma.$transaction(async tx => {
       const { actor, canCreate, where } = await this.readVisibility(userId, tx);
       const rows = await tx.aiUseCase.findMany({ where, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 100, select: intakeUseCase });
-      return rows.map(row => ({ ...row, canEdit: canCreate && row.requesterUserId === actor.id && (!row.workflowCase || row.workflowCase.status === CaseStatus.awaiting_information) }));
+      return rows.map(row => ({ ...row, canEdit: canCreate && (isSystemAdministrator(actor.roles) || row.requesterUserId === actor.id) && (!row.workflowCase || row.workflowCase.status === CaseStatus.awaiting_information) }));
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
 
@@ -618,7 +623,7 @@ export class AiIntakeService {
       const { actor, canCreate, where } = await this.readVisibility(userId, tx);
       const row = await tx.aiUseCase.findFirst({ where: { AND: [where, { id }] }, select: intakeUseCase });
       if (!row) throw new NotFoundException('AI use case not found');
-      return { ...row, canEdit: canCreate && row.requesterUserId === actor.id && (!row.workflowCase || row.workflowCase.status === CaseStatus.awaiting_information) };
+      return { ...row, canEdit: canCreate && (isSystemAdministrator(actor.roles) || row.requesterUserId === actor.id) && (!row.workflowCase || row.workflowCase.status === CaseStatus.awaiting_information) };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
 

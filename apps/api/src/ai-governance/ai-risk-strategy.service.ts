@@ -10,6 +10,7 @@ import { requiredInherentRound } from './ai-reassessment-state';
 import { jsonRecord } from './ai-risk-scoring';
 import { CompleteAiRiskReviewDto } from './ai-risk-review.dto';
 import { nextAvailableBusinessCode, formatBusinessSequence } from '../common/business-sequence';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 export const AI_COUNCILS = [
   { level:'domain_council', role:'AI_GOVERNANCE_OFFICER' },
@@ -41,23 +42,24 @@ export class AiRiskStrategyService {
     const ownerActive=!!risk.ownerPersonId&&!!await tx.person.findFirst({where:{id:risk.ownerPersonId,userId:risk.owner?.userId,isActive:true,deletedAt:null},select:{id:true}});
     const active=!!task&&!!adoption&&!!approved&&!!response&&!response.decisions.some(d=>d.decision==='return')&&risk.workflowCase?.status==='under_review'&&ownerActive;
     const last=events.at(-1)??null;
-    const independent=!access.actor.roles.includes('auditor')&&![risk.owner?.userId,risk.useCase.owner?.userId,response?.submittedBy].includes(userId);
-    const assigned=!!task&&(!task.assigneeUserId||task.assigneeUserId===userId)&&!!task.assigneeRoleCode&&access.actor.roles.includes(task.assigneeRoleCode);
+    const administratorOverride=isSystemAdministrator(access.actor.roles);
+    const independent=administratorOverride||!access.actor.roles.includes('auditor')&&![risk.owner?.userId,risk.useCase.owner?.userId,response?.submittedBy].includes(userId);
+    const assigned=!!task&&(administratorOverride||!task.assigneeUserId||task.assigneeUserId===userId)&&!!task.assigneeRoleCode&&(administratorOverride||access.actor.roles.includes(task.assigneeRoleCode));
     const authority=active&&independent&&assigned&&!!access.permissionRoles['airs.strategy.decide']?.includes(task!.assigneeRoleCode!);
-    const owner=active&&ownerActive&&risk.owner?.userId===userId&&access.actor.roles.includes('AI_RISK_OWNER')&&access.permissions.has('airs.risk.assess')&&!access.actor.roles.includes('auditor');
+    const owner=active&&ownerActive&&(administratorOverride||risk.owner?.userId===userId&&access.actor.roles.includes('AI_RISK_OWNER')&&access.permissions.has('airs.risk.assess')&&!access.actor.roles.includes('auditor'));
     const escalation=last?.escalationId?await tx.governanceEscalation.findUnique({where:{id:last.escalationId}}):null;
-    return {...access,risk,assessment,adoption,response,events,last,task,current,escalation,
+    return {...access,risk,assessment,adoption,response,events,last,task,current,escalation,administratorOverride,
       canPropose:!!owner&&response?.strategyCode==='AVOID'&&task?.templateStage?.code==='airs-avoidance-review'&&(!last||last.kind==='avoidance_review'&&last.outcome==='return'),
       canReview:!!authority&&!!current&&response?.strategyCode==='AVOID'&&task?.templateStage?.code==='airs-avoidance-review'&&last?.kind==='avoidance_proposed',
       canReturn:!!authority&&response?.strategyCode==='AVOID'&&task?.templateStage?.code==='airs-avoidance-review'&&last?.kind==='avoidance_proposed',
-      canClose:!!authority&&!!current&&response?.strategyCode==='AVOID'&&task?.templateStage?.code==='airs-closure'&&last?.kind==='avoidance_review'&&last.outcome==='approve'&&(task.assigneeRoleCode!=='STEERING_COMMITTEE'||last.actorId!==userId),
+      canClose:!!authority&&!!current&&response?.strategyCode==='AVOID'&&task?.templateStage?.code==='airs-closure'&&last?.kind==='avoidance_review'&&last.outcome==='approve'&&(administratorOverride||task.assigneeRoleCode!=='STEERING_COMMITTEE'||last.actorId!==userId),
       canOpenEscalation:!!authority&&!!current&&response?.strategyCode==='ESCALATE'&&!last,
       canResolveEscalation:!!authority&&response?.strategyCode==='ESCALATE'&&!!escalation&&escalation.status==='open'&&escalation.workflowTaskId===task?.id&&escalation.ownerRoleCode===task?.assigneeRoleCode&&AI_COUNCILS.some(c=>c.level===escalation.level&&c.role===task?.assigneeRoleCode)&&jsonRecord(task?.formDataJson)['strategyEventId']===last?.id,
     };
   }
   async context(userId:string,id:string){return this.prisma.$transaction(async tx=>{
     const g=await this.gate(tx,userId,id);
-    return {version:g.risk.version,strategyCode:g.response?.strategyCode??null,referencesCurrent:!!g.current,events:g.events,
+    return {version:g.risk.version,administratorOverride:g.administratorOverride,strategyCode:g.response?.strategyCode??null,referencesCurrent:!!g.current,events:g.events,
       task:g.task?{id:g.task.id,role:g.task.assigneeRoleCode,stage:g.task.templateStage?.code}:null,escalation:g.escalation,
       canPropose:g.canPropose,canReview:g.canReview,canReturn:g.canReturn,canClose:g.canClose,canOpenEscalation:g.canOpenEscalation,canResolveEscalation:g.canResolveEscalation,
       canAdvance:g.canResolveEscalation&&!!g.current&&g.escalation?.level!==AI_COUNCILS[3].level};

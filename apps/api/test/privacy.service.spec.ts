@@ -258,7 +258,7 @@ test('DPIA creators cannot approve their own gates', async () => {
   await assert.rejects(
     () =>
       service.saveGate(
-        ['system_admin'],
+        ['dmo_admin'],
         'dpia-1',
         { phase: PrivacyGatePhase.requirements, status: PrivacyGateStatus.approved },
         'creator@dgop.local',

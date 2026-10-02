@@ -10,6 +10,7 @@ import { AiAuthorizationService } from './ai-authorization.service';
 import { AiIdentifiersService } from './ai-identifiers.service';
 import { ApproveAiRegistrationDto, ProposeAiRegistrationDto } from './ai-registration.dto';
 import { AIUC_STAGE, AIUC_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -41,12 +42,13 @@ export class AiRegistrationService {
 
   async queue(userId: string) {
     const actor = await this.authorization.authorizeAny(userId, ['aiuc.asset.register', 'aiuc.asset.approve']);
+    const administratorOverride = isSystemAdministrator(actor.roles);
     const scope = await this.scope.resolve(actor.roles);
     const stages = actor.roles.includes('AI_WORKING_GROUP') ? [AIUC_STAGE.assetRegistration] as string[] : [];
     if (actor.roles.includes('data_owner')) stages.push(AIUC_STAGE.assetApproval);
     const tasks: Prisma.WorkflowTaskWhereInput = {
       status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
-      assigneeRoleCode: { in: actor.roles }, OR: [{ assigneeUserId: null }, { assigneeUserId: actor.id }],
+      assigneeRoleCode: { in: actor.roles }, ...(administratorOverride ? {} : { OR: [{ assigneeUserId: null }, { assigneeUserId: actor.id }] }),
       templateStage: { is: { code: { in: stages }, template: { is: { code: AIUC_TEMPLATE_CODE } } } },
     };
     const cases = await this.prisma.aiUseCase.findMany({
@@ -68,7 +70,7 @@ export class AiRegistrationService {
     return visible.filter((item): item is NonNullable<typeof item> => !!item).filter(item => {
       const task = item.workflowCase?.tasks[0];
       const proposal = record(record(task?.formDataJson)['registrationProposal']);
-      return task?.templateStage?.code !== AIUC_STAGE.assetApproval
+      return administratorOverride || task?.templateStage?.code !== AIUC_STAGE.assetApproval
         || ![item.requesterUserId, item.owner?.userId, proposal['registeredBy'], proposal['tierDecidedBy']].includes(actor.id);
     }).map(item => ({ ...item,
       approvedTier: item.assessments[0]?.ruleReferenceVersion.values.find(value => value.code === record(item.assessments[0]?.result)['approvedTierCode']) ?? null,
@@ -129,7 +131,7 @@ export class AiRegistrationService {
       const actor = await this.authorization.authorize(userId, 'aiuc.asset.register', tx);
       const context = await this.context(tx, id, taskId, AIUC_STAGE.assetRegistration, dto.expectedVersion);
       if (!actor.roles.includes('AI_WORKING_GROUP') || context.task.assigneeRoleCode !== 'AI_WORKING_GROUP'
-        || context.task.assigneeUserId && context.task.assigneeUserId !== actor.id) throw new ForbiddenException('The working-group registration task is required');
+        || !isSystemAdministrator(actor.roles) && context.task.assigneeUserId && context.task.assigneeUserId !== actor.id) throw new ForbiddenException('The working-group registration task is required');
       if ([actor.id, context.current.requesterUserId, context.current.owner?.userId, context.adoption['actorId']].includes(context.dataOwner.userId)) {
         throw new ConflictException('The nominated Data Owner is not independent of registration, request, ownership and tier decision');
       }
@@ -164,10 +166,11 @@ export class AiRegistrationService {
       const actor = await this.authorization.authorize(userId, 'aiuc.asset.approve', tx);
       const context = await this.context(tx, id, taskId, AIUC_STAGE.assetApproval, dto.expectedVersion);
       const proposal = record(context.form['registrationProposal']);
+      const administratorOverride = isSystemAdministrator(actor.roles);
       if (!actor.roles.includes('data_owner') || context.task.assigneeRoleCode !== 'data_owner'
-        || actor.id !== context.task.assigneeUserId || actor.id !== context.dataOwner.userId
-        || actor.id !== proposal['dataOwnerUserId']) throw new ForbiddenException('Only the nominated active Data Owner can decide asset registration');
-      if ([context.current.requesterUserId, context.current.owner?.userId, proposal['registeredBy'], context.adoption['actorId']].includes(actor.id)) {
+        || !administratorOverride && (actor.id !== context.task.assigneeUserId || actor.id !== context.dataOwner.userId
+        || actor.id !== proposal['dataOwnerUserId'])) throw new ForbiddenException('Only the nominated active Data Owner can decide asset registration');
+      if (!administratorOverride && [context.current.requesterUserId, context.current.owner?.userId, proposal['registeredBy'], context.adoption['actorId']].includes(actor.id)) {
         await logAiRequired(this.audit, { actor: actor.id, action: 'ai.sod.blocked', entityType: 'ai_use_case', entityId: id, metadata: { rule: 'AIUC-ASSET-INDEPENDENCE', taskId } });
         throw new ForbiddenException('Asset approval must be independent of registration and tier adoption');
       }

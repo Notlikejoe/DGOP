@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AiAuthorizationService } from './ai-authorization.service';
 import { AiucDecisionOutcome, RecordAiucDecisionDto } from './ai-decision.dto';
 import { AIUC_STAGE, AIUC_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 const decisionCase = {
   id: true, useCaseRef: true, workflowCaseId: true, requesterUserId: true, version: true,
@@ -43,16 +44,17 @@ export class AiDecisionService {
 
   async queue(userId: string) {
     const actor = await this.authorization.authorize(userId, 'case.approve.aiuc');
+    const administratorOverride = isSystemAdministrator(actor.roles);
     const taskWhere: Prisma.WorkflowTaskWhereInput = {
       status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
       assigneeRoleCode: { in: actor.roles },
-      OR: [{ assigneeUserId: null }, { assigneeUserId: actor.id }],
+      ...(administratorOverride ? {} : { OR: [{ assigneeUserId: null }, { assigneeUserId: actor.id }] }),
       templateStage: { is: { code: AIUC_STAGE.decision, template: { is: { code: AIUC_TEMPLATE_CODE } } } },
     };
     const cases = await this.prisma.aiUseCase.findMany({
       where: {
         deletedAt: null, useCaseRef: { not: null },
-        NOT: [{ requesterUserId: actor.id }, { owner: { is: { userId: actor.id } } }],
+        ...(administratorOverride ? {} : { NOT: [{ requesterUserId: actor.id }, { owner: { is: { userId: actor.id } } }] }),
         workflowCase: { is: { status: { in: [CaseStatus.under_review, CaseStatus.decision_made] }, tasks: { some: taskWhere } } },
       },
       orderBy: { updatedAt: 'asc' }, take: 100,
@@ -127,7 +129,7 @@ export class AiDecisionService {
       }
       const assignment = await this.routing.decisionAssignment(tx, approvedTierCode);
       if (task.assigneeRoleCode !== assignment.role || !actor.roles.includes(assignment.role)
-        || (task.assigneeUserId && task.assigneeUserId !== actor.id)) {
+        || (!isSystemAdministrator(actor.roles) && task.assigneeUserId && task.assigneeUserId !== actor.id)) {
         throw new ForbiddenException('The decision must be recorded by its configured tier authority');
       }
       if (!aiucAllowedDecisions(approvedTierCode).includes(dto.decision)) {

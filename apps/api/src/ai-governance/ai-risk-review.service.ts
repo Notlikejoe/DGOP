@@ -13,6 +13,7 @@ import { AIRS_TEMPLATE_CODE, AiWorkflowRoutingService } from './ai-workflow-rout
 import { jsonRecord } from './ai-risk-scoring';
 import { CompleteAiRiskReviewDto, ReassessAiRiskDto, REASSESSMENT_TRIGGERS } from './ai-risk-review.dto';
 import { AiReviewDisplayService } from './ai-review-display.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 const options={isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:15000,maxWait:15000};
 const KSA=10800000;
@@ -49,11 +50,13 @@ export class AiRiskReviewService {
     const kind={LOW:'accept_owner',MEDIUM:'countersign',HIGH:'executive',CRITICAL:'steering'}[g.result['bandCode'] as string];
     return g.assessment.decisions.find(d=>d.kind===kind&&(g.result['bandCode']==='CRITICAL'?['restrict','stop'].includes(d.decision):d.decision==='accept'));
   }
-  private manages(g:Gate) {return !g.actor.roles.includes('auditor')&&g.permissions.has('airs.cadence.manage')&&g.actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r));}
+  private manages(g:Gate) {return isSystemAdministrator(g.actor.roles)||!g.actor.roles.includes('auditor')&&g.permissions.has('airs.cadence.manage')&&g.actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r));}
   private reversalAuthority(g:Gate) {
     const previous=this.terminal(g);
-    if(!previous||!g.permissions.has('airs.risk.reverse')||g.actor.roles.includes('auditor')||[previous.actorId,g.risk.owner?.userId,g.facts.useCaseOwnerId].includes(g.actor.id))return null;
+    if(!previous||!g.permissions.has('airs.risk.reverse'))return null;
     const previousLevel=authorityLevels[previous.actorRoleCode];
+    if(isSystemAdministrator(g.actor.roles))return {role:'STEERING_COMMITTEE',level:authorityLevels.STEERING_COMMITTEE,previousLevel};
+    if(g.actor.roles.includes('auditor')||[previous.actorId,g.risk.owner?.userId,g.facts.useCaseOwnerId].includes(g.actor.id))return null;
     const role=g.actor.roles.filter(r=>authorityLevels[r]>previousLevel&&g.permissionRoles['airs.risk.reverse']?.includes(r)).sort((a,b)=>authorityLevels[b]-authorityLevels[a])[0];
     return role?{role,level:authorityLevels[role],previousLevel}:null;
   }
@@ -88,8 +91,9 @@ export class AiRiskReviewService {
     const g=await this.decisions.gate(tx,userId,id),history=await tx.aiRiskReview.findMany({where:{riskId:id},include:reviewInclude,orderBy:{round:'desc'}}),cadence=await this.cadence(tx);
     const ownerActive=!!g.risk.owner?.userId&&!!await tx.person.findFirst({where:{id:g.risk.ownerPersonId!,isActive:true,deletedAt:null},select:{id:true}});
     const reassessments=await tx.aiRiskReassessment.findMany({where:{riskId:id},orderBy:{inherentRound:'desc'},include:{additionalTriggers:{orderBy:{createdAt:'desc'}}}});
-    return {version:g.risk.version,reassessments,reversals:await tx.aiRiskAuthorityReversal.findMany({where:{riskId:id},orderBy:{createdAt:'desc'}}),canReverseAuthority:!!this.reversalAuthority(g)&&['implemented','decision_made'].includes(g.risk.workflowCase?.status??''),canAddTrigger:!!reassessments.length&&g.risk.workflowCase?.status==='under_review'&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),canReassess:!!this.terminal(g)&&['implemented','decision_made'].includes(g.risk.workflowCase?.status??'')&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),cadenceReady:!!cadence,canRegister:!!cadence&&this.manages(g)&&!!this.terminal(g)&&(!history.length||!!history[0].cancellation)&&g.risk.workflowCase?.status==='decision_made',canRecalculate:this.manages(g)&&history.length>0,
-      history:history.map(r=>({...r,task:undefined,status:r.cancellation?'superseded':aiReviewStatus(!!r.completion,r.dueAt),canComplete:!!cadence&&!!this.terminal(g)&&!r.completion&&!r.cancellation&&ownerActive&&g.risk.workflowCase?.status==='implemented'&&r.assignedOwnerId===userId&&g.risk.owner?.userId===userId&&g.permissions.has('airs.risk.assess')&&g.actor.roles.includes('AI_RISK_OWNER')&&!g.actor.roles.includes('auditor')&&r.task.status==='pending'}))};
+    const administratorOverride=isSystemAdministrator(g.actor.roles);
+    return {version:g.risk.version,administratorOverride,reassessments,reversals:await tx.aiRiskAuthorityReversal.findMany({where:{riskId:id},orderBy:{createdAt:'desc'}}),canReverseAuthority:!!this.reversalAuthority(g)&&['implemented','decision_made'].includes(g.risk.workflowCase?.status??''),canAddTrigger:!!reassessments.length&&g.risk.workflowCase?.status==='under_review'&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),canReassess:!!this.terminal(g)&&['implemented','decision_made'].includes(g.risk.workflowCase?.status??'')&&(this.manages(g)||ownerActive&&g.risk.owner?.userId===userId&&g.actor.roles.includes('AI_RISK_OWNER')&&g.permissions.has('airs.risk.assess')&&!g.actor.roles.includes('auditor')),cadenceReady:!!cadence,canRegister:!!cadence&&this.manages(g)&&!!this.terminal(g)&&(!history.length||!!history[0].cancellation)&&g.risk.workflowCase?.status==='decision_made',canRecalculate:this.manages(g)&&history.length>0,
+      history:history.map(r=>({...r,task:undefined,status:r.cancellation?'superseded':aiReviewStatus(!!r.completion,r.dueAt),canComplete:!!cadence&&!!this.terminal(g)&&!r.completion&&!r.cancellation&&ownerActive&&g.risk.workflowCase?.status==='implemented'&&(administratorOverride||r.assignedOwnerId===userId&&g.risk.owner?.userId===userId&&g.permissions.has('airs.risk.assess')&&g.actor.roles.includes('AI_RISK_OWNER')&&!g.actor.roles.includes('auditor'))&&r.task.status==='pending'}))};
   },options);}
   async register(userId:string,id:string,expectedVersion:number,clientIp?:string) {return this.prisma.$transaction(async tx=>{
     const g=await this.decisions.gate(tx,userId,id);await this.authorization.authorize(userId,'airs.cadence.manage',tx);
@@ -106,10 +110,11 @@ export class AiRiskReviewService {
   async complete(userId:string,id:string,reviewId:string,dto:CompleteAiRiskReviewDto,clientIp?:string) {
     if(!dto.justification?.trim()||dto.justification.length>5000||!Array.isArray(dto.evidenceIds)||!dto.evidenceIds.length||dto.evidenceIds.length>20||dto.evidenceIds.some(v=>typeof v!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(v)))throw new BadRequestException('Written review justification and 1–20 existing evidence identifiers are required');
     return this.prisma.$transaction(async tx=>{
-      const g=await this.decisions.gate(tx,userId,id);await this.authorization.authorize(userId,'airs.risk.assess',tx);
+      const g=await this.decisions.gate(tx,userId,id),actor=await this.authorization.authorize(userId,'airs.risk.assess',tx),administratorOverride=isSystemAdministrator(actor.roles);
       const r=await tx.aiRiskReview.findFirst({where:{id:reviewId,riskId:id},include:reviewInclude});
       if(!r||r.completion||r.cancellation||g.risk.version!==dto.expectedVersion||g.risk.workflowCase?.status!=='implemented'||!this.terminal(g)||this.terminal(g)!.id!==r.acceptanceDecisionId)throw new ConflictException('Review gate/version changed; reload');
-      if(userId!==r.assignedOwnerId||userId!==await this.owner(tx,g)||r.task.status!=='pending'||r.task.assigneeUserId!==userId||r.task.assigneeRoleCode!=='AI_RISK_OWNER'||r.task.templateStage?.code!=='airs-periodic-review'||r.task.dueDate?.getTime()!==r.dueAt.getTime()||jsonRecord(r.task.formDataJson)['reviewId']!==r.id)throw new ForbiddenException('Only the active actual assigned Risk Owner may complete this protected review');
+      const actualOwner=await this.owner(tx,g);
+      if(!administratorOverride&&(userId!==r.assignedOwnerId||userId!==actualOwner)||r.task.status!=='pending'||!administratorOverride&&r.task.assigneeUserId!==userId||r.task.assigneeRoleCode!=='AI_RISK_OWNER'||r.task.templateStage?.code!=='airs-periodic-review'||r.task.dueDate?.getTime()!==r.dueAt.getTime()||jsonRecord(r.task.formDataJson)['reviewId']!==r.id)throw new ForbiddenException('Only the active actual assigned Risk Owner or System Administrator may complete this protected review');
       const evidenceIds=[...new Set(dto.evidenceIds)];if(await tx.ndiEvidence.count({where:{id:{in:evidenceIds},deletedAt:null}})!==evidenceIds.length)throw new BadRequestException('Every review evidence identifier must exist');
       const completedAt=new Date();
       await tx.aiRiskReviewCompletion.create({data:{reviewId,actorId:userId,justification:dto.justification.trim(),evidenceIds,completedAt,clientIp}});

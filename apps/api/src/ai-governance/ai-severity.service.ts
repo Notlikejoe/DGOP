@@ -10,6 +10,7 @@ import { AiWorkflowRoutingService, AIRS_TEMPLATE_CODE } from './ai-workflow-rout
 import { governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import { jsonRecord } from './ai-risk-scoring';
 import { CompleteAiRiskReviewDto } from './ai-risk-review.dto';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 const authorities=['AI_GOVERNANCE_OFFICER','AI_ETHICS_COMMITTEE','AI_EXECUTIVE_TEAM','STEERING_COMMITTEE'];
 export interface SeverityInput extends CompleteAiRiskReviewDto { action:'propose'|'approve'|'return'|'reverse'; severityCode?:string }
@@ -25,23 +26,24 @@ export class AiSeverityService {
   const candidate=await tx.aiRiskSeverityEvent.findFirst({where:{riskId:id,kind:'proposal',outcomes:{none:{kind:{in:['approved','returned']}}}},orderBy:{round:'desc'}});
   const task=candidate?.taskId?await tx.workflowTask.findUnique({where:{id:candidate.taskId},include:{templateStage:{include:{template:true}}}}):null;
   const pending=task?.status==='pending'?candidate:null;
-  const independent=!access.actor.roles.includes('auditor')&&![risk.owner?.userId,risk.useCase.owner?.userId].includes(userId);
+  const administratorOverride=isSystemAdministrator(access.actor.roles);
+  const independent=administratorOverride||!access.actor.roles.includes('auditor')&&![risk.owner?.userId,risk.useCase.owner?.userId].includes(userId);
   const roles=authorities.filter(role=>access.permissionRoles['airs.severity.override']?.includes(role)),role=roles.find(role=>authorities.indexOf(role)<3);
   const settled=typeof calculation['assessmentId']==='string'?await tx.aiRiskSeverityEvent.findFirst({where:{riskId:id,assessmentId:calculation['assessmentId'],kind:{in:['approved','reversed']}},orderBy:{round:'desc'}}):null;
-  const assigned=independent&&!!pending&&pending.actorId!==userId&&!!task&&task.status==='pending'&&task.assigneeRoleCode!==null&&roles.includes(task.assigneeRoleCode)&&
-   (!task.assigneeUserId||task.assigneeUserId===userId)&&task.caseId===risk.workflowCase.id&&task.templateStage?.code==='airs-severity-override'&&task.templateStage.isActive&&
+  const assigned=independent&&!!pending&&(administratorOverride||pending.actorId!==userId)&&!!task&&task.status==='pending'&&task.assigneeRoleCode!==null&&roles.includes(task.assigneeRoleCode)&&
+   (administratorOverride||!task.assigneeUserId||task.assigneeUserId===userId)&&task.caseId===risk.workflowCase.id&&task.templateStage?.code==='airs-severity-override'&&task.templateStage.isActive&&
    task.templateStage.template.code===AIRS_TEMPLATE_CODE&&task.templateStage.template.isActive&&!task.templateStage.template.deletedAt&&
    jsonRecord(task.formDataJson)['proposalId']===pending.id&&jsonRecord(task.formDataJson)['assessmentId']===pending.assessmentId;
   const reverseRole=settled?.kind==='approved'?roles.find(role=>authorities.indexOf(role)+1>settled.authorityLevel):undefined;
-  return {...access,risk,calculation,events,pending,task,settled,role,reverseRole,
+  return {...access,risk,calculation,events,pending,task,settled,role,reverseRole,administratorOverride,
    canPropose:independent&&!!role&&!pending&&typeof calculation['assessmentId']==='string'&&typeof calculation['severityCode']==='string',
    canApprove:assigned&&pending!.assessmentId===calculation['assessmentId'],canReturn:assigned,
-   canReverse:independent&&!pending&&!!reverseRole&&settled?.actorId!==userId};
+   canReverse:independent&&!pending&&!!reverseRole&&(administratorOverride||settled?.actorId!==userId)};
  }
  async context(userId:string,id:string){return governanceTransaction(this.prisma,async tx=>{const g=await this.gate(tx,userId,id);return {
   version:g.risk.version,calculatedSeverityCode:g.calculation['severityCode']??null,effectiveSeverityCode:g.settled?.severityCode??g.calculation['severityCode']??null,
   assessmentId:g.calculation['assessmentId']??null,score:g.calculation['score']??null,bandCode:g.calculation['bandCode']??null,pending:g.pending?{id:g.pending.id,severityCode:g.pending.severityCode,role:g.task?.assigneeRoleCode}:null,
-  events:g.events.map(({clientIp,actorId,...event})=>event),historyLimit:20,canPropose:g.canPropose,canApprove:g.canApprove,canReturn:g.canReturn,canReverse:g.canReverse,
+  events:g.events.map(({clientIp,actorId,...event})=>event),historyLimit:20,administratorOverride:g.administratorOverride,canPropose:g.canPropose,canApprove:g.canApprove,canReturn:g.canReturn,canReverse:g.canReverse,
   acceptanceChanged:false,calculationChanged:false};});}
  async act(userId:string,id:string,dto:SeverityInput,clientIp?:string){
   const justification=governanceText(dto.justification);if(!['propose','approve','return','reverse'].includes(dto.action)||!Number.isInteger(dto.expectedVersion)||dto.expectedVersion<1||

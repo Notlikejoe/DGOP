@@ -6,6 +6,7 @@ import { AiAuthorizationService } from './ai-authorization.service';
 import { AIUC_STAGE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { aiNoticeAccess } from './ai-notifications';
 import { governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   AI_CLASSIFICATION_CRITERIA,
   AiCalculationInputV1,
@@ -373,11 +374,12 @@ export class AiClassificationService {
     const previousLevel=levels.indexOf(String(decision['actorRole']));
     const access=await aiNoticeAccess(tx,userId,current.workflowCaseId);
     const grants=await tx.rolePermission.findMany({where:{role:{code:{in:['AI_ETHICS_COMMITTEE','AI_EXECUTIVE_TEAM','STEERING_COMMITTEE']},isActive:true,deletedAt:null,userRoles:{some:{userId}}},permission:{resource:'aiuc.classify',action:'reverse'}},include:{role:true}});
-    const role=grants.map(g=>g.role.code).sort((a,b)=>levels.indexOf(a)-levels.indexOf(b)).find(r=>levels.indexOf(r)>previousLevel);
+    const administratorOverride=isSystemAdministrator(access?.roles);
+    const role=administratorOverride?'STEERING_COMMITTEE':grants.map(g=>g.role.code).sort((a,b)=>levels.indexOf(a)-levels.indexOf(b)).find(r=>levels.indexOf(r)>previousLevel);
     const owner=current.ownerPersonId?await tx.person.findUnique({where:{id:current.ownerPersonId},select:{userId:true}}):null;
     const calculated=source?classificationResult(source.result):null;
     const basis=typeof result['sourceAssessmentId']==='string'?await tx.aiAssessmentRound.findFirst({where:{id:result['sourceAssessmentId'],useCaseId:id,kind:'classification'}}):null;
-    const canReverse=!!source&&source.engineVersion===DECISION_ENGINE_VERSION&&['override','unacceptable'].includes(String(decision['decisionType']))&&previousLevel>=1&&!!role&&!access!.roles.includes('auditor')&&![current.requesterUserId,owner?.userId,source.createdBy,basis?.createdBy,decision['verifiedBy']].includes(userId)&&!current.assetId&&['under_review','decision_made','approved'].includes(current.workflowCase!.status)&&result['approvedTierCode']!==calculated?.proposedTierCode;
+    const canReverse=!!source&&source.engineVersion===DECISION_ENGINE_VERSION&&['override','unacceptable'].includes(String(decision['decisionType']))&&previousLevel>=1&&!!role&&(administratorOverride||!access!.roles.includes('auditor')&&![current.requesterUserId,owner?.userId,source.createdBy,basis?.createdBy,decision['verifiedBy']].includes(userId))&&!current.assetId&&['under_review','decision_made','approved'].includes(current.workflowCase!.status)&&result['approvedTierCode']!==calculated?.proposedTierCode;
     return {current,source,basis,result,decision,role,canReverse};
   }
   async reversalContext(userId:string,id:string) {
@@ -435,7 +437,7 @@ export class AiClassificationService {
 
       const source = current.assessments[0];
       if (!source) throw new ConflictException('A calculated classification round is required before verification');
-      if (source.createdBy === actor.id) {
+      if (source.createdBy === actor.id && !isSystemAdministrator(actor.roles)) {
         throw new ForbiddenException('The classification assessor cannot verify or override the same round');
       }
       const calculated = classificationResult(source.result);
@@ -598,7 +600,7 @@ export class AiClassificationService {
       if (!task) throw new ConflictException('No active Responsible AI Officer verification task exists');
       const source = current.assessments[0];
       if (!source) throw new ConflictException('A calculated classification round is required before verification');
-      if (source.createdBy === actor.id) throw new ForbiddenException('The classification assessor cannot verify the same round');
+      if (source.createdBy === actor.id && !isSystemAdministrator(actor.roles)) throw new ForbiddenException('The classification assessor cannot verify the same round');
       const calculated = classificationResult(source.result);
       const now = new Date();
       await tx.workflowTask.update({

@@ -9,6 +9,7 @@ import { AiDashboardService } from './ai-dashboard.service';
 import { governanceDigest, governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import { jsonRecord } from './ai-risk-scoring';
 import { AI_KPI_CATALOG } from './ai-kpi.catalog';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 export type ReportFrequency='manual'|'daily'|'monthly';
 export function reportSlots(now=new Date()){
@@ -35,7 +36,7 @@ export class AiDashboardReportsService {
   // Register reports require full organization coverage, never a person's own-risk projection.
   await this.dashboard.snapshotMembers(tx,userId,unitId);
   if(write){const actor=await this.authorization.authorize(userId,'airs.cadence.manage',tx);
-   if(!actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r))||actor.roles.includes('auditor'))throw new ForbiddenException('Reporting schedules require an eligible governance operator');
+   if(!isSystemAdministrator(actor.roles)&&(!actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r))||actor.roles.includes('auditor')))throw new ForbiddenException('Reporting schedules require an eligible governance operator');
   }
   return a;
  }
@@ -170,7 +171,7 @@ export class AiDashboardReportsService {
   const a=await this.access(tx,userId,unitId);if(!a.actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER','AI_COMPLIANCE_OFFICER','auditor'].includes(r)))throw new ForbiddenException('Governance schedule visibility required');
   const versions=await tx.aiDashboardScheduleVersion.findMany({where:{organizationUnitId:unitId},orderBy:{round:'desc'}}),latest=versions[0];
   const runs=latest?await tx.aiDashboardScheduleRun.findMany({where:{scheduleVersionId:{in:versions.map(v=>v.id)}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:30}):[];
-  const canManage=a.actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r))&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor');
+  const canManage=isSystemAdministrator(a.actor.roles)||a.actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r))&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor');
   const workerEnabled=process.env.GOVERNANCE_OPERATIONS_SCHEDULER!=='false'&&process.env.NODE_ENV!=='test',slots=reportSlots(),current=await this.dashboard.snapshotMembers(tx,userId,unitId);
   const evidence=[] as Array<{frequency:'daily'|'monthly';periodKey:string;enabled:boolean;status:'disabled'|'awaiting'|'failed'|'exhausted'|'verified';attempt:number;lastAttemptAt:Date|null;snapshotId:string|null}>;
   for(const frequency of ['daily','monthly'] as const){

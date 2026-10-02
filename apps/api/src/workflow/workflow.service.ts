@@ -3057,6 +3057,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   }
 
   private workflowLifecycleSodOverride(user: AuthUser, ...previousActors: Array<string | null | undefined>): boolean {
+    if (user.roles.includes('system_admin')) return true;
     if (previousActors.some((actor) => !!actor && actor === user.email)) {
       throw new ForbiddenException('Segregation of duties requires a different workflow actor for this action');
     }
@@ -6596,7 +6597,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     const isApprovalTask =
       task.case.type === 'owner_assignment_approval' ||
       task.case.type === 'steward_assignment_approval';
-    if (isApprovalTask && task.case.createdBy === user.email) {
+    if (!user.roles.includes('system_admin') && isApprovalTask && task.case.createdBy === user.email) {
       throw new ForbiddenException('You cannot decide an approval you submitted');
     }
     const returnedForClarification = dto.decision === WORKFLOW_RETURN_FOR_CLARIFICATION;

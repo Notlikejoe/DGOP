@@ -921,7 +921,7 @@ export class DataQualityService {
       if (existing.status !== DataQualityRuleStatus.in_review) {
         throw new BadRequestException('Only rules in review can be approved');
       }
-      if (existing.createdBy === actor) {
+      if (!roleCodes.includes('system_admin') && existing.createdBy === actor) {
         throw new BadRequestException('Rule creators cannot approve their own rule');
       }
       next.status = DataQualityRuleStatus.approved;

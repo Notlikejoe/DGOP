@@ -7,6 +7,7 @@ import { governanceDigest, governanceEvidence, governanceText, governanceTransac
 import { jsonRecord, scoringConfigurationIssues } from './ai-risk-scoring';
 import { PreviewEnvironment, PreviewRow } from './ai-migration-preview';
 import { reportCsvCell } from './ai-dashboard-reports.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 type Rule={column:string;kind:'reference'|'person'|'unit'|'text'|'control';listCode?:string};
 const ref=(column:string,listCode:string):Rule=>({column,listCode,kind:'reference'});
@@ -74,7 +75,7 @@ export class AiSourceCorrectionsService {
   if(!['approve','return'].includes(dto.outcome))throw new BadRequestException('Use an approve or return correction outcome');const justification=governanceText(dto.justification);
   return governanceTransaction(this.prisma,async tx=>{
    const v=await tx.aiSourceCorrectionVersion.findUnique({where:{id},include:correctionInclude});if(!v)throw new NotFoundException('Source correction not found');
-   await this.previews.mappingBase(tx,userId,v.previewId,'review');if(v.proposedBy===userId)throw new ForbiddenException('Source correction reviewer must be independent');
+   const base=await this.previews.mappingBase(tx,userId,v.previewId,'review');if(!isSystemAdministrator(base.actor.roles)&&v.proposedBy===userId)throw new ForbiddenException('Source correction reviewer must be independent');
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ai-source-corrections'),hashtext(${v.previewId}))`;
    const latest=await tx.aiSourceCorrectionVersion.findFirst({where:{previewId:v.previewId},orderBy:{round:'desc'}});if(v.review||latest?.id!==id||dto.expectedDigest!==v.digest)throw new ConflictException('Review only the latest pending correction version');
    if(dto.outcome==='approve')await this.current(tx,userId,v,'review');const evidenceIds=await governanceEvidence(tx,dto.evidenceIds);await governanceEvidence(tx,v.evidenceIds);
@@ -105,7 +106,7 @@ export class AiSourceCorrectionsService {
  async publishControl(userId:string,id:string,dto:{expectedDigest:string;justification:string;evidenceIds:string[]}){
   const justification=governanceText(dto.justification);return governanceTransaction(this.prisma,async tx=>{
    const v=await tx.aiControlDomainVersion.findUnique({where:{id},include:domainInclude});if(!v)throw new NotFoundException('Control proposal not found');
-   const base=await this.previews.mappingBase(tx,userId,v.previewId,'review',true);if(v.proposedBy===userId)throw new ForbiddenException('Control publisher must be independent');
+   const base=await this.previews.mappingBase(tx,userId,v.previewId,'review',true);if(!isSystemAdministrator(base.actor.roles)&&v.proposedBy===userId)throw new ForbiddenException('Control publisher must be independent');
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('ai-control-domain'),hashtext(${v.entry.controlCode}))`;
    const latest=await tx.aiControlDomainVersion.findFirst({where:{entryId:v.entryId},orderBy:{round:'desc'}}),pins=this.dimensionPins(base.environment,(v.dimensionPins as Array<{code:string}>).map(p=>p.code));
    if(v.publication||latest?.id!==id||dto.expectedDigest!==v.digest||governanceDigest({content:v.content,dimensionPins:v.dimensionPins})!==v.digest||governanceDigest(pins)!==governanceDigest(v.dimensionPins))throw new ConflictException('Control source/dimension pins or proposal changed');

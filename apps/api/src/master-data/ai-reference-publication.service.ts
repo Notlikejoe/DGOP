@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { AiAuthorizationService } from '../ai-governance/ai-authorization.service';
 import { AI_REGULATORY_LISTS, canonicalAiReference } from './ai-reference.catalog';
 import { ProposeAiReferenceDto } from './ai-reference.dto';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 function stable(value:unknown):unknown {
   if (Array.isArray(value)) return value.map(stable);
@@ -60,9 +61,9 @@ export class AiReferencePublicationService {
   async approve(userId:string,id:string,justification:string) {
     this.reason(justification);
     return this.prisma.$transaction(async tx=>{
-      await this.lock(tx); await this.auth.authorize(userId,'refdata.approve.ai',tx);
+      await this.lock(tx); const actor=await this.auth.authorize(userId,'refdata.approve.ai',tx);
       const version=await this.draft(tx,id);
-      if (version.createdBy===userId) throw new ForbiddenException('The proposer cannot independently approve the proposal');
+      if (!isSystemAdministrator(actor.roles) && version.createdBy===userId) throw new ForbiddenException('The proposer cannot independently approve the proposal');
       if (!AI_REGULATORY_LISTS.has(version.listCode)) throw new BadRequestException('This list does not require regulatory approval');
       const updated=await tx.governedReferenceVersion.update({where:{id},data:{approvedBy:userId,approvedAt:new Date(),approvalDigest:referenceDigest(version)}});
       await this.audit.logRequired({actor:userId,action:'ai.refdata.approved',entityType:'governed_reference_version',entityId:id,metadata:{digest:updated.approvalDigest,justification}},tx);
@@ -72,9 +73,9 @@ export class AiReferencePublicationService {
   async publish(userId:string,id:string,justification:string) {
     this.reason(justification);
     return this.prisma.$transaction(async tx=>{
-      await this.lock(tx); await this.auth.authorize(userId,'refdata.publish',tx);
+      await this.lock(tx); const actor=await this.auth.authorize(userId,'refdata.publish',tx);
       const version=await this.draft(tx,id);
-      if (version.createdBy===userId || version.approvedBy===userId) throw new ForbiddenException('Publication requires an independent custodian');
+      if (!isSystemAdministrator(actor.roles) && (version.createdBy===userId || version.approvedBy===userId)) throw new ForbiddenException('Publication requires an independent custodian');
       if (!version.values.length) throw new BadRequestException('An empty reference list cannot be published');
       if (AI_REGULATORY_LISTS.has(version.listCode)) {
         if (!version.approvedBy || !version.approvedAt || version.approvalDigest!==referenceDigest(version)) throw new ConflictException('Current regulatory content needs committee approval');

@@ -86,23 +86,25 @@
 .risk-owner-editor textarea { min-height: 2.55rem; resize: vertical; }
 .risk-owner-editor__actions { display: flex; align-items: center; gap: .4rem; padding-bottom: .05rem; }
 :host ::ng-deep .risk-detail-tabs .p-tablist { overflow: hidden; }
-:host ::ng-deep .risk-detail-tabs .p-tablist-content { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #d7dce2; border-radius: var(--radius-lg); background: #eef1f4; padding: .32rem; gap: .22rem; overflow: hidden; box-shadow: inset 0 1px 2px rgb(15 23 42 / 5%); }
+:host ::ng-deep .risk-detail-tabs .p-tablist-tab-list,
+:host ::ng-deep .risk-detail-tabs .p-tablist-content { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #4b5563 !important; border-radius: var(--radius-lg); background: #374151 !important; background-image: none !important; padding: .32rem; gap: .22rem; overflow: hidden; box-shadow: inset 0 1px 3px rgb(15 23 42 / 28%); }
 :host ::ng-deep .risk-detail-tabs .p-tablist-nav-button { display: none; }
 :host ::ng-deep .risk-detail-tabs .p-tablist-active-bar { display: none; }
-:host ::ng-deep .risk-detail-tabs .p-tab { position: relative; justify-content: stretch; min-width: 0; min-height: 3.75rem; padding: .46rem .56rem; color: #526071; border: 1px solid transparent; border-radius: calc(var(--radius-md) - 1px); background: transparent; font-weight: 800; transition: color .16s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
-:host ::ng-deep .risk-detail-tabs .p-tab:hover { color: #172033; border-color: #d8dde4; background: rgb(255 255 255 / 62%); }
-:host ::ng-deep .risk-detail-tabs .p-tab-active { color: var(--primary); border-color: #cbd2da; background: #fff; box-shadow: 0 2px 7px rgb(15 23 42 / 10%); }
+:host ::ng-deep .risk-detail-tabs .p-tab { position: relative; justify-content: stretch; min-width: 0; min-height: 3.75rem; padding: .46rem .56rem; color: #e5e7eb; border: 1px solid transparent; border-radius: calc(var(--radius-md) - 1px); background: transparent; font-weight: 800; transition: color .16s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+:host ::ng-deep .risk-detail-tabs .p-tab:hover { color: #fff !important; border-color: #6b7280; background: #4b5563 !important; }
+:host ::ng-deep .risk-detail-tabs .p-tab-active { color: #fff !important; border-color: #6b7280; background: #1f2937 !important; box-shadow: 0 2px 8px rgb(15 23 42 / 32%); }
 :host ::ng-deep .risk-detail-tabs .p-tab-active::after { content: ''; position: absolute; inset-inline: .7rem; inset-block-end: -.33rem; height: 3px; border-radius: var(--radius-pill); background: var(--primary); }
 :host ::ng-deep .risk-detail-tabs .p-tabpanels { margin-top: .55rem; padding: .65rem; border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface-2) 32%, var(--surface)); }
 .risk-tab-option { display: grid; grid-template-columns: 1.85rem minmax(0, 1fr) auto; align-items: center; gap: .5rem; width: 100%; min-width: 0; text-align: start; }
-.risk-tab-index { display: grid; place-items: center; width: 1.85rem; aspect-ratio: 1; color: #526071; border: 1px solid #cbd2da; background: #f8fafc; border-radius: .55rem; font-size: .72rem; font-weight: 900; }
+.risk-tab-index { display: grid; place-items: center; width: 1.85rem; aspect-ratio: 1; color: #f8fafc; border: 1px solid #6b7280; background: #4b5563; border-radius: .55rem; font-size: .72rem; font-weight: 900; }
 :host ::ng-deep .risk-detail-tabs .p-tab-active .risk-tab-index { color: var(--primary-contrast); border-color: var(--primary); background: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent); }
 .risk-tab-copy { display: grid; min-width: 0; }
 .risk-tab-copy strong { overflow: hidden; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
-.risk-tab-copy small { overflow: hidden; color: #687587; font-size: .64rem; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.risk-tab-copy small { overflow: hidden; color: #cbd5e1; font-size: .64rem; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+:host ::ng-deep .risk-detail-tabs .p-tab-active .risk-tab-copy small { color: #e5e7eb; }
 .risk-tab-option app-status-chip { min-width: 0; }
 :host ::ng-deep .risk-tab-option app-status-chip .status-chip { max-width: 5.2rem; overflow: hidden; padding: .16rem .38rem; font-size: .61rem; text-overflow: ellipsis; white-space: nowrap; }
-.tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.7rem; margin-inline-start: .35rem; padding: .08rem .35rem; border-radius: var(--radius-pill); background: var(--primary-soft); color: var(--primary); font-size: .72rem; }
+.tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 1.7rem; margin-inline-start: .35rem; padding: .08rem .35rem; border-radius: var(--radius-pill); background: rgb(255 255 255 / 14%); color: #f8fafc; font-size: .72rem; }
 .tab-count--audit { font-size: .62rem; }
 .risk-identification-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; margin-bottom: .65rem; align-items: start; }
 .risk-handover-card, .risk-owner-card { padding: 0; overflow: hidden; }

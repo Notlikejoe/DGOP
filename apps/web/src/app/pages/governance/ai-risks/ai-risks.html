@@ -61,24 +61,34 @@
 
     <main #riskDetail class="review-main risk-detail">
       @if (selected(); as item) {
-        <section class="ds-card risk-detail-head">
-          <div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.riskRef || item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2><p>{{ t('aiRisk.detailHelp') }}</p>@if (dirty()) { <small class="risk-unsaved" role="status">{{ t('aiRisk.unsaved') }}</small> }</div>
-          <div class="risk-detail-status"><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /><strong>{{ stageProgress(item) }}%</strong><p-progressbar [value]="stageProgress(item)" [showValue]="false" /></div>
+        <section class="ds-card risk-overview-card">
+          <header class="risk-overview-head">
+            <div><span class="eyebrow">{{ item.useCase.useCaseRef }} · {{ item.riskRef || item.workflowCase.code }}</span><h2>{{ item.title || item.useCase.name }}</h2><p>{{ t('aiRisk.detailHelp') }}</p>@if (dirty()) { <small class="risk-unsaved" role="status">{{ t('aiRisk.unsaved') }}</small> }</div>
+            <div class="risk-detail-status"><app-status-chip kind="info" [label]="t('aiRisk.status.' + item.workflowCase.status)" /><strong>{{ stageProgress(item) }}%</strong><p-progressbar [value]="stageProgress(item)" [showValue]="false" /></div>
+          </header>
+          <div class="risk-overview-details">
+            <div class="risk-overview-detail risk-overview-detail--progress" role="status">
+              <span class="risk-overview-detail__icon"><app-icon name="edit" /></span>
+              <div><small>{{ t('aiRisk.definitionProgress') }}</small><strong>{{ identificationCount(item) }} / {{ detailFields().length }} {{ t('aiRisk.fieldsComplete') }}</strong><p>{{ t(item.workflowCase.status === 'draft' ? (item.owner ? (item.canEdit ? 'aiRisk.nextAction.complete' : 'aiRisk.nextAction.owner') : 'aiRisk.nextAction.assign') : 'aiRisk.definitionRecorded') }}</p></div>
+              <div class="risk-overview-detail__actions">
+                <app-status-chip [kind]="identificationCount(item) === detailFields().length ? 'success' : 'info'" [label]="identificationCount(item) + '/' + detailFields().length" />
+                @if (item.workflowCase.status === 'draft' && item.owner) { <button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple (click)="scrollToIntake()">{{ t('aiRisk.nextAction.openForm') }}</button> }
+              </div>
+            </div>
+            <div class="risk-overview-detail risk-overview-detail--source">
+              <span class="risk-overview-detail__icon"><app-icon name="shield" /></span>
+              @if (item.libraryVersion; as libraryVersion) {
+                <div><small>{{ t('aiRisk.sourceLibrary') }}</small><strong>{{ libraryVersion.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ libraryVersion.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></div>
+                <app-status-chip kind="success" [label]="t('aiRisk.libraryLinked')" />
+              } @else {
+                <div><small>{{ t('aiRisk.riskSource') }}</small><strong>{{ t('aiRisk.manualSource') }}</strong><p>{{ t('aiRisk.libraryOptional') }}</p></div>
+                <app-status-chip kind="muted" [label]="t('aiRisk.manual')" />
+              }
+            </div>
+          </div>
         </section>
 
-        @if (item.workflowCase.status === 'draft') {
-          <section class="ds-card risk-manual-next" role="status">
-            <span class="risk-create-icon risk-create-icon--small"><app-icon name="edit" /></span>
-            <div><strong>{{ t('aiRisk.nextAction.title') }}</strong><p>{{ t(item.owner ? (item.canEdit ? 'aiRisk.nextAction.complete' : 'aiRisk.nextAction.owner') : 'aiRisk.nextAction.assign') }}</p>@if (item.owner) { <small>{{ t('aiRisk.nextAction.outcome') }}</small> }</div>
-            <div class="risk-manual-next__actions">
-              <app-status-chip [kind]="item.owner ? (item.canEdit ? 'success' : 'info') : 'muted'" [label]="item.owner ? ownerLabel(item.owner) : t('aiRisk.unassigned')" />
-              @if (item.owner) { <button type="button" class="ds-btn ds-btn--ghost btn-sm" pRipple (click)="scrollToIntake()">{{ t('aiRisk.nextAction.openForm') }}</button> }
-            </div>
-          </section>
-        }
-
         @if (item.useCase.operationalStatusCode) { <section class="ds-card risk-alert" role="status"><app-icon name="info" /><div><strong>{{ t('aiJourney.operational.' + item.useCase.operationalStatusCode) }}</strong><p>{{ t('aiJourney.intakePaused') }}</p></div></section> }
-        @if (item.libraryVersion; as libraryVersion) { <section class="ds-card risk-alert"><app-icon name="shield" /><div><strong>{{ libraryVersion.entry.libraryRef }} · {{ t('aiDashboard.round') }} {{ libraryVersion.round }}</strong><p>{{ t('aiInitiation.provenance') }}</p></div></section> }
 
         <section class="ds-card risk-owner-strip" [class.risk-owner-strip--unassigned]="!item.owner">
           <span class="risk-owner-strip__icon"><app-icon name="userCheck" /></span>

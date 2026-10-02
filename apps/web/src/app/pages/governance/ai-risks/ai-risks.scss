@@ -15,9 +15,9 @@
 
 .risk-cycle { padding: .75rem; overflow: hidden; background: linear-gradient(130deg, color-mix(in srgb, var(--primary-soft) 32%, var(--surface)), var(--surface) 54%); }
 .risk-cycle > header { display: grid; grid-template-columns: minmax(16rem, .7fr) minmax(20rem, 1.3fr); gap: var(--space-4); align-items: end; }
-.risk-cycle h2, .risk-register-heading h2, .risk-intake h2, .risk-detail-head h2, .risk-create-head h2 { margin: 0; }
-.risk-cycle h2, .risk-register-heading h2, .risk-detail-head h2 { font-size: 1rem; }
-.risk-cycle > header p, .risk-register-heading p, .risk-detail-head p, .risk-intake-head p { margin: .25rem 0 0; color: var(--command-muted); }
+.risk-cycle h2, .risk-register-heading h2, .risk-intake h2, .risk-overview-head h2, .risk-create-head h2 { margin: 0; }
+.risk-cycle h2, .risk-register-heading h2, .risk-overview-head h2 { font-size: 1rem; }
+.risk-cycle > header p, .risk-register-heading p, .risk-overview-head p, .risk-intake-head p { margin: .25rem 0 0; color: var(--command-muted); }
 .risk-cycle ol { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .35rem; padding: 0; margin: .65rem 0 .5rem; list-style: none; }
 .risk-cycle li { position: relative; display: grid; grid-template-columns: 1.55rem minmax(0, 1fr); gap: .42rem; align-items: start; min-width: 0; padding: .42rem; border: 1px solid color-mix(in srgb, var(--border) 78%, transparent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface) 88%, transparent); }
 .risk-cycle li:not(:last-child)::after { content: ''; position: absolute; inset-inline-end: -.45rem; inset-block-start: 1.45rem; width: .45rem; height: 2px; background: var(--primary); }
@@ -57,9 +57,20 @@
 .risk-empty-table { padding: 2rem !important; text-align: center; color: var(--command-muted); }
 
 .risk-detail { gap: var(--space-3); }
-.risk-detail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: .7rem .85rem; border-inline-start: .28rem solid var(--primary); }
+.risk-overview-card { padding: 0; overflow: hidden; border-inline-start: .28rem solid var(--primary); }
+.risk-overview-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: .7rem .85rem; }
 .risk-detail-status { flex: 0 0 min(18rem, 32%); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .3rem .65rem; }
 .risk-detail-status .p-progressbar { grid-column: 1 / -1; }
+.risk-overview-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--border); background: color-mix(in srgb, var(--surface-2) 45%, var(--surface)); }
+.risk-overview-detail { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; gap: .58rem; min-width: 0; padding: .55rem .75rem; }
+.risk-overview-detail:first-child { border-inline-end: 1px solid var(--border); }
+.risk-overview-detail__icon { display: grid; place-items: center; width: 2rem; aspect-ratio: 1; color: var(--primary); background: var(--primary-soft); border-radius: .55rem; }
+.risk-overview-detail > div { min-width: 0; }
+.risk-overview-detail small { display: block; color: var(--command-muted); font-size: .62rem; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.risk-overview-detail strong { display: block; margin-top: .06rem; overflow: hidden; color: var(--on-surface); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.risk-overview-detail p { margin: .1rem 0 0; color: var(--command-muted); font-size: .67rem; line-height: 1.3; }
+.risk-overview-detail__actions { display: grid; justify-items: end; gap: .3rem; }
+.risk-overview-detail__actions .ds-btn { min-height: 1.75rem; padding: .18rem .45rem; font-size: .66rem; white-space: nowrap; }
 .risk-alert { display: flex; align-items: flex-start; gap: .65rem; padding: .75rem 1rem; }
 .risk-alert p { margin: .12rem 0 0; color: var(--command-muted); }
 .risk-owner-strip { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) auto auto; align-items: center; gap: .7rem; padding: .62rem .75rem; border-inline-start: .24rem solid var(--success); background: linear-gradient(105deg, color-mix(in srgb, var(--success-soft) 42%, var(--surface)), var(--surface) 56%); }
@@ -74,13 +85,6 @@
 .risk-owner-editor p-select, .risk-owner-editor textarea { display: block; width: 100%; }
 .risk-owner-editor textarea { min-height: 2.55rem; resize: vertical; }
 .risk-owner-editor__actions { display: flex; align-items: center; gap: .4rem; padding-bottom: .05rem; }
-.risk-manual-next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; padding: .65rem .8rem; border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); background: linear-gradient(110deg, color-mix(in srgb, var(--primary-soft) 45%, var(--surface)), var(--surface) 72%); }
-.risk-manual-next strong { font-size: .82rem; }
-.risk-manual-next p { margin: .12rem 0 0; color: var(--command-muted); font-size: .72rem; }
-.risk-manual-next small { display: block; margin-top: .18rem; color: var(--primary); font-size: .66rem; font-weight: 750; }
-.risk-manual-next__actions { display: grid; justify-items: end; gap: .35rem; }
-.risk-manual-next__actions .ds-btn { min-height: 1.8rem; padding: .2rem .5rem; font-size: .67rem; white-space: nowrap; }
-.risk-manual-next__step { display: inline-flex; align-items: center; justify-content: center; min-width: 2.6rem; padding: .22rem .45rem; border-radius: var(--radius-pill); color: var(--primary); background: var(--primary-soft); font-size: .72rem; font-weight: 850; }
 :host ::ng-deep .risk-detail-tabs .p-tablist { overflow: hidden; }
 :host ::ng-deep .risk-detail-tabs .p-tablist-content { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #d7dce2; border-radius: var(--radius-lg); background: #eef1f4; padding: .32rem; gap: .22rem; overflow: hidden; box-shadow: inset 0 1px 2px rgb(15 23 42 / 5%); }
 :host ::ng-deep .risk-detail-tabs .p-tablist-nav-button { display: none; }
@@ -323,11 +327,13 @@
   .risk-cycle > header { grid-template-columns: 1fr; }
   .risk-cycle ol { grid-template-columns: 1fr; }
   .risk-cycle li::after { display: none; }
-  .risk-register-heading, .risk-detail-head { align-items: stretch; flex-direction: column; }
+  .risk-register-heading, .risk-overview-head { align-items: stretch; flex-direction: column; }
   .risk-register-tools { min-width: 0; width: 100%; flex-direction: column; align-items: stretch; }
   .risk-owner-strip { grid-template-columns: 2.25rem minmax(0, 1fr); }
   .risk-owner-strip > app-status-chip, .risk-owner-strip > .ds-btn { grid-column: 2; justify-self: start; }
   .risk-owner-editor { grid-template-columns: 1fr; }
+  .risk-overview-details { grid-template-columns: 1fr; }
+  .risk-overview-detail:first-child { border-inline-end: 0; border-bottom: 1px solid var(--border); }
   .risk-search { flex-basis: auto; }
   .risk-detail-status { flex-basis: auto; width: 100%; }
   :host ::ng-deep .risk-intake .p-datatable-thead > tr > th:first-child,

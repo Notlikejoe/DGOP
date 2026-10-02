@@ -190,27 +190,6 @@
   overflow-wrap: anywhere;
 }
 
-.workflow-trend {
-  display: grid;
-  grid-template-columns: repeat(14, minmax(0, 1fr));
-  gap: 0.25rem;
-  align-items: end;
-  min-height: 3.4rem;
-  padding: 0.65rem;
-  border: 1px solid var(--command-border);
-  border-radius: 8px;
-  background: var(--command-surface-2);
-}
-
-.workflow-trend span {
-  display: block;
-  min-height: 0.35rem;
-  height: calc((var(--created, 0) + var(--completed, 0) + 1) * 0.45rem);
-  max-height: 3rem;
-  border-radius: 3px 3px 0 0;
-  background: linear-gradient(to top, var(--command-accent), color-mix(in srgb, var(--success) 70%, var(--command-accent)));
-}
-
 .route-workspace {
   display: grid;
   grid-template-columns: minmax(250px, 0.32fr) minmax(0, 1fr) minmax(280px, 0.34fr);
@@ -291,12 +270,6 @@
   font-size: 0.78rem;
   font-weight: 800;
   overflow-wrap: anywhere;
-}
-
-.registry-strip__item--watch {
-  border-color: color-mix(in srgb, var(--warning) 54%, var(--command-border)) !important;
-  color: var(--warning) !important;
-  background: color-mix(in srgb, var(--warning) 10%, transparent) !important;
 }
 
 .registry-strip--variables span {
@@ -1031,8 +1004,8 @@
 .workflow-surface--map .workflow-dashboard,
 .workflow-surface--map .workflow-report,
 .workflow-surface--map .configuration-card {
-  gap: 0.65rem;
-  padding: 0.75rem;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
 }
 
 .workflow-surface--map .workflow-dashboard__head h2,
@@ -1054,28 +1027,23 @@
 .workflow-surface--map .workflow-dashboard__grid article,
 .workflow-surface--map .workflow-report__grid article,
 .workflow-surface--map .configuration-grid article {
-  padding: 0.6rem;
+  padding: 0.48rem 0.55rem;
 }
 
 .workflow-surface--map .workflow-dashboard__grid article > strong,
 .workflow-surface--map .workflow-report__grid article > strong,
 .workflow-surface--map .configuration-grid strong {
-  margin: 0.15rem 0;
-  font-size: 1.4rem;
+  margin: 0.1rem 0;
+  font-size: 1.25rem;
 }
 
 .workflow-surface--map .dashboard-list-row {
   padding-block: 0.25rem;
 }
 
-.workflow-surface--map .workflow-trend {
-  min-height: 2.8rem;
-  padding: 0.45rem;
-}
-
 .workflow-surface--map .configuration-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
 }
 
 .workflow-surface--map .registry-strip span {
@@ -1245,16 +1213,6 @@
 .workflow-surface--map .workflow-insights-grid .dashboard-list-row small {
   font-size: 0.66rem;
   white-space: nowrap;
-}
-
-.workflow-surface--map .workflow-insights-grid .workflow-trend {
-  min-height: 2.25rem;
-  margin-top: auto;
-  padding: 0.3rem 0.4rem;
-}
-
-.workflow-surface--map .workflow-insights-grid .workflow-trend span {
-  max-height: 2rem;
 }
 
 .workflow-surface--tasks {

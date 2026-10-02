@@ -112,15 +112,6 @@
                   }
                 </article>
               </div>
-              <div class="workflow-trend">
-                @for (point of dash.trend; track point.date) {
-                  <span
-                    [style.--created]="point.created"
-                    [style.--completed]="point.completed"
-                    [title]="point.date + ': ' + point.created + ' / ' + point.completed"
-                  ></span>
-                }
-              </div>
             </section>
           }
 
@@ -174,7 +165,6 @@
                   <h2>{{ t('wf.config.title') }}</h2>
                   <p>{{ t('wf.config.subtitle') }}</p>
                 </div>
-                <app-status-chip [kind]="graphKind(cfg.status)" [label]="t('wf.config.status.' + cfg.status)" />
               </div>
               <div class="configuration-grid">
                 <article>
@@ -224,13 +214,6 @@
                   <strong>{{ cfg.summary.automatedExecutionEvents ?? 0 }}</strong>
                   <small>{{ t('wf.config.automationEventsHelp') }}</small>
                 </article>
-              </div>
-              <div class="registry-strip">
-                @for (item of cfg.caseTypeRegistry.slice(0, 8); track item.caseType) {
-                  <span [class.registry-strip__item--watch]="item.status !== 'ready'">
-                    {{ typeLabel(item.caseType) }}
-                  </span>
-                }
               </div>
               @if (cfg.variableRegistry?.length) {
                 <div class="registry-strip registry-strip--variables">

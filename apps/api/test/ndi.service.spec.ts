@@ -238,12 +238,13 @@ test('domainTraceability: maps v5 operating models to live specs, evidence, reco
       {
         id: 'spec-dg',
         domain: { id: 'ndi-dg', code: 'data_strategy', shortCode: 'DG', nameEn: 'Data Strategy', nameAr: 'Data Strategy' },
-        evidence: [{ status: 'approved', expiryDate: new Date(now.getTime() + 86_400_000) }],
+        evidence: [{ status: 'approved', provenance: 'operational', expiryDate: new Date(now.getTime() + 86_400_000) },
+          { status: 'approved', provenance: 'seeded_uat', expiryDate: null }],
       },
       {
         id: 'spec-rmd',
         domain: { id: 'ndi-rmd', code: 'reference_master_data', shortCode: 'RMD', nameEn: 'Reference Data', nameAr: 'Reference Data' },
-        evidence: [{ status: 'submitted', expiryDate: null }],
+        evidence: [{ status: 'submitted', provenance: 'operational', expiryDate: null }],
       },
     ],
     workflowGroupBy: async () => [{ type: 'policy_lifecycle', _count: { _all: 1 } }],
@@ -267,6 +268,8 @@ test('domainTraceability: maps v5 operating models to live specs, evidence, reco
   const dg = result.models.find((row) => row.code === 'DG')!;
   const rmd = result.models.find((row) => row.code === 'RMD')!;
   assert.strictEqual(dg.status, 'ready');
+  assert.strictEqual(dg.metrics.approvedEvidenceCount, 1);
+  assert.strictEqual(dg.excludedEvidenceCount, 1);
   assert.strictEqual(dg.metrics.workflowCaseCount, 1);
   assert.strictEqual(rmd.status, 'watch');
   assert.strictEqual(rmd.metrics.pendingEvidenceCount, 1);

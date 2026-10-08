@@ -5,6 +5,7 @@ import { ApiService, HealthResponse } from '../../core/api.service';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
 import { AppIcon } from '../../shared/app-icon';
+import { AuthService } from '../../core/auth.service';
 
 type State = 'loading' | 'ok' | 'error';
 type GapType = 'missing' | 'expired' | 'rejected' | 'unassigned' | 'stuck';
@@ -69,6 +70,7 @@ interface JourneyNode {
 export class Dashboard implements OnInit {
   private readonly api = inject(ApiService);
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
   protected readonly i18n = inject(I18nService);
 
   protected readonly state = signal<State>('loading');
@@ -335,6 +337,10 @@ export class Dashboard implements OnInit {
 
   protected loadSummary(): void {
     this.summaryError.set(false);
+    if (!this.auth.hasPermission('dashboard.view')) {
+      this.summary.set({governance:null,ndi:null,workflow:null,myWork:null,training:null,dataQuality:null,reference:null});
+      return;
+    }
     this.http.get<DashboardSummary>('/api/dashboard/summary').subscribe({
       next: (s) => this.summary.set(s),
       error: () => this.summaryError.set(true),

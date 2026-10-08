@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { AiControlPicker, ControlTag } from './ai-control-picker';
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
@@ -17,7 +18,7 @@ interface Context {
  history:Array<{id:string;round:number;decision:{decision:string;justification:string}|null}>;
 }
 const empty=():ActionForm=>({title:'',description:'',actionType:'',priorityCode:'',assigneeUserId:'',startDate:'',targetDate:'',evidenceRequired:'',evidenceIds:[],taskType:'information'});
-@Component({selector:'app-ai-treatment',standalone:true,imports:[DualDatePipe,FormsModule,AppIcon,StatusChip,AiControlPicker],templateUrl:'./ai-treatment.html',styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-treatment',standalone:true,imports:[AiEvidencePanel,DualDatePipe,FormsModule,AppIcon,StatusChip,AiControlPicker],templateUrl:'./ai-treatment.html',styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiTreatment {
  readonly riskId=input.required<string>();readonly updated=output<void>();
  private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);

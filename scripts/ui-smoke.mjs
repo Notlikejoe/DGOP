@@ -1,30 +1,15 @@
+import { loadEnvironment, applyEnvironment } from './runtime-env.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { atomicJson } from './demo-profile.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
-function loadRootEnv() {
-  const env = { ...process.env };
-  const envPath = join(root, '.env');
-  if (!existsSync(envPath)) return env;
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (!env[key]) env[key] = value;
-  }
-  return env;
-}
+function loadRootEnv() { return loadEnvironment(root); }
 
 function requireFrom(moduleDir) {
   return createRequire(join(moduleDir, 'dgop-ui-smoke.js'));
@@ -59,9 +44,7 @@ function loadPlaywright() {
 }
 
 function fail(message, detail) {
-  console.error(message);
-  if (detail) console.error(detail);
-  process.exit(1);
+  const error=new Error(message);if(detail)console.error(detail);throw error;
 }
 
 const env = loadRootEnv();
@@ -95,15 +78,24 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 950 } });
 const consoleErrors = [];
 const consoleWarnings = [];
 const failedResponses = [];
+let nextNavigationAt=0;
+const paceNavigation=async()=>{const pause=Math.max(0,nextNavigationAt-Date.now());if(pause)await page.waitForTimeout(Math.min(pause,65000));};
 const accessibilityWarningPattern = /aria-hidden|focus must not be hidden|blocked aria-hidden|inert/iu;
 
 page.on('console', (message) => {
   const text = message.text();
   if (message.type() === 'error') consoleErrors.push(text);
   if (message.type() === 'warning' && accessibilityWarningPattern.test(text)) consoleWarnings.push(text);
+  if (env.DGOP_SMOKE_MATRIX === '1' && message.type() === 'warning' && /^\[PrimeUI\]/u.test(text)) consoleWarnings.push(text);
 });
-page.on('response', (response) => {
+page.on('pageerror',error=>consoleErrors.push(error.message));
+page.on('response', async (response) => {
   if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
+  const headers=await response.allHeaders();
+  const remaining=Number(headers['ratelimit-remaining']),reset=Number(headers['ratelimit-reset']);
+  // Leave capacity for each screen's bounded context requests. Test pacing is
+  // outside measured navigation latency and never changes the server's limits.
+  if(headers['ratelimit-remaining']!==undefined&&remaining<50&&Number.isFinite(reset))nextNavigationAt=Math.max(nextNavigationAt,Date.now()+Math.min(60,reset)*1000+1000);
 });
 
 try {
@@ -132,18 +124,30 @@ try {
   const checks = [];
 
   async function checkRoute(route, label = route) {
+    await paceNavigation();
+    const began = performance.now();
     await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle' });
     const title = (await page.locator('h1').first().textContent({ timeout: 10_000 })).trim();
+    const navigationMs = performance.now() - began;
+    const routeLoaded = new URL(page.url()).pathname === route;
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2);
     const bodyText = await page.locator('body').innerText();
+    const licenseValid=env.DGOP_SMOKE_MATRIX!=='1'||await page.locator('#p-license-host').count()===0;
     const rawKey = await page
       .locator('body')
-      .evaluate((body) => /\b(?:common|nav|workflow|operations|dq|security|ds|dashboard)\.[A-Za-z0-9_.-]+\b/u.test(body.innerText ?? ''));
+      .evaluate((body) => /\b(?:common|nav|workflow|operations|dq|security|ds|dashboard|aiGovernance|aiRisk|aiReview|privacy|scoring|evidence)\.[A-Za-z0-9_.-]+\b/u.test(body.innerText ?? ''));
     const invalidText = /\b(?:undefined|null)\b/iu.test(bodyText);
     let systemDatabaseStatus = true;
     if (route === '/dashboard') {
-      const systemText = await page.locator('.system-panel').innerText({ timeout: 10_000 });
-      systemDatabaseStatus = /\b(?:up|down)\b/iu.test(systemText);
+      if(await page.locator('.system-panel').count()){
+        const systemText = await page.locator('.system-panel').innerText({ timeout: 10_000 });
+        systemDatabaseStatus = /\b(?:up|down)\b/iu.test(systemText);
+      }else{
+        // A role with no operational dashboard sections has a legitimate empty view.
+        // Verify the server agrees rather than treating an unavailable dashboard as empty.
+        const empty=await page.evaluate(async()=>{const session=await fetch('/api/auth/me');if(!session.ok)return false;const user=await session.json();if(!user.permissions.includes('*')&&!user.permissions.includes('dashboard.view'))return true;const response=await fetch('/api/dashboard/summary');if(!response.ok)return false;const summary=await response.json();return ['governance','ndi','workflow','myWork','training','dataQuality','reference'].every(key=>summary[key]===null);});
+        systemDatabaseStatus=empty&&await page.locator('app-dashboard .empty-state').count()>0;
+      }
     }
     let featureControls = true;
     let hierarchyExpansion = true;
@@ -197,11 +201,16 @@ try {
         hierarchyExpansion = false;
       }
     }
-    checks.push({ route: label, title, overflow, rawKey, invalidText, systemDatabaseStatus, featureControls, hierarchyExpansion, hierarchyCounts });
+    checks.push({ route: label, title, navigationMs, routeLoaded, licenseValid, overflow, rawKey, invalidText, systemDatabaseStatus, featureControls, hierarchyExpansion, hierarchyCounts });
   }
 
   for (const route of routes) {
     await checkRoute(route);
+  }
+  for(const route of (env.DGOP_SMOKE_DENIED_ROUTES??'').split(',').filter(Boolean)){
+    await paceNavigation();
+    await page.goto(`${baseUrl}${route}`,{waitUntil:'networkidle'});
+    if(new URL(page.url()).pathname!=='/unauthorized')throw new Error('A role without AI screen access did not reach the denied-access page.');
   }
 
   if (env.DGOP_SMOKE_PRIVILEGE_BUILDER === '1') {
@@ -282,8 +291,29 @@ try {
     await checkRoute(route, `mobile ${route}`);
   }
 
+  if (env.DGOP_SMOKE_MATRIX === '1') {
+    for (const viewport of [{width:1440,height:950},{width:390,height:844}]) {
+      await page.setViewportSize(viewport);
+      for (const lang of ['en','ar']) for (const theme of ['light','dark']) {
+        await page.evaluate(({lang,theme}) => {localStorage.setItem('dgop.lang',lang);localStorage.setItem('dgop.theme',theme);},{lang,theme});
+        for (const route of routes) {
+          await checkRoute(route,`${viewport.width}px ${lang}/${theme} ${route}`);
+          const state=await page.evaluate(()=>({lang:document.documentElement.lang,dir:document.documentElement.dir,theme:document.documentElement.getAttribute('data-theme')}));
+          if(state.lang!==lang||state.dir!==(lang==='ar'?'rtl':'ltr')||state.theme!==theme) throw new Error('Language, direction or theme did not match the requested browser scenario.');
+        }
+      }
+    }
+  }
+
+  const durations=checks.map(check=>check.navigationMs).filter(Number.isFinite).sort((a,b)=>a-b);
+  const navigationP95Ms=durations[Math.max(0,Math.ceil(durations.length*.95)-1)]??null;
+  const functionalBadChecks=checks.filter(check=>check.routeLoaded===false||check.overflow||check.rawKey||check.invalidText||check.systemDatabaseStatus===false||check.featureControls===false||check.hierarchyExpansion===false||!check.title);
+  const performancePassed=navigationP95Ms!==null&&navigationP95Ms<=3000;
+  const licenseWarnings=consoleWarnings.filter(message=>message.startsWith('[PrimeUI]'));
+  const otherWarnings=consoleWarnings.filter(message=>!message.startsWith('[PrimeUI]'));
+  if(env.DGOP_SMOKE_REPORT)atomicJson(env.DGOP_SMOKE_REPORT,{demoOnly:true,evaluatedAt:new Date().toISOString(),browserVersion:browser.version(),matrix:env.DGOP_SMOKE_MATRIX==='1',checks:checks.length,navigationP95Ms,functionalPassed:!consoleErrors.length&&!failedResponses.length&&!functionalBadChecks.length&&!otherWarnings.length&&performancePassed,licensedAcceptancePassed:!consoleErrors.length&&!failedResponses.length&&!functionalBadChecks.length&&!consoleWarnings.length&&performancePassed&&checks.every(check=>check.licenseValid!==false),consoleErrors,failedResponses,otherWarnings,licenseWarningCount:licenseWarnings.length,licenseHostCount:checks.filter(check=>check.licenseValid===false).length,functionalBadChecks});
   const badChecks = checks.filter(
-    (check) => check.overflow || check.rawKey || check.invalidText || check.systemDatabaseStatus === false || check.featureControls === false || check.hierarchyExpansion === false || !check.title,
+    (check) => check.licenseValid === false || check.routeLoaded === false || check.overflow || check.rawKey || check.invalidText || check.systemDatabaseStatus === false || check.featureControls === false || check.hierarchyExpansion === false || !check.title,
   );
   if (consoleErrors.length || consoleWarnings.length || failedResponses.length || badChecks.length) {
     fail(
@@ -291,7 +321,11 @@ try {
       JSON.stringify({ consoleErrors, consoleWarnings, failedResponses, badChecks, checks }, null, 2),
     );
   }
-  console.log(JSON.stringify({ status: 'ok', baseUrl, routes: checks }, null, 2));
+  if(env.DGOP_SMOKE_MATRIX==='1'&&(navigationP95Ms===null||navigationP95Ms>3000))fail('Browser navigation exceeded the agreed local p95 budget.',JSON.stringify({navigationP95Ms,budgetMs:3000}));
+  console.log(JSON.stringify({ status: 'ok', baseUrl, matrix:env.DGOP_SMOKE_MATRIX==='1', navigationP95Ms, routes: checks }, null, 2));
+} catch(error) {
+  console.error(JSON.stringify({url:page.url(),consoleErrors,consoleWarnings,failedResponses,body:(await page.locator('body').innerText().catch(()=>'' )).slice(0,8000)},null,2));
+  throw error;
 } finally {
   await browser.close();
 }

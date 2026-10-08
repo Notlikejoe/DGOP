@@ -1,6 +1,8 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { AiRiskInitiationService } from './ai-risk-initiation.service';
 import { CreateAiRiskDto } from './ai-risk-library.dto';
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req, Query } from '@nestjs/common';
+import { AiRegisterQueryDto } from './ai-register-query.dto';
 import { Request } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -19,13 +21,15 @@ import { AiTreatmentService } from './ai-treatment.service';
 import { RecordTreatmentProgressDto, SaveTreatmentActionDto } from './ai-treatment.dto';
 
 @Controller('ai/risks')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiRiskIntakeController {
   constructor(private readonly service: AiRiskIntakeService, private readonly assessments: AiRiskAssessmentService, private readonly adoption: AiRiskAdoptionService,
     private readonly responses: AiRiskResponseService, private readonly treatment: AiTreatmentService, private readonly residual: AiResidualAssessmentService, private readonly residualDecisions: AiResidualDecisionService, private readonly initiation: AiRiskInitiationService) {}
   // Authenticated reads enforce own/org/all alternatives with live grants and data scope.
   @Get('initiation') initiationContext(@CurrentUser() u:AuthUser){return this.initiation.context(u.id);}
   @Post() create(@CurrentUser() u:AuthUser,@Body() dto:CreateAiRiskDto){return this.initiation.create(u.id,dto);}
-  @Get() list(@CurrentUser() user: AuthUser) { return this.service.list(user.id); }
+  @Get() list(@CurrentUser() user: AuthUser,@Query() query:AiRegisterQueryDto) { return this.service.list(user.id,query); }
   @Get('lookups') lookups(@CurrentUser() user: AuthUser) { return this.service.lookups(user.id); }
   @Get(':id/residual') residualContext(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.residual.context(user.id,id); }
   @Get(':id/residual/review') residualReview(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) { return this.residualDecisions.context(user.id,id); }

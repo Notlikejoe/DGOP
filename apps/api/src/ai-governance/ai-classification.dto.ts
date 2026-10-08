@@ -12,6 +12,8 @@ export class CreateAiClassificationDto {
 }
 
 export class VerifyAiClassificationDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsUUID('4', { each:true })
+  evidenceIds!: string[];
   @Type(() => Number)
   @IsInt()
   @Min(1)

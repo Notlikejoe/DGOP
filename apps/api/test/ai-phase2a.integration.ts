@@ -260,7 +260,7 @@ export async function testPhase2A(db: PrismaClient) {
   await assert.rejects(service.updateDraft(requester.id, draft.id, 3, { problem_desc: 'too late' }));
   await assert.rejects(service.submit(requester.id, draft.id, 3));
 
-  assert.equal((await service.triageQueue(triageReviewer.id)).length, 1);
+  assert.equal((await service.triageQueue(triageReviewer.id)).total, 1);
   await assert.rejects(service.triage(triageReviewer.id, draft.id, 3, 'return'));
   const returned = await service.triage(triageReviewer.id, draft.id, 3, 'return', 'Clarify the current-state baseline');
   assert.equal(returned.workflowCase!.status, 'awaiting_information');
@@ -280,7 +280,7 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', title: { contains: 'classification' } } }), 1);
   const classificationConfig = await classification.configuration(triageReviewer.id);
   assert.equal(classificationConfig.ready, true);
-  assert.equal((await classification.queue(triageReviewer.id)).length, 1);
+  assert.equal((await classification.queue(triageReviewer.id)).total, 1);
   await assert.rejects(classification.assess(triageReviewer.id, draft.id, 7, {
     kind: 'classification', scores: Array(5).fill({ value: 3, justification: 'Evidence reviewed' }),
   }));
@@ -293,8 +293,9 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal((assessed.assessments[0].result as { proposedTierCode: string }).proposedTierCode, 'HIGH');
   assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: draft.id, kind: 'classification' } }), 1);
   assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER' } }), 1);
-  assert.equal((await classification.verificationQueue(officer.id)).length, 1);
-  await assert.rejects(classification.verificationQueue(triageReviewer.id));
+  assert.equal((await classification.verificationQueue(officer.id)).total, 1);
+  assert.equal((await classification.verificationQueue(triageReviewer.id)).total, 1, 'Working Group organization readers may inspect the verification queue');
+  await assert.rejects(classification.verify(triageReviewer.id, draft.id, 8, 'Read access does not grant officer verification authority'), /Responsible AI Officer/);
   await assert.rejects(classification.override(officer.id, draft.id, 8, 'LIMITED',
     'A supported override', [], 'RAIO-P2D-001'));
   const overridden = await classification.override(officer.id, draft.id, 8, 'LIMITED',
@@ -316,9 +317,9 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal(await db.workflowTask.count({ where: {
     caseId: accepted.workflowCase!.id, status: 'pending', templateStage: { is: { code: AIUC_STAGE.decision } },
   } }), 0, 'tier decision must wait for every instantiated specialist review');
-  assert.equal((await classification.reviewQueue(privacyReviewer.id)).length, 1);
-  assert.equal((await classification.reviewQueue(securityReviewer.id)).length, 0);
-  assert.equal((await classification.reviewQueue(ethicsReviewer.id)).length, 1, 'High proposals require Ethics even when the approved tier is lowered');
+  assert.equal((await classification.reviewQueue(privacyReviewer.id)).total, 1);
+  assert.equal((await classification.reviewQueue(securityReviewer.id)).total, 0);
+  assert.equal((await classification.reviewQueue(ethicsReviewer.id)).total, 1, 'High proposals require Ethics even when the approved tier is lowered');
   const privacyApproved = await classification.reviewGate(
     privacyReviewer.id, draft.id, privacyTask.id, 9, 'approve',
     'Privacy basis and controls are supported by the attached decision evidence', [decisionEvidence.id], '127.0.0.4',
@@ -342,15 +343,15 @@ export async function testPhase2A(db: PrismaClient) {
     templateStage: { is: { code: AIUC_STAGE.decision } },
   } });
   assert.equal((limitedDecisionTask.formDataJson as { assignmentRuleId: string }).assignmentRuleId, 'AR-AIUC-01');
-  assert.equal((await classification.verificationQueue(officer.id)).length, 0);
+  assert.equal((await classification.verificationQueue(officer.id)).total, 0);
   const overrideAudit = await db.auditLog.findFirstOrThrow({ where: { entityId: draft.id, action: 'aiuc.classification.overridden' } });
   assert.equal((overrideAudit.metadata as { clientIp: string }).clientIp, '127.0.0.1');
-  assert.equal((await classification.queue(triageReviewer.id)).length, 0);
+  assert.equal((await classification.queue(triageReviewer.id)).total, 0);
   await assert.rejects(classification.assess(triageReviewer.id, draft.id, 8, {
     kind: 'classification', scores: Array(6).fill({ value: 3, justification: 'Cannot assess twice' }),
   }));
   await assert.rejects(service.updateDraft(requester.id, draft.id, 7, { problem_desc: 'too late again' }));
-  assert.equal((await service.triageQueue(triageReviewer.id)).length, 0);
+  assert.equal((await service.triageQueue(triageReviewer.id)).total, 0);
   assert.equal(await db.auditLog.count({ where: { entityId: draft.id, action: { startsWith: 'aiuc.intake.' } } }), 5);
   assert.equal((await service.listOwn(requester.id)).length, 1);
   assert.equal((await service.getOwn(requester.id, draft.id)).id, draft.id);
@@ -360,7 +361,7 @@ export async function testPhase2A(db: PrismaClient) {
     justification: 'Adopt the verified Limited tier subject to operational controls',
     evidenceIds: [decisionEvidence.id], conditions: ['Retain human approval for every matching decision'],
   };
-  assert.equal((await decisions.queue(officer.id)).length, 1);
+  assert.equal((await decisions.queue(officer.id)).total, 1);
   await assert.rejects(decisions.record(officer.id, draft.id, limitedDecisionTask.id, { ...approval, evidenceIds: [] }));
   await assert.rejects(decisions.record(officer.id, draft.id, limitedDecisionTask.id, {
     ...approval, evidenceIds: ['11111111-1111-4111-8111-111111111111'],
@@ -371,10 +372,10 @@ export async function testPhase2A(db: PrismaClient) {
   const officerRole = await db.role.findUniqueOrThrow({ where: { code: 'AI_GOVERNANCE_OFFICER' } });
   await db.userRole.create({ data: { userId: owner.id, roleId: officerRole.id } });
   await assert.rejects(decisions.record(owner.id, draft.id, limitedDecisionTask.id, approval));
-  assert.equal((await decisions.queue(owner.id)).length, 0, 'owners cannot hold their own stage-6 queue item');
+  assert.equal((await decisions.queue(owner.id)).total, 0, 'owners cannot hold their own stage-6 queue item');
   await db.userRole.create({ data: { userId: requester.id, roleId: officerRole.id } });
   await assert.rejects(decisions.record(requester.id, draft.id, limitedDecisionTask.id, approval));
-  assert.equal((await decisions.queue(requester.id)).length, 0, 'requesters cannot hold their own stage-6 queue item');
+  assert.equal((await decisions.queue(requester.id)).total, 0, 'requesters cannot hold their own stage-6 queue item');
   await db.userRole.delete({ where: { userId_roleId: { userId: requester.id, roleId: officerRole.id } } });
   await db.workflowTask.update({ where: { id: downgradedEthicsTask.id }, data: { status: 'cancelled' } });
   await assert.rejects(decisions.record(officer.id, draft.id, limitedDecisionTask.id, approval));
@@ -442,8 +443,8 @@ export async function testPhase2A(db: PrismaClient) {
     include: { templateStage: true },
   });
   assert.deepEqual(conditionalTasks.map(task => task.templateStage!.code).sort(), [AIUC_STAGE.ethics, AIUC_STAGE.security].sort());
-  assert.equal((await classification.reviewQueue(securityReviewer.id)).length, 1);
-  assert.equal((await classification.reviewQueue(ethicsReviewer.id)).length, 1);
+  assert.equal((await classification.reviewQueue(securityReviewer.id)).total, 1);
+  assert.equal((await classification.reviewQueue(ethicsReviewer.id)).total, 1);
   const securityTask = conditionalTasks.find(task => task.templateStage!.code === AIUC_STAGE.security)!;
   const ethicsTask = conditionalTasks.find(task => task.templateStage!.code === AIUC_STAGE.ethics)!;
   const securityApproved = await classification.reviewGate(
@@ -479,7 +480,7 @@ export async function testPhase2A(db: PrismaClient) {
     expectedVersion: 10, decision: 'stop' as const, justification: 'The Steering Committee prohibits this Unacceptable use',
     evidenceIds: [decisionEvidence.id],
   };
-  assert.equal((await decisions.queue(steeringReviewer.id)).length, 1);
+  assert.equal((await decisions.queue(steeringReviewer.id)).total, 1);
   await assert.rejects(decisions.record(steeringReviewer.id, manualDraft.id, steeringTask.id, { ...stopDecision, decision: 'approve' }));
   const stopped = await decisions.record(steeringReviewer.id, manualDraft.id, steeringTask.id, stopDecision, '127.0.0.10');
   assert.equal(stopped.workflowCase.status, 'rejected');
@@ -577,7 +578,7 @@ export async function testPhase2A(db: PrismaClient) {
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers: reviewerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/queue`, { headers: reviewerHeaders })).status, 200);
-    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: reviewerHeaders })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: reviewerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: officerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers: privacyHeaders })).status, 200);
@@ -609,7 +610,7 @@ export async function testPhase2A(db: PrismaClient) {
   const proposal = { expectedVersion: 12, justification: 'Register the approved supervised matching product', mode: 'create' as const,
     nameEn: 'Assisted matching product', nameAr: 'منتج المطابقة المساعدة', assetSubtype: 'recommendation_system',
     domainId: assetDomain.id, classificationId: assetClass.id };
-  assert.ok((await registrations.queue(triageReviewer.id)).some(value => value.id === draft.id));
+  assert.ok((await registrations.queue(triageReviewer.id)).data.some(value => value.id === draft.id));
   await assert.rejects(registrations.propose(officer.id, draft.id, handoverTask.id, proposal));
   const workingGroupRole = await db.role.findUniqueOrThrow({ where: { code: 'AI_WORKING_GROUP' } });
   await db.userRole.create({ data: { userId: dataOwner.id, roleId: workingGroupRole.id } });
@@ -619,7 +620,7 @@ export async function testPhase2A(db: PrismaClient) {
   const proposedAsset = await registrations.propose(triageReviewer.id, draft.id, handoverTask.id, proposal);
   assert.equal(proposedAsset.version, 13);
   assert.equal((await db.workflowTask.findUniqueOrThrow({ where: { id: proposedAsset.nextTaskId } })).assigneeUserId, dataOwner.id);
-  assert.ok((await registrations.queue(dataOwner.id)).some(value => value.id === draft.id));
+  assert.ok((await registrations.queue(dataOwner.id)).data.some(value => value.id === draft.id));
   const assetDecision = { expectedVersion: 13, decision: 'return' as const, justification: 'Please refine the registration names', evidenceIds: [decisionEvidence.id] };
   await assert.rejects(registrations.decide(requester.id, draft.id, proposedAsset.nextTaskId, assetDecision));
   await assert.rejects(registrations.decide(dataOwner.id, draft.id, proposedAsset.nextTaskId, { ...assetDecision, evidenceIds: [] }));
@@ -698,8 +699,8 @@ export async function testPhase2A(db: PrismaClient) {
   const riskOwner = await createActor('risk-owner', 'AI_RISK_OWNER');
   const otherRiskOwner = await createActor('other-risk-owner', 'AI_RISK_OWNER');
   const preservedHandoff = JSON.stringify(handedOver.handoffPayload);
-  assert.ok((await risks.list(triageReviewer.id)).some(item => item.id === handedOver.id));
-  assert.ok(!(await risks.list(riskOwner.id)).some(item => item.id === handedOver.id));
+  assert.ok((await risks.list(triageReviewer.id)).data.some(item => item.id === handedOver.id));
+  assert.ok(!(await risks.list(riskOwner.id)).data.some(item => item.id === handedOver.id));
   const assignment = { expectedVersion: 1, ownerUserId: riskOwner.id, justification: 'Assign the eligible product risk owner' };
   const brokenAudit = { logRequired: async () => { throw new Error('Injected risk audit failure'); } } as unknown as AuditService;
   const failingRisks = new AiRiskIntakeService(prisma, authorization, scope, routing, new AiIdentifiersService(), brokenAudit);
@@ -775,7 +776,7 @@ export async function testPhase2A(db: PrismaClient) {
   await assert.rejects(risks.assign(triageReviewer.id, linkedRisk.id, { ...assignment, expectedVersion: 3 }), /scope/);
   await db.roleDataScope.delete({ where: { id: restrictedScope.id } });
   const auditor = await createActor('risk-auditor', 'auditor');
-  assert.ok((await risks.list(auditor.id)).some(item => item.id === handedOver.id));
+  assert.ok((await risks.list(auditor.id)).data.some(item => item.id === handedOver.id));
   await assert.rejects(risks.save(auditor.id, linkedRisk.id, 3, { title: 'Auditor edit' }));
   const riskApp = await NestFactory.create(AppModule, { logger: false });
   try {

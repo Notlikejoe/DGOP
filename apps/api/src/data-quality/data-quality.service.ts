@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { claimGovernanceWrite } from '../common/governance-write';
 import {
   CaseStatus,
   DataQualityDimension,
@@ -658,7 +659,7 @@ export class DataQualityService {
     entityId: string,
     metadata?: Record<string, unknown>,
   ) {
-    return this.audit.log({
+    return this.audit.logRequired({
       actor,
       action,
       entityType,
@@ -921,7 +922,7 @@ export class DataQualityService {
       if (existing.status !== DataQualityRuleStatus.in_review) {
         throw new BadRequestException('Only rules in review can be approved');
       }
-      if (!roleCodes.includes('system_admin') && existing.createdBy === actor) {
+      if (existing.createdBy === actor) {
         throw new BadRequestException('Rule creators cannot approve their own rule');
       }
       next.status = DataQualityRuleStatus.approved;
@@ -947,7 +948,7 @@ export class DataQualityService {
       next.retiredAt = now;
     }
     return this.prisma.$transaction(async (tx) => {
-      const rule = await tx.dataQualityRule.update({ where: { id }, data: next });
+      const rule = await claimGovernanceWrite(() => tx.dataQualityRule.update({ where: { id, status: existing.status, currentVersion: existing.currentVersion, updatedAt: existing.updatedAt }, data: next }));
       await tx.dataQualityRuleVersion.updateMany({
         where: { ruleId: id, version: rule.currentVersion },
         data: {

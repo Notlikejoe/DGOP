@@ -1,3 +1,4 @@
+<app-ai-evidence-panel targetType="ai_risk" [targetId]="riskId()" />
 @if (context(); as c) {
  @if (c.canEdit || c.actions.length || c.history.length) {
   <section class="assessment-workspace" [attr.aria-busy]="working()"><header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiTreatment.title') }}</h2><p>{{ t('aiTreatment.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load()">{{ t('crud.retry') }}</button></header>

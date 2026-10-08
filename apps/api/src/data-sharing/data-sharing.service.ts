@@ -14,6 +14,7 @@ import { parseQueryEnum } from '../common/query-filters';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { WorkflowService } from '../workflow/workflow.service';
+import { claimGovernanceWrite } from '../common/governance-write';
 import {
   CreateDataSharingAgreementDto,
   CreateDataSharingRequestDto,
@@ -347,45 +348,67 @@ export class DataSharingService {
   }
 
   async updateRequest(roleCodes: string[], id: string, dto: UpdateDataSharingRequestDto, actor: string) {
-    await this.getRequest(roleCodes, id);
+    const existing = await this.getRequest(roleCodes, id);
     if (dto.status !== undefined) throw new BadRequestException('Data sharing request status is controlled by review decisions and agreements');
     if (dto.riskScore !== undefined) throw new BadRequestException('Data sharing risk is calculated from request controls');
-    const row = await this.prisma.dataSharingRequest.update({
-      where: { id },
+    if (!['draft', 'under_review', 'needs_changes'].includes(existing.status)) throw new BadRequestException('Approved sharing terms are immutable; create a new request for an amendment');
+    const row = await this.prisma.$transaction(async (tx) => {
+    const updated = await claimGovernanceWrite(() => tx.dataSharingRequest.update({
+      where: { id, updatedAt: existing.updatedAt, status: existing.status },
       data: { purpose: dto.purpose, updatedBy: actor },
       include: requestInclude,
+    }));
+    if (dto.purpose !== undefined && dto.purpose !== existing.purpose) await tx.dataSharingReview.updateMany({ where: { requestId: id }, data: { decision: DataSharingReviewDecision.pending, decidedAt: null } });
+    await this.audit.logRequired({ actor, action: 'data_sharing_request.update', entityType: 'data_sharing_request', entityId: id }, tx);
+    return dto.purpose !== undefined && dto.purpose !== existing.purpose ? tx.dataSharingRequest.findUniqueOrThrow({ where: { id }, include: requestInclude }) : updated;
     });
-    await this.audit.log({ actor, action: 'data_sharing_request.update', entityType: 'data_sharing_request', entityId: id });
     return this.decorateRequest(row);
   }
 
   async saveReview(roleCodes: string[], id: string, dto: SaveDataSharingReviewDto, actor: string) {
     const request = await this.getRequest(roleCodes, id);
-    if (!roleCodes.includes('system_admin') && dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
+    if (dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
       throw new ForbiddenException('Request creators cannot approve or reject their own data sharing request');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
-    await this.prisma.dataSharingReview.upsert({
+    await this.prisma.$transaction(async (tx) => {
+    await claimGovernanceWrite(() => tx.dataSharingRequest.update({ where: { id, updatedAt: request.updatedAt, status: request.status }, data: { updatedBy: actor } }));
+    if (!['draft', 'under_review', 'needs_changes'].includes(request.status)) throw new BadRequestException('Only an open sharing review can receive a decision');
+    const previous = request.reviews.find((review) => review.step === dto.step);
+    if (previous && previous.decision !== DataSharingReviewDecision.pending) throw new BadRequestException('Completed sharing reviews are immutable; submit changed terms for a new review');
+    const deciding = dto.decision !== undefined && dto.decision !== DataSharingReviewDecision.pending;
+    const assigned = previous?.reviewerPersonId;
+    if (deciding) {
+      const roles: Record<string, readonly string[]> = { owner: ['data_owner'], privacy: ['privacy_officer'], security: ['security_officer'], technical: ['technical_steward', 'data_custodian'] };
+      if (!roleCodes.some((role) => roles[dto.step]?.includes(role))) throw new ForbiddenException('An eligible business role is required for this sharing review step');
+      if (!assigned || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assigned)) throw new BadRequestException('Assign the reviewer before deciding the sharing review');
+      const person = await tx.person.findFirst({ where: { id: assigned, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
+      if (!person) throw new ForbiddenException('Only the assigned independent reviewer can decide this sharing step');
+      if (!dto.note?.trim()) throw new BadRequestException('Document the control assessment for this review');
+      if (previous?.decision !== DataSharingReviewDecision.pending) throw new BadRequestException('The review already has a decision');
+    }
+    await tx.dataSharingReview.upsert({
       where: { requestId_step: { requestId: id, step: dto.step } },
       create: {
         requestId: id,
         step: dto.step,
-        decision: dto.decision ?? DataSharingReviewDecision.pending,
-        reviewerPersonId: dto.reviewerPersonId || null,
-        note: dto.note ?? null,
-        decidedAt: dto.decision && dto.decision !== DataSharingReviewDecision.pending ? new Date() : null,
+        decision: dto.decision ?? undefined,
+        reviewerPersonId: dto.reviewerPersonId === undefined ? undefined : dto.reviewerPersonId,
+        note: dto.note === undefined ? undefined : dto.note,
+        decidedAt: dto.decision === undefined ? undefined : dto.decision !== DataSharingReviewDecision.pending ? new Date() : null,
         createdBy: actor,
       },
       update: {
-        decision: dto.decision ?? DataSharingReviewDecision.pending,
-        reviewerPersonId: dto.reviewerPersonId || null,
-        note: dto.note ?? null,
-        decidedAt: dto.decision && dto.decision !== DataSharingReviewDecision.pending ? new Date() : null,
+        decision: dto.decision ?? undefined,
+        reviewerPersonId: dto.reviewerPersonId === undefined ? undefined : dto.reviewerPersonId,
+        note: dto.note === undefined ? undefined : dto.note,
+        decidedAt: dto.decision === undefined ? undefined : dto.decision !== DataSharingReviewDecision.pending ? new Date() : null,
       },
     });
-    const reviews = await this.prisma.dataSharingReview.findMany({ where: { requestId: id }, select: { decision: true } });
-    await this.prisma.dataSharingRequest.update({ where: { id }, data: { status: statusFromReviews(reviews), updatedBy: actor } });
-    await this.audit.log({ actor, action: 'data_sharing_review.upsert', entityType: 'data_sharing_request', entityId: id, metadata: { step: dto.step } });
+    const reviews = await tx.dataSharingReview.findMany({ where: { requestId: id }, select: { decision: true } });
+    await tx.dataSharingRequest.update({ where: { id }, data: { status: statusFromReviews(reviews), updatedBy: actor } });
+    await this.audit.logRequired({ actor, action: 'data_sharing_review.upsert', entityType: 'data_sharing_request', entityId: id, metadata: { step: dto.step } }, tx);
+    });
     return this.getRequest(roleCodes, id);
   }
 
@@ -416,18 +439,24 @@ export class DataSharingService {
     if (request && request.status !== DataSharingRequestStatus.approved && request.status !== DataSharingRequestStatus.agreement_active) {
       throw new BadRequestException('Only an approved data sharing request can become an agreement');
     }
+    if (!request && dto.status && dto.status !== DataSharingAgreementStatus.draft) throw new BadRequestException('An active agreement requires an independently approved request');
+    if (request && ((dto.assetId !== undefined && dto.assetId !== request.assetId) || (dto.domainId !== undefined && dto.domainId !== request.domainId) || dto.recipientOrg !== request.recipientOrg || dto.purpose !== request.purpose)) throw new BadRequestException('Agreement terms must match the approved request; submit changed terms for a new approval');
     await this.assertScopedWriteTarget(roleCodes, dto.assetId ?? request?.assetId, dto.domainId ?? request?.domainId, 'Data sharing agreement');
     await this.assertPerson(dto.ownerPersonId, 'Owner');
     const startAt = dto.startAt ? new Date(dto.startAt) : new Date();
-    const row = await this.prisma.dataSharingAgreement.create({
+    const status = dto.status ?? (request ? DataSharingAgreementStatus.active : DataSharingAgreementStatus.draft);
+    const agreementNumber = await this.nextCode(this.prisma, 'dataSharingAgreement', 'agreementNumber', 'DSA');
+    const row = await this.prisma.$transaction(async (tx) => {
+    if (request) await claimGovernanceWrite(() => tx.dataSharingRequest.update({ where: { id: request.id, status: request.status, updatedAt: request.updatedAt }, data: { status: status === 'active' ? DataSharingRequestStatus.agreement_active : request.status, updatedBy: actor } }));
+    const created = await tx.dataSharingAgreement.create({
       data: {
-        agreementNumber: await this.nextCode(this.prisma, 'dataSharingAgreement', 'agreementNumber', 'DSA'),
+        agreementNumber,
         requestId: dto.requestId || null,
         assetId: dto.assetId ?? request?.assetId ?? null,
         domainId: dto.domainId ?? request?.domainId ?? null,
-        recipientOrg: dto.recipientOrg,
-        purpose: dto.purpose,
-        status: dto.status ?? DataSharingAgreementStatus.active,
+        recipientOrg: request?.recipientOrg ?? dto.recipientOrg,
+        purpose: request?.purpose ?? dto.purpose,
+        status,
         ownerPersonId: dto.ownerPersonId || null,
         agreementUrl: dto.agreementUrl || null,
         startAt,
@@ -437,27 +466,31 @@ export class DataSharingService {
       },
       include: agreementInclude,
     });
-    if (dto.requestId) {
-      await this.prisma.dataSharingRequest.update({ where: { id: dto.requestId }, data: { status: DataSharingRequestStatus.agreement_active, updatedBy: actor } });
-    }
-    await this.audit.log({ actor, action: 'data_sharing_agreement.create', entityType: 'data_sharing_agreement', entityId: row.id });
+    await this.audit.logRequired({ actor, action: 'data_sharing_agreement.create', entityType: 'data_sharing_agreement', entityId: created.id }, tx);
+    return created;
+    });
     return this.decorateAgreement(row);
   }
 
   async updateAgreement(roleCodes: string[], id: string, dto: UpdateDataSharingAgreementDto, actor: string) {
-    await this.assertAgreementVisible(roleCodes, id);
-    const row = await this.prisma.dataSharingAgreement.update({
-      where: { id },
+    const existing = await this.assertAgreementVisible(roleCodes, id);
+    if (dto.status === DataSharingAgreementStatus.active && existing.status !== DataSharingAgreementStatus.active) throw new BadRequestException('Activate a new agreement through an approved request; archived agreements cannot be reactivated by editing');
+    const row = await this.prisma.$transaction(async (tx) => {
+    const updated = await claimGovernanceWrite(() => tx.dataSharingAgreement.update({
+      where: { id, status: existing.status, updatedAt: existing.updatedAt },
       data: {
         status: dto.status,
         agreementUrl: dto.agreementUrl,
         renewalDueAt: dto.renewalDueAt ? new Date(dto.renewalDueAt) : undefined,
         retiredAt: dto.retiredAt ? new Date(dto.retiredAt) : undefined,
         updatedBy: actor,
+        updatedAt: new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1)),
       },
       include: agreementInclude,
+    }));
+    await this.audit.logRequired({ actor, action: 'data_sharing_agreement.update', entityType: 'data_sharing_agreement', entityId: id }, tx);
+    return updated;
     });
-    await this.audit.log({ actor, action: 'data_sharing_agreement.update', entityType: 'data_sharing_agreement', entityId: row.id });
     return this.decorateAgreement(row);
   }
 

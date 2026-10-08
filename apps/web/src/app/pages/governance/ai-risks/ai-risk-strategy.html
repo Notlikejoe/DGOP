@@ -1,3 +1,4 @@
+<app-ai-evidence-panel targetType="ai_risk" [targetId]="riskId()" />
 @if(failed()){<section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button class="ds-btn ds-btn--ghost" type="button" (click)="load()">{{ t('crud.retry') }}</button></section>}
 @if(context(); as c){
  @if(c.strategyCode === 'AVOID' || c.strategyCode === 'ESCALATE'){

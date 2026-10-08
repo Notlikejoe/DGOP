@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { ChangeDetectionStrategy, Component, inject, input, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -8,7 +9,7 @@ import { ToastService } from '../../../shared/toast.service';
 import { AiControlPicker, ControlTag } from './ai-control-picker';
 interface LinkVersion {id:string;round:number;digest:string;controlPins:ControlTag[];justification:string;review:{outcome:string;justification:string}|null}
 interface LinkContext {categoryMapping:{id:string;controlPins:ControlTag[]}|null;categoryIssue:boolean;canPropose:boolean;canReview:boolean;latestRound:number;controls:ControlTag[];versions:LinkVersion[]}
-@Component({selector:'app-ai-library-control-links',standalone:true,imports:[FormsModule,TableModule,AiControlPicker],templateUrl:'./ai-library-control-links.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-risks.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-library-control-links',standalone:true,imports:[AiEvidencePanel,FormsModule,TableModule,AiControlPicker],templateUrl:'./ai-library-control-links.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-risks.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiLibraryControlLinks {
  readonly versionId=input.required<string>();private readonly http=inject(HttpClient);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);protected readonly context=signal<LinkContext|null>(null);protected readonly selected=signal<string[]>([]);protected readonly reason=signal('');protected readonly evidence=signal('');protected readonly working=signal(false);protected readonly error=signal(false);private sequence=0;
  constructor(){effect(()=>{void this.load(this.versionId());});}protected t(k:string){return this.i18n.t(k);}

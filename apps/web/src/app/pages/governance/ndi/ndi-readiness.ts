@@ -11,6 +11,7 @@ import {
   GapType,
   MATURITY_KIND,
   ReadinessOverview,
+  ScenarioReadiness,
   SpecScoreRow,
   scoreKind,
 } from './scoring.types';
@@ -28,6 +29,8 @@ export class NdiReadinessPage implements OnInit {
 
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly data = signal<ReadinessOverview | null>(null);
+  protected readonly scenario = signal<ScenarioReadiness | null>(null);
+  protected readonly scenarioError = signal(false);
   protected readonly gapTypes = GAP_TYPES;
 
   // inline domain drill-down
@@ -42,6 +45,18 @@ export class NdiReadinessPage implements OnInit {
 
   protected load(): void {
     this.state.set('loading');
+    this.scenario.set(null);
+    this.scenarioError.set(false);
+    this.http.get<{ demoScenarioAvailable: boolean }>('/api/ndi/scoring/context').subscribe({
+      next: (context) => {
+        if (!context.demoScenarioAvailable) return;
+        this.http.get<ScenarioReadiness>('/api/ndi/scoring/scenario-readiness').subscribe({
+          next: (result) => this.scenario.set(result),
+          error: () => this.scenarioError.set(true),
+        });
+      },
+      error: () => this.scenarioError.set(true),
+    });
     this.http.get<ReadinessOverview>('/api/ndi/scoring/readiness').subscribe({
       next: (d) => {
         this.data.set(d);

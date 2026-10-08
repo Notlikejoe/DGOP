@@ -22,6 +22,16 @@ export interface ReadinessOverview {
   gapTotals: Record<GapType, number>;
 }
 
+export interface ScenarioReadiness {
+  demoOnly: true;
+  isComplianceClaim: false;
+  fixtureVersion: string;
+  evaluatedAt: string;
+  syntheticEvidenceCount: number;
+  operational: ReadinessOverview;
+  scenario: Omit<ReadinessOverview, 'scoringBasis'> & { scoringBasis: 'demonstration_scenario' };
+}
+
 export interface SpecScoreRow {
   id: string;
   code: string;

@@ -26,6 +26,8 @@ import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
 import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
+import { isManagedDemoProfile } from '../common/demo-profile';
+import { claimGovernanceWrite } from '../common/governance-write';
 import {
   CreateOpenDataCandidateDto,
   CreateOpenDataReviewDto,
@@ -237,14 +239,14 @@ export class OpenDataService {
     return OpenDataPersonalDataAssessment.personal_data;
   }
 
-  private async latestDqReadiness(assetId: string): Promise<{ score: number | null; scoreId: string | null }> {
-    const latestScore = await this.prisma.dataQualityScore.findFirst({
+  private async latestDqReadiness(assetId: string, client: PrismaService | Prisma.TransactionClient = this.prisma): Promise<{ score: number | null; scoreId: string | null }> {
+    const latestScore = await client.dataQualityScore.findFirst({
       where: { assetId },
       orderBy: { measuredAt: 'desc' },
       select: { id: true, score: true },
     });
     if (latestScore) return { score: latestScore.score, scoreId: latestScore.id };
-    const latestProfile = await this.prisma.dataQualityProfile.findFirst({
+    const latestProfile = await client.dataQualityProfile.findFirst({
       where: { assetId },
       orderBy: { createdAt: 'desc' },
       select: { qualityScore: true },
@@ -278,8 +280,9 @@ export class OpenDataService {
       personalDataAssessment?: OpenDataPersonalDataAssessment | null;
       publicationValueScore?: number | null;
     },
+    client: PrismaService | Prisma.TransactionClient = this.prisma,
   ) {
-    const asset = await this.prisma.dataAsset.findFirst({
+    const asset = await client.dataAsset.findFirst({
       where: { id: assetId, deletedAt: null },
       include: {
         classification: classificationSelect,
@@ -287,7 +290,7 @@ export class OpenDataService {
       },
     });
     if (!asset) throw new NotFoundException('data asset not found');
-    const dq = await this.latestDqReadiness(assetId);
+    const dq = await this.latestDqReadiness(assetId, client);
     const personalDataAssessment =
       input.personalDataAssessment ?? this.inferPersonalDataAssessment(asset);
     const eligibility = scoreOpenDataEligibility({
@@ -309,6 +312,14 @@ export class OpenDataService {
         reviewItems: eligibility.reviewItems,
         qualityScore: dq.score,
         classificationRank: asset.classification?.rank ?? null,
+        sourceFacts: {
+          assetId: asset.id, assetUpdatedAt: asset.updatedAt?.toISOString() ?? null,
+          classificationId: asset.classificationId, domainId: asset.domainId,
+          subjects: asset.subjects.map((row) => row.dataSubject.code).sort(),
+          ownerPersonId: input.ownerPersonId ?? null, stewardPersonId: input.stewardPersonId ?? null,
+          personalDataAssessment, publicationValueScore: input.publicationValueScore ?? 50,
+          qualityScoreId: dq.scoreId,
+        },
       },
     };
   }
@@ -420,6 +431,7 @@ export class OpenDataService {
             ? `System-generated evidence that ${candidate.code} completed Open Data assessment approval gates.`
             : `System-generated evidence that ${candidate.code} was published through the Open Data portal sync workflow.`,
         status: NdiEvidenceStatus.submitted,
+        provenance: kind === 'publication' ? 'generated_simulation' : isManagedDemoProfile() ? 'seeded_uat' : 'operational',
         fileName,
         originalName: fileName,
         mimeType: OPEN_DATA_SYSTEM_EVIDENCE_MIME,
@@ -441,17 +453,15 @@ export class OpenDataService {
     return roleCodes.some((role) => allowedSet.has(role));
   }
 
-  private assertApprovalAuthority(
+  private async assertApprovalAuthority(
     roleCodes: string[],
     candidate: CandidateWithInclude,
     approval: { step: string; workflowTaskId?: string | null },
     actor: string,
-  ): void {
-    if (roleCodes.includes('system_admin')) return;
-    if (approval.step === 'odiao' && candidate.createdBy === actor) {
-      throw new ForbiddenException('The submitter cannot make the final ODIAO approval decision');
+  ): Promise<void> {
+    if (candidate.createdBy === actor) {
+      throw new ForbiddenException('The submitter cannot approve their own Open Data candidate');
     }
-    if (this.hasAnyRole(roleCodes, OPEN_DATA_ADMIN_APPROVAL_ROLES)) return;
 
     const roleAllowed = this.hasAnyRole(roleCodes, OPEN_DATA_APPROVAL_ROLE_RULES[approval.step] ?? []);
     const personAllowed =
@@ -459,8 +469,13 @@ export class OpenDataService {
       (approval.step === 'steward' && candidate.stewardPerson?.email === actor) ||
       (approval.step === 'odiao' && candidate.odiaoReviewerPerson?.email === actor);
 
-    if (!roleAllowed && !personAllowed) {
+    if (!roleAllowed || (['owner', 'steward', 'odiao'].includes(approval.step) && !personAllowed)) {
       throw new ForbiddenException(`You cannot decide the ${approval.step} Open Data approval step`);
+    }
+    if (approval.workflowTaskId) {
+      const task = await this.prisma.workflowTask.findUnique({ where: { id: approval.workflowTaskId }, select: { assigneeUserId: true, assigneeRoleCode: true } });
+      const user = await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } });
+      if (!task || (task.assigneeUserId && task.assigneeUserId !== user?.id) || (!task.assigneeUserId && task.assigneeRoleCode && !roleCodes.includes(task.assigneeRoleCode))) throw new ForbiddenException('Only the assigned business reviewer can decide this Open Data task');
     }
   }
 
@@ -760,6 +775,8 @@ export class OpenDataService {
     });
     const complete = dto.complete ?? false;
     await this.prisma.$transaction(async (tx) => {
+      const signals = await this.buildEligibility(current.assetId, current, tx);
+      await claimGovernanceWrite(() => tx.openDataCandidate.update({ where: { id: current.id, updatedAt: current.updatedAt }, data: { eligibilityScore: signals.eligibility.eligibilityScore, eligibilityJson: signals.eligibilityJson, updatedBy: actor } }));
       await tx.openDataAssessment.create({
         data: {
           candidateId: current.id,
@@ -801,7 +818,7 @@ export class OpenDataService {
           data: { status: OpenDataCandidateStatus.assessment, updatedBy: actor },
         });
       }
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: complete ? 'open_data_assessment.complete' : 'open_data_assessment.save',
         entityType: 'open_data_candidate',
@@ -813,7 +830,7 @@ export class OpenDataService {
           blockers: result.blockers,
         },
       }, tx);
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return this.get(roleCodes, id);
   }
 
@@ -895,17 +912,19 @@ export class OpenDataService {
       where: { id: approvalId, candidateId: current.id },
     });
     if (!approval) throw new NotFoundException('open_data_approval not found');
-    this.assertApprovalAuthority(roleCodes, current, approval, actor);
+    await this.assertApprovalAuthority(roleCodes, current, approval, actor);
+    if (approval.decision !== OpenDataApprovalDecision.pending) throw new BadRequestException('This approval already has a decision; reassess changed facts before deciding again');
+    if (!dto.note?.trim()) throw new BadRequestException('A documented assessment is required for this approval');
     await this.prisma.$transaction(async (tx) => {
-      await tx.openDataApproval.update({
-        where: { id: approval.id },
+      await claimGovernanceWrite(() => tx.openDataApproval.update({
+        where: { id: approval.id, updatedAt: approval.updatedAt, decision: OpenDataApprovalDecision.pending },
         data: {
           decision: dto.decision,
           decidedBy: actor,
           decidedAt: new Date(),
           note: dto.note ?? null,
         },
-      });
+      }));
       if (approval.workflowTaskId) {
         if (!this.workflow) throw new BadRequestException('Workflow engine is unavailable');
         await this.workflow.recordDomainTaskDecision({
@@ -970,7 +989,7 @@ export class OpenDataService {
           data: { status, updatedBy: actor },
         });
       }
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: `open_data_approval.${dto.decision}`,
         entityType: 'open_data_candidate',
@@ -991,15 +1010,20 @@ export class OpenDataService {
     if (current.status !== OpenDataCandidateStatus.approved) {
       throw new BadRequestException('Only approved Open Data candidates can be published');
     }
-    const assessment = await this.latestCompletedAssessment(current.id);
-    const gate = await this.approvalGate(current.id);
-    this.assertPublicationReady(current, assessment, gate);
     const publishedAt = this.parseDateOrNow(dto.publishedAt);
     const nextReviewAt =
       this.parseNullableDate(dto.nextReviewAt) ??
       nextOpenDataReviewDate(publishedAt, current.publicationFrequency);
     const portalRecordId = dto.portalRecordId?.trim() || `${current.code}-PORTAL`;
     await this.prisma.$transaction(async (tx) => {
+      // A coherent snapshot prevents changing source facts or approvals from
+      // racing with publication. An old assessment never certifies new facts.
+      const signals = await this.buildEligibility(current.assetId, current, tx);
+      const assessment = await tx.openDataAssessment.findFirst({ where: { candidateId: current.id, status: OpenDataAssessmentStatus.completed }, orderBy: { completedAt: 'desc' } });
+      const approvals = await tx.openDataApproval.findMany({ where: { candidateId: current.id }, select: { step: true, decision: true } });
+      this.assertPublicationReady({ ...current, eligibilityScore: signals.eligibility.eligibilityScore, eligibilityJson: signals.eligibilityJson }, assessment, openDataApprovalGate(approvals));
+      if (JSON.stringify(current.eligibilityJson) !== JSON.stringify(signals.eligibilityJson)) throw new BadRequestException('Source facts changed since assessment. Reassess eligibility and obtain new independent approvals before publication.');
+      await claimGovernanceWrite(() => tx.openDataCandidate.update({ where: { id: current.id, status: OpenDataCandidateStatus.approved, updatedAt: current.updatedAt }, data: { updatedBy: actor } }));
       const publication = await tx.openDataPublication.create({
         data: {
           candidateId: current.id,
@@ -1037,14 +1061,14 @@ export class OpenDataService {
           updatedBy: actor,
         },
       });
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'open_data_publication.simulate',
         entityType: 'open_data_candidate',
         entityId: current.id,
         metadata: { portalRecordId, nextReviewAt: nextReviewAt?.toISOString() ?? null },
       }, tx);
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return this.get(roleCodes, id);
   }
 

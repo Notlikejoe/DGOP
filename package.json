@@ -17,7 +17,7 @@
     "db:local:start": "node scripts/local-postgres.mjs start",
     "db:local:stop": "node scripts/local-postgres.mjs stop",
     "db:local:status": "node scripts/local-postgres.mjs status",
-    "demo:prepare": "node scripts/prepare-demo-env.mjs",
+    "demo:prepare": "node scripts/demo.mjs prepare",
     "local:prepare": "node scripts/prepare-demo-env.mjs --local",
     "local:setup": "node scripts/local.mjs setup",
     "local:check": "node scripts/local.mjs check",
@@ -25,7 +25,7 @@
     "start:local": "node scripts/local.mjs start",
     "test:local": "node --test scripts/test/local.test.mjs",
     "test:local:integration": "node scripts/test/local.integration.mjs",
-    "qa:api": "node scripts/api-quality.mjs",
+    "qa:api": "node scripts/api-route-scan.test.mjs && node scripts/api-quality.mjs",
     "qa:web": "node scripts/web-quality.mjs",
     "qa:ui": "node scripts/ui-smoke.mjs",
     "qa": "npm run qa:api && npm run qa:web",
@@ -37,9 +37,30 @@
     "start:demo": "node scripts/start-demo.mjs",
     "dev": "node scripts/dev.mjs",
     "publish:external": "node scripts/publish.mjs",
-    "publish:external:dry-run": "node scripts/publish.mjs --dry-run"
+    "publish:external:dry-run": "node scripts/publish.mjs --dry-run",
+    "test:database": "node scripts/test-ai-foundation.mjs",
+    "demo:setup": "node scripts/demo.mjs setup",
+    "demo:start": "node scripts/demo.mjs start",
+    "demo:check": "node scripts/demo.mjs check",
+    "demo:stop": "node scripts/demo.mjs stop",
+    "demo:verify": "node scripts/demo.mjs verify",
+    "demo:backup": "node scripts/demo.mjs backup",
+    "demo:restore": "node scripts/demo.mjs restore",
+    "demo:recover": "node scripts/demo.mjs recover",
+    "demo:preflight": "node scripts/demo.mjs preflight",
+    "demo:soak": "node scripts/demo.mjs soak",
+    "test:demo": "node --test scripts/test/demo.test.mjs",
+    "demo:browser": "node scripts/demo-browser-qa.mjs",
+    "test:demo:native": "node scripts/test-demo-native.mjs",
+    "test:demo:runtime": "node scripts/test-demo-runtime.mjs",
+    "test:demo:journeys": "node scripts/test-demo-journeys.mjs",
+    "test:demo:soak": "node scripts/test-demo-soak.mjs",
+    "test:demo:restored-runtime": "node scripts/test-demo-restored-runtime.mjs",
+    "test:demo:register-browser": "node scripts/test-demo-register-browser.mjs",
+    "test:demo:browser-writes": "node scripts/test-demo-browser-writes.mjs"
   },
   "engines": {
-    "node": "^22.22.3 || ^24.15.0 || >=26"
-  }
+    "node": "24.19.x"
+  },
+  "packageManager": "npm@11.13.0"
 }

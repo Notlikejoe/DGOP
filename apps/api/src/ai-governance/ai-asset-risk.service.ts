@@ -5,6 +5,7 @@ import { ScopeService } from '../access/scope.service';
 import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { AI_RISK_REPORT_SELECT, projectRisk } from './ai-dashboard.service';
 import { jsonRecord } from './ai-risk-scoring';
+import { reportingAssessments, ReportAssessment, indexBy } from './ai-reporting-projection';
 import { aiReviewStatus } from './ai-risk-review.service';
 import { isSystemAdministrator } from '../auth/system-admin';
 @Injectable()
@@ -19,10 +20,11 @@ export class AiAssetRiskService {
   const where:Prisma.AiRiskWhereInput={AND:[a.where,{isSampleData:false,riskRef:{not:null},useCase:{is:{assetId,isSampleData:false,useCaseRef:{not:null},...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}})}}}]};return {...a,asset,where,aggregateOnly};
  }
  private async population(tx:Prisma.TransactionClient,userId:string,assetId:string){
-  const a=await this.access(tx,userId,assetId),asOf=new Date(),source=await tx.aiRisk.findMany({where:a.where,select:{...AI_RISK_REPORT_SELECT,useCase:{select:{useCaseRef:true,id:true}},workflowCase:{select:{id:true,code:true,status:true}},controlPins:true,suggestedControlPins:true},orderBy:[{riskRef:'asc'},{id:'asc'}]});
-  type Assessment={id:string;riskId:string;kind:string;round:number;result:Prisma.JsonValue;inputs:Prisma.JsonValue};
-  const latest=source.length?await tx.$queryRaw<Assessment[]>`SELECT DISTINCT ON ("riskId",kind) id,"riskId",kind,round,result,jsonb_build_object('inherentAssessmentId',inputs->'inherentAssessmentId') AS inputs FROM ai_assessment_rounds WHERE "riskId" IN (${Prisma.join(source.map(r=>r.id))}) AND kind::text IN ('inherent','residual') ORDER BY "riskId",kind,round DESC`:[];
-  const rows=source.map(r=>({...projectRisk({...r,assessments:latest.filter(x=>x.riskId===r.id)},asOf),caseId:r.workflowCase?.id,caseCode:r.workflowCase?.code,useCaseRef:r.useCase.useCaseRef,useCaseId:r.useCase.id,controlPins:r.controlPins,suggestedControlPins:r.suggestedControlPins}));return {a,asOf,rows};
+  const a=await this.access(tx,userId,assetId),asOf=new Date(),source=await tx.aiRisk.findMany({where:a.where,select:{...AI_RISK_REPORT_SELECT,useCase:{select:{useCaseRef:true,id:true,effectiveConfiguration:AI_RISK_REPORT_SELECT.useCase.select.effectiveConfiguration}},workflowCase:{select:{id:true,code:true,status:true}},controlPins:true,suggestedControlPins:true},orderBy:[{riskRef:'asc'},{id:'asc'}]});
+  type Assessment=ReportAssessment;
+  const latest=source.length?await tx.$queryRaw<Assessment[]>`SELECT DISTINCT ON ("riskId",kind) id,"riskId",kind,round,result,"createdAt",jsonb_build_object('inherentAssessmentId',inputs->'inherentAssessmentId') AS inputs FROM ai_assessment_rounds WHERE "riskId" IN (${Prisma.join(source.map(r=>r.id))}) AND kind::text IN ('inherent','residual') ORDER BY "riskId",kind,round DESC`:[];
+  const byRisk=indexBy(latest,a=>a.riskId);
+  const rows=source.map(r=>({...projectRisk({...r,assessments:reportingAssessments(r,byRisk.get(r.id)??[],r.useCase.effectiveConfiguration)},asOf),caseId:r.workflowCase?.id,caseCode:r.workflowCase?.code,useCaseRef:r.useCase.useCaseRef,useCaseId:r.useCase.id,controlPins:r.controlPins,suggestedControlPins:r.suggestedControlPins}));return {a,asOf,rows};
  }
  private detailOnly(a:{aggregateOnly:boolean}){if(a.aggregateOnly)throw new ForbiddenException('Executive asset risk access is aggregate only');}
  async summary(userId:string,assetId:string){return this.prisma.$transaction(async tx=>{const p=await this.population(tx,userId,assetId),open=p.rows.filter(r=>!['closed','archived','rejected','cancelled'].includes(r.status)),scored=open.filter(r=>r.residualScore!==null),highest=scored.sort((a,b)=>b.residualScore!-a.residualScore!)[0]??null,actions=open.flatMap(r=>r.actions);

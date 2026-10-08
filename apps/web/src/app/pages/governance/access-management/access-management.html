@@ -1173,7 +1173,13 @@
             </button>
           </div>
         }
-        @if (canEdit && !['expired', 'rejected', 'revoked'].includes(grant.status)) {
+        @if (canEdit && ['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(grant.status)) {
+          <div class="actions">
+            <button type="button" class="ds-btn ds-btn--danger" [disabled]="busy()" (click)="dispatch('revoke')">{{ t('access.action.confirmRemoval') }}</button>
+            <button type="button" class="ds-btn ds-btn--ghost" [disabled]="busy()" (click)="openManualCompletion()">{{ t('access.action.manualRemovalEvidence') }}</button>
+          </div>
+        }
+        @if (canEdit && !['expired', 'rejected', 'revoked', 'pending_revocation', 'revocation_failed', 'suspended'].includes(grant.status)) {
           <div class="actions grant-actions">
             <button
               type="button"
@@ -1212,13 +1218,15 @@
                   >{{ attempt.connectorCode }} &middot;
                   {{ date(attempt.completedAt || attempt.createdAt) }}</span
                 >
+                @if (attempt.responseJson?.requiresReconciliation) { <small class="risk-note">{{ t('access.detail.supersededObservation') }}</small> }
+                @if (attempt.responseJson?.simulated) { <small>{{ t('access.detail.simulated') }}</small> }
                 @if (attempt.responseJson?.evidenceReference) {
                   <small
                     >{{ t('access.field.evidence') }}:
                     {{ attempt.responseJson?.evidenceReference }}</small
                   >
                 }
-                @if (['queued', 'running', 'retrying'].includes(attempt.status) && canEdit) {
+                @if (['queued', 'running', 'retrying'].includes(attempt.status) && attempt.completionVersion && canEdit) {
                   <div class="attempt-actions">
                     <button
                       type="button"
@@ -1841,9 +1849,10 @@
     <label class="modal-field"
       ><span>{{ t('access.field.outcome') }}</span
       ><select [ngModel]="manualStatus()" (ngModelChange)="manualStatus.set($event)">
-        <option value="enforced">{{ t('access.value.enforced') }}</option>
+        @if (manualStatus() === 'revoked' || ['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(selected()?.status || '')) {
+          <option value="revoked">{{ t('access.value.revoked') }}</option>
+        } @else { <option value="enforced">{{ t('access.value.enforced') }}</option> }
         <option value="failed">{{ t('access.value.failed') }}</option>
-        <option value="not_enforced">{{ t('access.value.not_enforced') }}</option>
       </select></label
     >
     <label class="modal-field"

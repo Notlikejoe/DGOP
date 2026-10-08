@@ -256,7 +256,8 @@ export class ApplyAccessGrantRulesDto {
 
 export class CompleteManualAccessEnforcementDto {
   @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
-  @IsIn(["enforced", "failed", "not_enforced"]) enforcementStatus!: string;
+  @IsOptional() @IsIn(["grant", "revoke"]) operation?: "grant" | "revoke";
+  @IsIn(["enforced", "revoked", "failed"]) enforcementStatus!: string;
   @IsString() @IsNotEmpty() @MaxLength(500) evidenceReference!: string;
   @IsOptional() @IsString() @MaxLength(1200) comment?: string | null;
 }

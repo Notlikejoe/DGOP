@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { AiReviewQueryDto } from './ai-review-query.dto';
+import { RequireAnyPermissions } from '../auth/decorators';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
@@ -13,31 +15,33 @@ import {
 } from './ai-classification.dto';
 
 @Controller('ai/use-cases/classification')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiClassificationController {
   constructor(private readonly service: AiClassificationService) {}
 
   @Get('configuration')
-  @RequirePermissions('aiuc.classify.assess')
+  @RequireAnyPermissions('aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all')
   configuration(@CurrentUser() user: AuthUser) {
     return this.service.configuration(user.id);
   }
 
   @Get('queue')
-  @RequirePermissions('aiuc.classify.assess')
-  queue(@CurrentUser() user: AuthUser) {
-    return this.service.queue(user.id);
+  @RequireAnyPermissions('aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all')
+  queue(@CurrentUser() user: AuthUser, @Query() query: AiReviewQueryDto) {
+    return this.service.queue(user.id, query);
   }
 
   @Get('verification/queue')
-  @RequirePermissions('aiuc.classify.assess')
-  verificationQueue(@CurrentUser() user: AuthUser) {
-    return this.service.verificationQueue(user.id);
+  @RequireAnyPermissions('aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all')
+  verificationQueue(@CurrentUser() user: AuthUser, @Query() query: AiReviewQueryDto) {
+    return this.service.verificationQueue(user.id, query);
   }
 
   @Get('reviews/queue')
   @RequirePermissions('case.view.aiuc.org')
-  reviewQueue(@CurrentUser() user: AuthUser) {
-    return this.service.reviewQueue(user.id);
+  reviewQueue(@CurrentUser() user: AuthUser, @Query() query: AiReviewQueryDto) {
+    return this.service.reviewQueue(user.id, query);
   }
 
   @Post(':id/assess')
@@ -58,7 +62,7 @@ export class AiClassificationController {
     @CurrentUser() user: AuthUser,
     @Req() req: Request,
   ) {
-    return this.service.verify(user.id, id, dto.expectedVersion, dto.justification, req.ip ?? req.socket?.remoteAddress);
+    return this.service.verify(user.id, id, dto.expectedVersion, dto.justification, req.ip ?? req.socket?.remoteAddress, dto.evidenceIds);
   }
 
   @Post(':id/return')

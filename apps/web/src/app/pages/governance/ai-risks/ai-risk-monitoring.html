@@ -1,3 +1,4 @@
+<app-ai-evidence-panel targetType="ai_risk" [targetId]="riskId()" />
 <section class="assessment-workspace" [attr.aria-busy]="working()">
   @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }
   @else if (state() === 'error') { <section class="ds-card state-card"><p>{{ t('aiAdoption.error') }}</p><button type="button" class="ds-btn ds-btn--ghost" (click)="load()">{{ t('crud.retry') }}</button></section> }
@@ -25,7 +26,7 @@
     }
     @for(reversal of c.reversals; track reversal.id){<section class="ds-card decision-card"><h2>{{ t('aiMonitoring.reverse') }}</h2><p>{{ t('aiAssessment.role.'+reversal.actorRoleCode) }} · {{ reversal.createdAt | dgopDualDate:'medium':i18n.lang() }}</p><p>{{ reversal.justification }}</p><small>{{ t('aiMonitoring.previousDecision') }}: {{ reversal.previousDecisionId }}</small></section>}
     @for (reassessment of c.reassessments; track reassessment.id) { <section class="ds-card decision-card"><h2>{{ t('aiMonitoring.trigger.' + reassessment.triggerCode) }}</h2><p>{{ reassessment.justification }}</p><small>{{ t('aiAdoption.evidence') }}: {{ reassessment.evidenceIds.join(', ') }}</small><p>{{ reassessment.createdAt | dgopDualDate:'medium':i18n.lang() }}</p>@for (trigger of reassessment.additionalTriggers; track trigger.id) { <div class="override-notice"><div><strong>{{ t('aiMonitoring.trigger.' + trigger.triggerCode) }}</strong><p>{{ trigger.justification }}</p><small>{{ trigger.evidenceIds.join(', ') }} · {{ trigger.createdAt | dgopDualDate:'medium':i18n.lang() }}</small></div></div> }</section> }
-    @for (r of c.history; track r.id) {
+    @for (r of c.history; track r.id) {<app-ai-evidence-panel targetType="ai_risk_review" [targetId]="r.id" />
       <section class="ds-card decision-card specialist-decision"><header class="assessment-result"><h2>{{ t('aiAssessment.round') }} {{ r.round }} · {{ r.bandCode }} · {{ r.intervalDays }} {{ t('aiMonitoring.days') }}</h2><app-status-chip [kind]="r.status === 'overdue' ? 'danger' : 'info'" [label]="t('aiMonitoring.status.' + r.status)" /></header>
         <p>{{ t('aiMonitoring.due') }}: <strong>{{ r.dueAt | dgopDualDate:'medium':i18n.lang() }}</strong></p>
         <p>{{ t('aiReviews.cadence') }}: {{ (i18n.lang() === 'ar' ? r.displayCadenceLabelAr : r.displayCadenceLabelEn) || t('aiReviews.unpinned') }}</p>

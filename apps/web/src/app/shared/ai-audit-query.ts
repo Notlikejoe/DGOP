@@ -26,6 +26,8 @@ export class AiAuditQuery {
   ...(this.from?{from:new Date(this.from+'T00:00:00+03:00').toISOString()}:{}),...(this.to?{to:new Date(this.to+'T23:59:59.999+03:00').toISOString()}:{}),page,pageSize:20};}
  protected async load(id=this.caseId(),page=1){const sequence=++this.sequence;this.data.set(null);this.state.set('loading');
   this.census.set(null);this.chain.set(null);this.verificationError.set(false);
+  const canRead=(kind:'airs'|'aiuc')=>this.auth.hasAiPermission('case.view.'+kind+'.org')||this.auth.hasAiPermission('case.view.'+kind+'.all');
+  if(this.kind()==='all'?!(canRead('airs')&&canRead('aiuc')):!canRead(this.kind() as 'airs'|'aiuc')){this.state.set('hidden');return;}
   try{const result=await firstValueFrom(this.http.get<AuditPage>('/api/ai/audit',{params:this.params(id,page)}));if(sequence===this.sequence){this.data.set(result);this.state.set('ok');}}
   catch(e){if(sequence===this.sequence)this.state.set(e instanceof HttpErrorResponse&&e.status===403?'hidden':'error');}
  }

@@ -3,11 +3,13 @@ import { AiSeverity } from './ai-severity';
 import { AiRiskStrategy } from './ai-risk-strategy';
 import { AiControlPicker, ControlTag } from './ai-control-picker';
 import { AiRiskInitiation } from './ai-risk-initiation';
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
+import { AiRegisterPage } from '../../../core/auth.models';
+import { AuthService } from '../../../core/auth.service';
 import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { AppIcon } from '../../../shared/app-icon';
@@ -20,7 +22,7 @@ import { AiResidualReview } from './ai-residual-review';
 import { AiRiskMonitoring } from './ai-risk-monitoring';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
-import { TableModule } from 'primeng/table';
+import { TableModule, TableLazyLoadEvent } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { DialogModule } from 'primeng/dialog';
 import { ProgressBarModule } from 'primeng/progressbar';
@@ -46,10 +48,11 @@ interface RiskLookups {
 
 @Component({ selector: 'app-ai-risks', standalone: true, imports: [AiAuditQuery, AiSeverity, AiControlPicker,AiRiskInitiation, FormsModule, AppIcon, StatusChip, AiRiskAssessment, AiRiskAdoption, AiRiskResponse, AiRiskStrategy, AiTreatment, AiResidualReview, AiRiskMonitoring, InputTextModule, SelectModule, TableModule, TextareaModule, DialogModule, ProgressBarModule, RippleModule, TabsModule, TooltipModule],
   templateUrl: './ai-risks.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risks.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
-export class AiRisksPage implements OnInit {
+export class AiRisksPage implements OnInit, OnDestroy {
   @ViewChild('riskDetail') private riskDetail?: ElementRef<HTMLElement>;
   @ViewChild('riskIntake') private riskIntake?: ElementRef<HTMLElement>;
   private readonly http = inject(HttpClient);
+  protected readonly auth = inject(AuthService);
   protected readonly i18n = inject(I18nService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -88,16 +91,20 @@ export class AiRisksPage implements OnInit {
     ...this.otherFields,
   ]);
   protected readonly lifecycleSteps = [1, 2, 3, 4, 5, 6];
-  protected readonly filteredItems = computed(() => {
-    const search = this.riskSearch().trim().toLocaleLowerCase(), status = this.riskStatus();
-    return this.items().filter(item => (status === 'all' || item.workflowCase.status === status)
-      && (!search || [item.riskRef, item.workflowCase.code, item.title, item.useCase.useCaseRef, item.useCase.name, item.owner?.fullNameEn, item.owner?.fullNameAr]
-        .some(value => value?.toLocaleLowerCase().includes(search))));
-  });
-  protected readonly draftCount = computed(() => this.items().filter(item => item.workflowCase.status === 'draft').length);
-  protected readonly reviewCount = computed(() => this.items().filter(item => ['submitted', 'under_review', 'awaiting_information'].includes(item.workflowCase.status)).length);
-  protected readonly activeCount = computed(() => this.items().filter(item => ['approved', 'implemented'].includes(item.workflowCase.status)).length);
+  protected readonly page=signal(1);
+  protected readonly total=signal(0);
+  protected readonly population=signal({total:0,drafts:0,review:0,active:0});
+  private searchTimer:ReturnType<typeof setTimeout>|null=null;
+  private loadGeneration=0;
+  protected readonly filteredItems = computed(()=>this.items());
+  protected readonly draftCount = computed(()=>this.population().drafts);
+  protected readonly reviewCount = computed(()=>this.population().review);
+  protected readonly activeCount = computed(()=>this.population().active);
+  protected searchRisks(value:string):void {this.riskSearch.set(value);if(this.searchTimer)clearTimeout(this.searchTimer);this.searchTimer=setTimeout(()=>{this.page.set(1);void this.load();},300);}
+  protected filterStatus(value:string):void {this.riskStatus.set(value);this.page.set(1);void this.load();}
+  protected pageChanged(event:TableLazyLoadEvent):void {const next=Math.floor((event.first??0)/(event.rows??25))+1;if(this.page()!==next){this.page.set(next);void this.load();}}
   ngOnInit(): void { void this.load(); }
+  ngOnDestroy():void {if(this.searchTimer)clearTimeout(this.searchTimer);this.loadGeneration++;}
   protected t(key: string): string { return this.i18n.t(key); }
   protected statusOptions() { return ['all', 'draft', 'under_review', 'implemented', 'closed'].map(value => ({ value, label: this.t(`aiRisk.filter.${value}`) })); }
   protected stageNumber(item: RiskItem): number {
@@ -209,16 +216,19 @@ export class AiRisksPage implements OnInit {
     return !!this.ownerUserId() && !!this.ownerJustification().trim() && this.ownerUserId() !== item.owner?.userId;
   }
   protected async load(preferredId?: string): Promise<void> {
+    const generation=++this.loadGeneration;
     this.state.set('loading');
     try {
-      const [items, lookups] = await Promise.all([firstValueFrom(this.http.get<RiskItem[]>('/api/ai/risks')),
+      const [result, lookups] = await Promise.all([firstValueFrom(this.http.get<AiRegisterPage<RiskItem,{total:number;drafts:number;review:number;active:number}>>('/api/ai/risks?'+new URLSearchParams({page:String(this.page()),pageSize:'25',search:this.riskSearch(),status:this.riskStatus()}))),
         firstValueFrom(this.http.get<RiskLookups>('/api/ai/risks/lookups'))]);
-      if(preferredId&&!items.some(i=>i.id===preferredId))items.unshift(await firstValueFrom(this.http.get<RiskItem>(`/api/ai/risks/${preferredId}`)));
+      if(generation!==this.loadGeneration)return;
+      const items=result.data;this.total.set(result.total);this.population.set(result.summary);
       this.controls.set((await firstValueFrom(this.http.get<{rows:ControlTag[]}>('/api/ai/control-domains'))).rows);
-      const preferred = items.find(item => item.id === preferredId);
+      const preferred = items.find(item => item.id === preferredId)??(preferredId?await firstValueFrom(this.http.get<RiskItem>(`/api/ai/risks/${preferredId}`)):null);
       const completeExample = items.find(item => item.riskRef && ['implemented', 'approved', 'closed'].includes(item.workflowCase.status));
+      if(generation!==this.loadGeneration)return;
       this.items.set(items); this.lookups.set(lookups); this.select(preferred ?? completeExample ?? items[0] ?? null); this.state.set('ok');
-    } catch (error) { this.state.set('error'); this.toast.errorFrom(error, this.t('aiRisk.error')); }
+    } catch (error) { if(generation!==this.loadGeneration)return;this.state.set('error'); this.toast.errorFrom(error, this.t('aiRisk.error')); }
   }
   protected async assignOwner(): Promise<void> {
     const item = this.selected();

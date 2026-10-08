@@ -4,6 +4,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
 import { AuthService } from '../../../core/auth.service';
+import { ReferenceLookupsService } from '../../../core/reference-lookups.service';
 import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
@@ -79,6 +80,7 @@ export class OwnershipPage implements OnInit {
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
+  private readonly referenceLookups = inject(ReferenceLookupsService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
@@ -162,14 +164,14 @@ export class OwnershipPage implements OnInit {
 
   private loadLookups(): void {
     forkJoin({
-      roleTypes: this.http.get<Ref[]>('/api/role-types'),
-      people: this.http.get<Person[]>('/api/people'),
-      asset: this.http.get<Ref[]>('/api/assets'),
-      domain: this.http.get<Ref[]>('/api/data-domains'),
-      capability: this.http.get<Ref[]>('/api/business-capabilities'),
-      subject: this.http.get<Ref[]>('/api/data-subjects'),
-      org_unit: this.http.get<Ref[]>('/api/org-units'),
-      system: this.http.get<Ref[]>('/api/systems'),
+      roleTypes: this.referenceLookups.list<Ref>('role_types.view','/api/role-types'),
+      people: this.referenceLookups.list<Person>('people.view','/api/people'),
+      asset: this.referenceLookups.list<Ref>('data_assets.view','/api/assets'),
+      domain: this.referenceLookups.list<Ref>('data_domains.view','/api/data-domains'),
+      capability: this.referenceLookups.list<Ref>('business_capabilities.view','/api/business-capabilities'),
+      subject: this.referenceLookups.list<Ref>('data_subjects.view','/api/data-subjects'),
+      org_unit: this.referenceLookups.list<Ref>('org_units.view','/api/org-units'),
+      system: this.referenceLookups.list<Ref>('systems.view','/api/systems'),
     }).subscribe((r) => {
       this.roleTypes.set(r.roleTypes);
       this.people.set(r.people);
@@ -179,7 +181,7 @@ export class OwnershipPage implements OnInit {
       });
     });
     // Users power the "submit for approval" approver picker; tolerate missing users.view.
-    this.http.get<UserRef[]>('/api/users').subscribe({
+    this.referenceLookups.list<UserRef>('users.view','/api/users').subscribe({
       next: (u) => this.users.set(u),
       error: () => {},
     });

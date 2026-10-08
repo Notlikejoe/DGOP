@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { IsIn, IsOptional } from 'class-validator';
 import { Request } from 'express';
@@ -10,6 +11,8 @@ class SeverityDto extends CompleteAiRiskReviewDto {
  @IsOptional() @IsIn(['P1','P2','P3','P4']) severityCode?:string;
 }
 @Controller('ai/risks/:id/severity')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiSeverityController {
  constructor(private readonly severity:AiSeverityService){}
  @Get() context(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string){return this.severity.context(u.id,id);}

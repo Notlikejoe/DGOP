@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { isOperationalEvidence } from '../evidence/evidence-status';
 import {
   CreateNdiSpecDto,
   MATURITY_LEVELS,
@@ -96,7 +97,7 @@ export class NdiSpecificationsService {
           domain: { select: { id: true, code: true, shortCode: true, nameEn: true, nameAr: true } },
           evidence: {
             where: { deletedAt: null },
-            select: { status: true, expiryDate: true },
+            select: { status: true, expiryDate: true, provenance: true },
           },
         },
       }),
@@ -130,10 +131,9 @@ export class NdiSpecificationsService {
 
     const models = V5_DOMAIN_MODEL_DEFINITIONS.map((definition) => {
       const modelSpecs = specs.filter((spec) => definition.ndiDomainCodes.includes(spec.domain.code));
-      const evidence = modelSpecs.flatMap((spec) => spec.evidence);
-      const approvedEvidenceCount = evidence.filter(
-        (row) => row.status === 'approved' && (!row.expiryDate || row.expiryDate.getTime() > now.getTime()),
-      ).length;
+      const allEvidence = modelSpecs.flatMap((spec) => spec.evidence);
+      const evidence = allEvidence.filter((row) => row.provenance === 'operational');
+      const approvedEvidenceCount = evidence.filter((row) => isOperationalEvidence(row, now)).length;
       const expiredEvidenceCount = evidence.filter(
         (row) => row.status === 'expired' || (row.expiryDate && row.expiryDate.getTime() <= now.getTime()),
       ).length;
@@ -159,6 +159,7 @@ export class NdiSpecificationsService {
         evidenceQualityScore: evidenceQualityScore(input),
         openGapCount: domainModelGapCount(input),
         metrics: input,
+        excludedEvidenceCount: allEvidence.length - evidence.length,
         ndiDomains: [...new Map(modelSpecs.map((spec) => [spec.domain.id, spec.domain])).values()],
         nextAction: this.domainModelNextAction(input),
       };
@@ -166,6 +167,7 @@ export class NdiSpecificationsService {
 
     return {
       generatedAt: now.toISOString(),
+      scoringBasis: 'operational_evidence_only',
       summary: {
         models: models.length,
         ready: models.filter((row) => row.status === 'ready').length,

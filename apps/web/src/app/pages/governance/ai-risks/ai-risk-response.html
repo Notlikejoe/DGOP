@@ -1,3 +1,4 @@
+<app-ai-evidence-panel targetType="ai_risk" [targetId]="riskId()" />
 <section class="assessment-workspace" [attr.aria-busy]="working()">
   <header class="ds-card assessment-heading"><app-icon name="shield" /><div><h2>{{ t('aiResponse.title') }}</h2><p>{{ t('aiResponse.subtitle') }}</p></div><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working()" (click)="load()">{{ t('crud.retry') }}</button></header>
   @if (state() === 'loading') { <section class="ds-card state-card">{{ t('crud.loading') }}</section> }

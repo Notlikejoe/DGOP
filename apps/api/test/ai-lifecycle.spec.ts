@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { lifecycleTransition,lifecycleTier,independentLifecycleActor,operationalUseAllowed } from '../src/ai-governance/ai-lifecycle.logic';
+import { requiresAiDecisionProof } from '../src/ai-governance/ai-evidence.logic';
+const allowed:Record<string,Record<string,string>>={active:{change:'active',suspend:'suspended',retire:'retired'},suspended:{change:'suspended',resume:'active',retire:'retired'},retired:{}};
+for(const state of ['active','suspended','retired'])for(const action of ['change','suspend','resume','retire'])if(allowed[state][action])assert.equal(lifecycleTransition(state,action),allowed[state][action]);else assert.throws(()=>lifecycleTransition(state,action));
+assert.throws(()=>lifecycleTransition('unknown','suspend'));assert.equal(lifecycleTier('HIGH','MINIMAL'),'HIGH');assert.equal(lifecycleTier('LIMITED','HIGH'),'HIGH');assert.equal(lifecycleTier('MINIMAL','MINIMAL',['P2']),'HIGH');assert.equal(lifecycleTier('HIGH','HIGH',['P1']),'UNACCEPTABLE');assert.throws(()=>lifecycleTier('','HIGH'));
+for(const id of ['requester','owner','proposer','assessor','authority'])assert.equal(independentLifecycleActor(id,'requester','owner','proposer',['assessor'],'authority'),false);
+assert.equal(independentLifecycleActor('data-owner','requester','owner','proposer',['assessor'],'authority'),true);
+assert.equal(operationalUseAllowed('active',null),true);assert.equal(operationalUseAllowed('suspended',null),false);assert.equal(operationalUseAllowed('retired',null),false);assert.equal(operationalUseAllowed('active','SUSPENDED'),false);
+for(const stage of ['verification','privacy','security','ethics','authority','confirmation'])for(const outcome of ['approve','return','reject'])assert.equal(requiresAiDecisionProof('aiuc.lifecycle.'+stage+'.'+outcome),true);
+assert.equal(requiresAiDecisionProof('aiuc.lifecycle.proposed'),false);assert.equal(requiresAiDecisionProof('aiuc.lifecycle.assessment.recorded'),false);
+console.log('AI lifecycle: transition matrix, conservative authority, independence, operation restrictions and final-proof contracts passed');

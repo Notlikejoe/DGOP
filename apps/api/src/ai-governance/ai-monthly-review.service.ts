@@ -5,6 +5,9 @@ import { AuditService } from '../audit/audit.service';
 import { AiAnnualReviewService } from './ai-annual-review.service';
 import { aggregateReviewMeasures } from './ai-review-report.service';
 
+import { AiReviewQueryDto, aiReviewParams } from './ai-review-query.dto';
+import { scopedHistoryPage, visibleSnapshots, snapshotMemberIds } from './ai-review-history';
+
 export function monthlyReviewWindow(month:string,now=new Date()){
   if(!/^\d{4}-(0[1-9]|1[0-2])$/u.test(month)||Number(month.slice(0,4))<2000)throw new BadRequestException('Use a valid closed reporting month YYYY-MM');
   const year=Number(month.slice(0,4)),m=Number(month.slice(5)),start=new Date(Date.UTC(year,m-1,1)-10800000),end=new Date(Date.UTC(year,m,1)-10800001);
@@ -28,15 +31,21 @@ export class AiMonthlyReviewService {
     },options);
   }
   private async visible(tx:Prisma.TransactionClient,userId:string,row:{organizationUnitId:string;members:Prisma.JsonValue}){
-    const access=await this.annual.registerScope(tx,userId,row.organizationUnitId),members=row.members as Array<{id:string}>;
-    if(!Array.isArray(members)||members.some(m=>typeof m?.id!=='string')||await tx.aiRisk.count({where:{AND:[access.where,{id:{in:members.map(m=>m.id)}}]}})!==members.length)throw new ForbiddenException('Monthly snapshot source is outside current register visibility');
-    return members.length;
+    const access=await this.annual.historyScope(tx,userId,row.organizationUnitId);
+    if(!(await visibleSnapshots(tx,access.where,[row],r=>r.members)).length)throw new ForbiddenException('Monthly snapshot source is outside current register visibility');
+    return snapshotMemberIds(row.members)!.length;
   }
-  async list(userId:string,unitId:string){return this.prisma.$transaction(async tx=>{
-    await this.annual.registerScope(tx,userId,unitId);
-    const rows=await tx.aiMonthlyReviewReport.findMany({where:{organizationUnitId:unitId},orderBy:{periodMonth:'desc'},take:24});
-    const result:Array<{id:string;periodMonth:string;capturedAt:Date;sourceCount:number}>=[];for(const r of rows){const sourceCount=await this.visible(tx,userId,r);result.push({id:r.id,periodMonth:r.periodMonth,capturedAt:r.capturedAt,sourceCount});}return result;
-  },options);}
+  async list(userId:string,unitId:string,query:AiReviewQueryDto=new AiReviewQueryDto()){
+    aiReviewParams(query);
+    return this.prisma.$transaction(async tx=>{
+      const access=await this.annual.historyScope(tx,userId,unitId),search=(query.search??'').trim();
+      const where:Prisma.AiMonthlyReviewReportWhereInput={organizationUnitId:unitId,...(search?{periodMonth:{contains:search,mode:'insensitive'}}:{})};
+      let sourceCount=0;
+      const paged=await scopedHistoryPage(query,cursor=>tx.aiMonthlyReviewReport.findMany({where,select:{id:true,periodMonth:true,capturedAt:true,members:true},orderBy:[{periodMonth:'desc'},{id:'asc'}],take:200,...(cursor?{cursor:{id:cursor},skip:1}:{})}),rows=>visibleSnapshots(tx,access.where,rows,r=>r.members),r=>{sourceCount+=snapshotMemberIds(r.members)!.length;});
+      const rows=await tx.aiMonthlyReviewReport.findMany({where:{id:{in:paged.ids}},select:{id:true,periodMonth:true,capturedAt:true,members:true},orderBy:[{periodMonth:'desc'},{id:'asc'}]});
+      return {...paged.envelope,data:rows.map(r=>({id:r.id,periodMonth:r.periodMonth,capturedAt:r.capturedAt,sourceCount:snapshotMemberIds(r.members)!.length})),summary:{total:paged.envelope.total,sourceCount},readOnly:true};
+    },options);
+  }
   async get(userId:string,id:string){return this.prisma.$transaction(async tx=>{
     const row=await tx.aiMonthlyReviewReport.findUnique({where:{id}});if(!row)throw new NotFoundException('Monthly snapshot not found');
     const sourceCount=await this.visible(tx,userId,row);return {id:row.id,organizationUnitId:row.organizationUnitId,periodMonth:row.periodMonth,periodStart:row.periodStart,periodEnd:row.periodEnd,capturedAt:row.capturedAt,sourceCount,measures:row.measures,readOnly:true};

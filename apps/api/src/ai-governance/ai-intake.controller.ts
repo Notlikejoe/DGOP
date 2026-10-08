@@ -1,10 +1,15 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { AiReviewQueryDto } from './ai-review-query.dto';
+import { RequireAnyPermissions } from '../auth/decorators';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { AiRegisterQueryDto } from './ai-register-query.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import { CloseAiIntakeDto, CreateAiIntakeDraftDto, SubmitAiIntakeDto, TriageAiIntakeDto, UpdateAiIntakeDraftDto } from './ai-intake.dto';
 import { AiIntakeService } from './ai-intake.service';
 
 @Controller('ai/use-cases')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiIntakeController {
   constructor(private readonly service: AiIntakeService) {}
 
@@ -15,8 +20,8 @@ export class AiIntakeController {
   }
 
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.service.listVisible(user.id);
+  list(@CurrentUser() user: AuthUser,@Query() query:AiRegisterQueryDto) {
+    return this.service.listVisible(user.id,query);
   }
 
   @Get('lookups')
@@ -25,9 +30,9 @@ export class AiIntakeController {
   }
 
   @Get('triage')
-  @RequirePermissions('aiuc.classify.assess')
-  triageQueue(@CurrentUser() user: AuthUser) {
-    return this.service.triageQueue(user.id);
+  @RequireAnyPermissions('aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all')
+  triageQueue(@CurrentUser() user: AuthUser, @Query() query: AiReviewQueryDto) {
+    return this.service.triageQueue(user.id, query);
   }
 
   @Get(':id')

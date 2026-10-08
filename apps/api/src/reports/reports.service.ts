@@ -12,6 +12,7 @@ import { AccessService } from '../access/access.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { foiSlaStatus } from '../foi/foi.logic';
+import { isOperationalEvidence, operationalEvidenceWhere } from '../evidence/evidence-status';
 import {
   filterDefinitions,
   toCsv,
@@ -150,7 +151,7 @@ export class ReportsService {
     if (format === 'csv') {
       return { filename: `${stem}.csv`, contentType: 'text/csv; charset=utf-8', body: toCsv(result) };
     }
-    return { filename: `${stem}.pdf`, contentType: 'application/pdf', body: toSimplePdf(result) };
+    return { filename: `${stem}.pdf`, contentType: 'application/pdf', body: await toSimplePdf(result) };
   }
 
   private assetScopeWhere(scope: EffectiveScope): Prisma.DataAssetWhereInput {
@@ -432,8 +433,9 @@ export class ReportsService {
         asset: { select: { code: true, nameEn: true } },
       },
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-      take: 500,
+      take: 20001,
     });
+    if (rows.length > 20000) throw new BadRequestException('Report exceeds 20,000 records. Narrow the date or status filters; no partial report was generated.');
     return this.result(
       'open-data-workload',
       'Open Data workload',
@@ -480,8 +482,9 @@ export class ReportsService {
         appeals: { select: { id: true } },
       },
       orderBy: [{ dueAt: 'asc' }],
-      take: 500,
+      take: 20001,
     });
+    if (rows.length > 20000) throw new BadRequestException('Report exceeds 20,000 records. Narrow the date or status filters; no partial report was generated.');
     const mapped = rows.map((row) => ({
       requestNumber: row.requestNumber,
       requester: row.requesterName,
@@ -511,6 +514,7 @@ export class ReportsService {
   }
 
   private async ndiReadiness(user: AuthUser, filters: ReportFilters): Promise<ReportResult> {
+    const evaluatedAt = new Date();
     const scope = await this.scope.resolve(user.roles);
     const unrestricted = this.isUnrestricted(scope);
     const [specWhere, evidenceWhere] = await Promise.all([
@@ -526,7 +530,7 @@ export class ReportsService {
           select: {
             id: true,
             code: true,
-            evidence: { where: evidenceWhere, select: { status: true } },
+            evidence: { where: { AND: [evidenceWhere, operationalEvidenceWhere(evaluatedAt)] }, select: { status: true, provenance: true, expiryDate: true, deletedAt: true } },
           },
         },
       },
@@ -534,7 +538,7 @@ export class ReportsService {
     const visibleDomains = unrestricted ? domains : domains.filter((domain) => domain.specifications.length > 0);
     const rows = visibleDomains.map((domain) => {
       const specs = domain.specifications;
-      const approved = specs.filter((spec) => spec.evidence.some((evidence) => evidence.status === NdiEvidenceStatus.approved)).length;
+      const approved = specs.filter((spec) => spec.evidence.some((evidence) => isOperationalEvidence(evidence, evaluatedAt))).length;
       return {
         domain: domain.shortCode ?? domain.code,
         name: domain.nameEn,

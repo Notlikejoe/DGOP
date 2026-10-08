@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsString, IsUUID, Length, Matches } from 'class-validator';
 import type { Response } from 'express';
@@ -19,10 +20,12 @@ class DispositionPreviewDto extends PreviewEvidenceDto {
  @IsIn(['defer','reject']) outcome!:string;
 }
 @Controller('ai/migration-previews')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiMigrationPreviewController {
  constructor(private readonly previews:AiMigrationPreviewService){}
  @Get('context') context(@CurrentUser() u:AuthUser){return this.previews.context(u.id);}
- @Get() list(@CurrentUser() u:AuthUser,@Query('page',new DefaultValuePipe(1),ParseIntPipe) page:number,@Query('pageSize',new DefaultValuePipe(20),ParseIntPipe) size:number){return this.previews.list(u.id,page,size);}
+ @Get() list(@CurrentUser() u:AuthUser,@Query('page',new DefaultValuePipe(1),ParseIntPipe) page:number,@Query('pageSize',new DefaultValuePipe(25),ParseIntPipe) size:number,@Query('search') search=''){return this.previews.list(u.id,page,size,search);}
  @Post() create(@CurrentUser() u:AuthUser,@Body() dto:CreatePreviewDto){return this.previews.create(u.id,dto);}
  @Get(':id') get(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string){return this.previews.get(u.id,id);}
  @Post(':id/dispositions') disposition(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:DispositionPreviewDto){return this.previews.disposition(u.id,id,dto);}

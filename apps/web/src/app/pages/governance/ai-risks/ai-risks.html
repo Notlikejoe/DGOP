@@ -2,7 +2,7 @@
   <header class="page__header review-hero risk-hero">
     <div><span class="eyebrow">{{ t('aiRisk.eyebrow') }}</span><h1>{{ t('aiRisk.title') }}</h1><p class="page__subtitle">{{ t('aiRisk.subtitle') }}</p></div>
     <div class="risk-hero-actions">
-      <button type="button" class="ds-btn ds-btn--primary" pRipple (click)="createOpen.set(true)">+ {{ t('aiRisk.add') }}</button>
+      @if (auth.hasAiPermission('case.create.airs')) { <button type="button" class="ds-btn ds-btn--primary" pRipple (click)="createOpen.set(true)">+ {{ t('aiRisk.add') }}</button> }
       <button type="button" class="ds-btn ds-btn--ghost" pRipple [disabled]="working()" (click)="load(selected()?.id)"><app-icon name="refresh" />{{ t('crud.retry') }}</button>
     </div>
   </header>
@@ -15,7 +15,7 @@
     <section class="ds-card state-card"><p>{{ t('aiRisk.error') }}</p><button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button></section>
   } @else {
     <section class="risk-metrics admin-metrics review-metrics" [attr.aria-label]="t('aiRisk.metrics.title')">
-      <article class="admin-metric admin-metric--primary" [pTooltip]="t('aiRisk.metrics.allHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="listCheck" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.all') }}</small><strong>{{ items().length }}</strong></span></article>
+      <article class="admin-metric admin-metric--primary" [pTooltip]="t('aiRisk.metrics.allHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="listCheck" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.all') }}</small><strong>{{ population().total }}</strong></span></article>
       <article class="admin-metric admin-metric--muted" [pTooltip]="t('aiRisk.metrics.draftsHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="edit" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.drafts') }}</small><strong>{{ draftCount() }}</strong></span></article>
       <article class="admin-metric admin-metric--warning" [pTooltip]="t('aiRisk.metrics.reviewHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="searchAlert" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.review') }}</small><strong>{{ reviewCount() }}</strong></span></article>
       <article class="admin-metric admin-metric--success" [pTooltip]="t('aiRisk.metrics.activeHelp')" tooltipPosition="top"><span class="admin-metric__icon"><app-icon name="shield" /></span><span class="risk-metric-copy"><small>{{ t('aiRisk.metrics.active') }}</small><strong>{{ activeCount() }}</strong></span></article>
@@ -33,13 +33,13 @@
 
     <section class="ds-card risk-register-table">
       <header class="risk-register-heading">
-        <div><span class="eyebrow">{{ t('aiRisk.register') }} · {{ filteredItems().length }}/{{ items().length }}</span><h2>{{ t('aiRisk.tableTitle') }}</h2><p>{{ t('aiRisk.tableHelp') }}</p></div>
+        <div><span class="eyebrow">{{ t('aiRisk.register') }} · {{ filteredItems().length }}/{{ population().total }}</span><h2>{{ t('aiRisk.tableTitle') }}</h2><p>{{ t('aiRisk.tableHelp') }}</p></div>
         <div class="risk-register-tools">
-          <label class="risk-search"><span class="sr-only">{{ t('aiRisk.search') }}</span><input pInputText type="search" [placeholder]="t('aiRisk.search')" [ngModel]="riskSearch()" [ngModelOptions]="{standalone:true}" (ngModelChange)="riskSearch.set($event)" /></label>
-          <p-select [options]="statusOptions()" optionLabel="label" optionValue="value" [ngModel]="riskStatus()" [ngModelOptions]="{standalone:true}" (ngModelChange)="riskStatus.set($event)" [ariaLabel]="t('aiRisk.filterLabel')" />
+          <label class="risk-search"><span class="sr-only">{{ t('aiRisk.search') }}</span><input pInputText type="search" [placeholder]="t('aiRisk.search')" [ngModel]="riskSearch()" [ngModelOptions]="{standalone:true}" maxlength="200" (ngModelChange)="searchRisks($event)" /></label>
+          <p-select [options]="statusOptions()" optionLabel="label" optionValue="value" [ngModel]="riskStatus()" [ngModelOptions]="{standalone:true}" (ngModelChange)="filterStatus($event)" [ariaLabel]="t('aiRisk.filterLabel')" />
         </div>
       </header>
-      <p-table class="risk-register-grid" [value]="filteredItems()" dataKey="id" size="small" [rowHover]="true" [stripedRows]="true" [showGridlines]="true" [scrollable]="true" [paginator]="filteredItems().length > 8" [rows]="8" [tableStyle]="{'min-width':'58rem'}">
+      <p-table class="risk-register-grid" [value]="filteredItems()" dataKey="id" size="small" [rowHover]="true" [stripedRows]="true" [showGridlines]="true" [scrollable]="true" [paginator]="total() > 25" [rows]="25" [lazy]="true" [totalRecords]="total()" [first]="(page()-1)*25" (onLazyLoad)="pageChanged($event)" [tableStyle]="{'min-width':'58rem'}">
         <ng-template #header><tr>
           <th>{{ t('aiDashboard.reference') }}</th><th>{{ t('aiRisk.tableRisk') }}</th><th>{{ t('aiInitiation.useCase') }}</th><th>{{ t('aiRisk.field.risk_category') }}</th><th>{{ t('aiRisk.owner') }}</th><th>{{ t('aiRisk.lifecycle.column') }}</th><th>{{ t('crud.actions') }}</th>
         </tr></ng-template>
@@ -251,6 +251,6 @@
 
   <p-dialog styleClass="risk-create-dialog" [visible]="createOpen()" (visibleChange)="createOpen.set($event)" [modal]="true" [resizable]="true" [draggable]="true" [maximizable]="true" [keepInViewport]="true" [blockScroll]="true" [style]="{width:'64rem','max-width':'96vw','max-height':'92vh'}" [contentStyle]="{overflow:'auto','max-height':'calc(92vh - 4rem)'}" [breakpoints]="{'960px':'92vw','640px':'98vw'}">
     <ng-template #header><div class="risk-dialog-head"><span class="eyebrow">{{ t('aiRisk.stage.1') }}</span><strong>{{ t('aiRisk.add') }}</strong><small>{{ t('aiRisk.windowHint') }}</small></div></ng-template>
-    @if (createOpen()) { <app-ai-risk-initiation (created)="createdRisk($event)" /> }
+    @if (createOpen() && auth.hasAiPermission('case.create.airs')) { <app-ai-risk-initiation (created)="createdRisk($event)" /> }
   </p-dialog>
 </section>

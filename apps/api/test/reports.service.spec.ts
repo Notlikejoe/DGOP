@@ -50,7 +50,7 @@ test('report catalog hides definitions without an underlying permission', () => 
   assert.deepEqual(visible.map((definition) => definition.id), ['allowed']);
 });
 
-test('CSV export quotes commas and PDF export returns a PDF buffer', () => {
+test('CSV export quotes commas and PDF export returns a PDF buffer', async () => {
   const result = {
     id: 'r1',
     title: 'Report',
@@ -64,7 +64,7 @@ test('CSV export quotes commas and PDF export returns a PDF buffer', () => {
   };
   const csv = toCsv(result);
   assert.ok(csv.includes('"Finance, Customer"'));
-  const pdf = toSimplePdf(result);
+  const pdf = await toSimplePdf(result);
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
 });
 

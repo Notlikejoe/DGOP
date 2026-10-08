@@ -5,6 +5,7 @@ import {
   MetadataCertificationStatus,
   ReferenceDataVersionStatus,
 } from '@prisma/client';
+import { MdmRuleConfig } from './mdm-rule';
 
 export function clampScore(value: number | undefined, fallback = 0): number {
   const score = Math.round(Number(value ?? fallback));
@@ -69,6 +70,7 @@ export interface MdmMatchEvaluation {
 export interface MdmMatchRunOptions {
   threshold?: number;
   limit?: number;
+  rule?: MdmRuleConfig;
 }
 
 const MDM_STOP_WORDS = new Set([
@@ -185,8 +187,10 @@ export function canonicalMdmPairKey(sourceAssetId: string, candidateAssetId: str
 export function evaluateMdmMatch(
   source: MdmMatchAssetProfile,
   candidate: MdmMatchAssetProfile,
+  rule?: MdmRuleConfig,
 ): MdmMatchEvaluation | null {
   if (source.id === candidate.id) return null;
+  if (rule?.blockingFields.some((field) => !source[field] || source[field] !== candidate[field])) return null;
 
   const sourceTrust = sourceTrustRank(source);
   const candidateTrust = sourceTrustRank(candidate);
@@ -273,22 +277,26 @@ export function evaluateMdmMatch(
     },
   ];
 
-  const activeFactors = factors.filter((factor) => factor.score > 0 || factor.key === 'code' || factor.key === 'name');
+  if (rule?.weights) for (const factor of factors) factor.weight = rule.weights[factor.key] ?? 0;
+  const activeFactors = factors.filter((factor) => factor.weight > 0 && (rule?.weights || factor.score > 0 || factor.key === 'code' || factor.key === 'name'));
   const weightedFactors = activeFactors.length ? activeFactors : factors;
   const weightedTotal = weightedFactors.reduce((sum, factor) => sum + factor.score * factor.weight, 0);
   const totalWeight = weightedFactors.reduce((sum, factor) => sum + factor.weight, 0);
   const baseScore = clampScore(weightedTotal / totalWeight);
   const matchScore =
-    externalIdScore === 100
+    !rule?.weights && externalIdScore === 100
       ? Math.max(baseScore, 96)
-      : externalIdScore >= 88
+      : !rule?.weights && externalIdScore >= 88
         ? Math.max(baseScore, 86)
         : baseScore;
   const confidence = matchConfidence(matchScore);
   const pairKey = canonicalMdmPairKey(source.id, candidate.id);
   const resolutionStep = defaultMatchStep(matchScore);
   const status = defaultMatchStatus(matchScore);
-  const preferredSource = sourceTrust >= candidateTrust ? source : candidate;
+  const preferredSource = rule?.survivorship === 'source' ? source : rule?.survivorship === 'candidate' ? candidate : sourceTrust >= candidateTrust ? source : candidate;
+  const survivingValue = (field: keyof MdmMatchAssetProfile) => rule?.survivorship === 'source' || rule?.survivorship === 'candidate'
+    ? preferredSource[field] || (preferredSource === source ? candidate[field] : source[field]) || null
+    : preferredValue(source, candidate, field, sourceTrust, candidateTrust);
   const explanation = `${confidence} confidence match: ${factors
     .filter((factor) => factor.score >= 70)
     .map((factor) => factor.label.toLowerCase())
@@ -315,15 +323,15 @@ export function evaluateMdmMatch(
     confidence,
     preferredRecordAssetId: preferredSource.id,
     fields: {
-      code: preferredValue(source, candidate, 'code', sourceTrust, candidateTrust),
-      nameEn: preferredValue(source, candidate, 'nameEn', sourceTrust, candidateTrust),
-      nameAr: preferredValue(source, candidate, 'nameAr', sourceTrust, candidateTrust),
-      description: preferredValue(source, candidate, 'description', sourceTrust, candidateTrust),
-      domainId: preferredValue(source, candidate, 'domainId', sourceTrust, candidateTrust),
-      systemId: preferredValue(source, candidate, 'systemId', sourceTrust, candidateTrust),
-      capabilityId: preferredValue(source, candidate, 'capabilityId', sourceTrust, candidateTrust),
-      classificationId: preferredValue(source, candidate, 'classificationId', sourceTrust, candidateTrust),
-      ownerName: preferredValue(source, candidate, 'ownerName', sourceTrust, candidateTrust),
+      code: survivingValue('code'),
+      nameEn: survivingValue('nameEn'),
+      nameAr: survivingValue('nameAr'),
+      description: survivingValue('description'),
+      domainId: survivingValue('domainId'),
+      systemId: survivingValue('systemId'),
+      capabilityId: survivingValue('capabilityId'),
+      classificationId: survivingValue('classificationId'),
+      ownerName: survivingValue('ownerName'),
     },
   };
 
@@ -359,7 +367,7 @@ export function rankMdmMatches(
       const pairKey = canonicalMdmPairKey(source.id, candidate.id);
       if (seen.has(pairKey)) continue;
       seen.add(pairKey);
-      const evaluation = evaluateMdmMatch(source, candidate);
+      const evaluation = evaluateMdmMatch(source, candidate, options.rule);
       if (evaluation && evaluation.matchScore >= threshold) evaluations.push(evaluation);
     }
   }

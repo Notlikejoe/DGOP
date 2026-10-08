@@ -11,18 +11,23 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
-    "test": "ts-node test/runtime-safety.spec.ts && ts-node test/business-sequence.spec.ts && ts-node test/health.controller.spec.ts && ts-node test/auth.service.spec.ts && ts-node test/access.service.spec.ts && ts-node test/bounded-lists.spec.ts && ts-node test/scope.service.spec.ts && ts-node test/roles.service.spec.ts && ts-node test/master-data.service.spec.ts && ts-node test/assets.service.spec.ts && ts-node test/ownership.service.spec.ts && ts-node test/workflow.service.spec.ts && ts-node test/ndi.service.spec.ts && ts-node test/evidence.service.spec.ts && ts-node test/audit.service.spec.ts && ts-node test/audit.controller.spec.ts && ts-node test/scoring.service.spec.ts && ts-node test/training.service.spec.ts && ts-node test/data-quality.service.spec.ts && ts-node test/security-governance.service.spec.ts && ts-node test/integrations.service.spec.ts && ts-node test/open-data.service.spec.ts && ts-node test/foi.service.spec.ts && ts-node test/privacy.service.spec.ts && ts-node test/data-sharing.service.spec.ts && ts-node test/transparency.service.spec.ts && ts-node test/reports.service.spec.ts && ts-node test/audit-packs.service.spec.ts && ts-node test/extended-domains.service.spec.ts && ts-node test/business-value.service.spec.ts && ts-node test/governance-operations.service.spec.ts && ts-node test/governance-lifecycle.logic.spec.ts && ts-node test/error-experience.spec.ts && ts-node test/search.service.spec.ts && ts-node test/dashboard.service.spec.ts && npm run test:ai-foundation && ts-node test/ai-security.spec.ts",
-    "test:ai-foundation": "ts-node test/ai-governance.contracts.spec.ts && ts-node test/ai-intake.spec.ts && ts-node test/ai-risk-scoring.spec.ts",
-    "seed:ai-security": "ts-node prisma/seed-ai-security.ts"
+    "test": "ts-node test/runtime-safety.spec.ts && ts-node test/business-sequence.spec.ts && ts-node test/health.controller.spec.ts && ts-node test/auth.service.spec.ts && ts-node test/access.service.spec.ts && ts-node test/bounded-lists.spec.ts && ts-node test/scope.service.spec.ts && ts-node test/roles.service.spec.ts && ts-node test/master-data.service.spec.ts && ts-node test/assets.service.spec.ts && ts-node test/ownership.service.spec.ts && ts-node test/workflow.service.spec.ts && ts-node test/ndi.service.spec.ts && ts-node test/evidence.service.spec.ts && ts-node test/audit.service.spec.ts && ts-node test/audit.controller.spec.ts && ts-node test/scoring.service.spec.ts && ts-node test/training.service.spec.ts && ts-node test/data-quality.service.spec.ts && ts-node test/security-governance.service.spec.ts && ts-node test/integrations.service.spec.ts && ts-node test/open-data.service.spec.ts && ts-node test/foi.service.spec.ts && ts-node test/privacy.service.spec.ts && ts-node test/data-sharing.service.spec.ts && ts-node test/transparency.service.spec.ts && ts-node test/reports.service.spec.ts && ts-node test/audit-packs.service.spec.ts && ts-node test/extended-domains.service.spec.ts && ts-node test/business-value.service.spec.ts && ts-node test/governance-operations.service.spec.ts && ts-node test/governance-lifecycle.logic.spec.ts && ts-node test/error-experience.spec.ts && ts-node test/search.service.spec.ts && ts-node test/dashboard.service.spec.ts && npm run test:ai-foundation && ts-node test/ai-security.spec.ts && ts-node test/ai-stability.spec.ts && ts-node test/access-privacy-stability.spec.ts && ts-node test/evidence-eligibility.spec.ts && ts-node test/demo-access-connector.spec.ts",
+    "test:ai-foundation": "ts-node test/ai-governance.contracts.spec.ts && ts-node test/ai-intake.spec.ts && ts-node test/ai-risk-scoring.spec.ts && ts-node test/ai-decision-integrity.spec.ts && ts-node test/ai-review-queue.spec.ts && ts-node test/ai-review-history.spec.ts && ts-node test/ai-evidence.spec.ts && ts-node test/ai-lifecycle.spec.ts && ts-node test/ai-reporting.spec.ts && ts-node test/ai-source-parser.spec.ts && ts-node test/ai-source-native-replay.spec.ts && ts-node test/ai-reporting-proof.spec.ts",
+    "test:ai-decision-integrity:database": "ts-node test/ai-decision-integrity.integration.ts",
+    "seed:ai-security": "ts-node prisma/seed-ai-security.ts",
+    "test:stability:database": "ts-node test/access-privacy-stability.integration.ts",
+    "test:ai-review-queues:database": "ts-node test/ai-review-queue.integration.ts",
+    "test:ai-review-history:database": "ts-node test/ai-review-history.integration.ts"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.0",
+    "@nestjs/common": "11.2.7",
     "@nestjs/config": "^4.0.0",
-    "@nestjs/core": "^11.0.0",
+    "@nestjs/core": "11.2.7",
     "@nestjs/jwt": "^11.0.0",
-    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/platform-express": "11.2.7",
     "@prisma/client": "^6.2.0",
     "bcryptjs": "^3.0.2",
+    "bidi-js": "1.1.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.5",
@@ -30,6 +35,7 @@
     "express-rate-limit": "^7.4.0",
     "fast-xml-parser": "^5.10.1",
     "helmet": "^8.0.0",
+    "pdfkit": "0.20.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
@@ -39,6 +45,7 @@
     "@types/express": "^5.0.0",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.10.0",
+    "@types/pdfkit": "0.17.6",
     "prisma": "^6.2.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
@@ -46,13 +53,21 @@
   },
   "overrides": {
     "deepmerge-ts": "8.0.1",
-    "fast-uri": "3.1.5",
-    "js-yaml": "4.3.1",
+    "fast-uri": "3.1.8",
+    "js-yaml": "4.3.2",
     "minimatch@3.1.5": {
-      "brace-expansion": "1.1.18"
+      "brace-expansion": "1.1.21"
     },
     "minimatch@10.2.5": {
-      "brace-expansion": "5.0.9"
-    }
-  }
+      "brace-expansion": "5.0.12"
+    },
+    "multer": "2.4.0",
+    "browserslist": "4.29.3",
+    "baseline-browser-mapping": "2.11.27",
+    "qs": "6.16.0"
+  },
+  "engines": {
+    "node": "24.19.x"
+  },
+  "packageManager": "npm@11.13.0"
 }

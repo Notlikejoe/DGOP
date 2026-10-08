@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   BreachStatus,
   CaseStatus,
@@ -16,6 +16,7 @@ import { parseQueryEnum } from '../common/query-filters';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { WorkflowService } from '../workflow/workflow.service';
+import { claimGovernanceWrite } from '../common/governance-write';
 import {
   CreateBreachDto,
   CreateConsentRecordDto,
@@ -31,9 +32,14 @@ import {
 } from './privacy.dto';
 import {
   addHours,
+  addCalendarDays,
+  dsrTransitionError,
+  dsrDeadlineExtensionError,
+  breachTransitionError,
   addKsaBusinessDays,
   breachNotificationStatus,
   calculateDpiaRisk,
+  riskLevelFromScore,
   dpiaStatusFromGates,
   privacySlaStatus,
 } from './privacy.logic';
@@ -115,6 +121,24 @@ export class PrivacyService {
     private readonly scope: ScopeService,
     private readonly workflow?: WorkflowService,
   ) {}
+
+  private assertPrivacyDecisionAuthority(roleCodes: string[]): void {
+    if (!roleCodes.includes('privacy_officer')) throw new ForbiddenException('An assigned privacy officer business role is required for this decision');
+  }
+
+  private async privacyDecisionRoles(roleCodes: string[]): Promise<string[]> {
+    this.assertPrivacyDecisionAuthority(roleCodes);
+    const role = await this.prisma.role.findFirst({ where: { code: 'privacy_officer', isActive: true, deletedAt: null, permissions: { some: { permission: { resource: 'privacy_operations', action: 'edit' } } } }, select: { code: true } });
+    if (!role) throw new ForbiddenException('A live privacy officer decision permission is required');
+    // Technical oversight and unrelated roles must not broaden a business decision.
+    return [role.code];
+  }
+
+  private async assertAssignedDecisionActor(tx: Prisma.TransactionClient, assignedPersonId: string | null, actor: string): Promise<void> {
+    if (!assignedPersonId) throw new ForbiddenException('Assign a privacy officer before making this decision');
+    const assigned = await tx.person.findFirst({ where: { id: assignedPersonId, isActive: true, deletedAt: null, OR: [{ email: { equals: actor, mode: 'insensitive' } }, { user: { email: { equals: actor, mode: 'insensitive' }, isActive: true } }] }, select: { id: true } });
+    if (!assigned) throw new ForbiddenException('Only the currently assigned privacy officer can make this decision');
+  }
 
   private assetScopeWhere(scope: EffectiveScope): Prisma.DataAssetWhereInput {
     const where: Prisma.DataAssetWhereInput = { deletedAt: null };
@@ -249,11 +273,11 @@ export class PrivacyService {
   }
 
   private decorateDsr<T extends DsrWithInclude>(row: T) {
-    return { ...row, slaStatus: privacySlaStatus(row.dueAt, row.status) };
+    return { ...row, effectiveDueAt: row.extensionDueAt ?? row.dueAt, slaStatus: privacySlaStatus(row.extensionDueAt ?? row.dueAt, row.status) };
   }
 
   private decorateBreach<T extends BreachWithInclude>(row: T) {
-    return { ...row, notificationStatus: breachNotificationStatus(row.notificationDueAt, row.status, row.notifiedAt) };
+    return { ...row, notificationStatus: breachNotificationStatus(row.notificationDueAt, row.status, row.notifiedAt, new Date(), row) };
   }
 
   private gateSummary(gates: { status: PrivacyGateStatus }[]) {
@@ -274,8 +298,8 @@ export class PrivacyService {
     const now = new Date();
     const [dpias, dsrs, breaches, ropaDue, consents, retentionDue] = await Promise.all([
       this.prisma.privacyDpia.findMany({ where: scoped, select: { status: true, riskLevel: true, dueAt: true } }),
-      this.prisma.privacyDsrRequest.findMany({ where: scoped as Prisma.PrivacyDsrRequestWhereInput, select: { status: true, dueAt: true } }),
-      this.prisma.privacyBreach.findMany({ where: scoped as Prisma.PrivacyBreachWhereInput, select: { status: true, notificationDueAt: true, notifiedAt: true } }),
+      this.prisma.privacyDsrRequest.findMany({ where: scoped as Prisma.PrivacyDsrRequestWhereInput, select: { status: true, dueAt: true, extensionDueAt: true } }),
+      this.prisma.privacyBreach.findMany({ where: scoped as Prisma.PrivacyBreachWhereInput, select: { status: true, notificationDueAt: true, notifiedAt: true, regulatorNotificationRequired: true, subjectNotificationRequired: true, notificationDecisionReason: true, regulatorNotified: true, subjectNotified: true, regulatorNotificationEvidenceReference: true, subjectNotifiedAt: true, subjectNotificationEvidenceReference: true } }),
       this.prisma.privacyRopaRecord.count({ where: { ...(scoped as Prisma.PrivacyRopaRecordWhereInput), reviewDueAt: { lte: addKsaBusinessDays(now, 14) } } }),
       this.prisma.privacyConsentRecord.count({ where: { ...consentScoped, status: 'active' } }),
       this.prisma.privacyRetentionRule.count({ where: { ...retentionScoped, nextReviewAt: { lte: addKsaBusinessDays(now, 30) }, isActive: true } }),
@@ -285,9 +309,9 @@ export class PrivacyService {
       dpiaUnderReview: dpias.filter((row) => row.status === PrivacyWorkStatus.under_review || row.status === PrivacyWorkStatus.submitted).length,
       highRiskDpias: dpias.filter((row) => row.riskLevel === DpiaRiskLevel.high || row.riskLevel === DpiaRiskLevel.critical).length,
       dsrOpen: dsrs.filter((row) => !new Set<string>([DsrRequestStatus.fulfilled, DsrRequestStatus.closed]).has(row.status)).length,
-      dsrOverdue: dsrs.filter((row) => privacySlaStatus(row.dueAt, row.status) === 'overdue').length,
+      dsrOverdue: dsrs.filter((row) => privacySlaStatus(row.extensionDueAt ?? row.dueAt, row.status) === 'overdue').length,
       breachesOpen: breaches.filter((row) => !new Set<string>([BreachStatus.closed, BreachStatus.false_positive]).has(row.status)).length,
-      breachNotificationRisk: breaches.filter((row) => ['urgent', 'overdue'].includes(breachNotificationStatus(row.notificationDueAt, row.status, row.notifiedAt))).length,
+      breachNotificationRisk: breaches.filter((row) => ['urgent', 'overdue'].includes(breachNotificationStatus(row.notificationDueAt, row.status, row.notifiedAt, now, row))).length,
       ropaDue,
       activeConsents: consents,
       retentionDue,
@@ -299,9 +323,11 @@ export class PrivacyService {
   }
 
   async createLegalBasis(dto: CreatePrivacyLegalBasisDto, actor: string) {
-    const row = await this.prisma.privacyLegalBasis.create({ data: { ...dto, code: dto.code.trim().toLowerCase() } });
-    await this.audit.log({ actor, action: 'privacy_legal_basis.create', entityType: 'privacy_legal_basis', entityId: row.id });
+    return this.prisma.$transaction(async (tx) => {
+    const row = await tx.privacyLegalBasis.create({ data: { ...dto, code: dto.code.trim().toLowerCase() } });
+    await this.audit.logRequired({ actor, action: 'privacy_legal_basis.create', entityType: 'privacy_legal_basis', entityId: row.id }, tx);
     return row;
+    });
   }
 
   async listRopa(roleCodes: string[], filters: PrivacyFilters) {
@@ -332,9 +358,10 @@ export class PrivacyService {
     await this.assertScopedWriteTarget(roleCodes, dto.assetId, dto.domainId, 'RoPA record');
     await this.assertLegalBasis(dto.legalBasisId);
     await this.assertPerson(dto.ownerPersonId, 'Owner');
-    const row = await this.prisma.privacyRopaRecord.create({
+    return this.prisma.$transaction(async (tx) => {
+    const row = await tx.privacyRopaRecord.create({
       data: {
-        code: await this.nextCode(this.prisma, 'privacyRopaRecord', 'code', 'ROPA'),
+        code: await this.nextCode(tx, 'privacyRopaRecord', 'code', 'ROPA'),
         processName: dto.processName,
         purpose: dto.purpose,
         assetId: dto.assetId || null,
@@ -350,8 +377,9 @@ export class PrivacyService {
       },
       include: ropaInclude,
     });
-    await this.audit.log({ actor, action: 'privacy_ropa.create', entityType: 'privacy_ropa_record', entityId: row.id });
+    await this.audit.logRequired({ actor, action: 'privacy_ropa.create', entityType: 'privacy_ropa_record', entityId: row.id }, tx);
     return row;
+    });
   }
 
   async listDpias(roleCodes: string[], filters: PrivacyFilters) {
@@ -440,7 +468,7 @@ export class PrivacyService {
         actor,
       );
       await tx.privacyDpia.update({ where: { id: dpia.id }, data: { workflowCaseId } });
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'privacy_dpia.create',
         entityType: 'privacy_dpia',
@@ -451,54 +479,80 @@ export class PrivacyService {
   }
 
   async updateDpia(roleCodes: string[], id: string, dto: UpdateDpiaDto, actor: string) {
-    await this.getDpia(roleCodes, id);
+    const existing = await this.getDpia(roleCodes, id);
     if (dto.status !== undefined) throw new BadRequestException('DPIA status is controlled by privacy gate decisions');
     if (dto.riskLevel !== undefined) throw new BadRequestException('DPIA risk is calculated from DPIA controls');
-    const row = await this.prisma.privacyDpia.update({
-      where: { id },
+    if (dto.completedAt !== undefined) throw new BadRequestException('DPIA completion is controlled by privacy gate decisions');
+    if (dto.residualRiskScore !== undefined && !dto.decisionSummary?.trim()) throw new BadRequestException('A documented mitigation justification is required for a residual risk change');
+    await this.getDpia(await this.privacyDecisionRoles(roleCodes), id);
+    return this.prisma.$transaction(async (tx) => {
+    if (dto.residualRiskScore !== undefined) await this.assertAssignedDecisionActor(tx, existing.reviewerPersonId, actor);
+    const row = await claimGovernanceWrite(() => tx.privacyDpia.update({
+      where: { id, updatedAt: existing.updatedAt },
       data: {
         title: dto.title,
         description: dto.description,
         residualRiskScore: dto.residualRiskScore,
+        riskLevel: dto.residualRiskScore === undefined ? undefined : riskLevelFromScore(dto.residualRiskScore),
+        status: dto.residualRiskScore === undefined ? undefined : PrivacyWorkStatus.under_review,
         decisionSummary: dto.decisionSummary,
-        completedAt: dto.completedAt ? new Date(dto.completedAt) : undefined,
+        completedAt: dto.residualRiskScore === undefined ? undefined : null,
         updatedBy: actor,
       },
       include: dpiaInclude,
+    }));
+    if (dto.residualRiskScore !== undefined) await tx.privacyGate.updateMany({ where: { dpiaId: id }, data: { status: PrivacyGateStatus.pending, completedAt: null } });
+    await this.audit.logRequired({ actor, action: 'privacy_dpia.update', entityType: 'privacy_dpia', entityId: id }, tx);
+    return this.decorateDpia(dto.residualRiskScore === undefined ? row : await tx.privacyDpia.findUniqueOrThrow({ where: { id }, include: dpiaInclude }));
     });
-    await this.audit.log({ actor, action: 'privacy_dpia.update', entityType: 'privacy_dpia', entityId: id });
-    return this.decorateDpia(row);
   }
 
   async saveGate(roleCodes: string[], id: string, dto: SavePrivacyGateDto, actor: string) {
-    const dpia = await this.getDpia(roleCodes, id);
-    if (!roleCodes.includes('system_admin') && dto.status && dto.status !== PrivacyGateStatus.pending && dpia.createdBy === actor) {
+    const decisionRoles = await this.privacyDecisionRoles(roleCodes);
+    const dpia = await this.getDpia(decisionRoles, id);
+    if (dto.status && dto.status !== PrivacyGateStatus.pending) this.assertPrivacyDecisionAuthority(roleCodes);
+    if (dto.status && dto.status !== PrivacyGateStatus.pending && dpia.createdBy === actor) {
       throw new ForbiddenException('DPIA creators cannot approve or block their own privacy gates');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
-    await this.prisma.privacyGate.upsert({
+    await this.prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM privacy_dpias WHERE id = ${id} FOR UPDATE`;
+    await claimGovernanceWrite(() => tx.privacyDpia.update({ where: { id, updatedAt: dpia.updatedAt }, data: { updatedBy: actor } }));
+    const existingGate = await tx.privacyGate.findUnique({ where: { dpiaId_phase: { dpiaId: id, phase: dto.phase } } });
+    if (existingGate && existingGate.status !== PrivacyGateStatus.pending) throw new ConflictException('Completed privacy gates are immutable; reopen the assessment before changing them');
+    const deciding = dto.status !== undefined && dto.status !== PrivacyGateStatus.pending;
+    const assignedId = existingGate?.reviewerPersonId ?? dpia.reviewerPersonId;
+    if (deciding) {
+      if (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assignedId) throw new BadRequestException('Assign the reviewer while the gate is pending before making a decision');
+      await this.assertAssignedDecisionActor(tx, assignedId, actor);
+      if (!dto.note?.trim()) throw new BadRequestException('A documented control assessment or not-required justification is required');
+      if (existingGate && existingGate.status !== PrivacyGateStatus.pending) throw new ConflictException('This gate already has a decision; reopen the assessment before deciding again');
+    }
+    await tx.privacyGate.upsert({
       where: { dpiaId_phase: { dpiaId: id, phase: dto.phase } },
       create: {
         dpiaId: id,
         phase: dto.phase,
         status: dto.status ?? PrivacyGateStatus.pending,
-        reviewerPersonId: dto.reviewerPersonId || null,
+        reviewerPersonId: dto.reviewerPersonId ?? dpia.reviewerPersonId,
         note: dto.note ?? null,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
-        completedAt: dto.status === PrivacyGateStatus.approved || dto.status === PrivacyGateStatus.not_required ? new Date() : null,
+        completedAt: dto.status === undefined ? undefined : dto.status === PrivacyGateStatus.approved || dto.status === PrivacyGateStatus.not_required ? new Date() : null,
         createdBy: actor,
       },
       update: {
-        status: dto.status ?? PrivacyGateStatus.pending,
-        reviewerPersonId: dto.reviewerPersonId || null,
-        note: dto.note ?? null,
+        status: dto.status ?? undefined,
+        reviewerPersonId: dto.reviewerPersonId === undefined ? undefined : dto.reviewerPersonId,
+        note: dto.note === undefined ? undefined : dto.note,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
-        completedAt: dto.status === PrivacyGateStatus.approved || dto.status === PrivacyGateStatus.not_required ? new Date() : null,
+        completedAt: dto.status === undefined ? undefined : dto.status === PrivacyGateStatus.approved || dto.status === PrivacyGateStatus.not_required ? new Date() : null,
       },
     });
-    const gates = await this.prisma.privacyGate.findMany({ where: { dpiaId: id }, select: { status: true } });
-    await this.prisma.privacyDpia.update({ where: { id }, data: { status: dpiaStatusFromGates(gates), updatedBy: actor } });
-    await this.audit.log({ actor, action: 'privacy_gate.upsert', entityType: 'privacy_dpia', entityId: id, metadata: { phase: dto.phase } });
+    const gates = await tx.privacyGate.findMany({ where: { dpiaId: id }, select: { status: true } });
+    const status = dpiaStatusFromGates(gates);
+    await tx.privacyDpia.update({ where: { id }, data: { status, completedAt: status === PrivacyWorkStatus.approved ? new Date() : null, updatedBy: actor } });
+    await this.audit.logRequired({ actor, action: 'privacy_gate.upsert', entityType: 'privacy_dpia', entityId: id, metadata: { phase: dto.phase } }, tx);
+    });
     return this.getDpia(roleCodes, id);
   }
 
@@ -525,11 +579,16 @@ export class PrivacyService {
   }
 
   async createDsr(roleCodes: string[], dto: CreateDsrRequestDto, actor: string) {
+    if (dto.identityValidated) roleCodes = await this.privacyDecisionRoles(roleCodes);
     await this.assertScopedWriteTarget(roleCodes, dto.assetId, dto.domainId, 'DSR request');
     await this.assertPerson(dto.assignedPersonId, 'Assignee');
     return this.prisma.$transaction(async (tx) => {
       const requestNumber = await this.nextCode(tx, 'privacyDsrRequest', 'requestNumber', 'DSR');
-      const dueAt = dto.dueAt ? new Date(dto.dueAt) : addKsaBusinessDays(new Date(), 20);
+      const receivedAt = new Date();
+      const legalDueAt = addCalendarDays(receivedAt, 30);
+      const dueAt = dto.dueAt ? new Date(dto.dueAt) : legalDueAt;
+      if (dueAt < receivedAt || dueAt > legalDueAt) throw new BadRequestException('DSR due date must be within 30 calendar days of receipt');
+      if (dto.identityValidated && !dto.identityEvidenceReference?.trim()) throw new BadRequestException('Identity verification evidence is required');
       const dsr = await tx.privacyDsrRequest.create({
         data: {
           requestNumber,
@@ -538,6 +597,10 @@ export class PrivacyService {
           requestType: dto.requestType,
           description: dto.description,
           identityValidated: dto.identityValidated ?? false,
+          receivedAt,
+          identityEvidenceReference: dto.identityEvidenceReference?.trim() || null,
+          identityVerifiedAt: dto.identityValidated ? receivedAt : null,
+          identityVerifiedBy: dto.identityValidated ? actor : null,
           assetId: dto.assetId || null,
           domainId: dto.domainId || null,
           assignedPersonId: dto.assignedPersonId || null,
@@ -548,7 +611,7 @@ export class PrivacyService {
       });
       const workflowCaseId = await this.createWorkflow(tx, { type: 'privacy_dsr', title: `DSR ${requestNumber}`, description: dto.description, assetId: dsr.assetId, assigneePersonId: dsr.assignedPersonId, dueAt }, roleCodes, actor);
       await tx.privacyDsrRequest.update({ where: { id: dsr.id }, data: { workflowCaseId } });
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'privacy_dsr.create',
         entityType: 'privacy_dsr_request',
@@ -559,29 +622,56 @@ export class PrivacyService {
   }
 
   async updateDsr(roleCodes: string[], id: string, dto: UpdateDsrRequestDto, actor: string) {
-    const scope = await this.scope.resolve(roleCodes);
-    const assetIds = await this.visibleAssetIds(roleCodes, scope);
-    const exists = await this.prisma.privacyDsrRequest.findFirst({ where: { AND: [{ id }, this.scopedWhere<Prisma.PrivacyDsrRequestWhereInput>(scope, assetIds)] } });
-    if (!exists) throw new NotFoundException('DSR request not found');
-    const finalDsrStatuses: DsrRequestStatus[] = [DsrRequestStatus.fulfilled, DsrRequestStatus.rejected, DsrRequestStatus.closed];
-    if (!roleCodes.includes('system_admin') && dto.status && finalDsrStatuses.includes(dto.status) && exists.createdBy === actor) {
-      throw new ForbiddenException('DSR creators cannot close or reject their own request');
-    }
+    const decisionRoles = await this.privacyDecisionRoles(roleCodes);
+    const scope = await this.scope.resolve(decisionRoles);
+    const assetIds = await this.visibleAssetIds(decisionRoles, scope);
     await this.assertPerson(dto.assignedPersonId, 'Assignee');
-    const row = await this.prisma.privacyDsrRequest.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        identityValidated: dto.identityValidated,
-        assignedPersonId: dto.assignedPersonId,
-        decisionSummary: dto.decisionSummary,
-        fulfilledAt: dto.fulfilledAt ? new Date(dto.fulfilledAt) : undefined,
-        updatedBy: actor,
-      },
-      include: dsrInclude,
+    return this.prisma.$transaction(async (tx) => {
+      const exists = await tx.privacyDsrRequest.findFirst({ where: { AND: [{ id }, this.scopedWhere<Prisma.PrivacyDsrRequestWhereInput>(scope, assetIds)] } });
+      if (!exists) throw new NotFoundException('DSR request not found');
+      if (exists.version !== dto.expectedVersion) throw new ConflictException('DSR changed; reload before saving');
+      const finalStatuses: DsrRequestStatus[] = ['fulfilled', 'rejected', 'closed'];
+      if ((dto.status && finalStatuses.includes(dto.status)) || dto.identityValidated === true) this.assertPrivacyDecisionAuthority(roleCodes);
+      if (dto.status && finalStatuses.includes(dto.status) && exists.createdBy === actor) throw new ForbiddenException('DSR creators cannot make their own final decisions');
+      const proofChanged = dto.identityEvidenceReference !== undefined && (dto.identityEvidenceReference?.trim() || null) !== exists.identityEvidenceReference
+        || dto.completionEvidenceReference !== undefined && (dto.completionEvidenceReference?.trim() || null) !== exists.completionEvidenceReference
+        || !!dto.fulfilledAt && new Date(dto.fulfilledAt).getTime() !== exists.fulfilledAt?.getTime();
+      const decides = !!dto.deadlineExtension || proofChanged || dto.identityValidated === true || !!dto.status && finalStatuses.includes(dto.status);
+      if (decides) await this.assertAssignedDecisionActor(tx, exists.assignedPersonId, actor);
+      if (dto.deadlineExtension && exists.createdBy === actor) throw new ForbiddenException('DSR creators cannot approve their own deadline extensions');
+      const now = new Date();
+      const merged = {
+        ...exists,
+        status: dto.status ?? exists.status,
+        identityValidated: dto.identityValidated ?? exists.identityValidated,
+        identityEvidenceReference: dto.identityEvidenceReference === undefined ? exists.identityEvidenceReference : dto.identityEvidenceReference?.trim() || null,
+        completionEvidenceReference: dto.completionEvidenceReference === undefined ? exists.completionEvidenceReference : dto.completionEvidenceReference?.trim() || null,
+        decisionSummary: dto.decisionSummary === undefined ? exists.decisionSummary : dto.decisionSummary?.trim() || null,
+        fulfilledAt: dto.fulfilledAt ? new Date(dto.fulfilledAt) : exists.fulfilledAt ?? (dto.status === 'fulfilled' ? now : null),
+      };
+      const error = dsrTransitionError(exists.status, merged, now);
+      if (error) throw new BadRequestException(error);
+      const extension = dto.deadlineExtension ? { dueAt: new Date(dto.deadlineExtension.dueAt), reason: dto.deadlineExtension.reason.trim(), communicatedAt: new Date(dto.deadlineExtension.communicatedAt), communicationReference: dto.deadlineExtension.communicationReference.trim() } : null;
+      if (extension) {
+        const extensionError = dsrDeadlineExtensionError(merged, extension, now);
+        if (extensionError) throw new BadRequestException(extensionError);
+      }
+      const verificationChanged = merged.identityValidated && (!exists.identityValidated || exists.identityEvidenceReference !== merged.identityEvidenceReference);
+      const claimed = await tx.privacyDsrRequest.updateMany({ where: { id, version: dto.expectedVersion, deletedAt: null }, data: {
+        status: merged.status, identityValidated: merged.identityValidated,
+        identityEvidenceReference: merged.identityEvidenceReference, completionEvidenceReference: merged.completionEvidenceReference,
+        identityVerifiedAt: merged.identityValidated ? verificationChanged ? now : exists.identityVerifiedAt ?? now : null,
+        identityVerifiedBy: merged.identityValidated ? verificationChanged ? actor : exists.identityVerifiedBy ?? actor : null,
+        assignedPersonId: dto.assignedPersonId, decisionSummary: merged.decisionSummary, fulfilledAt: merged.fulfilledAt,
+        ...(extension ? { extensionDueAt: extension.dueAt, extensionReason: extension.reason, extensionCommunicatedAt: extension.communicatedAt, extensionCommunicationReference: extension.communicationReference, extensionRecordedBy: actor } : {}),
+        updatedBy: actor, version: { increment: 1 },
+      } });
+      if (claimed.count !== 1) throw new ConflictException('DSR changed before the decision could be committed');
+      if (extension && exists.workflowCaseId) await tx.workflowTask.updateMany({ where: { caseId: exists.workflowCaseId, status: { in: ['pending', 'in_progress'] } }, data: { dueDate: extension.dueAt } });
+      if (exists.workflowCaseId) await tx.workflowEvent.create({ data: { caseId: exists.workflowCaseId, actor, action: 'privacy_dsr.updated', comment: exists.status + ' → ' + merged.status } });
+      await this.audit.logRequired({ actor, action: 'privacy_dsr.update', entityType: 'privacy_dsr_request', entityId: id, metadata: { previousStatus: exists.status, newStatus: merged.status, previousVersion: exists.version, newVersion: exists.version + 1, identityValidated: merged.identityValidated, identityEvidenceReference: merged.identityEvidenceReference, completionEvidenceReference: merged.completionEvidenceReference, ...(extension ? { deadlineExtension: { originalDueAt: exists.dueAt.toISOString(), dueAt: extension.dueAt.toISOString(), reason: extension.reason, communicatedAt: extension.communicatedAt.toISOString(), communicationReference: extension.communicationReference } } : {}) } }, tx);
+      return this.decorateDsr(await tx.privacyDsrRequest.findUniqueOrThrow({ where: { id }, include: dsrInclude }));
     });
-    await this.audit.log({ actor, action: 'privacy_dsr.update', entityType: 'privacy_dsr_request', entityId: id });
-    return this.decorateDsr(row);
   }
 
   async listBreaches(roleCodes: string[], filters: PrivacyFilters) {
@@ -612,6 +702,7 @@ export class PrivacyService {
     return this.prisma.$transaction(async (tx) => {
       const code = await this.nextCode(tx, 'privacyBreach', 'code', 'BRCH');
       const detectedAt = dto.detectedAt ? new Date(dto.detectedAt) : new Date();
+      if (detectedAt > new Date()) throw new BadRequestException('Awareness time cannot be in the future');
       const notificationDueAt = addHours(detectedAt, 72);
       const breach = await tx.privacyBreach.create({
         data: {
@@ -630,7 +721,7 @@ export class PrivacyService {
       });
       const workflowCaseId = await this.createWorkflow(tx, { type: 'privacy_breach', title: `Breach ${code}`, description: dto.title, assetId: breach.assetId, assigneePersonId: breach.assignedPersonId, dueAt: breach.notificationDueAt }, roleCodes, actor);
       await tx.privacyBreach.update({ where: { id: breach.id }, data: { workflowCaseId } });
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'privacy_breach.create',
         entityType: 'privacy_breach',
@@ -641,29 +732,57 @@ export class PrivacyService {
   }
 
   async updateBreach(roleCodes: string[], id: string, dto: UpdateBreachDto, actor: string) {
-    const scope = await this.scope.resolve(roleCodes);
-    const assetIds = await this.visibleAssetIds(roleCodes, scope);
-    const exists = await this.prisma.privacyBreach.findFirst({ where: { AND: [{ id }, this.scopedWhere<Prisma.PrivacyBreachWhereInput>(scope, assetIds)] } });
-    if (!exists) throw new NotFoundException('privacy breach not found');
-    const finalBreachStatuses: BreachStatus[] = [BreachStatus.closed, BreachStatus.false_positive];
-    if (!roleCodes.includes('system_admin') && dto.status && finalBreachStatuses.includes(dto.status) && exists.createdBy === actor) {
-      throw new ForbiddenException('Privacy breach creators cannot close their own incident');
-    }
-    const row = await this.prisma.privacyBreach.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        severity: dto.severity,
-        containedAt: dto.containedAt ? new Date(dto.containedAt) : undefined,
-        notifiedAt: dto.notifiedAt ? new Date(dto.notifiedAt) : undefined,
-        regulatorNotified: dto.regulatorNotified,
-        subjectNotified: dto.subjectNotified,
-        updatedBy: actor,
-      },
-      include: breachInclude,
+    const decisionRoles = await this.privacyDecisionRoles(roleCodes);
+    const scope = await this.scope.resolve(decisionRoles);
+    const assetIds = await this.visibleAssetIds(decisionRoles, scope);
+    return this.prisma.$transaction(async (tx) => {
+      const exists = await tx.privacyBreach.findFirst({ where: { AND: [{ id }, this.scopedWhere<Prisma.PrivacyBreachWhereInput>(scope, assetIds)] } });
+      if (!exists) throw new NotFoundException('Privacy breach not found');
+      if (exists.version !== dto.expectedVersion) throw new ConflictException('Incident changed; reload before saving');
+      const decisionChanged = (dto.regulatorNotificationRequired !== undefined && dto.regulatorNotificationRequired !== exists.regulatorNotificationRequired)
+        || (dto.subjectNotificationRequired !== undefined && dto.subjectNotificationRequired !== exists.subjectNotificationRequired)
+        || (dto.notificationDecisionReason !== undefined && (dto.notificationDecisionReason?.trim() || null) !== exists.notificationDecisionReason);
+      const notificationEvidenceChanged = dto.regulatorNotificationEvidenceReference !== undefined && (dto.regulatorNotificationEvidenceReference?.trim() || null) !== exists.regulatorNotificationEvidenceReference
+        || dto.subjectNotificationEvidenceReference !== undefined && (dto.subjectNotificationEvidenceReference?.trim() || null) !== exists.subjectNotificationEvidenceReference
+        || !!dto.notifiedAt && new Date(dto.notifiedAt).getTime() !== exists.notifiedAt?.getTime()
+        || !!dto.subjectNotifiedAt && new Date(dto.subjectNotifiedAt).getTime() !== exists.subjectNotifiedAt?.getTime();
+      const decidesNotification = decisionChanged || notificationEvidenceChanged || dto.regulatorNotified === true || dto.subjectNotified === true || !!dto.status && ['closed', 'false_positive', 'notified'].includes(dto.status);
+      if (decidesNotification) this.assertPrivacyDecisionAuthority(roleCodes);
+      if (exists.createdBy === actor && decidesNotification) throw new ForbiddenException('Incident creators cannot approve their own notification obligations, completion or final decisions');
+      if (decidesNotification) await this.assertAssignedDecisionActor(tx, exists.assignedPersonId, actor);
+      if ((exists.regulatorNotified && dto.regulatorNotified === false) || (exists.subjectNotified && dto.subjectNotified === false)) throw new BadRequestException('Recorded notification completion cannot be erased');
+      const now = new Date();
+      const merged = {
+        ...exists, status: dto.status ?? exists.status,
+        regulatorNotificationRequired: dto.regulatorNotificationRequired === undefined ? exists.regulatorNotificationRequired : dto.regulatorNotificationRequired,
+        subjectNotificationRequired: dto.subjectNotificationRequired === undefined ? exists.subjectNotificationRequired : dto.subjectNotificationRequired,
+        notificationDecisionReason: dto.notificationDecisionReason === undefined ? exists.notificationDecisionReason : dto.notificationDecisionReason?.trim() || null,
+        containedAt: dto.containedAt ? new Date(dto.containedAt) : exists.containedAt,
+        notifiedAt: dto.notifiedAt ? new Date(dto.notifiedAt) : exists.notifiedAt,
+        subjectNotifiedAt: dto.subjectNotifiedAt ? new Date(dto.subjectNotifiedAt) : exists.subjectNotifiedAt,
+        regulatorNotified: dto.regulatorNotified ?? exists.regulatorNotified,
+        subjectNotified: dto.subjectNotified ?? exists.subjectNotified,
+        regulatorNotificationEvidenceReference: dto.regulatorNotificationEvidenceReference === undefined ? exists.regulatorNotificationEvidenceReference : dto.regulatorNotificationEvidenceReference?.trim() || null,
+        subjectNotificationEvidenceReference: dto.subjectNotificationEvidenceReference === undefined ? exists.subjectNotificationEvidenceReference : dto.subjectNotificationEvidenceReference?.trim() || null,
+      };
+      const error = breachTransitionError(exists.status, merged, now);
+      if (error) throw new BadRequestException(error);
+      const claimed = await tx.privacyBreach.updateMany({ where: { id, version: dto.expectedVersion, deletedAt: null }, data: {
+        status: merged.status, severity: dto.severity, containedAt: merged.containedAt,
+        notifiedAt: merged.notifiedAt, regulatorNotified: merged.regulatorNotified, subjectNotified: merged.subjectNotified,
+        regulatorNotificationRequired: merged.regulatorNotificationRequired, subjectNotificationRequired: merged.subjectNotificationRequired,
+        notificationDecisionReason: merged.notificationDecisionReason,
+        notificationDecisionAt: decisionChanged ? now : exists.notificationDecisionAt,
+        notificationDecisionBy: decisionChanged ? actor : exists.notificationDecisionBy,
+        regulatorNotificationEvidenceReference: merged.regulatorNotificationEvidenceReference,
+        subjectNotifiedAt: merged.subjectNotifiedAt, subjectNotificationEvidenceReference: merged.subjectNotificationEvidenceReference,
+        updatedBy: actor, version: { increment: 1 },
+      } });
+      if (claimed.count !== 1) throw new ConflictException('Incident changed before the decision could be committed');
+      if (exists.workflowCaseId) await tx.workflowEvent.create({ data: { caseId: exists.workflowCaseId, actor, action: 'privacy_breach.updated', comment: exists.status + ' → ' + merged.status } });
+      await this.audit.logRequired({ actor, action: 'privacy_breach.update', entityType: 'privacy_breach', entityId: id, metadata: { previousStatus: exists.status, newStatus: merged.status, previousVersion: exists.version, newVersion: exists.version + 1, regulatorNotificationRequired: merged.regulatorNotificationRequired, subjectNotificationRequired: merged.subjectNotificationRequired, notificationDecisionReason: merged.notificationDecisionReason, regulatorNotified: merged.regulatorNotified, subjectNotified: merged.subjectNotified, notifiedAt: merged.notifiedAt?.toISOString() ?? null, regulatorNotificationEvidenceReference: merged.regulatorNotificationEvidenceReference, subjectNotifiedAt: merged.subjectNotifiedAt?.toISOString() ?? null, subjectNotificationEvidenceReference: merged.subjectNotificationEvidenceReference } }, tx);
+      return this.decorateBreach(await tx.privacyBreach.findUniqueOrThrow({ where: { id }, include: breachInclude }));
     });
-    await this.audit.log({ actor, action: 'privacy_breach.update', entityType: 'privacy_breach', entityId: id });
-    return this.decorateBreach(row);
   }
 
   async createConsent(roleCodes: string[], dto: CreateConsentRecordDto, actor: string) {
@@ -671,7 +790,8 @@ export class PrivacyService {
     if (!this.isUnrestricted(scope) && !dto.assetId) throw new BadRequestException('Consent records must be linked to a visible data asset');
     await this.assertAssetVisible(roleCodes, dto.assetId);
     await this.assertLegalBasis(dto.legalBasisId);
-    const row = await this.prisma.privacyConsentRecord.create({
+    return this.prisma.$transaction(async (tx) => {
+    const row = await tx.privacyConsentRecord.create({
       data: {
         assetId: dto.assetId || null,
         subjectRef: dto.subjectRef,
@@ -683,16 +803,18 @@ export class PrivacyService {
         createdBy: actor,
       },
     });
-    await this.audit.log({ actor, action: 'privacy_consent.create', entityType: 'privacy_consent_record', entityId: row.id });
+    await this.audit.logRequired({ actor, action: 'privacy_consent.create', entityType: 'privacy_consent_record', entityId: row.id }, tx);
     return row;
+    });
   }
 
   async createRetentionRule(roleCodes: string[], dto: CreateRetentionRuleDto, actor: string) {
     await this.assertScopedWriteTarget(roleCodes, dto.assetId, dto.domainId, 'Retention rule');
     await this.assertPerson(dto.ownerPersonId, 'Owner');
-    const row = await this.prisma.privacyRetentionRule.create({
+    return this.prisma.$transaction(async (tx) => {
+    const row = await tx.privacyRetentionRule.create({
       data: {
-        code: await this.nextCode(this.prisma, 'privacyRetentionRule', 'code', 'RET'),
+        code: await this.nextCode(tx, 'privacyRetentionRule', 'code', 'RET'),
         nameEn: dto.nameEn,
         nameAr: dto.nameAr,
         assetId: dto.assetId || null,
@@ -705,7 +827,8 @@ export class PrivacyService {
         createdBy: actor,
       },
     });
-    await this.audit.log({ actor, action: 'privacy_retention_rule.create', entityType: 'privacy_retention_rule', entityId: row.id });
+    await this.audit.logRequired({ actor, action: 'privacy_retention_rule.create', entityType: 'privacy_retention_rule', entityId: row.id }, tx);
     return row;
+    });
   }
 }

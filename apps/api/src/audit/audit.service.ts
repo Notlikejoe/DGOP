@@ -9,6 +9,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { parsePageParams, toPaged, type Paged } from "../common/pagination";
 import { isProductionLikeRuntime } from "../common/runtime-safety";
 import { nativeAuditContext } from './audit-context';
+import { prepareAiDecisionProof } from '../ai-governance/ai-evidence-proof';
 import {
   hashAuditEntry,
   sanitizeAuditMetadata,
@@ -74,10 +75,12 @@ export class AuditService {
     entry: AuditEntry,
     client: AuditWriter,
   ): Promise<void> {
+    const proof = await prepareAiDecisionProof(client as Prisma.TransactionClient, entry);
     await client.$queryRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY}) IS NULL AS "locked"`;
     const context=nativeAuditContext(entry.action);
     const metadata = sanitizeAuditMetadata(entry.metadata ?? null);
-    const contextMetadata = sanitizeAuditMetadata(Object.keys(context).length?{...(metadata as Record<string,unknown>??{}),...context}:metadata);
+    const boundMetadata = sanitizeAuditMetadata(proof ? { ...(metadata as Record<string,unknown>??{}), aiEvidencePolicyVersion:1, aiEvidenceDigest:proof.digest, demoOnly:proof.demoOnly } : metadata);
+    const contextMetadata = sanitizeAuditMetadata(Object.keys(context).length?{...(boundMetadata as Record<string,unknown>??{}),...context}:boundMetadata);
     const previous = await client.auditLog.findFirst({
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { entryHash: true, createdAt:true },
@@ -97,7 +100,7 @@ export class AuditService {
       previousHash,
       chainVersion,
     });
-    await client.auditLog.create({
+    const saved = await client.auditLog.create({
       data: {
         actor: entry.actor,
         action: entry.action,
@@ -110,6 +113,7 @@ export class AuditService {
         createdAt,
       },
     });
+    if (proof) await client.aiDecisionEvidenceProof.create({ data:{ auditLogId:saved.id,...proof } });
   }
 
   async log(entry: AuditEntry, client?: AuditWriter): Promise<void> {

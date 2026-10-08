@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { environmentFiles } from './common/environment';
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { AuditContextMiddleware } from './audit/audit-context';
 import { ConfigModule } from '@nestjs/config';
@@ -45,10 +46,7 @@ import { PermissionsGuard } from './access/permissions.guard';
     ConfigModule.forRoot({
       isGlobal: true,
       // Single source of truth: the repo root .env (three levels up from dist or src).
-      envFilePath: [
-        join(__dirname, '..', '..', '..', '.env'),
-        join(process.cwd(), '..', '..', '.env'),
-      ],
+      envFilePath: environmentFiles(join(__dirname, '..', '..', '..')),
     }),
     PrismaModule,
     AccessModule,

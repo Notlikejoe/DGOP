@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, DefaultValuePipe, Res } from '@nestjs/common';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsString, IsUUID, Length, Matches, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -30,6 +31,8 @@ class ProposeControlDto extends SourceEvidenceDto {
  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(8) @IsString({each:true}) dimensionCodes!:string[];
 }
 @Controller('ai/source-corrections')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiSourceCorrectionsController {
  constructor(private readonly corrections:AiSourceCorrectionsService){}
  @Get('previews/:id/context') context(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string){return this.corrections.context(u.id,id);}

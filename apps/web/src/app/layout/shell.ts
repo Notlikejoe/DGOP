@@ -301,6 +301,8 @@ export class Shell implements OnDestroy {
   }
 
   private canSeeNavItem(item: NavItem): boolean {
+    const screen=({'/governance/ai-use-cases':'useCases','/governance/ai-risks':'risks','/governance/ai-review':'review','/governance/ai-reviews':'reviewOperations','/governance/ai-dashboard':'dashboard','/governance/ai-migration':'migration'} as const)[item.link as '/governance/ai-use-cases'];
+    if(screen)return this.auth.hasAiScreen(screen);
     return !item.permission || (typeof item.permission === 'string'
       ? this.auth.hasPermission(item.permission) : item.permission.some(value => this.auth.hasPermission(value)));
   }

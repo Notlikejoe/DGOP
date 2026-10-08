@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   ArchitectureReviewDecision,
   CaseStatus,
@@ -13,6 +14,9 @@ import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/bus
 import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { claimGovernanceWrite, requireTransition } from '../common/governance-write';
+import { parseMdmRule } from './mdm-rule';
+import { operationalEvidenceWhere } from '../evidence/evidence-status';
 import {
   CreateArchitectureReviewDto,
   CreateMdmMatchDto,
@@ -353,10 +357,22 @@ export class ExtendedDomainsService {
 
     const sourceProfiles = sourceRows.map((row) => this.toMdmProfile(row));
     const candidateProfiles = candidateRows.map((row) => this.toMdmProfile(row));
+    const sourceDomain = dto.domainId ?? sourceRows[0].domainId;
+    const rules = await this.prisma.mdmMatchRule.findMany({ where: { isActive: true, OR: [{ domainId: sourceDomain }, { domainId: null }], ...(dto.ruleCode ? { code: dto.ruleCode } : {}) }, orderBy: { code: 'asc' } });
+    const applicable = rules.filter((rule) => rule.domainId === sourceDomain);
+    const candidates = applicable.length ? applicable : rules.filter((rule) => rule.domainId === null);
+    if (candidates.length > 1) throw new BadRequestException('Multiple applicable MDM rules exist. Select an explicit ruleCode.');
+    if (dto.ruleCode && !candidates.length) throw new BadRequestException('The selected MDM rule is not active for this domain');
+    const selectedRule = candidates[0];
+    const rule = selectedRule ? parseMdmRule(selectedRule.blockingJson, selectedRule.weightsJson, selectedRule.survivorshipJson) : undefined;
+    const threshold = selectedRule?.thresholdScore ?? dto.threshold ?? 65;
+    if (selectedRule && dto.threshold !== undefined && dto.threshold !== threshold) throw new BadRequestException('The saved rule owns the threshold. Omit the override or amend the governed rule.');
+    const ruleReceipt = selectedRule ? { code: selectedRule.code, id: selectedRule.id, version: selectedRule.updatedAt.toISOString(), digest: createHash('sha256').update(JSON.stringify({ threshold, rule })).digest('hex') } : { code: 'builtin_mdm_asset_match_v1', id: null, version: '2026-10-04', digest: null };
     const evaluatedPairs = sourceProfiles.length * candidateProfiles.length;
     const recommendations = rankMdmMatches(sourceProfiles, candidateProfiles, {
-      threshold: dto.threshold ?? 65,
+      threshold,
       limit: dto.limit ?? 10,
+      rule,
     });
     const existing = recommendations.length
       ? await this.prisma.mdmMatchCandidate.findMany({
@@ -375,7 +391,8 @@ export class ExtendedDomainsService {
 
     if (!persist) {
       return {
-        threshold: dto.threshold ?? 65,
+        threshold,
+        rule: ruleReceipt,
         limit: dto.limit ?? 10,
         evaluatedPairs,
         recommendedCount: recommendations.length,
@@ -385,18 +402,21 @@ export class ExtendedDomainsService {
       };
     }
 
+    return claimGovernanceWrite(() => this.prisma.$transaction(async (tx) => {
+    if (selectedRule) {
+      const currentRule = await tx.mdmMatchRule.findFirst({ where: { id: selectedRule.id, updatedAt: selectedRule.updatedAt, isActive: true } });
+      if (!currentRule) throw new ConflictException('The matching rule changed. Reload the governed rule before running it.');
+    }
     const created: unknown[] = [];
     for (const match of newRecommendations) {
-      const code = await this.nextCode('mdmMatchCandidate', 'MCM');
-      const row = await this.prisma.mdmMatchCandidate.upsert({
-        where: {
-          sourceAssetId_candidateAssetId: {
-            sourceAssetId: match.sourceAssetId,
-            candidateAssetId: match.candidateAssetId,
-          },
-        },
-        update: {},
-        create: {
+      const present = await tx.mdmMatchCandidate.findFirst({ where: { OR: [
+        { sourceAssetId: match.sourceAssetId, candidateAssetId: match.candidateAssetId },
+        { sourceAssetId: match.candidateAssetId, candidateAssetId: match.sourceAssetId },
+      ] } });
+      if (present) continue;
+      const code = await this.nextCode('mdmMatchCandidate', 'MCM', tx);
+      const row = await tx.mdmMatchCandidate.create({
+        data: {
           code,
           sourceAssetId: match.sourceAssetId,
           candidateAssetId: match.candidateAssetId,
@@ -408,6 +428,7 @@ export class ExtendedDomainsService {
             ...match.survivorshipRulesJson,
             generatedBy: actor,
             generatedAt: new Date().toISOString(),
+            appliedRule: ruleReceipt,
           } as Prisma.InputJsonObject,
           proposedGoldenRecordJson: match.proposedGoldenRecordJson as Prisma.InputJsonObject,
           resolutionNote: match.explanation,
@@ -422,31 +443,34 @@ export class ExtendedDomainsService {
       created.push(row);
     }
 
-    await this.audit.log({
+    await this.audit.logRequired({
       actor,
       action: 'extended_domains.mdm_match.run',
       entityType: 'mdm_match_candidate',
       metadata: {
-        threshold: dto.threshold ?? 65,
+        threshold,
+        rule: ruleReceipt,
         limit: dto.limit ?? 10,
         sourceAssetId: dto.sourceAssetId ?? null,
         domainId: dto.domainId ?? null,
         evaluatedPairs,
         recommendedCount: recommendations.length,
         createdCount: created.length,
-        skippedExistingCount: recommendations.length - newRecommendations.length,
+        skippedExistingCount: recommendations.length - created.length,
       },
-    });
+    }, tx);
     return {
-      threshold: dto.threshold ?? 65,
+      threshold,
+      rule: ruleReceipt,
       limit: dto.limit ?? 10,
       evaluatedPairs,
       recommendedCount: recommendations.length,
       createdCount: created.length,
-      skippedExistingCount: recommendations.length - newRecommendations.length,
+      skippedExistingCount: recommendations.length - created.length,
       candidates: created,
       preview: recommendations,
     };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
   }
 
   async resolveMatch(roleCodes: string[], id: string, dto: ResolveMdmMatchDto, actor: string) {
@@ -458,9 +482,12 @@ export class ExtendedDomainsService {
     if (final && existing.createdBy === actor) {
       throw new ForbiddenException('MDM match creators cannot make the final resolution decision');
     }
+    if (['merged', 'rejected', 'superseded'].includes(existing.status)) throw new ConflictException('Final MDM dispositions are immutable; create a new candidate for another review');
+    if (dto.status && dto.status !== existing.status) requireTransition(existing.status, dto.status, { candidate: ['under_review'], under_review: ['merged', 'rejected', 'superseded'], merged: [], rejected: [], superseded: [] });
+    if (final && !dto.resolutionNote?.trim()) throw new BadRequestException('Document the independent MDM disposition');
     const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.mdmMatchCandidate.update({
-        where: { id },
+      const updated = await claimGovernanceWrite(() => tx.mdmMatchCandidate.update({
+        where: { id, status: existing.status, updatedAt: existing.updatedAt },
         data: {
           status: dto.status,
           resolutionStep: dto.resolutionStep,
@@ -470,12 +497,13 @@ export class ExtendedDomainsService {
           evidenceId: dto.evidenceId ?? undefined,
           decidedBy: final ? actor : undefined,
           decidedAt: final ? new Date() : undefined,
+          updatedAt: new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1)),
         },
         include: {
           sourceAsset: { select: { id: true, code: true, nameEn: true, domainId: true } },
           candidateAsset: { select: { id: true, code: true, nameEn: true, domainId: true } },
         },
-      });
+      }));
       if (dto.status === MdmMatchStatus.merged) {
         await this.publishGoldenRecordForMatch(tx, updated, actor, dto);
       } else if (final) {
@@ -490,7 +518,7 @@ export class ExtendedDomainsService {
           },
         });
       }
-      await this.audit.log(
+      await this.audit.logRequired(
         { actor, action: 'extended_domains.mdm_match.resolve', entityType: 'mdm_match_candidate', entityId: id, metadata: { status: dto.status, step: dto.resolutionStep } },
         tx,
       );
@@ -508,10 +536,14 @@ export class ExtendedDomainsService {
 
   async upsertMdmMatchRule(roleCodes: string[], dto: UpsertMdmMatchRuleDto, actor: string) {
     await this.assertDomainVisible(roleCodes, dto.domainId);
-    const row = await this.prisma.mdmMatchRule.upsert({
-      where: { code: dto.code },
-      create: {
-        code: dto.code,
+    parseMdmRule(dto.blockingJson, dto.weightsJson, dto.survivorshipJson);
+    const existing = await this.prisma.mdmMatchRule.findUnique({ where: { code: dto.code } });
+    if (existing) {
+      await this.assertDomainVisible(roleCodes, existing.domainId);
+      if ((dto.domainId ?? null) !== existing.domainId) throw new BadRequestException('Rule domain relocation requires a new governed rule code');
+    }
+    return claimGovernanceWrite(() => this.prisma.$transaction(async (tx) => {
+    const settings = {
         name: dto.name,
         domainId: dto.domainId ?? null,
         thresholdScore: dto.thresholdScore ?? 85,
@@ -519,21 +551,23 @@ export class ExtendedDomainsService {
         weightsJson: dto.weightsJson as Prisma.InputJsonObject,
         survivorshipJson: (dto.survivorshipJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         isActive: dto.isActive ?? true,
+    };
+    const row = existing ? await tx.mdmMatchRule.update({
+      where: { id: existing.id, updatedAt: existing.updatedAt },
+      data: { ...settings, updatedBy: actor, updatedAt: new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1)) },
+    }) : await tx.mdmMatchRule.create({
+      data: {
+        ...settings,
+        code: dto.code,
         createdBy: actor,
       },
-      update: {
-        name: dto.name,
-        domainId: dto.domainId ?? null,
-        thresholdScore: dto.thresholdScore ?? 85,
-        blockingJson: dto.blockingJson as Prisma.InputJsonObject,
-        weightsJson: dto.weightsJson as Prisma.InputJsonObject,
-        survivorshipJson: (dto.survivorshipJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-        isActive: dto.isActive ?? true,
-        updatedBy: actor,
-      },
     });
-    await this.audit.log({ actor, action: 'extended_domains.mdm_rule.upsert', entityType: 'mdm_match_rule', entityId: row.id, metadata: { code: row.code } });
+    await this.audit.logRequired({ actor, action: 'extended_domains.mdm_rule.upsert', entityType: 'mdm_match_rule', entityId: row.id, metadata: { code: row.code } }, tx);
     return row;
+    })).catch((error: unknown) => {
+      if ((error as { code?: string })?.code === 'P2002') throw new ConflictException('A matching rule with this code was created concurrently. Reload and review it.');
+      throw error;
+    });
   }
 
   async listGoldenRecords(roleCodes: string[]) {
@@ -613,15 +647,22 @@ export class ExtendedDomainsService {
       throw new ForbiddenException('Reference version creators cannot make the final decision');
     }
     const status = referenceVersionStatus(dto.decision);
-    const row = await this.prisma.referenceDataVersion.update({
-      where: { id },
+    requireTransition(existing.status, status, { draft: ['under_review'], under_review: ['approved', 'rejected'], rejected: ['under_review'], approved: ['active', 'retired'], active: ['retired'], retired: [] });
+    if (status === 'active' && (!existing.approvedBy || !existing.approvedAt)) throw new BadRequestException('Activation requires a recorded independent approval');
+    const now = new Date();
+    if (status === 'active' && ((existing.effectiveFrom && existing.effectiveFrom > now) || (existing.effectiveTo && existing.effectiveTo <= now))) throw new BadRequestException('The reference version is outside its effective dates');
+    const row = await this.prisma.$transaction(async (tx) => {
+    const updated = await claimGovernanceWrite(() => tx.referenceDataVersion.update({
+      where: { id, status: existing.status, updatedAt: existing.updatedAt },
       data: {
         status,
-        approvedBy: ['approve', 'activate'].includes(dto.decision) ? actor : undefined,
-        approvedAt: ['approve', 'activate'].includes(dto.decision) ? new Date() : undefined,
+        approvedBy: dto.decision === 'approve' ? actor : undefined,
+        approvedAt: dto.decision === 'approve' ? now : undefined,
       },
+    }));
+    await this.audit.logRequired({ actor, action: 'extended_domains.reference_version.decide', entityType: 'reference_data_version', entityId: id, metadata: { decision: dto.decision, status } }, tx);
+    return updated;
     });
-    await this.audit.log({ actor, action: 'extended_domains.reference_version.decide', entityType: 'reference_data_version', entityId: id, metadata: { decision: dto.decision, status } });
     return row;
   }
 
@@ -667,12 +708,32 @@ export class ExtendedDomainsService {
     const ownerConfirmed = dto.ownerConfirmed ?? existing.ownerConfirmed;
     const glossaryAligned = dto.glossaryAligned ?? existing.glossaryAligned;
     const lineageReviewed = dto.lineageReviewed ?? existing.lineageReviewed;
-    const status = dto.status ?? certificationStatus({ qualityScore, completenessScore, ownerConfirmed, glossaryAligned, lineageReviewed });
+    const calculated = certificationStatus({ qualityScore, completenessScore, ownerConfirmed, glossaryAligned, lineageReviewed });
+    if (dto.status === MetadataCertificationStatus.certified && calculated !== MetadataCertificationStatus.certified) throw new BadRequestException('Metadata does not meet the required certification checks');
+    const status = dto.status === MetadataCertificationStatus.certified || dto.status === undefined ? calculated : dto.status;
     if (existing.createdBy === actor && status === MetadataCertificationStatus.certified) {
       throw new ForbiddenException('Metadata certification creators cannot certify their own metadata');
     }
-    const row = await this.prisma.metadataCertification.update({
-      where: { id },
+    const row = await claimGovernanceWrite(() => this.prisma.$transaction(async (tx) => {
+    if (status === MetadataCertificationStatus.certified) {
+      if (!roleCodes.some((role) => ['enterprise_data_steward', 'dq_steward'].includes(role))) throw new ForbiddenException('An eligible metadata reviewer business role is required');
+      const now = new Date();
+      const expiresAt = dto.expiresAt ? this.parseDate(dto.expiresAt) : existing.expiresAt;
+      if (expiresAt && expiresAt <= now) throw new BadRequestException('A current certification cannot already be expired');
+      const [asset, score, owner, glossary, lineage, proof] = await Promise.all([
+        tx.dataAsset.findFirst({ where: { id: existing.assetId, deletedAt: null, isActive: true } }),
+        tx.dataQualityScore.findFirst({ where: { assetId: existing.assetId }, orderBy: { measuredAt: 'desc' } }),
+        tx.stewardshipAssignment.findFirst({ where: { targetType: 'asset', targetId: existing.assetId, roleType: { code: 'data_owner' }, approvalStatus: 'approved', isActive: true, deletedAt: null, effectiveDate: { lte: now }, OR: [{ expiryDate: null }, { expiryDate: { gt: now } }], person: { isActive: true, deletedAt: null } } }),
+        tx.businessGlossaryTerm.findFirst({ where: { assetId: existing.assetId, status: 'approved', OR: [{ reviewDueAt: null }, { reviewDueAt: { gt: now } }] } }),
+        tx.businessLineageMap.findFirst({ where: { status: 'verified', OR: [{ sourceAssetId: existing.assetId }, { targetAssetId: existing.assetId }] } }),
+        tx.ndiEvidence.findFirst({ where: { id: dto.evidenceId ?? existing.evidenceId ?? '__missing_certification_proof__', ...operationalEvidenceWhere(now) } }),
+      ]);
+      const fields = asset ? [asset.code, asset.nameEn, asset.nameAr, asset.description, asset.domainId, asset.orgUnitId, asset.systemId, asset.classificationId, asset.ownerName] : [];
+      const liveCompleteness = fields.length ? Math.round(fields.filter(Boolean).length / fields.length * 100) : 0;
+      if (!proof || !owner || !glossary || !lineage || !score || score.score < 80 || liveCompleteness < 80 || qualityScore !== score.score || completenessScore !== liveCompleteness) throw new BadRequestException('Certification requires current operational proof, approved ownership, reviewed glossary and lineage, and matching live quality/completeness metrics');
+    }
+    const updated = await claimGovernanceWrite(() => tx.metadataCertification.update({
+      where: { id, updatedAt: existing.updatedAt, status: existing.status },
       data: {
         status,
         qualityScore,
@@ -683,12 +744,14 @@ export class ExtendedDomainsService {
         certificationNote: dto.certificationNote,
         expiresAt: dto.expiresAt ? this.parseDate(dto.expiresAt) : undefined,
         evidenceId: dto.evidenceId ?? undefined,
-        certifiedBy: status === MetadataCertificationStatus.certified ? actor : undefined,
-        certifiedAt: status === MetadataCertificationStatus.certified ? new Date() : undefined,
+        certifiedBy: status === MetadataCertificationStatus.certified ? actor : null,
+        certifiedAt: status === MetadataCertificationStatus.certified ? new Date() : null,
         updatedBy: actor,
       },
-    });
-    await this.audit.log({ actor, action: 'extended_domains.metadata_certification.save', entityType: 'metadata_certification', entityId: id, metadata: { status } });
+    }));
+    await this.audit.logRequired({ actor, action: 'extended_domains.metadata_certification.save', entityType: 'metadata_certification', entityId: id, metadata: { status } }, tx);
+    return updated;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
     return row;
   }
 
@@ -782,18 +845,18 @@ export class ExtendedDomainsService {
     );
   }
 
-  private async nextCode(model: 'mdmMatchCandidate' | 'metadataCertification' | 'architectureReview', prefix: string): Promise<string> {
+  private async nextCode(model: 'mdmMatchCandidate' | 'metadataCertification' | 'architectureReview', prefix: string, client: Prisma.TransactionClient = this.prisma): Promise<string> {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     return nextAvailableBusinessCode(
-      this.prisma,
+      client,
       `extended_domains:${model}:${day}`,
       (value) => `${prefix}-${day}-${formatBusinessSequence(value, 3)}`,
       async (code) => !(
         model === 'mdmMatchCandidate'
-          ? await this.prisma.mdmMatchCandidate.findUnique({ where: { code } })
+          ? await client.mdmMatchCandidate.findUnique({ where: { code } })
           : model === 'metadataCertification'
-            ? await this.prisma.metadataCertification.findUnique({ where: { code } })
-            : await this.prisma.architectureReview.findUnique({ where: { code } })
+            ? await client.metadataCertification.findUnique({ where: { code } })
+            : await client.architectureReview.findUnique({ where: { code } })
       ),
     );
   }

@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Request } from 'express';
@@ -11,6 +12,8 @@ class StrategyDto extends CompleteAiRiskReviewDto {
   @IsOptional() @IsString() @MaxLength(5000) scopeChange?:string;
 }
 @Controller('ai/risks/:id/strategy')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiRiskStrategyController {
   constructor(private readonly strategy:AiRiskStrategyService){}
   @Get() context(@CurrentUser() user:AuthUser,@Param('id',ParseUUIDPipe) id:string){return this.strategy.context(user.id,id);}

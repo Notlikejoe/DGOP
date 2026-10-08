@@ -44,9 +44,9 @@
       <aside class="ds-card case-rail">
         <div class="panel-head">
           <div><span class="eyebrow">{{ t('aiuc.rail.eyebrow') }}</span><h2>{{ t('aiuc.rail.title') }}</h2></div>
-          <span class="count">{{ cases().length }}</span>
+          <span class="count">{{ total() }}</span>
         </div>
-        <label class="case-search"><span class="sr-only">{{ t('aiuc.search') }}</span><input pInputText type="search" [placeholder]="t('aiuc.search')" [ngModel]="caseSearch()" [ngModelOptions]="{standalone:true}" (ngModelChange)="caseSearch.set($event)" /></label>
+        <label class="case-search"><span class="sr-only">{{ t('aiuc.search') }}</span><input pInputText type="search" [placeholder]="t('aiuc.search')" [ngModel]="caseSearch()" [ngModelOptions]="{standalone:true}" maxlength="200" (ngModelChange)="searchCases($event)" /></label>
         <div class="case-list">
           @for (item of filteredCases(); track item.id) {
             <button type="button" class="case-row" pRipple [class.case-row--active]="selected()?.id === item.id" (click)="selectCase(item)">
@@ -62,6 +62,7 @@
             <div class="empty-state"><app-icon name="fileCheck" /><strong>{{ t('aiuc.empty.title') }}</strong><p>{{ t('aiuc.empty.body') }}</p></div>
           }
         </div>
+        <p-paginator [rows]="25" [totalRecords]="total()" [first]="(page()-1)*25" (onPageChange)="pageChanged($event)" />
       </aside>
 
       <main class="intake-main">

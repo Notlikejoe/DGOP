@@ -57,6 +57,7 @@
       </aside>
 
       <main class="review-main">
+        @if (auth.aiCapabilities()?.administratorOversight && !canActOnStage()) { <div class="review-gate-note" role="status">{{ t('aiGovernance.oversightReadOnly') }}</div> }
         @if (selected(); as item) {
           <section class="ds-card review-toolbar review-toolbar--case"><div><span class="eyebrow">{{ item.workflowCase.code }} · {{ item.useCaseRef || t('aiReview.pendingAiRef') }}</span><h2>{{ item.name }}</h2><small>{{ t('aiReview.stageProgress') }} · {{ stageNumber() }}/6</small></div><div class="review-case-progress"><app-status-chip kind="info" [label]="tabLabel()" /><strong>{{ stageProgress() }}%</strong><p-progressbar [value]="stageProgress()" [showValue]="false" /></div></section>
 
@@ -70,7 +71,7 @@
             <section class="ds-card decision-card">
               <div><span class="eyebrow">{{ t('aiReview.triage.decision') }}</span><h2>{{ t('aiReview.triage.title') }}</h2><p>{{ t('aiReview.triage.body') }}</p></div>
               <label><span>{{ t('aiReview.justification') }}</span><textarea rows="4" [ngModel]="justification()" (ngModelChange)="justification.set($event)" [placeholder]="t('aiReview.justificationHint')"></textarea></label>
-              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working()" (click)="decide('accept')">{{ t('aiReview.accept') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification().trim()" (click)="decide('return')">{{ t('aiReview.return') }}</button><button type="button" class="ds-btn danger-action" [disabled]="working() || !justification().trim()" (click)="decide('reject')">{{ t('aiReview.reject') }}</button></div>
+              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working()" (click)="decide('accept')">{{ t('aiReview.accept') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="!canActOnStage() || working() || !justification().trim()" (click)="decide('return')">{{ t('aiReview.return') }}</button><button type="button" class="ds-btn danger-action" [disabled]="!canActOnStage() || working() || !justification().trim()" (click)="decide('reject')">{{ t('aiReview.reject') }}</button></div>
             </section>
           } @else if (tab() === 'classification') {
             <section class="classification-result" [class.classification-result--ready]="calculatedTier()">
@@ -86,7 +87,7 @@
                 </article>
               }
             </section>
-            <section class="ds-card assessment-actions"><div><strong>{{ t('aiReview.assessment.review') }}</strong><p>{{ t('aiReview.assessment.reviewBody') }}</p></div><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !configuration()?.ready || !assessmentComplete()" (click)="assess()"><app-icon name="shield" />{{ t('aiReview.assessment.submit') }}</button></section>
+            <section class="ds-card assessment-actions"><div><strong>{{ t('aiReview.assessment.review') }}</strong><p>{{ t('aiReview.assessment.reviewBody') }}</p></div><button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working() || !configuration()?.ready || !assessmentComplete()" (click)="assess()"><app-icon name="shield" />{{ t('aiReview.assessment.submit') }}</button></section>
           } @else if (tab() === 'verification') {
             <section class="classification-result classification-result--ready verification-summary">
               <div><span>{{ t('aiReview.calculated') }}</span><strong>{{ assessmentResult()['scoreMax'] ?? '—' }}</strong></div>
@@ -114,7 +115,7 @@
                   <label><span>{{ t('aiReview.verification.authority') }} <b>*</b></span><input type="text" [ngModel]="authorityReference()" (ngModelChange)="authorityReference.set($event)" [placeholder]="t('aiReview.verification.authorityHint')" /></label>
                 </div>
               }
-              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !justification().trim()" (click)="returnForReassessment()">{{ t('aiReview.verification.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !decisionReady()" (click)="recordVerification()"><app-icon name="shield" />{{ decisionIsOverride() ? t('aiReview.verification.recordDecision') : t('aiReview.verification.verify') }}</button></div>
+              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="!canActOnStage() || working() || !justification().trim()" (click)="returnForReassessment()">{{ t('aiReview.verification.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working() || !decisionReady()" (click)="recordVerification()"><app-icon name="shield" />{{ decisionIsOverride() ? t('aiReview.verification.recordDecision') : t('aiReview.verification.verify') }}</button></div>
             </section>
           } @else if (tab() === 'registration') {
             <section class="classification-result classification-result--ready specialist-summary">
@@ -154,9 +155,9 @@
               <label><span>{{ t('aiReview.justification') }} <b>*</b></span><textarea rows="3" [ngModel]="justification()" (ngModelChange)="justification.set($event)"></textarea></label>
               @if (assetApprovalStage()) {
                 <label><span>{{ t('aiReview.verification.evidenceIds') }} <b>*</b></span><textarea rows="2" [ngModel]="decisionEvidenceIds()" (ngModelChange)="decisionEvidenceIds.set($event)"></textarea></label>
-                <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !specialistDecisionReady()" (click)="saveRegistration('return')">{{ t('aiReview.registration.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !specialistDecisionReady()" (click)="saveRegistration('approve')"><app-icon name="shield" />{{ t('aiReview.registration.approve') }}</button></div>
+                <div class="decision-actions"><button type="button" class="ds-btn ds-btn--ghost" [disabled]="!canActOnStage() || working() || !specialistDecisionReady()" (click)="saveRegistration('return')">{{ t('aiReview.registration.return') }}</button><button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working() || !specialistDecisionReady()" (click)="saveRegistration('approve')"><app-icon name="shield" />{{ t('aiReview.registration.approve') }}</button></div>
               } @else {
-                <button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !registrationReady()" (click)="saveRegistration()">{{ t('aiReview.registration.submit') }}</button>
+                <button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working() || !registrationReady()" (click)="saveRegistration()">{{ t('aiReview.registration.submit') }}</button>
               }
             </section>
           } @else {
@@ -195,7 +196,7 @@
                 <label><span>{{ t('aiReview.justification') }} <b>*</b></span><textarea rows="3" [ngModel]="justification()" (ngModelChange)="justification.set($event)"></textarea></label>
                 <label><span>{{ t('aiReview.verification.evidenceIds') }} <b>*</b></span><textarea rows="3" [ngModel]="decisionEvidenceIds()" (ngModelChange)="decisionEvidenceIds.set($event)" [placeholder]="t('aiReview.verification.evidenceHint')"></textarea></label>
                 <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiReview.adoption.separation') }}</span></div>
-                <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !adoptionReady()" (click)="recordAdoption()"><app-icon name="shield" />{{ t('aiReview.adoption.record') }}</button></div>
+                <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working() || !adoptionReady()" (click)="recordAdoption()"><app-icon name="shield" />{{ t('aiReview.adoption.record') }}</button></div>
               </section>
             } @else {
             <section class="ds-card decision-card specialist-decision">
@@ -203,7 +204,7 @@
               <label><span>{{ t('aiReview.justification') }} <b>*</b></span><textarea rows="3" [ngModel]="justification()" (ngModelChange)="justification.set($event)" [placeholder]="t('aiReview.specialist.justificationHint')"></textarea></label>
               <label><span>{{ t('aiReview.verification.evidenceIds') }} <b>*</b></span><textarea rows="3" [ngModel]="decisionEvidenceIds()" (ngModelChange)="decisionEvidenceIds.set($event)" [placeholder]="t('aiReview.verification.evidenceHint')"></textarea></label>
               <div class="review-gate-note"><app-icon name="info" /><span>{{ t('aiReview.specialist.mergeGate') }}</span></div>
-              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="working() || !specialistDecisionReady()" (click)="recordSpecialistReview('approve')">{{ t('aiReview.specialist.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="working() || !specialistDecisionReady()" (click)="recordSpecialistReview('return')">{{ t('aiReview.specialist.return') }}</button><button type="button" class="ds-btn danger-action" [disabled]="working() || !specialistDecisionReady()" (click)="recordSpecialistReview('reject')">{{ t('aiReview.specialist.reject') }}</button></div>
+              <div class="decision-actions"><button type="button" class="ds-btn ds-btn--primary" [disabled]="!canActOnStage() || working() || !specialistDecisionReady()" (click)="recordSpecialistReview('approve')">{{ t('aiReview.specialist.approve') }}</button><button type="button" class="ds-btn ds-btn--ghost" [disabled]="!canActOnStage() || working() || !specialistDecisionReady()" (click)="recordSpecialistReview('return')">{{ t('aiReview.specialist.return') }}</button><button type="button" class="ds-btn danger-action" [disabled]="!canActOnStage() || working() || !specialistDecisionReady()" (click)="recordSpecialistReview('reject')">{{ t('aiReview.specialist.reject') }}</button></div>
             </section>
             }
           }

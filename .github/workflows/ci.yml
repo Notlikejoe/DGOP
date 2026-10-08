@@ -17,7 +17,7 @@ jobs:
           POSTGRES_PASSWORD: dgop_ci_password
           POSTGRES_DB: dgop_ci
         ports:
-          - 5432:5432
+          - 55438:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d dgop_ci"
           --health-interval 5s
@@ -26,7 +26,7 @@ jobs:
     env:
       NODE_ENV: test
       PORT: 3005
-      DATABASE_URL: postgresql://postgres:dgop_ci_password@127.0.0.1:5432/dgop_ci?schema=public
+      DATABASE_URL: postgresql://postgres:dgop_ci_password@127.0.0.1:55438/dgop_ci?schema=public
       JWT_SECRET: ci-jwt-5ccb27acd6564e66b595ca80f03b9627
       DGOP_SEARCH_QUERY_KEY: ci-search-3c0f53d4d7424eb89c0f59031d5a1b89
       DGOP_BPMN_SIGNING_SECRET: ci-bpmn-13b3d49f2dc647c8adfd9f4e89cfe4dd
@@ -43,11 +43,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24.19.0
           cache: npm
           cache-dependency-path: |
             apps/api/package-lock.json
             apps/web/package-lock.json
+      - name: Pin npm
+        run: npm install --global npm@11.13.0
+      - name: Configure licensed UI
+        env:
+          PRIMEUI_LICENSE: ${{ secrets.PRIMEUI_LICENSE }}
+        run: node scripts/configure-ci-license.mjs
       - name: Install dependencies
         run: |
           npm ci --prefix apps/api
@@ -58,5 +64,10 @@ jobs:
         run: npm run db:deploy
       - name: Seed controlled CI data
         run: npm run db:seed
+      - name: Clean-install and upgrade database regressions
+        env:
+          DGOP_AI_TEST_DATABASE_URL: postgresql://postgres:dgop_ci_password@127.0.0.1:55438/dgop_ai_test_ci
+          DGOP_TEST_PG_BIN: /usr/lib/postgresql/16/bin
+        run: npm run test:database
       - name: Run canonical release gate
         run: npm run qa:release

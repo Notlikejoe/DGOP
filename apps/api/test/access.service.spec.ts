@@ -184,7 +184,7 @@ test('access grant CSV commit creates rows only after governed validation', asyn
   };
   const service = new AccessGrantsService(
     prisma as never,
-    { log: async (entry: any) => auditActions.push(entry.action) } as never,
+    { logRequired: async (entry: any) => auditActions.push(entry.action) } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
     {} as never,
   );
@@ -243,7 +243,7 @@ test('effective access expands role grants into active user memberships', async 
   };
   const service = new AccessGrantsService(
     prisma as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
     {} as never,
   );
@@ -299,7 +299,7 @@ test('effective access paginates expanded rows across bounded source batches wit
         },
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
     {} as never,
   );
@@ -355,7 +355,7 @@ test('access matrix clamps its dimensions and rejects an oversized grant selecti
         count: async () => 10_001,
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
     {} as never,
   );
@@ -430,7 +430,7 @@ test('approved grant rules are applied atomically to the DGOP policy store', asy
   };
   const service = new AccessGrantsService(
     prisma as never,
-    { log: async (entry: any) => auditActions.push(entry.action) } as never,
+    { logRequired: async (entry: any) => auditActions.push(entry.action) } as never,
     {} as never,
     {} as never,
   );
@@ -479,7 +479,7 @@ test('pending revocation removes DGOP policy rules and closes the grant lifecycl
   };
   const service = new AccessGrantsService(
     { accessEnforcementAttempt: { findUnique: async () => null }, $transaction: async (fn: any) => fn(tx) } as never,
-    { log: async (entry: any) => auditActions.push(entry.action) } as never,
+    { logRequired: async (entry: any) => auditActions.push(entry.action) } as never,
     {} as never,
     {} as never,
   );

@@ -1,0 +1,34 @@
+// Rebind a previously verified fresh restore for backend smoke; never mutates its source installation.
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdirSync,cpSync,realpathSync} from 'node:fs';
+import {dirname,resolve,join,relative,sep,isAbsolute} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createServer} from 'node:net';
+import {spawnSync} from 'node:child_process';
+import {demoConfig,readManifest,atomicJson,sha256} from './demo-profile.mjs';
+import {directoryFingerprint,sameFingerprint} from './demo-files.mjs';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..'),config=demoConfig(root);
+assert.equal(config.env.NODE_ENV,'test');assert.equal(config.env.DGOP_DEMO_QA,'true');assert.equal(readManifest(config).qaOnly,true);
+const proofFile=resolve(process.argv[2]??''),proof=JSON.parse(readFileSync(proofFile,'utf8'));
+const inside=relative(realpathSync(join(config.installationRoot,'backups')),realpathSync(proofFile));assert.ok(inside&&inside!=='..'&&!inside.startsWith('..'+sep)&&!isAbsolute(inside),'Select a verified backup inside this installation');
+assert.equal(proof.database,config.database);assert.equal(proof.restoreVerified,true);assert.match(proof.restoredDatabase,/^dgop_ai_test_restore_\d+$/);
+assert.equal(realpathSync(proof.restoredFiles),realpathSync(join(dirname(proofFile),'restored-files')));
+assert.equal(sha256(readFileSync(join(dirname(proofFile),'database.dump'))),proof.dumpSha256);
+const originalManifest=readFileSync(join(proof.restoredFiles,'manifest.json'));assert.equal(sha256(originalManifest),proof.manifestSha256);
+const directory=join(dirname(proofFile),'restored-smoke-'+Date.now());mkdirSync(directory,{recursive:true});mkdirSync(join(directory,'logs'),{recursive:true});
+for(const name of ['evidence','attachments','sources']){assert.ok(sameFingerprint(proof.fileSets[name],directoryFingerprint(join(proof.restoredFiles,name))));cpSync(join(proof.restoredFiles,name),join(directory,name),{recursive:true,force:false,errorOnExist:true});}
+const server=createServer();await new Promise(done=>server.listen(0,'127.0.0.1',done));const port=server.address().port;await new Promise(done=>server.close(done));
+const url=new URL(config.env.DATABASE_URL);url.pathname='/'+proof.restoredDatabase;
+const profile=join(directory,'installation.json'),manifestPath=join(directory,'manifest.json'),envFile=join(directory,'.env.qa');
+atomicJson(profile,{profileVersion:1,demoOnly:true,qaOnly:true,database:proof.restoredDatabase,installationId:config.env.DGOP_DEMO_INSTALLATION_ID,installationRoot:directory,bindHost:'127.0.0.1'});
+atomicJson(manifestPath,{...JSON.parse(originalManifest),database:proof.restoredDatabase,qaOnly:true});
+const credentialBytes=readFileSync(proof.privateRecoveryFiles?join(dirname(proofFile),'credentials.local.json'):config.credentialsPath);
+if(proof.privateRecoveryFiles)assert.equal(sha256(credentialBytes),proof.privateRecoveryFiles.credentialsSha256);
+const credentials=JSON.parse(credentialBytes);atomicJson(join(directory,'credentials.local.json'),{...credentials,qaOnly:true,previewUrl:'http://localhost:'+port+'/'});
+const env={...config.env,NODE_ENV:'test',PORT:String(port),PUBLIC_ORIGIN:'http://127.0.0.1:'+port,CORS_ORIGINS:'http://127.0.0.1:'+port,DATABASE_URL:url.href,DGOP_AI_TEST_DATABASE_URL:url.href,DGOP_ENV_FILE:envFile,DGOP_DEMO_ROOT:directory,DGOP_DEMO_PROFILE_FILE:profile,DGOP_DEMO_MANIFEST:manifestPath,DGOP_DEMO_CREDENTIALS:join(directory,'credentials.local.json'),DGOP_DEMO_RESULT:join(directory,'verification.json'),EVIDENCE_STORAGE_DIR:join(directory,'evidence'),WORKFLOW_ATTACHMENT_STORAGE_DIR:join(directory,'attachments'),AI_MIGRATION_SOURCE_DIR:join(directory,'sources'),AI_MIGRATION_SOURCE_MANIFEST:join(directory,'sources/manifest.json')};
+const fields=Object.fromEntries(Object.entries(env).filter(([key])=>key in config.env&&!/^(?:PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|USERPROFILE|HOMEDRIVE|HOMEPATH|APPDATA|LOCALAPPDATA|PROGRAMFILES|PROGRAMDATA|NUMBER_OF_PROCESSORS|PROCESSOR_ARCHITECTURE)$/i.test(key)));
+writeFileSync(envFile,Object.entries(fields).map(([key,value])=>`${key}='${value}'`).join('\n')+'\n',{mode:0o600});
+const result=spawnSync(process.execPath,[join(root,'scripts/test-demo-runtime.mjs'),'--cycles','1'],{cwd:root,env,stdio:'inherit',windowsHide:true});
+assert.equal(result.status,0,'Restored instance backend and persona smoke must pass');
+atomicJson(join(directory,'restored-runtime-verification.json'),{qaOnly:true,demoOnly:true,isLicensedDemoAcceptance:false,completedAt:new Date().toISOString(),restoredDatabase:proof.restoredDatabase,originalFixtureManifestSha256:proof.manifestSha256,fixtureManifestReboundForSmoke:true,backendAndAllPersonaSmokePassed:true,preSmokeExactRestoreVerified:true});
+console.log('Fresh restored database and files passed native backend/persona smoke. Presentation browser acceptance remains separate.');

@@ -50,7 +50,8 @@ function makeService(over: Over): EvidenceService {
       findFirst: async () => over.person ?? null,
     },
   };
-  const audit = { log: async () => {} };
+  (prisma as any).$transaction = async (callback: any) => callback(prisma);
+  const audit = { log: async () => {}, logRequired: async () => {} };
   return new EvidenceService(prisma as never, audit as never);
 }
 
@@ -94,7 +95,7 @@ test('effectiveStatus: approved with future expiry stays approved', async () => 
   assert.strictEqual((list[0] as any).effectiveStatus, 'approved');
 });
 
-test('rollupForSpecs: counts only operational evidence by default', async () => {
+test('rollupForSpecs: operational credit cannot be disabled by a legacy option', async () => {
   const queries: any[] = [];
   const svc = makeService({ rows: [], onFindMany: (args) => queries.push(args.where) });
 
@@ -102,7 +103,20 @@ test('rollupForSpecs: counts only operational evidence by default', async () => 
   await svc.rollupForSpecs(['spec1'], { authoritativeOnly: false });
 
   assert.strictEqual(queries[0].provenance, 'operational');
-  assert.strictEqual(Object.prototype.hasOwnProperty.call(queries[1], 'provenance'), false);
+  assert.strictEqual(queries[1].provenance, 'operational');
+});
+
+test('rollupForSpecs: unknown or synthetic provenance cannot receive operational credit', async () => {
+  const svc = makeService({ rows: [
+    { ...base, status: 'approved', provenance: 'seeded_uat' },
+    { ...base, status: 'approved' },
+  ] });
+  assert.strictEqual((await svc.rollupForSpecs(['spec1'])).get('spec1')?.hasCurrentApproved, false);
+});
+
+test('rollupForSpecs: synthetic scenario is unavailable outside a managed demo profile', async () => {
+  const svc = makeService({ rows: [] });
+  await assert.rejects(() => svc.rollupForSpecs(['spec1'], { syntheticScenario: true }), /unavailable/);
 });
 
 test('submit: draft -> submitted', async () => {
@@ -138,6 +152,11 @@ test('review: approve sets approved status', async () => {
   assert.strictEqual(captured.status, 'approved');
   assert.strictEqual(captured.reviewedBy, 'bob@dgop.local');
   assert.strictEqual(captured.reviewComment, 'ok');
+});
+
+test('review: platform administrator needs a business review role for another submitter', async () => {
+  const svc = makeService({ evidenceRow: { ...base, status: 'submitted' } });
+  await assert.rejects(() => svc.review('e1', { decision: 'approve' }, adminUser), /eligible assigned evidence reviewer role/i);
 });
 
 test('review: reject sets rejected status', async () => {

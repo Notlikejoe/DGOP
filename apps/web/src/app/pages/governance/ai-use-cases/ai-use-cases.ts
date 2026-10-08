@@ -1,11 +1,13 @@
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { AiAuditQuery } from '../../../shared/ai-audit-query';
 import { AiRequestControls } from '../../../shared/ai-request-controls';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../../core/auth.service';
+import { AiRegisterPage } from '../../../core/auth.models';
+import { PaginatorModule } from 'primeng/paginator';
 import { I18nService } from '../../../core/i18n.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
@@ -148,11 +150,11 @@ const STEPS: IntakeStepDefinition[] = [
   selector: 'app-ai-use-cases',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AiAuditQuery, AiRequestControls, DualDatePipe, FormsModule, AppIcon, StatusChip,
-    AccordionModule, InputTextModule, MultiSelectModule, ProgressBarModule, RippleModule, SelectModule, TextareaModule],
+    AccordionModule, InputTextModule, MultiSelectModule, ProgressBarModule, RippleModule, SelectModule, TextareaModule, PaginatorModule],
   templateUrl: './ai-use-cases.html',
   styleUrl: './ai-use-cases.scss',
 })
-export class AiUseCasesPage implements OnInit {
+export class AiUseCasesPage implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
@@ -161,6 +163,11 @@ export class AiUseCasesPage implements OnInit {
   protected readonly steps = STEPS;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
   protected readonly cases = signal<AiUseCase[]>([]);
+  protected readonly page=signal(1);
+  protected readonly total=signal(0);
+  protected readonly population=signal({total:0,drafts:0,review:0,registered:0});
+  private searchTimer:ReturnType<typeof setTimeout>|null=null;
+  private loadGeneration=0;
   protected readonly caseSearch = signal('');
   protected readonly selected = signal<AiUseCase | null>(null);
   protected readonly payload = signal<Record<string, any>>({});
@@ -187,25 +194,15 @@ export class AiUseCasesPage implements OnInit {
     return completed;
   });
   protected readonly completionPercent = computed(() => Math.round(this.completedRequired() / this.requiredTotal * 100));
-  protected readonly filteredCases = computed(() => {
-    const search = this.caseSearch().trim().toLocaleLowerCase();
-    return this.cases().filter(item => !search || [item.name, item.useCaseRef, item.workflowCase?.code]
-      .some(value => value?.toLocaleLowerCase().includes(search)));
-  });
-  protected readonly useCaseMetrics = computed(() => {
-    const rows = this.cases();
-    const terminal = new Set(['closed', 'rejected', 'cancelled']);
-    return {
-      total: rows.length,
-      drafts: rows.filter(item => !item.workflowCaseId).length,
-      review: rows.filter(item => item.workflowCase && !terminal.has(item.workflowCase.status)).length,
-      registered: rows.filter(item => item.workflowCase?.status === 'closed').length,
-    };
-  });
+  protected readonly filteredCases = computed(()=>this.cases());
+  protected readonly useCaseMetrics = computed(()=>this.population());
+  protected searchCases(value:string):void {this.caseSearch.set(value);if(this.searchTimer)clearTimeout(this.searchTimer);this.searchTimer=setTimeout(()=>{this.page.set(1);void this.load();},300);}
+  protected pageChanged(event:{page?:number}):void {this.page.set((event.page??0)+1);void this.load();}
 
   ngOnInit(): void {
     void this.load();
   }
+  ngOnDestroy():void {if(this.searchTimer)clearTimeout(this.searchTimer);this.loadGeneration++;}
 
   protected t(key: string): string { return this.i18n.t(key); }
   protected fieldLabel(code: string): string { return this.t(`aiuc.field.${code}`); }
@@ -245,21 +242,26 @@ export class AiUseCasesPage implements OnInit {
   protected fieldIssues(code: string): ValidationIssue[] { return this.issues().filter(issue => issue.field === code); }
 
   protected async load(preferredId?: string): Promise<void> {
+    const generation=++this.loadGeneration;
     this.state.set('loading');
     try {
       const [cases, lookups] = await Promise.all([
-        firstValueFrom(this.http.get<AiUseCase[]>('/api/ai/use-cases')),
+        firstValueFrom(this.http.get<AiRegisterPage<AiUseCase,{total:number;drafts:number;review:number;registered:number}>>('/api/ai/use-cases?'+new URLSearchParams({page:String(this.page()),pageSize:'25',search:this.caseSearch()}))),
         firstValueFrom(this.http.get<IntakeLookups>('/api/ai/use-cases/lookups')),
       ]);
-      this.cases.set(cases);
+      if(generation!==this.loadGeneration)return;
+      this.cases.set(cases.data);this.total.set(cases.total);this.population.set(cases.summary);
       this.lookups.set(lookups);
-      const target = cases.find(row => row.id === preferredId)
-        ?? cases.find(row => row.id === this.selected()?.id)
-        ?? cases[0]
+      const target = cases.data.find(row => row.id === preferredId)
+        ?? (preferredId?await firstValueFrom(this.http.get<AiUseCase>(`/api/ai/use-cases/${preferredId}`)):null)
+        ?? cases.data.find(row => row.id === this.selected()?.id)
+        ?? cases.data[0]
         ?? null;
+      if(generation!==this.loadGeneration)return;
       this.selectCase(target);
       this.state.set('ok');
     } catch (error) {
+      if(generation!==this.loadGeneration)return;
       this.state.set('error');
       this.toast.errorFrom(error, this.t('aiuc.error.load'));
     }
@@ -281,8 +283,7 @@ export class AiUseCasesPage implements OnInit {
     this.saving.set(true);
     try {
       const created = await firstValueFrom(this.http.post<AiUseCase>('/api/ai/use-cases', { payload: {} }));
-      this.cases.update(rows => [created, ...rows]);
-      this.selectCase(created);
+      await this.load(created.id);
       this.toast.success(this.t('aiuc.saved.created'));
     } catch (error) {
       this.handleError(error, 'aiuc.error.create');
@@ -404,8 +405,7 @@ export class AiUseCasesPage implements OnInit {
         expectedVersion: item.version,
         changes: this.payload(),
       }));
-      this.replaceCase(saved);
-      this.selectCase(saved);
+      await this.load(saved.id);
       this.toast.success(this.t('aiuc.saved.draft'));
       return saved;
     } catch (error) {
@@ -430,8 +430,7 @@ export class AiUseCasesPage implements OnInit {
       const submitted = await firstValueFrom(this.http.post<AiUseCase>(`/api/ai/use-cases/${item.id}/${operation}`, {
         expectedVersion: item.version,
       }));
-      this.replaceCase(submitted);
-      this.selectCase(submitted);
+      await this.load(submitted.id);
       this.toast.success(this.t('aiuc.saved.submitted'));
     } catch (error) {
       this.handleError(error, 'aiuc.error.submit');

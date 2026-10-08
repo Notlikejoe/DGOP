@@ -20,6 +20,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
 import { AuthService } from '../../../core/auth.service';
+import { ReferenceLookupsService } from '../../../core/reference-lookups.service';
 import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
@@ -252,6 +253,7 @@ export class AssetsPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
+  private readonly referenceLookups = inject(ReferenceLookupsService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
@@ -387,12 +389,12 @@ export class AssetsPage implements OnInit {
 
   private loadLookups(): void {
     forkJoin({
-      domains: this.http.get<Ref[]>('/api/data-domains'),
-      orgUnits: this.http.get<Ref[]>('/api/org-units'),
-      systems: this.http.get<SystemRef[]>('/api/systems'),
-      capabilities: this.http.get<Ref[]>('/api/business-capabilities'),
-      classifications: this.http.get<ClassRef[]>('/api/classifications'),
-      subjects: this.http.get<Ref[]>('/api/data-subjects'),
+      domains: this.referenceLookups.list<Ref>('data_domains.view','/api/data-domains'),
+      orgUnits: this.referenceLookups.list<Ref>('org_units.view','/api/org-units'),
+      systems: this.referenceLookups.list<SystemRef>('systems.view','/api/systems'),
+      capabilities: this.referenceLookups.list<Ref>('business_capabilities.view','/api/business-capabilities'),
+      classifications: this.referenceLookups.list<ClassRef>('classifications.view','/api/classifications'),
+      subjects: this.referenceLookups.list<Ref>('data_subjects.view','/api/data-subjects'),
     }).subscribe((r) => {
       this.domains.set(r.domains);
       this.orgUnits.set(r.orgUnits);
@@ -402,7 +404,7 @@ export class AssetsPage implements OnInit {
       this.subjects.set(r.subjects);
     });
     if (this.canSubmitForApproval) {
-      this.http.get<UserRef[]>('/api/users').subscribe({
+      this.referenceLookups.list<UserRef>('users.view','/api/users').subscribe({
         next: (u) => this.users.set(u),
         error: () => this.users.set([]),
       });

@@ -404,7 +404,7 @@ test('close delegates linked workflow closure to the workflow engine', async () 
       },
       $transaction: async (callback: any) => callback(tx),
     } as never,
-    { log: async () => undefined } as never,
+    { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
@@ -455,7 +455,7 @@ test('importCsv does not distinguish hidden asset codes from unavailable codes',
     {
       dataAsset: { findMany: async () => [] },
     } as never,
-    { log: async () => undefined } as never,
+    { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
     } as never,
@@ -485,7 +485,7 @@ test('importCsv rejects invalid enum values before creating issue rows', async (
         },
       },
     } as never,
-    { log: async () => undefined } as never,
+    { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
@@ -510,7 +510,7 @@ test('importCsv normalizes friendly enum casing for CSV operators', async () => 
     {
       dataAsset: { findMany: async () => [] },
     } as never,
-    { log: async () => undefined } as never,
+    { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
@@ -642,7 +642,7 @@ test('runProfilingEngine persists a profile, six dimension scores, and draft rul
       dataDomain: { findFirst: async () => ({ id: 'domain-finance' }) },
       $transaction: async (callback: any) => callback(tx),
     } as never,
-    { log: async (entry: any) => audits.push(entry) } as never,
+    { log: async (entry: any) => audits.push(entry), logRequired: async (entry: any) => audits.push(entry) } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
@@ -692,7 +692,7 @@ test('runProfilingEngine can turn profiling anomalies into data quality issues',
       dataAsset: { findMany: async () => [], findFirst: async () => ({ id: 'asset-patients' }) },
       $transaction: async (callback: any) => callback(tx),
     } as never,
-    { log: async () => undefined } as never,
+    { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,

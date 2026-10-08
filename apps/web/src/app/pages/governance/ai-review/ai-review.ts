@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
+import { AuthService } from '../../../core/auth.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
@@ -43,6 +44,7 @@ interface AiReviewCase {
       id: string;
       title: string;
       assigneeRoleCode?: string | null;
+      assigneeUserId?: string | null;
       dueDate?: string | null;
       approvalGroupId?: string | null;
       formDataJson?: Record<string, unknown> | null;
@@ -109,6 +111,7 @@ const INTAKE_FIELDS = [
   styleUrl: './ai-review.scss',
 })
 export class AiReviewPage implements OnInit {
+  protected readonly auth=inject(AuthService);
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   protected readonly i18n = inject(I18nService);
@@ -173,6 +176,12 @@ export class AiReviewPage implements OnInit {
     return !!this.justification().trim() && !!this.authorityReference().trim() && this.evidenceIdList().length > 0;
   });
   protected readonly selectedReviewTask = computed(() => this.selected()?.workflowCase.tasks?.[0] ?? null);
+  protected readonly canActOnStage=computed(()=>{
+    const tab=this.tab(),task=this.selectedReviewTask(),roles=this.auth.currentUser()?.roles.map(r=>r.code)??[];
+    const assigned=!task?.assigneeRoleCode||roles.includes(task.assigneeRoleCode);
+    const permission=tab==='decision'?'case.approve.aiuc':tab==='registration'?(task?.templateStage?.code==='aiuc-asset-approval'?'aiuc.asset.approve':'aiuc.asset.register'):tab==='specialist'?'case.view.aiuc.org':'aiuc.classify.assess';
+    return assigned&&(!task?.assigneeUserId||task.assigneeUserId===this.auth.currentUser()?.id)&&this.auth.hasAiPermission(permission);
+  });
   protected readonly specialistDecisionReady = computed(() => !!this.justification().trim() && this.evidenceIdList().length > 0);
   protected readonly adoptionReady = computed(() => !!this.adoptionOutcome() && this.specialistDecisionReady()
     && (this.adoptionOutcome() !== 'approve_with_conditions' || this.conditionList().length > 0));
@@ -305,6 +314,10 @@ export class AiReviewPage implements OnInit {
   }
 
   private async loadQueue(url: string): Promise<AiReviewCase[]> {
+    if(url.includes('/reviews/queue')&&!this.auth.hasAiPermission('case.view.aiuc.org'))return [];
+    const broad=this.auth.hasAiPermission('case.view.aiuc.org')||this.auth.hasAiPermission('case.view.aiuc.all');
+    const purpose=url.includes('registration')?['aiuc.asset.register','aiuc.asset.approve']:url.includes('decisions')?['case.approve.aiuc']:['aiuc.classify.assess'];
+    if(!broad&&!purpose.some(p=>this.auth.hasAiPermission(p)))return [];
     try {
       return await firstValueFrom(this.http.get<AiReviewCase[]>(url));
     } catch (error) {
@@ -314,6 +327,7 @@ export class AiReviewPage implements OnInit {
   }
 
   private async loadConfiguration(): Promise<ClassificationConfiguration | null> {
+    if(!['aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all'].some(permission=>this.auth.hasAiPermission(permission)))return null;
     try {
       return await firstValueFrom(this.http.get<ClassificationConfiguration>('/api/ai/use-cases/classification/configuration'));
     } catch (error) {

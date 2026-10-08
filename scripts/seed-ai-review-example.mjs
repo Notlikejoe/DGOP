@@ -1,3 +1,5 @@
+import { applyEnvironment } from './runtime-env.mjs';
+import { demoConfig, atomicJson, readManifest, applyDemoEnvironment, assertDemoFixtureWrite } from './demo-profile.mjs';
 // Idempotent installer for one fully populated intake in the isolated AI preview review queue.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -5,15 +7,15 @@ import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-Object.assign(process.env, parseEnv(readFileSync(resolve(root, '.env'), 'utf8')));
+applyEnvironment(root, true);
+const config = demoConfig(root);
+applyDemoEnvironment(config);
+process.env.DGOP_DEMO_ADAPTER_SCHEDULER = 'false';
 const connection = new URL(process.env.DATABASE_URL);
-if (process.argv[2] !== '--local-demo' || connection.hostname !== '127.0.0.1' || connection.port !== '55436'
-  || !/^\/dgop_ai_preview_\d+$/u.test(connection.pathname) || process.env.NODE_ENV !== 'development') {
-  throw new Error('Explicit isolated local preview required; original and remote databases are prohibited');
-}
+assertDemoFixtureWrite(config,process.argv[2]);
 
-const manifestPath = resolve(root, 'storage/ai-preview/demo-manifest.json');
-const credentialsPath = resolve(root, '../../outputs/DGOP_AI_Demo_Logins.local.json');
+const manifestPath = config.manifestPath;
+const credentialsPath = config.credentialsPath;
 if (!existsSync(manifestPath) || !existsSync(credentialsPath)) throw new Error('Install the local AI demonstration before adding the review example');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const credentials = JSON.parse(readFileSync(credentialsPath, 'utf8'));
@@ -21,7 +23,7 @@ if (manifest.demoOnly !== true || manifest.database !== connection.pathname.slic
 const account = credentials.accounts.find(row => row.purpose === 'showcase');
 if (!account) throw new Error('Local showcase account is unavailable');
 
-const base = 'http://127.0.0.1:3006/api';
+const base = config.base + '/api';
 const login = await fetch(base + '/auth/login', {
   method: 'POST', headers: { 'content-type': 'application/json', 'x-dgop-csrf': 'same-origin' },
   body: JSON.stringify({ email: account.email, password: account.password }),
@@ -42,12 +44,16 @@ async function request(path, options = {}) {
 const name = 'DEMO — Employee Support Knowledge Assistant';
 let example = null;
 if (manifest.reviewExample?.useCaseId) {
-  try { example = await request(`/ai/use-cases/${manifest.reviewExample.useCaseId}`, { headers: readHeaders }); } catch { example = null; }
+  example = await request(`/ai/use-cases/${manifest.reviewExample.useCaseId}`, { headers: readHeaders });
 }
 if (!example) {
-  const visible = await request('/ai/use-cases', { headers: readHeaders });
-  example = visible.find(row => row.name === name) ?? null;
+  const visible = await request(`/ai/use-cases?search=${encodeURIComponent(name)}&pageSize=200`, { headers: readHeaders });
+  if (!Array.isArray(visible.data) || visible.total > 200) throw new Error('Review example lookup is ambiguous; preserve existing records and inspect fixture ownership');
+  const matches = visible.data.filter(row => row.name === name);
+  if (matches.length > 1) throw new Error('Multiple records claim the pending review fixture');
+  if (matches.length) example = await request(`/ai/use-cases/${matches[0].id}`, { headers: readHeaders });
 }
+if (example && (example.name !== name || example.requesterUserId !== manifest.actors.showcase || example.intakeRevisions?.[0]?.createdBy !== manifest.actors.showcase)) throw new Error('Pending review fixture ownership conflicts with this installation');
 
 if (!example) {
   const riyadhDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -82,6 +88,10 @@ if (!example) {
     attachments: [manifest.evidenceId],
   };
   example = await request('/ai/use-cases', { method: 'POST', headers: writeHeaders, body: JSON.stringify({ payload }) });
+  manifest.reviewExample = { useCaseId: example.id, name: 'Employee Support Knowledge Assistant', stage: 'draft', completeInput: true, demoOnly: true };
+  atomicJson(manifestPath, manifest);
+}
+if (!example.workflowCaseId) {
   await request(`/ai/use-cases/${example.id}/submit`, { method: 'POST', headers: writeHeaders, body: JSON.stringify({ expectedVersion: example.version }) });
   example = await request(`/ai/use-cases/${example.id}`, { headers: readHeaders });
 }
@@ -104,5 +114,5 @@ const payload = example.intakeRevisions?.[0]?.payload ?? {};
 const requiredFields = ['usecase_name', 'proposed_owner', 'problem_desc', 'objective_value', 'success_kpi', 'human_role', 'data_source', 'data_owner', 'executive_sponsor'];
 if (requiredFields.some(field => payload[field] === undefined || payload[field] === '')) throw new Error('The review example intake is incomplete');
 manifest.reviewExample = { useCaseId: example.id, name: 'Employee Support Knowledge Assistant', stage, completeInput: true, demoOnly: true };
-writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+atomicJson(manifestPath, manifest);
 console.log(JSON.stringify({ installed: true, useCaseId: example.id, stage, completeInput: true }));

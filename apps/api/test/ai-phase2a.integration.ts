@@ -294,7 +294,8 @@ export async function testPhase2A(db: PrismaClient) {
   assert.equal(await db.aiAssessmentRound.count({ where: { useCaseId: draft.id, kind: 'classification' } }), 1);
   assert.equal(await db.workflowTask.count({ where: { caseId: accepted.workflowCase!.id, status: 'pending', assigneeRoleCode: 'AI_GOVERNANCE_OFFICER' } }), 1);
   assert.equal((await classification.verificationQueue(officer.id)).length, 1);
-  await assert.rejects(classification.verificationQueue(triageReviewer.id));
+  assert.equal((await classification.verificationQueue(triageReviewer.id)).length, 1, 'Working Group organization readers may inspect the verification queue');
+  await assert.rejects(classification.verify(triageReviewer.id, draft.id, 8, 'Read access does not grant officer verification authority'), /Responsible AI Officer/);
   await assert.rejects(classification.override(officer.id, draft.id, 8, 'LIMITED',
     'A supported override', [], 'RAIO-P2D-001'));
   const overridden = await classification.override(officer.id, draft.id, 8, 'LIMITED',
@@ -577,7 +578,7 @@ export async function testPhase2A(db: PrismaClient) {
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/configuration`, { headers: reviewerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/queue`, { headers: reviewerHeaders })).status, 200);
-    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: reviewerHeaders })).status, 403);
+    assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: reviewerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/verification/queue`, { headers: officerHeaders })).status, 200);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers })).status, 403);
     assert.equal((await fetch(`${base}/api/ai/use-cases/classification/reviews/queue`, { headers: privacyHeaders })).status, 200);
@@ -698,8 +699,8 @@ export async function testPhase2A(db: PrismaClient) {
   const riskOwner = await createActor('risk-owner', 'AI_RISK_OWNER');
   const otherRiskOwner = await createActor('other-risk-owner', 'AI_RISK_OWNER');
   const preservedHandoff = JSON.stringify(handedOver.handoffPayload);
-  assert.ok((await risks.list(triageReviewer.id)).some(item => item.id === handedOver.id));
-  assert.ok(!(await risks.list(riskOwner.id)).some(item => item.id === handedOver.id));
+  assert.ok((await risks.list(triageReviewer.id)).data.some(item => item.id === handedOver.id));
+  assert.ok(!(await risks.list(riskOwner.id)).data.some(item => item.id === handedOver.id));
   const assignment = { expectedVersion: 1, ownerUserId: riskOwner.id, justification: 'Assign the eligible product risk owner' };
   const brokenAudit = { logRequired: async () => { throw new Error('Injected risk audit failure'); } } as unknown as AuditService;
   const failingRisks = new AiRiskIntakeService(prisma, authorization, scope, routing, new AiIdentifiersService(), brokenAudit);
@@ -775,7 +776,7 @@ export async function testPhase2A(db: PrismaClient) {
   await assert.rejects(risks.assign(triageReviewer.id, linkedRisk.id, { ...assignment, expectedVersion: 3 }), /scope/);
   await db.roleDataScope.delete({ where: { id: restrictedScope.id } });
   const auditor = await createActor('risk-auditor', 'auditor');
-  assert.ok((await risks.list(auditor.id)).some(item => item.id === handedOver.id));
+  assert.ok((await risks.list(auditor.id)).data.some(item => item.id === handedOver.id));
   await assert.rejects(risks.save(auditor.id, linkedRisk.id, 3, { title: 'Auditor edit' }));
   const riskApp = await NestFactory.create(AppModule, { logger: false });
   try {

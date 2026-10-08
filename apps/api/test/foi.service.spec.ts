@@ -162,7 +162,7 @@ function makeService() {
   };
   const service = new FoiService(
     prisma as never,
-    { log: async (entry: any) => data.audit.push(entry) } as never,
+    { log: async (entry: any) => data.audit.push(entry), logRequired: async (entry: any) => data.audit.push(entry) } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
     {
       openRoutedCase: async (input: any) => {
@@ -335,7 +335,9 @@ test('saveDecision delegates workflow progress to the engine', async () => {
     decisions: [],
     disclosures: [],
     appeals: [],
-    reviews: [],
+    reviews: ['classification', 'privacy', 'legal'].map((reviewType) => ({ reviewType, status: 'completed' })),
+    identityValidated: true, contactValidated: true, assignedOfficerPersonId: 'person-officer', createdBy: 'requester@example.test',
+    decisionOutcome: FoiDecisionOutcome.approved,
     exemptions: [],
   };
 
@@ -370,7 +372,9 @@ test('createDisclosure closes linked workflow through the engine', async () => {
     decisions: [{ id: 'decision-1', outcome: FoiDecisionOutcome.approved }],
     disclosures: [],
     appeals: [],
-    reviews: [],
+    reviews: ['classification', 'privacy', 'legal'].map((reviewType) => ({ reviewType, status: 'completed' })),
+    identityValidated: true, contactValidated: true, assignedOfficerPersonId: 'person-officer', createdBy: 'requester@example.test',
+    decisionOutcome: FoiDecisionOutcome.approved,
     exemptions: [],
   };
 

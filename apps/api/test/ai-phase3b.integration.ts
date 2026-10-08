@@ -54,7 +54,7 @@ export async function testPhase3B(db: PrismaClient, fixture: { riskId: string; r
   let context = await service.context(fixture.riskOwnerId, id);
   assert.equal(context.tasks.length, 8); assert.equal(context.canStart, false); assert.equal(context.canComplete, false);
   assert.equal(context.tasks.filter(task => task.canContribute).length, 2);
-  assert.ok((await risks.list(model.id)).some(risk => risk.id === id), 'competent role queues grant own-case visibility within effective scope');
+  assert.ok((await risks.list(model.id)).data.some(risk => risk.id === id), 'competent role queues grant own-case visibility within effective scope');
   await assert.rejects(service.start(fixture.riskOwnerId, id, 6), /already started/);
   await assert.rejects(service.complete(fixture.riskOwnerId, id, { expectedVersion: 6, likelihood: 2, justification: 'Likelihood reason' }), /eight/);
   const privacyTask = context.tasks.find(task => task.dimension === 'dim_privacy')!;

@@ -19,6 +19,7 @@ export class CreateMdmMatchDto {
 }
 
 export class RunMdmMatchingDto {
+  @IsOptional() @IsString() ruleCode?: string;
   @IsOptional() @IsString() sourceAssetId?: string;
   @IsOptional() @IsString() domainId?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) candidateAssetIds?: string[];

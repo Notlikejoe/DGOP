@@ -12,6 +12,7 @@ import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/bus
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { claimGovernanceWrite, requireTransition } from '../common/governance-write';
 import {
   CreateBusinessImpactAssessmentDto,
   CreateBusinessLineageDto,
@@ -261,21 +262,29 @@ export class BusinessValueService {
           },
         },
       });
-      await this.audit.log({ actor, action: 'business_value.glossary.create', entityType: 'business_glossary_term', entityId: row.id, metadata: { code, workflowCaseId } });
+      await this.audit.logRequired({ actor, action: 'business_value.glossary.create', entityType: 'business_glossary_term', entityId: row.id, metadata: { code, workflowCaseId } }, tx);
       return row;
     });
   }
 
   async decideGlossaryTerm(roleCodes: string[], id: string, dto: DecideGlossaryTermDto, actor: string) {
     const existing = await this.findVisibleGlossary(roleCodes, id);
-    if (!roleCodes.includes('system_admin') && existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
+    if (existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Glossary term creators cannot make the final review decision');
+    }
+    requireTransition(existing.status, dto.status, {
+      draft: ['under_review'], under_review: ['approved', 'needs_revision'],
+      needs_revision: ['under_review'], approved: ['under_review', 'retired', 'expired'],
+      expired: ['under_review', 'retired'], retired: [],
+    });
+    if (dto.status === 'approved' && dto.definition && dto.definition !== existing.definition) {
+      throw new BadRequestException('Submit the changed definition for review before approving it');
     }
     const definitionChanged = dto.definition && dto.definition !== existing.definition;
     const nextVersion = definitionChanged ? existing.version + 1 : existing.version;
     const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.businessGlossaryTerm.update({
-        where: { id },
+      const updated = await claimGovernanceWrite(() => tx.businessGlossaryTerm.update({
+        where: { id, updatedAt: existing.updatedAt, status: existing.status },
         data: {
           status: dto.status,
           definition: dto.definition ?? undefined,
@@ -284,15 +293,15 @@ export class BusinessValueService {
           approvedAt: dto.status === BusinessGlossaryStatus.approved ? new Date() : undefined,
           updatedBy: actor,
         },
-      });
+      }));
       if (definitionChanged) {
         await tx.businessGlossaryTermVersion.create({
           data: { termId: id, version: nextVersion, definition: dto.definition!, status: dto.status, changedBy: actor },
         });
       }
+      await this.audit.logRequired({ actor, action: 'business_value.glossary.decide', entityType: 'business_glossary_term', entityId: id, metadata: { status: dto.status } }, tx);
       return updated;
     });
-    await this.audit.log({ actor, action: 'business_value.glossary.decide', entityType: 'business_glossary_term', entityId: id, metadata: { status: dto.status } });
     return row;
   }
 
@@ -312,7 +321,8 @@ export class BusinessValueService {
     }
     const score = clampScore(dto.impactScore, 50);
     const code = await this.nextCode('businessLineageMap', 'BLI');
-    const row = await this.prisma.businessLineageMap.create({
+    return this.prisma.$transaction(async (tx) => {
+    const row = await tx.businessLineageMap.create({
       data: {
         code,
         processName: dto.processName,
@@ -327,27 +337,30 @@ export class BusinessValueService {
         createdBy: actor,
       },
     });
-    await this.audit.log({ actor, action: 'business_value.lineage.create', entityType: 'business_lineage_map', entityId: row.id, metadata: { code } });
+    await this.audit.logRequired({ actor, action: 'business_value.lineage.create', entityType: 'business_lineage_map', entityId: row.id, metadata: { code } }, tx);
     return row;
+    });
   }
 
   async updateLineage(roleCodes: string[], id: string, dto: UpdateBusinessLineageDto, actor: string) {
     const existing = await this.findVisibleLineage(roleCodes, id);
-    if (!roleCodes.includes('system_admin') && existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
+    if (existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
       throw new ForbiddenException('Lineage creators cannot verify their own lineage map');
     }
     const impactScore = dto.impactScore === undefined ? existing.impactScore : clampScore(dto.impactScore, existing.impactScore);
-    const row = await this.prisma.businessLineageMap.update({
-      where: { id },
+    return this.prisma.$transaction(async (tx) => {
+    const row = await claimGovernanceWrite(() => tx.businessLineageMap.update({
+      where: { id, status: existing.status, updatedAt: existing.updatedAt },
       data: {
         status: dto.status,
         impactScore,
         impactLevel: dto.impactLevel ?? (dto.impactScore === undefined ? undefined : impactLevelFromScore(impactScore)),
         updatedBy: actor,
       },
-    });
-    await this.audit.log({ actor, action: 'business_value.lineage.update', entityType: 'business_lineage_map', entityId: id, metadata: { status: row.status } });
+    }));
+    await this.audit.logRequired({ actor, action: 'business_value.lineage.update', entityType: 'business_lineage_map', entityId: id, metadata: { status: row.status } }, tx);
     return row;
+    });
   }
 
   async createValuation(roleCodes: string[], dto: CreateDataAssetValuationDto, actor: string) {
@@ -426,33 +439,37 @@ export class BusinessValueService {
           createdBy: actor,
         },
       });
-      await this.audit.log({ actor, action: 'business_value.lifecycle.create', entityType: 'asset_lifecycle_decision', entityId: row.id, metadata: { code, workflowCaseId } });
+      await this.audit.logRequired({ actor, action: 'business_value.lifecycle.create', entityType: 'asset_lifecycle_decision', entityId: row.id, metadata: { code, workflowCaseId } }, tx);
       return row;
     });
   }
 
   async decideLifecycle(roleCodes: string[], id: string, dto: DecideLifecycleDecisionDto, actor: string) {
     const existing = await this.findVisibleLifecycle(roleCodes, id);
-    if (!roleCodes.includes('system_admin') && existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
+    if (existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Lifecycle decision creators cannot approve or reject their own decision');
     }
-    const isApproved = dto.status === LifecycleDecisionStatus.approved || dto.status === LifecycleDecisionStatus.implemented;
+    requireTransition(existing.status, dto.status, { proposed: ['approved', 'rejected'], approved: ['implemented', 'rejected'], implemented: [], rejected: [] });
+    if (dto.status === 'implemented' && (!existing.approvedBy || !existing.approvedAt)) {
+      throw new BadRequestException('Implementation requires a recorded independent approval');
+    }
+    const isApproved = dto.status === LifecycleDecisionStatus.approved;
     const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.assetLifecycleDecision.update({
-        where: { id },
+      const updated = await claimGovernanceWrite(() => tx.assetLifecycleDecision.update({
+        where: { id, status: existing.status, updatedAt: existing.updatedAt },
         data: {
           status: dto.status,
           approvedBy: isApproved ? actor : undefined,
           approvedAt: isApproved ? new Date() : undefined,
           updatedBy: actor,
         },
-      });
+      }));
       if (dto.status === LifecycleDecisionStatus.implemented) {
-        await tx.dataAsset.update({ where: { id: existing.assetId }, data: { lifecycleStatus: existing.proposedStatus } });
+        await claimGovernanceWrite(() => tx.dataAsset.update({ where: { id: existing.assetId, lifecycleStatus: existing.currentStatus }, data: { lifecycleStatus: existing.proposedStatus } }));
       }
+      await this.audit.logRequired({ actor, action: 'business_value.lifecycle.decide', entityType: 'asset_lifecycle_decision', entityId: id, metadata: { status: dto.status } }, tx);
       return updated;
     });
-    await this.audit.log({ actor, action: 'business_value.lifecycle.decide', entityType: 'asset_lifecycle_decision', entityId: id, metadata: { status: dto.status } });
     return row;
   }
 
@@ -482,7 +499,7 @@ export class BusinessValueService {
           createdBy: actor,
         },
       });
-      await this.audit.log({ actor, action: 'business_value.bia.create', entityType: 'business_impact_assessment', entityId: row.id, metadata: { code, workflowCaseId } });
+      await this.audit.logRequired({ actor, action: 'business_value.bia.create', entityType: 'business_impact_assessment', entityId: row.id, metadata: { code, workflowCaseId } }, tx);
       return row;
     });
   }

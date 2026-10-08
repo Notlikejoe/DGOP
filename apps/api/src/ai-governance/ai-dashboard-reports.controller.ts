@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthUser } from '../auth/auth.types';
@@ -5,6 +6,8 @@ import { CurrentUser } from '../auth/decorators';
 import { CaptureDashboardDto, ConfigureDashboardScheduleDto } from './ai-dashboard-reports.dto';
 import { AiDashboardReportsService } from './ai-dashboard-reports.service';
 @Controller('ai/dashboard-reports')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiDashboardReportsController {
  constructor(private readonly reports:AiDashboardReportsService){}
  @Get('units') units(@CurrentUser() u:AuthUser){return this.reports.units(u.id);}

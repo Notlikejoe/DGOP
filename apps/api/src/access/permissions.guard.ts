@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { PERMISSIONS_KEY } from '../auth/decorators';
+import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { AccessService } from './access.service';
@@ -24,13 +24,15 @@ export class PermissionsGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (!required || required.length === 0) return true;
+    const alternatives = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY,[context.getHandler(),context.getClass()]);
+    if (!required?.length && !alternatives?.length) return true;
 
     const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     const user = request.user;
     const granted = user ? await this.access.permissionsForRoleCodes(user.roles) : [];
     const allowed =
-      !!user && required.every((perm) => this.access.hasPermission(granted, perm));
+      !!user && (!required?.length || required.every((perm) => this.access.hasPermission(granted, perm)))
+      && (!alternatives?.length || alternatives.some(perm=>this.access.hasPermission(granted,perm)));
 
     if (!allowed) {
       await this.audit.log({
@@ -38,7 +40,7 @@ export class PermissionsGuard implements CanActivate {
         action: 'auth.access.denied',
         entityType: 'route',
         entityId: request.path,
-        metadata: { requiredPermissions: required, userRoles: user?.roles ?? [] },
+        metadata: { requiredPermissions: required, anyPermissions:alternatives, userRoles: user?.roles ?? [] },
       });
       throw new ForbiddenException('Insufficient permissions');
     }

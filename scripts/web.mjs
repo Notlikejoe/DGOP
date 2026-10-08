@@ -26,13 +26,7 @@ function parseVersion(value) {
 }
 
 function satisfiesAngular(version) {
-  if (!version) return false;
-  if (version.major >= 26) return true;
-  if (version.major === 24)
-    return version.minor > 15 || (version.minor === 15 && version.patch >= 0);
-  if (version.major === 22)
-    return version.minor > 22 || (version.minor === 22 && version.patch >= 3);
-  return false;
+  return !!version && version.major === 24 && version.minor === 19;
 }
 
 function scanBundledNode() {
@@ -82,7 +76,11 @@ function scanBundledNode() {
 
 function resolveNode() {
   const envNode = process.env.DGOP_NODE_EXE;
-  if (envNode && existsSync(envNode)) return envNode;
+  if (envNode && existsSync(envNode)) {
+    const result=spawnSync(envNode,['-v'],{encoding:'utf8',windowsHide:true});
+    if(result.status===0&&satisfiesAngular(parseVersion(result.stdout.trim())))return envNode;
+    throw new Error('DGOP_NODE_EXE must identify the pinned Node 24.19 runtime.');
+  }
   if (satisfiesAngular(parseVersion(process.version))) return process.execPath;
   return scanBundledNode();
 }
@@ -104,7 +102,7 @@ if (!existsSync(cliPath)) {
 const node = resolveNode();
 if (!node) {
   console.error(
-    "Angular 22 requires Node.js 22.22.3+, 24.15.0+, or 26+. Set DGOP_NODE_EXE to a compatible node.exe or upgrade Node.js.",
+    "Use the repository-pinned Node.js 24.19 runtime. Set DGOP_NODE_EXE to that node.exe.",
   );
   process.exit(1);
 }

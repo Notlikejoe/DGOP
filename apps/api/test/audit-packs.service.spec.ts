@@ -92,8 +92,18 @@ test('audit pack readiness scopes scoring, specifications, evidence, and workflo
                   originalName: 'proof.pdf',
                   sha256: 'abc',
                   status: 'approved',
+                  provenance: 'operational',
                   reviewedAt: new Date('2026-07-01T00:00:00Z'),
                   expiryDate: null,
+                },
+                {
+                  id: 'ev-synthetic', title: 'Demo proof', originalName: 'demo.pdf', sha256: 'def',
+                  status: 'approved', provenance: 'seeded_uat', reviewedAt: new Date(), expiryDate: null,
+                },
+                {
+                  id: 'ev-expired', title: 'Expired proof', originalName: 'old.pdf', sha256: 'ghi',
+                  status: 'approved', provenance: 'operational', reviewedAt: new Date('2020-01-01'),
+                  expiryDate: new Date('2020-02-01'),
                 },
               ],
             },
@@ -129,6 +139,9 @@ test('audit pack readiness scopes scoring, specifications, evidence, and workflo
 
   assert.equal(preview.summary.specCount, 1);
   assert.equal(preview.summary.approvedEvidenceCount, 1);
+  assert.equal(preview.summary.excludedEvidenceCount, 2);
+  assert.equal(preview.manifest.evidence[0].provenance, 'operational');
+  assert.deepEqual(preview.manifest.excludedEvidence?.map((row) => row.exclusionReason), ['synthetic_or_unknown_provenance', 'expired']);
   assert.deepEqual(scoringActors, [actor, actor]);
   assert.ok(specWhereText.includes('ownerPersonId'));
   assert.ok(specWhereText.includes('submittedBy'));

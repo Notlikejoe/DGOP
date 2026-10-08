@@ -71,6 +71,8 @@ interface ProfileRef {
 }
 
 interface EnforcementAttempt {
+  requestVersion?: number | null;
+  completionVersion?: number | null;
   id: string;
   operation: string;
   connectorCode: string;
@@ -78,7 +80,7 @@ interface EnforcementAttempt {
   attemptCount: number;
   errorCode?: string | null;
   errorMessage?: string | null;
-  responseJson?: { evidenceReference?: string; comment?: string } | null;
+  responseJson?: { evidenceReference?: string; comment?: string; appliedToGrant?: boolean; requiresReconciliation?: boolean; simulated?: boolean } | null;
   completedAt?: string | null;
   createdAt: string;
 }
@@ -935,7 +937,7 @@ export class AccessManagementPage implements OnInit {
     const grant = this.selected();
     if (!grant) return;
     this.manualEvidence.set('');
-    this.manualStatus.set('enforced');
+    this.manualStatus.set(['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(grant.status) ? 'revoked' : 'enforced');
     this.manualOpen.set(true);
   }
 
@@ -950,6 +952,7 @@ export class AccessManagementPage implements OnInit {
       `/api/access/grants/${grant.id}/enforcement/manual-complete`,
       {
         expectedVersion: grant.version,
+        operation: ['pending_revocation', 'revocation_failed', 'expired', 'suspended'].includes(grant.status) ? 'revoke' : 'grant',
         enforcementStatus: this.manualStatus(),
         evidenceReference: this.manualEvidence().trim(),
       },
@@ -977,7 +980,7 @@ export class AccessManagementPage implements OnInit {
     this.busy.set(true);
     this.http
       .post(`/api/access/enforcement/attempts/${attempt.id}/complete`, {
-        expectedVersion: grant.version,
+        expectedVersion: attempt.completionVersion,
         status: this.connectorStatus(),
         providerReference: this.connectorReference().trim(),
         message: this.connectorMessage().trim() || null,

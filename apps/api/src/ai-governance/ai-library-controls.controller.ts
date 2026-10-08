@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { IsArray, ArrayMaxSize, ArrayMinSize, IsInt, IsIn, IsOptional, IsString, IsUUID, Length, Matches, Min } from 'class-validator';
 import type { Response } from 'express';
@@ -12,6 +13,8 @@ class SourceImportDto extends EvidenceDto {@IsUUID('4') requestKey!:string;@IsSt
 class ControlLinkDto extends EvidenceDto { @IsOptional() @IsUUID('4') categoryMappingVersionId?:string;@IsInt() @Min(0) expectedRound!:number;@IsArray() @ArrayMaxSize(10) @IsUUID('4',{each:true}) controlVersionIds!:string[];}
 class ReviewControlLinkDto extends EvidenceDto {@IsIn(['approve','return']) outcome!:string;@IsString() @Matches(/^[0-9a-f]{64}$/) expectedDigest!:string;}
 @Controller('ai/library-sources')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiLibrarySourceController {
  constructor(private readonly service:AiLibrarySourceService){}
  @Post('snapshots/:id/proposals') propose(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:SourceImportDto){return this.service.propose(u.id,id,dto);}
@@ -20,6 +23,8 @@ export class AiLibrarySourceController {
  @Get('imports/:id/export') async export(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Query('format',new DefaultValuePipe('json')) format:string,@Res() res:Response){const body=await this.service.export(u.id,id,format);res.setHeader('Content-Type',format==='csv'?'text/csv; charset=utf-8':'application/json; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="dgop-ai-library-reconciliation.'+(format==='csv'?'csv':'json')+'"');res.send(body);}
 }
 @Controller('ai')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiControlLinksController {
  constructor(private readonly controls:AiControlDomainsService,private readonly links:AiLibraryControlLinksService){}
  @Get('control-domains') list(@CurrentUser() u:AuthUser){return this.controls.list(u.id);}
@@ -28,6 +33,8 @@ export class AiControlLinksController {
  @Post('library-control-links/:id/review') review(@CurrentUser() u:AuthUser,@Param('id',ParseUUIDPipe) id:string,@Body() dto:ReviewControlLinkDto){return this.links.review(u.id,id,dto);}
 }
 @Controller('ai/assets')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 @RequirePermissions('data_assets.view')
 export class AiAssetRiskController {
  constructor(private readonly service:AiAssetRiskService){}

@@ -1,0 +1,16 @@
+{
+  "fixtureVersion": "governance-demo-v1",
+  "demoOnly": true,
+  "isComplianceProof": false,
+  "completedAiJourneys": [
+    {"name":"Document Classification Assistant","riskTitle":"DEMO — Misclassification or document exposure","riskCategory":"PRIVACY","ethicsPrinciple":"PRIVACY"},
+    {"name":"Service Request Routing Assistant","riskTitle":"DEMO — Incorrect routing or uneven service","riskCategory":"QUALITY","ethicsPrinciple":"FAIRNESS"},
+    {"name":"Policy Guidance Assistant","riskTitle":"DEMO — Outdated or unsupported policy guidance","riskCategory":"QUALITY","ethicsPrinciple":"FAIRNESS"}
+  ],
+  "pendingAiJourneys": 1,
+  "actionsPerCompletedJourney": 2,
+  "completedReviewsPerJourney": 1,
+  "scheduledReviewsPerJourney": 1,
+  "core": {"assets":1,"assignments":2,"evidence":1,"qualityIssues":1},
+  "privacyAccess": {"grants":2,"requests":1,"incidents":2}
+}

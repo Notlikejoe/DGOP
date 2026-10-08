@@ -26,6 +26,15 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
+export interface AiCapabilities {
+  administratorOversight:boolean;
+  readMode:'governance'|'audit'|'executive'|'own'|'none';
+  permissions:string[];
+  screens:Record<'useCases'|'risks'|'review'|'reviewOperations'|'dashboard'|'migration',boolean>;
+}
+
+export interface AiRegisterPage<T,S> {data:T[];total:number;page:number;pageSize:number;totalPages:number;summary:S;}
+
 export interface AdminUser {
   id: string;
   email: string;

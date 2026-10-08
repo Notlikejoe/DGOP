@@ -1,0 +1,19 @@
+{
+  "manifestVersion": 1,
+  "fixtureVersion": "synthetic-sources-v1",
+  "demoOnly": true,
+  "sourceMode": "synthetic_demo",
+  "productionReady": false,
+  "sources": [
+    {
+      "source": "risk",
+      "file": "demo-risk-v1.xlsx",
+      "sha256": "2d1f1ad4b7e496b501cc852cdc60cbcc86fdd22707412bece6969fc87ed53c8e"
+    },
+    {
+      "source": "adoption",
+      "file": "demo-adoption-v1.xlsx",
+      "sha256": "0a177a2bf9072e8eb66137e421670acd0209bbe9d1d40d0ae40340f88f44534b"
+    }
+  ]
+}

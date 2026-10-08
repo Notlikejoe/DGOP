@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "fixtureVersion": "synthetic-sources-v2",
+  "demoOnly": true,
+  "sourceMode": "synthetic_demo",
+  "productionReady": false,
+  "purpose": "Synthetic engineering scenario; original retained workbooks are independently required for their own acceptance.",
+  "sources": [
+    {
+      "source": "risk",
+      "file": "demo-risk-v2.xlsx",
+      "sha256": "fb546f90d30413a48c4eb14695c6736db94f5ed1f27050583cba436835b81d25"
+    },
+    {
+      "source": "adoption",
+      "file": "demo-adoption-v2.xlsx",
+      "sha256": "db905bf387afcbc286d34233bcabfd663600e95b4edac54fef30c7a7c7a7f0e5"
+    }
+  ]
+}

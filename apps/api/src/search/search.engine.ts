@@ -65,6 +65,7 @@ class HttpSearchEngine implements ExternalSearchEngine {
         method: 'POST',
         headers: this.headers(),
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) {
         return {
@@ -105,9 +106,13 @@ class HttpSearchEngine implements ExternalSearchEngine {
         method: 'POST',
         headers: this.headers('application/x-ndjson'),
         body: `${lines.join('\n')}\n`,
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) return { indexed: 0, status: 'unavailable' as const, message: `HTTP ${response.status}` };
-      return { indexed: records.length, status: 'available' as const };
+      const result = await response.json() as { errors?: boolean; items?: Array<{ index?: { status?: number; error?: unknown } }> };
+      if (!Array.isArray(result.items) || result.items.length !== records.length) return { indexed: 0, status: 'unavailable', message: 'Bulk response did not confirm every requested record.' };
+      const indexed = result.items.filter((item) => item.index && !item.index.error && Number(item.index.status) >= 200 && Number(item.index.status) < 300).length;
+      return indexed === records.length && !result.errors ? { indexed, status: 'available' } : { indexed, status: 'unavailable', message: `${records.length - indexed} record(s) failed to index; retry the failed batch.` };
     } catch (error) {
       return {
         indexed: 0,

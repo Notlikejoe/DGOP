@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../../../core/auth.service';
+import { ReferenceLookupsService } from '../../../core/reference-lookups.service';
 import { I18nService } from '../../../core/i18n.service';
 import { ToastService } from '../../../shared/toast.service';
 import { AppIcon } from '../../../shared/app-icon';
@@ -53,6 +54,15 @@ interface PrivacyDpia {
 }
 
 interface PrivacyDsr {
+  version: number;
+  identityEvidenceReference?: string | null;
+  completionEvidenceReference?: string | null;
+  extensionDueAt?: string | null;
+  extensionReason?: string | null;
+  extensionCommunicatedAt?: string | null;
+  extensionCommunicationReference?: string | null;
+  extensionRecordedBy?: string | null;
+  effectiveDueAt?: string | null;
   id: string;
   requestNumber: string;
   requesterName: string;
@@ -72,6 +82,13 @@ interface PrivacyDsr {
 }
 
 interface PrivacyBreach {
+  version: number;
+  regulatorNotificationRequired?: boolean | null;
+  subjectNotificationRequired?: boolean | null;
+  notificationDecisionReason?: string | null;
+  regulatorNotificationEvidenceReference?: string | null;
+  subjectNotifiedAt?: string | null;
+  subjectNotificationEvidenceReference?: string | null;
   id: string;
   code: string;
   title: string;
@@ -146,6 +163,7 @@ const GATE_STATUSES = ['pending', 'approved', 'blocked', 'not_required'];
 export class PrivacyOperationsPage implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
+  private readonly referenceLookups = inject(ReferenceLookupsService);
   private readonly toast = inject(ToastService);
   protected readonly i18n = inject(I18nService);
 
@@ -171,8 +189,9 @@ export class PrivacyOperationsPage implements OnInit {
   protected readonly expandedPanel = signal<string | null>(null);
 
   protected readonly gateDraft = signal({ phase: 'requirements', status: 'approved', reviewerPersonId: '', note: '' });
-  protected readonly dsrDraftUpdate = signal({ status: 'in_progress', assignedPersonId: '', decisionSummary: '', identityValidated: false });
-  protected readonly breachDraftUpdate = signal({ status: 'contained', severity: 'medium', containedAt: '', notifiedAt: '', regulatorNotified: false, subjectNotified: false });
+  protected readonly dsrDraftUpdate = signal({ status: 'identity_validation', assignedPersonId: '', decisionSummary: '', identityValidated: false, identityEvidenceReference: '', completionEvidenceReference: '' });
+  protected readonly dsrExtensionDraft = signal({ dueAt: '', reason: '', communicatedAt: '', communicationReference: '' });
+  protected readonly breachDraftUpdate = signal({ status: 'triage', severity: 'medium', containedAt: '', notifiedAt: '', regulatorNotified: false, subjectNotified: false, regulatorNotificationRequired: null as boolean | null, subjectNotificationRequired: null as boolean | null, notificationDecisionReason: '', regulatorNotificationEvidenceReference: '', subjectNotifiedAt: '', subjectNotificationEvidenceReference: '' });
   protected readonly dpiaDraft = signal({
     title: '',
     description: '',
@@ -190,6 +209,7 @@ export class PrivacyOperationsPage implements OnInit {
     assetId: '',
     assignedPersonId: '',
     identityValidated: false,
+    identityEvidenceReference: '',
     dueAt: '',
   });
   protected readonly breachDraft = signal({
@@ -222,6 +242,7 @@ export class PrivacyOperationsPage implements OnInit {
 
   protected get canCreate(): boolean { return this.auth.hasPermission('privacy_operations.create'); }
   protected get canEdit(): boolean { return this.auth.hasPermission('privacy_operations.edit'); }
+  protected get canDecide(): boolean { return this.canEdit && (this.auth.currentUser()?.roles.some(role => role.code === 'privacy_officer') ?? false); }
 
   ngOnInit(): void {
     this.loadLookups();
@@ -249,6 +270,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.totalPages.set(active.totalPages);
         this.page.set(active.page);
         this.ensureSelection();
+        this.resetDecisionDrafts();
         this.state.set('ok');
       },
       error: () => this.state.set('error'),
@@ -256,8 +278,8 @@ export class PrivacyOperationsPage implements OnInit {
   }
 
   private loadLookups(): void {
-    this.http.get<AssetRef[]>('/api/assets').subscribe({ next: (rows) => this.assets.set(rows), error: () => this.assets.set([]) });
-    this.http.get<PersonRef[]>('/api/people').subscribe({ next: (rows) => this.people.set(rows), error: () => this.people.set([]) });
+    this.referenceLookups.list<AssetRef>('data_assets.view','/api/assets').subscribe({ next: (rows) => this.assets.set(rows), error: () => this.assets.set([]) });
+    this.referenceLookups.list<PersonRef>('people.view','/api/people').subscribe({ next: (rows) => this.people.set(rows), error: () => this.people.set([]) });
     this.http.get<LegalBasis[]>('/api/privacy/legal-bases').subscribe({ next: (rows) => this.legalBases.set(rows), error: () => this.legalBases.set([]) });
   }
 
@@ -320,6 +342,21 @@ export class PrivacyOperationsPage implements OnInit {
 
   protected select(id: string): void {
     this.selectedId.set(id);
+    this.resetDecisionDrafts();
+  }
+
+  private resetDecisionDrafts(): void {
+    this.dsrExtensionDraft.set({ dueAt: '', reason: '', communicatedAt: '', communicationReference: '' });
+    const dsr = this.selectedDsr();
+    if (dsr) this.dsrDraftUpdate.set({ status: dsr.status, assignedPersonId: dsr.assignedPerson?.id || '', decisionSummary: dsr.decisionSummary || '', identityValidated: dsr.identityValidated, identityEvidenceReference: dsr.identityEvidenceReference || '', completionEvidenceReference: dsr.completionEvidenceReference || '' });
+    const breach = this.selectedBreach();
+    if (breach) this.breachDraftUpdate.set({ status: breach.status, severity: breach.severity, containedAt: this.localDateInput(breach.containedAt), notifiedAt: this.localDateInput(breach.notifiedAt), regulatorNotified: breach.regulatorNotified, subjectNotified: breach.subjectNotified, regulatorNotificationRequired: breach.regulatorNotificationRequired ?? null, subjectNotificationRequired: breach.subjectNotificationRequired ?? null, notificationDecisionReason: breach.notificationDecisionReason || '', regulatorNotificationEvidenceReference: breach.regulatorNotificationEvidenceReference || '', subjectNotifiedAt: this.localDateInput(breach.subjectNotifiedAt), subjectNotificationEvidenceReference: breach.subjectNotificationEvidenceReference || '' });
+  }
+
+  private localDateInput(value?: string | null): string {
+    if (!value) return '';
+    const date = new Date(value);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }
 
   protected goToPage(page: number): void {
@@ -349,6 +386,24 @@ export class PrivacyOperationsPage implements OnInit {
 
   protected patchDsrUpdate(key: string, value: unknown): void {
     this.dsrDraftUpdate.update((draft) => ({ ...draft, [key]: value }));
+  }
+
+  protected patchDsrExtension(key: string, value: string): void {
+    this.dsrExtensionDraft.update(draft => ({ ...draft, [key]: value }));
+  }
+
+  protected extendDsrDeadline(dsr: PrivacyDsr): void {
+    if (this.saving()) return;
+    this.saving.set(true);
+    this.http.patch<PrivacyDsr>(`/api/privacy/dsr/${dsr.id}`, { expectedVersion: dsr.version, deadlineExtension: this.clean(this.dsrExtensionDraft()) }).subscribe({
+      next: updated => {
+        this.toast.success(this.t('privacy.saved.dsrUpdate'));
+        this.dsrs.update(rows => rows.map(row => row.id === updated.id ? updated : row));
+        this.resetDecisionDrafts();
+      },
+      error: err => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
+      complete: () => this.saving.set(false),
+    });
   }
 
   protected patchBreachUpdate(key: string, value: unknown): void {
@@ -392,7 +447,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.createMode.set(null);
         this.load();
       },
-      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
+      error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
       complete: () => this.saving.set(false),
     });
   }
@@ -405,7 +460,7 @@ export class PrivacyOperationsPage implements OnInit {
         this.toast.success(this.t('privacy.saved.gate'));
         this.dpias.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
       },
-      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
+      error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
       complete: () => this.saving.set(false),
     });
   }
@@ -413,12 +468,13 @@ export class PrivacyOperationsPage implements OnInit {
   protected updateDsr(dsr: PrivacyDsr): void {
     if (this.saving()) return;
     this.saving.set(true);
-    this.http.patch<PrivacyDsr>(`/api/privacy/dsr/${dsr.id}`, this.clean(this.dsrDraftUpdate())).subscribe({
+    this.http.patch<PrivacyDsr>(`/api/privacy/dsr/${dsr.id}`, { ...this.clean(this.dsrDraftUpdate()), expectedVersion: dsr.version }).subscribe({
       next: (updated) => {
         this.toast.success(this.t('privacy.saved.dsrUpdate'));
         this.dsrs.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+        this.resetDecisionDrafts();
       },
-      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
+      error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
       complete: () => this.saving.set(false),
     });
   }
@@ -426,12 +482,13 @@ export class PrivacyOperationsPage implements OnInit {
   protected updateBreach(breach: PrivacyBreach): void {
     if (this.saving()) return;
     this.saving.set(true);
-    this.http.patch<PrivacyBreach>(`/api/privacy/breaches/${breach.id}`, this.clean(this.breachDraftUpdate())).subscribe({
+    this.http.patch<PrivacyBreach>(`/api/privacy/breaches/${breach.id}`, { ...this.clean(this.breachDraftUpdate()), expectedVersion: breach.version }).subscribe({
       next: (updated) => {
         this.toast.success(this.t('privacy.saved.breachUpdate'));
         this.breaches.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+        this.resetDecisionDrafts();
       },
-      error: (err) => this.toast.errorFrom(err, this.t('privacy.error.save')),
+      error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
       complete: () => this.saving.set(false),
     });
   }
@@ -480,7 +537,7 @@ export class PrivacyOperationsPage implements OnInit {
   }
 
   private clean<T extends Record<string, unknown>>(draft: T): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value === '' ? null : value]));
+    return Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value === '' ? null : typeof value === 'string' && key.endsWith('At') ? new Date(value).toISOString() : value]));
   }
 
   protected t(key: string): string {

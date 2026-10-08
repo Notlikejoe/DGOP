@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -12,7 +13,7 @@ interface StrategyContext {
  escalation:{code:string;level:string;status:string}|null;
  events:Array<{id:string;kind:string;outcome:string;actorRoleCode:string;justification:string;evidenceIds:string[];createdAt:string;payload:{scopeChange?:string}}>;
 }
-@Component({selector:'app-ai-risk-strategy',standalone:true,imports:[FormsModule,DualDatePipe,TableModule],templateUrl:'./ai-risk-strategy.html',
+@Component({selector:'app-ai-risk-strategy',standalone:true,imports:[AiEvidencePanel,FormsModule,DualDatePipe,TableModule],templateUrl:'./ai-risk-strategy.html',
  styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiRiskStrategy {
  readonly riskId=input.required<string>();readonly updated=output<void>();private readonly http=inject(HttpClient);private readonly toast=inject(ToastService);protected readonly i18n=inject(I18nService);

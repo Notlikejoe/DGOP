@@ -14,7 +14,8 @@ const url = new URL(supplied);
 if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' || url.port !== '55438' || !/^\/dgop_ai_test_[a-z0-9_]+$/.test(url.pathname)) {
   throw new Error('Use the isolated loopback PostgreSQL test server on 55438 with a dgop_ai_test_ database');
 }
-const pg = process.env.DGOP_TEST_PG_BIN ?? 'C:/Program Files/PostgreSQL/16/bin';
+const pg = process.env.DGOP_TEST_PG_BIN ?? (process.platform === 'win32' ? 'C:/Program Files/PostgreSQL/18/bin' : '/usr/lib/postgresql/16/bin');
+const pgCommand = (name) => join(pg, name + (process.platform === 'win32' ? '.exe' : ''));
 const stamp = Date.now().toString();
 const migration = '20260911160000_ai_reference_approval';
 const baseline = join(root, 'storage/ai-test', stamp, 'prisma');
@@ -38,13 +39,16 @@ for (const mode of ['clean', 'upgrade']) {
   const db = `dgop_ai_test_${mode}_${stamp}`;
   const connection = new URL(url); connection.pathname = `/${db}`;
   const env = { DATABASE_URL: connection.href, DGOP_AI_TEST_DATABASE_URL: connection.href };
-  run(join(pg, 'createdb.exe'), ['-h', url.hostname, '-p', url.port, '-U', decodeURIComponent(url.username), db], { PGPASSWORD: decodeURIComponent(url.password) });
+  run(pgCommand('createdb'), ['-h', url.hostname, '-p', url.port, '-U', decodeURIComponent(url.username), db], { PGPASSWORD: decodeURIComponent(url.password) });
   const cli = join(api, 'node_modules/prisma/build/index.js');
   if (mode === 'upgrade') {
     run(process.execPath, [cli, 'migrate', 'deploy', '--schema', join(baseline, 'schema.prisma')], env);
-    run(join(pg, 'psql.exe'), ['-h', url.hostname, '-p', url.port, '-U', decodeURIComponent(url.username), '-d', db, '-v', 'ON_ERROR_STOP=1', '-c', `INSERT INTO users (id,email,"passwordHash","displayName","updatedAt") VALUES ('baseline-sentinel','baseline@example.test','test-only','Existing DGOP user',NOW())`], { PGPASSWORD: decodeURIComponent(url.password) });
+    run(pgCommand('psql'), ['-h', url.hostname, '-p', url.port, '-U', decodeURIComponent(url.username), '-d', db, '-v', 'ON_ERROR_STOP=1', '-c', `INSERT INTO users (id,email,"passwordHash","displayName","updatedAt") VALUES ('baseline-sentinel','baseline@example.test','test-only','Existing DGOP user',NOW())`], { PGPASSWORD: decodeURIComponent(url.password) });
   }
   run(process.execPath, [cli, 'migrate', 'deploy'], env);
   console.log(`${mode}: Prisma migration deploy passed`);
+  const drift=run(process.execPath,[cli,'migrate','diff','--from-url',connection.href,'--to-schema-datamodel','prisma/schema.prisma','--script'],env);
+  if(!/^\s*-- This is an empty migration\.\s*$/.test(drift))throw new Error(mode+' database has unexpected schema drift; preserve it and inspect the migration result.');
+  console.log(`${mode}: zero unexpected Prisma schema drift`);
   console.log(run(process.execPath, [join(api, 'node_modules/ts-node/dist/bin.js'), 'test/ai-foundation.integration.ts', mode], env).trim());
 }

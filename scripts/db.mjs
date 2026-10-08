@@ -1,3 +1,5 @@
+import { loadEnvironment, applyEnvironment } from './runtime-env.mjs';
+import { runtimeCommand } from './node-runtime.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,32 +10,15 @@ const apiDir = join(root, 'apps', 'api');
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
-function loadRootEnv() {
-  const envPath = join(root, '.env');
-  if (!existsSync(envPath)) return;
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
+function loadRootEnv() { return loadEnvironment(root); }
 
 function run(command, args) {
-  const result = spawnSync(command, args, {
+  const selected = runtimeCommand(root, command, args);
+  const result = spawnSync(selected.command, selected.args, {
     cwd: apiDir,
-    env: process.env,
+    env: selected.env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   if (result.error) {
     console.error(result.error.message);
@@ -42,11 +27,12 @@ function run(command, args) {
 }
 
 function runGenerate() {
-  const result = spawnSync(npxCmd, ['--no-install', 'prisma', 'generate'], {
+  const selected = runtimeCommand(root, npxCmd, ['--no-install', 'prisma', 'generate']);
+  const result = spawnSync(selected.command, selected.args, {
     cwd: apiDir,
-    env: process.env,
+    env: selected.env,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
@@ -67,7 +53,7 @@ function runGenerate() {
   process.exit(result.status ?? 1);
 }
 
-loadRootEnv();
+applyEnvironment(root);
 
 const [command, migrationName = 'update'] = process.argv.slice(2);
 switch (command) {

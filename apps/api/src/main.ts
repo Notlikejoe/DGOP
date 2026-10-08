@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { config as loadEnv } from 'dotenv';
+import { loadRuntimeEnvironment } from './common/environment';
+import { isManagedDemoProfile } from './common/demo-profile';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger, ValidationPipe } from '@nestjs/common';
@@ -21,7 +22,7 @@ import {
 
 const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-loadEnv({ path: join(__dirname, '..', '..', '..', '.env') });
+loadRuntimeEnvironment(join(__dirname, '..', '..', '..'));
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -42,6 +43,7 @@ async function bootstrap(): Promise<void> {
   instance.set('trust proxy', configuredTrustProxy());
 
   assertSafeRuntimeConfig();
+  if (process.env.DGOP_DEMO === 'true' && !isManagedDemoProfile()) throw new Error('The isolated demonstration profile is missing or differs from this installation.');
   const strictConfig = isProductionLikeRuntime();
   const allowedOrigins = configuredCorsOrigins();
   const corsOrigins = allowedOrigins.length ? allowedOrigins : ['http://localhost:4205'];

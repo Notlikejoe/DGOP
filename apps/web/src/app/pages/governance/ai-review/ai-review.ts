@@ -1,9 +1,11 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { formatDualDate } from '../../../shared/dual-date.format';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { I18nService } from '../../../core/i18n.service';
+import { AuthService } from '../../../core/auth.service';
 import { AppIcon } from '../../../shared/app-icon';
 import { StatusChip } from '../../../shared/status-chip';
 import { ToastService } from '../../../shared/toast.service';
@@ -22,6 +24,21 @@ type IntakeLookups = {
   dataOwners: DirectoryUser[];
   executiveSponsors: DirectoryUser[];
 };
+interface ReviewQueue {
+  data: AiReviewCase[]; total: number; page: number; pageSize: number; totalPages: number;
+  summary: { total: number; pending: number; inProgress: number; overdue: number };
+  denied?: boolean;
+}
+const REVIEW_TABS: ReviewTab[] = ['triage','classification','verification','specialist','decision','registration'];
+const QUEUE_URLS: Record<ReviewTab,string> = {
+  triage:'/api/ai/use-cases/triage', classification:'/api/ai/use-cases/classification/queue',
+  verification:'/api/ai/use-cases/classification/verification/queue', specialist:'/api/ai/use-cases/classification/reviews/queue',
+  decision:'/api/ai/use-cases/decisions/queue', registration:'/api/ai/use-cases/registration/queue',
+};
+function emptyQueue(page=1,denied=false):ReviewQueue {
+  return {data:[],total:0,page,pageSize:25,totalPages:1,summary:{total:0,pending:0,inProgress:0,overdue:0},denied};
+}
+
 type CriterionCode = 'individual_impact' | 'affected_scope' | 'harm_likelihood' | 'decision_autonomy'
   | 'data_fairness_transparency' | 'technical_resilience';
 
@@ -43,6 +60,7 @@ interface AiReviewCase {
       id: string;
       title: string;
       assigneeRoleCode?: string | null;
+      assigneeUserId?: string | null;
       dueDate?: string | null;
       approvalGroupId?: string | null;
       formDataJson?: Record<string, unknown> | null;
@@ -104,19 +122,26 @@ const INTAKE_FIELDS = [
 @Component({
   selector: 'app-ai-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, AppIcon, StatusChip, InputTextModule, ProgressBarModule, RippleModule, TabsModule],
+  imports:[AiEvidencePanel,FormsModule, AppIcon, StatusChip, InputTextModule, ProgressBarModule, RippleModule, TabsModule],
   templateUrl: './ai-review.html',
   styleUrl: './ai-review.scss',
 })
-export class AiReviewPage implements OnInit {
+export class AiReviewPage implements OnInit, OnDestroy {
+  protected readonly auth=inject(AuthService);
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   protected readonly i18n = inject(I18nService);
   protected readonly criteria = CRITERIA;
   protected readonly intakeFields = INTAKE_FIELDS;
   protected readonly state = signal<'loading' | 'ok' | 'error'>('loading');
+  protected readonly loadingQueues = signal(false);
   protected readonly tab = signal<ReviewTab>('triage');
   protected readonly queueSearch = signal('');
+  protected readonly queues = signal<Record<ReviewTab,ReviewQueue>>(Object.fromEntries(REVIEW_TABS.map(tab=>[tab,emptyQueue()])) as Record<ReviewTab,ReviewQueue>);
+  protected readonly activeQueue = computed(()=>this.queues()[this.tab()]);
+  private readonly queuePages = signal<Partial<Record<ReviewTab,number>>>({});
+  private requestGeneration = 0;
+  private searchTimer?: ReturnType<typeof setTimeout>;
   protected readonly triageCases = signal<AiReviewCase[]>([]);
   protected readonly classificationCases = signal<AiReviewCase[]>([]);
   protected readonly verificationCases = signal<AiReviewCase[]>([]);
@@ -168,23 +193,26 @@ export class AiReviewPage implements OnInit {
   protected readonly decisionIsOverride = computed(() => !!this.decisionTierCode()
     && this.decisionTierCode() !== this.assessmentProposedTier()?.code);
   protected readonly decisionReady = computed(() => {
-    if (!this.decisionTierCode()) return false;
+    if (!this.decisionTierCode() || !this.evidenceIdList().length) return false;
     if (!this.decisionIsOverride()) return true;
     return !!this.justification().trim() && !!this.authorityReference().trim() && this.evidenceIdList().length > 0;
   });
   protected readonly selectedReviewTask = computed(() => this.selected()?.workflowCase.tasks?.[0] ?? null);
+  protected readonly canActOnStage=computed(()=>{
+    const tab=this.tab(),task=this.selectedReviewTask(),roles=this.auth.currentUser()?.roles.map(r=>r.code)??[];
+    const assigned=!task?.assigneeRoleCode||roles.includes(task.assigneeRoleCode);
+    const permission=tab==='decision'?'case.approve.aiuc':tab==='registration'?(task?.templateStage?.code==='aiuc-asset-approval'?'aiuc.asset.approve':'aiuc.asset.register'):tab==='specialist'?'case.view.aiuc.org':'aiuc.classify.assess';
+    return assigned&&(!task?.assigneeUserId||task.assigneeUserId===this.auth.currentUser()?.id)&&this.auth.hasAiPermission(permission);
+  });
   protected readonly specialistDecisionReady = computed(() => !!this.justification().trim() && this.evidenceIdList().length > 0);
   protected readonly adoptionReady = computed(() => !!this.adoptionOutcome() && this.specialistDecisionReady()
     && (this.adoptionOutcome() !== 'approve_with_conditions' || this.conditionList().length > 0));
-  protected readonly totalAssigned = computed(() => this.triageCases().length + this.classificationCases().length
-    + this.verificationCases().length + this.specialistCases().length + this.decisionCases().length + this.registrationCases().length);
-  protected readonly assessmentCount = computed(() => this.classificationCases().length + this.verificationCases().length + this.specialistCases().length);
-  protected readonly approvalCount = computed(() => this.decisionCases().length + this.registrationCases().length);
-  protected readonly filteredActiveCases = computed(() => {
-    const search = this.queueSearch().trim().toLocaleLowerCase();
-    return this.activeCases().filter(item => !search || [item.name, item.workflowCase.code, item.useCaseRef]
-      .some(value => value?.toLocaleLowerCase().includes(search)));
-  });
+  protected readonly totalAssigned = computed(() => REVIEW_TABS.reduce((sum,tab)=>sum+this.queues()[tab].total,0));
+  protected readonly assessmentCount = computed(() => ['classification','verification','specialist'].reduce((sum,tab)=>sum+this.queues()[tab as ReviewTab].total,0));
+  protected readonly approvalCount = computed(() => this.queues().decision.total + this.queues().registration.total);
+  protected readonly filteredActiveCases = computed(() => this.loadingQueues() ? [] : this.activeCases());
+
+  ngOnDestroy():void { clearTimeout(this.searchTimer); this.requestGeneration++; }
 
   ngOnInit(): void { void this.load(); }
 
@@ -193,49 +221,51 @@ export class AiReviewPage implements OnInit {
   protected criterionLabel(code: string): string { return this.t(`aiReview.criterion.${code}`); }
 
   protected async load(preferredId?: string): Promise<void> {
-    this.state.set('loading');
+    clearTimeout(this.searchTimer);
+    const generation=++this.requestGeneration, tab=this.tab(), search=this.queueSearch().trim();
+    const pages={...this.queuePages()}, selectedId=preferredId??this.selected()?.id;
+    if(this.state()!=='ok')this.state.set('loading');
+    this.loadingQueues.set(true);
+    this.selected.set(null);
     try {
-      const [triage, classification, verification, specialist, decision, registration, assetLookups, configuration, intakeLookups] = await Promise.all([
-        this.loadQueue('/api/ai/use-cases/triage'),
-        this.loadQueue('/api/ai/use-cases/classification/queue'),
-        this.loadQueue('/api/ai/use-cases/classification/verification/queue'),
-        this.loadQueue('/api/ai/use-cases/classification/reviews/queue'),
-        this.loadQueue('/api/ai/use-cases/decisions/queue'),
-        this.loadQueue('/api/ai/use-cases/registration/queue'),
-        this.loadAssetLookups(),
-        this.loadConfiguration(),
-        this.loadIntakeLookups(),
+      const [loaded, assetLookups, configuration, intakeLookups] = await Promise.all([
+        Promise.all(REVIEW_TABS.map(stage=>this.loadQueue(QUEUE_URLS[stage],pages[stage]??1,search))),
+        this.loadAssetLookups(), this.loadConfiguration(), this.loadIntakeLookups(),
       ]);
-      this.triageCases.set(triage);
-      this.classificationCases.set(classification);
-      this.verificationCases.set(verification);
-      this.specialistCases.set(specialist);
-      this.decisionCases.set(decision);
-      this.registrationCases.set(registration);
-      this.assetLookups.set(assetLookups);
-      this.configuration.set(configuration);
-      this.intakeLookups.set(intakeLookups);
-      const queues: Array<[ReviewTab, AiReviewCase[]]> = [
-        ['triage', triage], ['classification', classification], ['verification', verification], ['specialist', specialist],
-        ['decision', decision], ['registration', registration],
-      ];
-      const activeTab = this.rowsFor(this.tab(), triage, classification, verification, specialist, decision, registration).length
-        ? this.tab()
-        : queues.find(([, rows]) => rows.length)?.[0] ?? this.tab();
-      this.tab.set(activeTab);
-      const rows = this.rowsFor(activeTab, triage, classification, verification, specialist, decision, registration);
-      this.select(rows.find(row => row.id === preferredId) ?? rows[0] ?? null);
+      if(generation!==this.requestGeneration)return;
+      const queues=Object.fromEntries(REVIEW_TABS.map((stage,index)=>[stage,loaded[index]])) as Record<ReviewTab,ReviewQueue>;
+      if(queues[tab].page>queues[tab].totalPages&&!queues[tab].denied){
+        this.queuePages.update(value=>({...value,[tab]:queues[tab].totalPages}));
+        await this.load(selectedId); return;
+      }
+      this.queues.set(queues);
+      this.triageCases.set(queues.triage.data); this.classificationCases.set(queues.classification.data);
+      this.verificationCases.set(queues.verification.data); this.specialistCases.set(queues.specialist.data);
+      this.decisionCases.set(queues.decision.data); this.registrationCases.set(queues.registration.data);
+      this.assetLookups.set(assetLookups); this.configuration.set(configuration); this.intakeLookups.set(intakeLookups);
+      const rows=this.rowsFor(tab);
+      this.select(rows.find(row=>row.id===selectedId)??rows[0]??null);
+      this.loadingQueues.set(false);
       this.state.set('ok');
-    } catch (error) {
-      this.state.set('error');
-      this.toast.errorFrom(error, this.t('aiReview.error.load'));
+    } catch(error) {
+      if(generation!==this.requestGeneration)return;
+      this.loadingQueues.set(false); this.state.set('error'); this.toast.errorFrom(error,this.t('aiReview.error.load'));
     }
   }
 
-  protected setTab(tab: ReviewTab): void {
-    this.tab.set(tab);
-    const rows = this.rowsFor(tab);
-    this.select(rows[0] ?? null);
+  protected setTab(tab:ReviewTab):void {
+    if(!REVIEW_TABS.includes(tab)||this.working()||tab===this.tab())return;
+    this.tab.set(tab); void this.load();
+  }
+  protected changeQueuePage(page:number):void {
+    if(this.working()||this.loadingQueues()||page<1||page>this.activeQueue().totalPages)return;
+    this.queuePages.update(value=>({...value,[this.tab()]:page})); void this.load();
+  }
+  protected changeQueueSearch(value:string):void {
+    if(this.working())return;
+    this.queueSearch.set(value.slice(0,200)); this.queuePages.set({});
+    clearTimeout(this.searchTimer); this.requestGeneration++; this.selected.set(null); this.loadingQueues.set(true);
+    this.searchTimer=setTimeout(()=>void this.load(),250);
   }
 
   protected changeTab(value: string | number | undefined): void {
@@ -304,16 +334,25 @@ export class AiReviewPage implements OnInit {
     finally { this.working.set(false); }
   }
 
-  private async loadQueue(url: string): Promise<AiReviewCase[]> {
+  private async loadQueue(url:string,page:number,search:string):Promise<ReviewQueue> {
+    if(url.includes('/reviews/queue')&&!this.auth.hasAiPermission('case.view.aiuc.org'))return emptyQueue(page,true);
+    const broad=this.auth.hasAiPermission('case.view.aiuc.org')||this.auth.hasAiPermission('case.view.aiuc.all');
+    const purpose=url.includes('registration')?['aiuc.asset.register','aiuc.asset.approve']:url.includes('decisions')?['case.approve.aiuc']:['aiuc.classify.assess'];
+    if(!broad&&!purpose.some(permission=>this.auth.hasAiPermission(permission)))return emptyQueue(page,true);
     try {
-      return await firstValueFrom(this.http.get<AiReviewCase[]>(url));
-    } catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 403) return [];
+      const queue=await firstValueFrom(this.http.get<ReviewQueue>(url,{params:{page,pageSize:25,search}}));
+      if(!Array.isArray(queue.data)||!Number.isInteger(queue.total)||queue.total<0||queue.page!==page
+        ||queue.pageSize!==25||queue.totalPages!==Math.max(1,Math.ceil(queue.total/25))||queue.summary?.total!==queue.total
+        ||queue.summary.pending+queue.summary.inProgress!==queue.total||queue.data.length>25)throw new Error('Invalid review queue response');
+      return queue;
+    } catch(error) {
+      if(error instanceof HttpErrorResponse&&error.status===403)return emptyQueue(page,true);
       throw error;
     }
   }
 
   private async loadConfiguration(): Promise<ClassificationConfiguration | null> {
+    if(!['aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all'].some(permission=>this.auth.hasAiPermission(permission)))return null;
     try {
       return await firstValueFrom(this.http.get<ClassificationConfiguration>('/api/ai/use-cases/classification/configuration'));
     } catch (error) {
@@ -515,7 +554,7 @@ export class AiReviewPage implements OnInit {
     const isSame = target === proposed;
     const isUnacceptable = target === 'UNACCEPTABLE';
     const operation = isSame ? 'verify' : isUnacceptable ? 'unacceptable' : 'override';
-    const body: Record<string, unknown> = { expectedVersion: item.version };
+    const body: Record<string, unknown> = { expectedVersion: item.version, evidenceIds:this.evidenceIdList() };
     if (isSame) {
       if (this.justification().trim()) body['justification'] = this.justification().trim();
     } else {

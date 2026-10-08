@@ -3,7 +3,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../auth/auth.types';
 import { parseQueryEnum } from '../common/query-filters';
+import { isManagedDemoProfile } from '../common/demo-profile';
 import { EvidenceService, SpecEvidenceRollup } from '../evidence/evidence.service';
+import { SYNTHETIC_EVIDENCE_PROVENANCES } from '../evidence/evidence-status';
 import {
   GAP_TYPES,
   GAP_SEVERITY,
@@ -183,10 +185,34 @@ export class ScoringService {
     return 'none';
   }
 
-  async readiness(actor: AuthUser): Promise<ReadinessOverview> {
+  async readiness(actor: AuthUser, now = new Date()): Promise<ReadinessOverview> {
+    return this.calculateReadiness(actor, now, false);
+  }
+
+  async scenarioReadiness(actor: AuthUser) {
+    if (!isManagedDemoProfile()) throw new NotFoundException('Demo scenario is unavailable');
+    const evaluatedAt = new Date();
+    const [operational, scenario, syntheticEvidenceCount] = await Promise.all([
+      this.calculateReadiness(actor, evaluatedAt, false),
+      this.calculateReadiness(actor, evaluatedAt, true),
+      this.prisma.ndiEvidence.count({
+        where: { deletedAt: null, provenance: { in: [...SYNTHETIC_EVIDENCE_PROVENANCES] }, spec: await this.specVisibilityWhere(actor) },
+      }),
+    ]);
+    return {
+      demoOnly: true as const,
+      isComplianceClaim: false as const,
+      fixtureVersion: process.env.DGOP_DEMO_FIXTURE_VERSION ?? 'unverified',
+      evaluatedAt: evaluatedAt.toISOString(),
+      syntheticEvidenceCount,
+      operational,
+      scenario: { ...scenario, scoringBasis: 'demonstration_scenario' as const },
+    };
+  }
+
+  private async calculateReadiness(actor: AuthUser, now: Date, syntheticScenario: boolean): Promise<ReadinessOverview> {
     const specs = await this.loadSpecs(actor);
-    const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id));
-    const now = new Date();
+    const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id), { now, syntheticScenario });
 
     const gapTotals: Record<GapType, number> = {
       missing: 0,
@@ -244,12 +270,11 @@ export class ScoringService {
     };
   }
 
-  async domainDetail(actor: AuthUser, domainId: string): Promise<DomainDetail> {
+  async domainDetail(actor: AuthUser, domainId: string, now = new Date()): Promise<DomainDetail> {
     const domain = await this.prisma.ndiDomain.findUnique({ where: { id: domainId } });
     if (!domain) throw new NotFoundException('ndi_domain not found');
     const specs = await this.loadSpecs(actor, domainId);
-    const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id));
-    const now = new Date();
+    const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id), { now });
 
     const rows: SpecScoreRow[] = specs.map((spec) => {
       const roll = rollups.get(spec.id);
@@ -288,11 +313,10 @@ export class ScoringService {
     };
   }
 
-  async gaps(actor: AuthUser, filter?: { gapType?: string; domainId?: string }): Promise<GapRow[]> {
+  async gaps(actor: AuthUser, filter?: { gapType?: string; domainId?: string }, now = new Date()): Promise<GapRow[]> {
     const gapType = this.parseGapType(filter?.gapType);
     const specs = await this.loadSpecs(actor, filter?.domainId);
-    const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id));
-    const now = new Date();
+    const rollups = await this.evidence.rollupForSpecs(specs.map((s) => s.id), { now });
     const out: GapRow[] = [];
     for (const spec of specs) {
       const roll = rollups.get(spec.id);

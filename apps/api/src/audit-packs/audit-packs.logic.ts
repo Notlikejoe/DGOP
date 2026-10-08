@@ -12,6 +12,7 @@ export interface ManifestEvidenceEntry {
   sha256: string;
   status: string;
   expiryDate: string | null;
+  provenance?: string;
 }
 
 export interface AuditPackManifest {
@@ -21,6 +22,8 @@ export interface AuditPackManifest {
   frameworks: string[];
   files: { path: string; sha256: string; bytes: number }[];
   evidence: ManifestEvidenceEntry[];
+  scoringBasis?: 'operational_evidence_only';
+  excludedEvidence?: (ManifestEvidenceEntry & { exclusionReason: string })[];
 }
 
 const CRC_TABLE = (() => {

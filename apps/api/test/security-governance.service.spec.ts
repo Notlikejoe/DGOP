@@ -406,6 +406,7 @@ test('updateReviewItem queues linked grant revocation and completes the review',
   let reviewUpdate: any;
   let auditEntry: any;
   const tx: any = {
+    $queryRaw: async () => [],
     accessReviewItem: {
       update: async (args: any) => {
         itemUpdate = args;
@@ -431,6 +432,7 @@ test('updateReviewItem queues linked grant revocation and completes the review',
       dataAsset: { findFirst: async () => ({ id: 'asset-1' }) },
       dataDomain: { findFirst: async () => ({ id: 'domain-1' }) },
       classification: { findFirst: async () => ({ id: 'class-1', rank: 2 }) },
+      user: { findUnique: async () => ({ id: 'independent-user' }) },
       accessReviewItem: {
         findUnique: async () => ({
           id: 'item-1',
@@ -441,13 +443,14 @@ test('updateReviewItem queues linked grant revocation and completes the review',
           assetId: 'asset-1',
           domainId: 'domain-1',
           classificationId: 'class-1',
+          decision: 'pending', grant: { id: 'grant-1', version: 1 },
           review: { ownerUserId: null, status: 'active' },
         }),
       },
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
     } as never,
     {
-      log: async (entry: any) => {
+      logRequired: async (entry: any) => {
         auditEntry = entry;
       },
     } as never,

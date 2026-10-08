@@ -25,6 +25,7 @@ test('local preparation is idempotent and preserves not-so-strong local password
   const root = mkdtempSync(join(tmpdir(), 'dgop-local-config-'));
   mkdirSync(join(root, 'scripts'));
   copyFileSync(new URL('../prepare-demo-env.mjs', import.meta.url), join(root, 'scripts/prepare-demo-env.mjs'));
+  copyFileSync(new URL('../runtime-env.mjs', import.meta.url), join(root, 'scripts/runtime-env.mjs'));
   writeFileSync(join(root, '.env.example'), 'NODE_ENV=development\nSEED_ADMIN_PASSWORD=replace-with-local-demo-password\n');
   const prepare = (args = ['--local']) => spawnSync(process.execPath, [join(root, 'scripts/prepare-demo-env.mjs'), ...args], {
     encoding: 'utf8', env: { ...process.env, NODE_ENV: 'development', DGOP_REQUIRE_STRICT_RUNTIME: 'false' },

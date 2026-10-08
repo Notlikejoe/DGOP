@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { AiSourceCorrections } from './ai-source-corrections';
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
@@ -15,12 +16,13 @@ interface Reconciliation {counts:Record<string,number>;sourceCount:number;quaran
 interface Decision {id:string;outcome:string;actorId:string;justification:string;createdAt:string;rowKey?:string}
 interface SavedPreview {id:string;digest:string;createdAt:string;createdBy:string;justification:string;report:{rows:PreviewRow[];sources:Array<{source:string;sha256:string}>;reconciliation:Reconciliation};dispositions:Decision[];review:Decision|null}
 interface Context {canPropose:boolean;canReview:boolean;sources:Array<{source:string;file:string;sha256:string}>}
-@Component({selector:'app-ai-migration',standalone:true,imports: [AiSourceCorrections,DualDatePipe,JsonPipe,FormsModule,TableModule,TagModule,AppIcon],templateUrl:'./ai-migration.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-migration.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
+@Component({selector:'app-ai-migration',standalone:true,imports:[AiEvidencePanel,AiSourceCorrections,DualDatePipe,JsonPipe,FormsModule,TableModule,TagModule,AppIcon],templateUrl:'./ai-migration.html',styleUrls:['../ai-review/ai-review.scss','../ai-reviews/ai-reviews.scss','./ai-migration.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiMigrationPage implements OnInit {
  private readonly http=inject(HttpClient);private readonly toast=inject(ToastService);protected readonly i18n=inject(I18nService);
  protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly detailsState=signal<'idle'|'loading'|'ok'|'error'>('idle');protected readonly working=signal(false);
- protected readonly context=signal<Context|null>(null);protected readonly archive=signal<{rows:Array<{id:string;digest:string;createdAt:string;review:Decision|null;reconciliation:Reconciliation}>;total:number;page:number;pageSize:number}|null>(null);
+ protected readonly context=signal<Context|null>(null);protected readonly archive=signal<{data:Array<{id:string;digest:string;createdAt:string;review:Decision|null;reconciliation:Reconciliation}>;total:number;page:number;pageSize:number}|null>(null);
  protected readonly saved=signal<SavedPreview|null>(null);protected readonly selected=signal<PreviewRow|null>(null);protected readonly kind=signal('all');protected readonly status=signal('all');protected readonly search=signal('');
+ protected archiveSearch='';
  protected readonly justification=signal('');protected readonly evidence=signal('');protected readonly outcome=signal('defer');
  protected readonly kinds=['reference','library','control','usecase','classification','risk','assessment','action','intake'];
  protected readonly filtered=computed(()=>{const needle=this.search().toLocaleLowerCase();return this.saved()?.report.rows.filter(r=>(this.kind()==='all'||r.kind===this.kind())&&(this.status()==='all'||r.status===this.status())&&(!needle||(r.sourceRef+' '+r.sheet+' '+JSON.stringify(r.raw)).toLocaleLowerCase().includes(needle)))??[];});
@@ -31,7 +33,7 @@ export class AiMigrationPage implements OnInit {
  protected ids(){return [...new Set(this.evidence().split(/[\s,;]+/u).filter(Boolean))];}
  protected disposition(r:PreviewRow){return this.saved()?.dispositions.find(d=>d.rowKey===r.key);}
  protected choose(r:PreviewRow){this.selected.set(r);this.justification.set('');this.evidence.set('');}
- protected async load(page=1){const seq=++this.sequence;this.state.set('loading');try{const [context,archive]=await Promise.all([firstValueFrom(this.http.get<Context>('/api/ai/migration-previews/context')),firstValueFrom(this.http.get<NonNullable<ReturnType<typeof this.archive>>>('/api/ai/migration-previews?page='+page+'&pageSize=20'))]);if(seq===this.sequence){this.context.set(context);this.archive.set(archive);this.state.set('ok');}}catch(e){if(seq===this.sequence){this.state.set('error');this.toast.errorFrom(e,this.t('aiMigration.error'));}}}
+ protected async load(page=1){const seq=++this.sequence;this.state.set('loading');try{const [context,archive]=await Promise.all([firstValueFrom(this.http.get<Context>('/api/ai/migration-previews/context')),firstValueFrom(this.http.get<NonNullable<ReturnType<typeof this.archive>>>('/api/ai/migration-previews',{params:{page,pageSize:25,search:this.archiveSearch}}))]);if(seq===this.sequence){this.context.set(context);this.archive.set(archive);this.state.set('ok');}}catch(e){if(seq===this.sequence){this.state.set('error');this.toast.errorFrom(e,this.t('aiMigration.error'));}}}
  protected async open(id:string){const seq=++this.detailSequence;this.currentId=id;this.detailsState.set('loading');this.saved.set(null);this.selected.set(null);this.justification.set('');this.evidence.set('');try{const d=await firstValueFrom(this.http.get<SavedPreview>('/api/ai/migration-previews/'+id));if(seq===this.detailSequence){this.saved.set(d);this.detailsState.set('ok');}}catch(e){if(seq===this.detailSequence){this.detailsState.set('error');this.toast.errorFrom(e,this.t('aiMigration.error'));}}}
  protected retryDetails(){void this.open(this.currentId);}
  protected close(){++this.detailSequence;this.saved.set(null);this.selected.set(null);this.detailsState.set('idle');this.justification.set('');this.evidence.set('');}

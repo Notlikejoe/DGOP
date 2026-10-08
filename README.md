@@ -10,7 +10,7 @@ Database handoff details for another developer are documented in [`docs/DATABASE
 
 ## Prerequisites
 
-- Node.js 22.22.3+, 24.15.0+, or 26+ for Angular 22 (tested on Node 24)
+- Node.js 24.19.0 and npm 11.13.0 for the isolated stability candidate.
 - PostgreSQL running locally and reachable through `DATABASE_URL`
 - All configuration comes from the root **`.env`** (see `.env.example`)
 

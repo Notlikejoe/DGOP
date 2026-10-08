@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom, timeout } from 'rxjs';
-import { LoginResponse, UserProfile } from './auth.models';
+import { AiCapabilities, LoginResponse, UserProfile } from './auth.models';
 
 const LEGACY_TOKEN_KEY = 'dgop.token';
 export class SessionUnavailableError extends Error {}
@@ -13,7 +13,9 @@ export class AuthService {
   private readonly router = inject(Router);
 
   readonly currentUser = signal<UserProfile | null>(null);
+  readonly aiCapabilities = signal<AiCapabilities | null>(null);
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
+  private capabilityGeneration=0;
 
   getToken(): string | null {
     return null;
@@ -32,6 +34,7 @@ export class AuthService {
     try {
       const user = await firstValueFrom(this.http.get<UserProfile | null>('/api/auth/session').pipe(timeout(10_000)));
       this.currentUser.set(user);
+      if(user) await this.refreshAiCapabilities();
     } catch {
       this.clearSession();
     }
@@ -45,6 +48,7 @@ export class AuthService {
     if (!user?.isActive || user.id !== res.user.id) throw new SessionUnavailableError('The browser could not retain the login session.');
     this.clearToken();
     this.currentUser.set(user);
+    await this.refreshAiCapabilities();
   }
 
   async logout(): Promise<void> {
@@ -59,11 +63,24 @@ export class AuthService {
 
   /** Clear local session without an API call (used on 401). */
   clearSession(): void {
+    this.capabilityGeneration++;
     this.clearToken();
     this.currentUser.set(null);
+    this.aiCapabilities.set(null);
   }
 
+  async refreshAiCapabilities():Promise<void> {
+    const generation=++this.capabilityGeneration,userId=this.currentUser()?.id;
+    if(!userId){this.aiCapabilities.set(null);return;}
+    try {const capabilities=await firstValueFrom(this.http.get<AiCapabilities>('/api/ai/capabilities').pipe(timeout(10000)));if(generation===this.capabilityGeneration&&this.currentUser()?.id===userId)this.aiCapabilities.set(capabilities);}
+    catch {if(generation===this.capabilityGeneration)this.aiCapabilities.set(null);}
+  }
+
+  hasAiPermission(permission:string):boolean { return this.aiCapabilities()?.permissions.includes(permission)??false; }
+  hasAiScreen(screen:keyof AiCapabilities['screens']):boolean { return this.aiCapabilities()?.screens[screen]??false; }
+
   hasPermission(permission: string): boolean {
+    if(/^(?:case\.(?:view|create|approve)\.ai|aiuc\.|airs\.|dashboard\.view\.(?:aiuc|airs|exec\.ai)|refdata\.(?:propose|approve)\.ai|refdata\.publish$)/u.test(permission))return this.hasAiPermission(permission);
     const perms = this.currentUser()?.permissions ?? [];
     return perms.includes('*') || perms.includes(permission);
   }

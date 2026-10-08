@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Controller, Get, Query, Res } from '@nestjs/common';
 import { IsIn, IsInt, IsISO8601, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -17,6 +18,8 @@ export class AuditQueryDto {
  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) @Max(100) pageSize?:number;
 }
 @Controller('ai/audit')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiAuditQueryController {
  constructor(private readonly audit:AiAuditQueryService){}
  @Get() query(@CurrentUser() user:AuthUser,@Query() query:AuditQueryDto){return this.audit.query(user.id,query);}

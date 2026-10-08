@@ -1,3 +1,6 @@
+import { loadEnvironment, applyEnvironment } from './runtime-env.mjs';
+import { assertSnapshotAttestation } from './snapshot-attestation.mjs';
+import { runtimeCommand } from './node-runtime.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { request } from 'node:http';
@@ -10,32 +13,16 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const gitCmd = process.platform === 'win32' ? 'git.exe' : 'git';
 
-function loadRootEnv() {
-  const env = { ...process.env };
-  const envPath = join(root, '.env');
-  if (!existsSync(envPath)) return env;
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (!env[key]) env[key] = value;
-  }
-  return env;
-}
+function loadRootEnv() { return loadEnvironment(root); }
 
 function run(label, command, args, options = {}) {
   console.log(`\n[qa:release] ${label}`);
-  const result = spawnSync(command, args, {
+  const selected = runtimeCommand(root, command, args, options.env);
+  const result = spawnSync(selected.command, selected.args, {
     cwd: options.cwd ?? root,
-    env: options.env,
+    env: selected.env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -48,7 +35,7 @@ function commandOutput(command, args, options = {}) {
     cwd: options.cwd ?? root,
     env: options.env,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with code ${result.status}`);
@@ -56,6 +43,10 @@ function commandOutput(command, args, options = {}) {
 }
 
 function assertCleanCheckout(env) {
+  if (env.DGOP_SNAPSHOT_ATTESTATION) {
+    assertSnapshotAttestation(root, env.DGOP_SNAPSHOT_ATTESTATION);
+    return;
+  }
   if (/^(?:1|true|yes)$/iu.test(env.DGOP_ALLOW_DIRTY_RELEASE ?? '')) {
     console.warn('[qa:release] dirty-checkout guard explicitly bypassed for local verification');
     return;
@@ -197,7 +188,10 @@ run('Prisma migration status', npxCmd, ['--no-install', 'prisma', 'migrate', 'st
 run('Prisma client generation', npmCmd, ['run', 'db:generate'], { env });
 run('API high-severity dependency audit', npmCmd, ['--prefix', 'apps/api', 'audit', '--audit-level=high'], { env });
 run('web high-severity dependency audit', npmCmd, ['--prefix', 'apps/web', 'audit', '--audit-level=high'], { env });
-run('Git whitespace check', gitCmd, ['diff', '--check'], { env });
+if (env.DGOP_SNAPSHOT_ATTESTATION) {
+  assertSnapshotAttestation(root, env.DGOP_SNAPSHOT_ATTESTATION);
+  console.log('[qa:release] attested source snapshot remained unchanged');
+} else run('Git whitespace check', gitCmd, ['diff', '--check'], { env });
 run('production build', npmCmd, ['run', 'build'], { env });
 assertBuiltIndexIsCspCompatible();
 await runRuntimeSmoke(env);

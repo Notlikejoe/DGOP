@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -15,7 +16,7 @@ interface ResponseContext {
   history: Array<{ id: string; round: number; strategyCode: string; payload: Payload;
     decisions: Array<{ id: string; kind: string; decision: string; justification: string }> }>;
 }
-@Component({ selector: 'app-ai-risk-response', standalone: true, imports: [FormsModule, AppIcon, StatusChip],
+@Component({ selector: 'app-ai-risk-response', standalone: true, imports:[AiEvidencePanel,FormsModule, AppIcon, StatusChip],
   templateUrl: './ai-risk-response.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risk-assessment.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRiskResponse {
   readonly riskId = input.required<string>(); readonly updated = output<void>();

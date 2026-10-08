@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -12,7 +13,7 @@ interface SeverityContext {
  pending:{severityCode:string;role:string}|null;
  events:Array<{id:string;kind:string;severityCode:string;previousSeverityCode:string;actorRoleCode:string;createdAt:string;justification:string;evidenceIds:string[]}>;
 }
-@Component({selector:'app-ai-severity',standalone:true,imports:[FormsModule,TableModule,DualDatePipe],templateUrl:'./ai-severity.html',
+@Component({selector:'app-ai-severity',standalone:true,imports:[AiEvidencePanel,FormsModule,TableModule,DualDatePipe],templateUrl:'./ai-severity.html',
  styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiSeverity {
  readonly riskId=input.required<string>();readonly updated=output<void>();

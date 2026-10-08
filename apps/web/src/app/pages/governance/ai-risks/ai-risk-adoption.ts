@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -14,7 +15,7 @@ interface AdoptionContext {
   history: Array<{ id: string; round: number; decisions: Array<{ id: string; kind: string; decision: string;
     actorRoleCode: string; justification: string; evidenceIds: string[]; createdAt: string }> }>;
 }
-@Component({ selector: 'app-ai-risk-adoption', standalone: true, imports: [FormsModule, AppIcon, StatusChip],
+@Component({ selector: 'app-ai-risk-adoption', standalone: true, imports:[AiEvidencePanel,FormsModule, AppIcon, StatusChip],
   templateUrl: './ai-risk-adoption.html', styleUrls: ['../ai-review/ai-review.scss', './ai-risk-assessment.scss'], changeDetection: ChangeDetectionStrategy.OnPush })
 export class AiRiskAdoption {
   readonly riskId = input.required<string>();

@@ -572,6 +572,7 @@ enum NdiEvidenceStatus {
 /// A piece of evidence (an uploaded file) demonstrating compliance with an
 /// NDI specification. Goes through a submit -> review lifecycle and can expire.
 model NdiEvidence {
+  aiLinks AiEvidenceLink[]
   id            String            @id @default(uuid())
   specId        String
   title         String
@@ -985,6 +986,7 @@ enum GovernanceCouncilMemberRole {
 
 /// A governance workflow case (a controlled piece of work, e.g. an assignment approval).
 model WorkflowCase {
+  aiLifecycleRequest AiLifecycleRequest?
   aiAnnualReviews AiAnnualReview[]
   aiUseCase                     AiUseCase?
   aiRisk                        AiRisk?
@@ -1042,7 +1044,9 @@ model WorkflowCase {
 
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
+  aiLifecycleDecision AiLifecycleDecision?
   aiStrategyEvents AiRiskStrategyEvent[]
+  aiSeverityEvents AiRiskSeverityEvent[]
   reassessmentTrigger AiReassessmentTrigger?
   aiAnnualReview AiAnnualReview?
   reassessment AiRiskReassessment?
@@ -1471,6 +1475,7 @@ model WorkflowVariableDefinition {
 
 /// Append-only audit log foundation.
 model AuditLog {
+  aiEvidenceProof AiDecisionEvidenceProof?
   id           String   @id @default(uuid())
   actor        String
   action       String
@@ -1486,6 +1491,39 @@ model AuditLog {
   @@index([entryHash])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// Explicit relevance assertion pinned to an independently approved document revision.
+model AiEvidenceLink {
+  id String @id @default(uuid())
+  evidenceId String
+  targetType String
+  targetId String
+  evidenceUpdatedAt DateTime
+  sha256 String @db.VarChar(64)
+  actorId String
+  justification String
+  createdAt DateTime @default(now())
+  evidence NdiEvidence @relation(fields:[evidenceId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+  @@unique([evidenceId,targetType,targetId,evidenceUpdatedAt],map:"ai_evidence_link_revision_key")
+  @@index([targetType,targetId])
+  @@map("ai_evidence_links")
+}
+
+/// Append-only decision proof; historical records deliberately receive no fabricated backfill.
+model AiDecisionEvidenceProof {
+  id String @id @default(uuid())
+  auditLogId String @unique
+  targetType String
+  targetId String
+  snapshot Json
+  digest String @db.VarChar(64)
+  demoOnly Boolean
+  evaluatedAt DateTime
+  createdAt DateTime @default(now())
+  auditLog AuditLog @relation(fields:[auditLogId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+  @@index([targetType,targetId,createdAt])
+  @@map("ai_decision_evidence_proofs")
 }
 
 /// Lifecycle states for role-based governance training assignments.
@@ -2671,6 +2709,17 @@ model PrivacyGate {
 }
 
 model PrivacyDsrRequest {
+  extensionDueAt DateTime?
+  extensionReason String?
+  extensionCommunicatedAt DateTime?
+  extensionCommunicationReference String?
+  extensionRecordedBy String?
+  version Int @default(1)
+  receivedAt DateTime @default(now())
+  identityVerifiedAt DateTime?
+  identityVerifiedBy String?
+  identityEvidenceReference String?
+  completionEvidenceReference String?
   id                String           @id @default(uuid())
   requestNumber     String           @unique
   requesterName     String
@@ -2707,6 +2756,15 @@ model PrivacyDsrRequest {
 }
 
 model PrivacyBreach {
+  version Int @default(1)
+  regulatorNotificationRequired Boolean?
+  subjectNotificationRequired Boolean?
+  notificationDecisionReason String?
+  notificationDecisionAt DateTime?
+  notificationDecisionBy String?
+  regulatorNotificationEvidenceReference String?
+  subjectNotifiedAt DateTime?
+  subjectNotificationEvidenceReference String?
   id                String         @id @default(uuid())
   code              String         @unique
   title             String
@@ -3362,6 +3420,8 @@ model AccessPrincipalDirectory {
 
 /// Append-only connector handoff ledger for external access enforcement.
 model AccessEnforcementAttempt {
+  requestVersion Int?
+  completionVersion Int?
   id             String      @id @default(uuid())
   grantId        String
   idempotencyKey String      @unique
@@ -4971,12 +5031,17 @@ enum AiAssessmentKind {
 /// Full 28-field intake lives in append-only, schema-versioned revisions.
 /// Register projections/remaining business fields are added in the AIRS phase.
 model AiUseCase {
+  lifecycleState String @default("active")
+  effectiveConfigurationId String? @unique
+  effectiveConfiguration AiEffectiveConfiguration? @relation("AiCurrentConfiguration",fields:[effectiveConfigurationId],references:[id],onDelete:Restrict)
+  configurations AiEffectiveConfiguration[] @relation("AiConfigurationHistory")
+  lifecycleRequests AiLifecycleRequest[]
   operationalStrategyEvent AiRiskStrategyEvent? @relation(fields:[operationalStrategyEventId],references:[id],onDelete:Restrict,onUpdate:NoAction)
  sourceDraft AiSourceNativeDraft?
   operationalStatusCode String?
   operationalStrategyEventId String?
   operationalDecisionId String?
-  operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict)
+  operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict, map: "ai_use_case_operational_decision_fk")
   id                 String                 @id @default(uuid())
   useCaseRef         String?                @unique
   workflowCaseId     String?                @unique
@@ -5006,6 +5071,85 @@ model AiUseCase {
   @@index([organizationUnitId, deletedAt])
   @@index([assetId])
   @@map("ai_use_cases")
+}
+
+model AiEffectiveConfiguration {
+ id String @id @default(uuid())
+ useCaseId String
+ sequence Int
+ payload Json
+ tierCode String
+ referencePins Json
+ assessmentSnapshot Json
+ riskSnapshot Json
+ obligationSnapshot Json
+ sourceRequestId String? @unique
+ createdBy String
+ createdAt DateTime @default(now())
+ useCase AiUseCase @relation("AiConfigurationHistory",fields:[useCaseId],references:[id],onDelete:Restrict)
+ currentUseCase AiUseCase? @relation("AiCurrentConfiguration")
+ @@unique([useCaseId,sequence])
+ @@map("ai_effective_configurations")
+}
+
+model AiLifecycleRequest {
+ reviewRetirements AiLifecycleReviewRetirement[]
+ id String @id @default(uuid())
+ useCaseId String
+ workflowCaseId String @unique
+ action String
+ status String @default("assessment")
+ version Int @default(1)
+ baseVersion Int
+ baseConfigurationId String
+ proposedPayload Json
+ assignments Json
+ sourceSnapshot Json
+ assessmentSnapshot Json?
+ riskSnapshot Json?
+ approvedConditions Json @default("[]")
+ authorityTier String
+ authorityRole String?
+ authorityActorId String?
+ proposerId String
+ justification String
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ completedAt DateTime?
+ useCase AiUseCase @relation(fields:[useCaseId],references:[id],onDelete:Restrict)
+ workflowCase WorkflowCase @relation(fields:[workflowCaseId],references:[id],onDelete:Restrict)
+ decisions AiLifecycleDecision[]
+ @@index([useCaseId,status,createdAt])
+ @@map("ai_lifecycle_requests")
+}
+
+model AiLifecycleReviewRetirement {
+ id String @id @default(uuid())
+ reviewId String @unique
+ requestId String
+ createdAt DateTime @default(now())
+ review AiRiskReview @relation(fields:[reviewId],references:[id],onDelete:Restrict)
+ request AiLifecycleRequest @relation(fields:[requestId],references:[id],onDelete:Restrict)
+ @@index([requestId])
+ @@map("ai_lifecycle_review_retirements")
+}
+
+model AiLifecycleDecision {
+ id String @id @default(uuid())
+ requestId String
+ taskId String @unique
+ stage String
+ decision String
+ actorId String
+ actorRole String
+ justification String
+ evidenceIds Json
+ snapshot Json
+ createdAt DateTime @default(now())
+ request AiLifecycleRequest @relation(fields:[requestId],references:[id],onDelete:Restrict)
+ task WorkflowTask @relation(fields:[taskId],references:[id],onDelete:Restrict)
+ @@index([requestId,createdAt])
+ @@map("ai_lifecycle_decisions")
 }
 
 model AiIntakeRevision {
@@ -5123,6 +5267,7 @@ model AiRiskAssessmentDecision {
 
 /// Immutable review basis; completion and SLA events are separate ledgers.
 model AiRiskReview {
+ retirement AiLifecycleReviewRetirement?
   cadenceReferenceVersionId String?
   cadenceCode String?
   displayCadenceLabelEn String?
@@ -5335,6 +5480,7 @@ model AiTreatmentProgress {
 
 /// Conditions remain separate obligations rather than disappearing into a note.
 model AiApprovalObligation {
+  operationalState String @default("active")
   assetId     String?
   asset       DataAsset? @relation(fields: [assetId], references: [id], onDelete: Restrict)
   id          String    @id @default(uuid())
@@ -5690,12 +5836,13 @@ model AiRiskSeverityEvent {
  evidenceIds Json
  clientIp String?
  createdAt DateTime @default(now())
- risk AiRisk @relation(fields:[riskId],references:[id],onDelete:Restrict)
- assessment AiAssessmentRound @relation(fields:[assessmentId],references:[id],onDelete:Restrict)
- relatedEvent AiRiskSeverityEvent? @relation("AiSeverityBasis",fields:[relatedEventId],references:[id],onDelete:Restrict)
+ risk AiRisk @relation(fields:[riskId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ assessment AiAssessmentRound @relation(fields:[assessmentId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ relatedEvent AiRiskSeverityEvent? @relation("AiSeverityBasis",fields:[relatedEventId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ task WorkflowTask? @relation(fields:[taskId],references:[id],onDelete:Restrict,onUpdate:NoAction)
  outcomes AiRiskSeverityEvent[] @relation("AiSeverityBasis")
  @@unique([riskId,round])
- @@index([assessmentId,round])
+ @@index([assessmentId,round],map:"ai_risk_severity_events_assessmentid_round_idx")
  @@map("ai_risk_severity_events")
 }
 

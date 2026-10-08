@@ -9,6 +9,10 @@ import { AppModule } from '../src/app.module';
 import { testPhase1B } from './ai-phase1b.integration';
 import { testPhase2A } from './ai-phase2a.integration';
 import { testAiRequestLifecycle } from './ai-request-lifecycle.integration';
+import { testAiStability } from './ai-stability.integration';
+import { testAccessPrivacyStability } from './access-privacy-stability.integration';
+import { testGovernanceFunctionalStability } from './governance-functional-stability.integration';
+import { initializeManagedSourceFixture } from './ai-source-fixture';
 
 const url = new URL(process.env.DGOP_AI_TEST_DATABASE_URL ?? '');
 assert.equal(url.hostname, '127.0.0.1');
@@ -18,6 +22,7 @@ process.env.DATABASE_URL = url.href;
 process.env.NODE_ENV = 'test';
 process.env.WORKFLOW_EXECUTION_SCHEDULER = 'false';
 process.env.GOVERNANCE_OPERATIONS_SCHEDULER = 'false';
+initializeManagedSourceFixture();
 const db = new PrismaClient({ datasources: { db: { url: url.href } } });
 const ids = new AiIdentifiersService();
 let rejected = 0;
@@ -82,6 +87,9 @@ async function main() {
   await testPhase1B(db);
   await testPhase2A(db);
   await testAiRequestLifecycle(db);
+  await testAiStability(db);
+  await testAccessPrivacyStability(db);
+  await testGovernanceFunctionalStability(db);
   console.log(`Database foundation passed: concurrent/collision/rollback numbering, parent integrity, immutable history, reference lifecycle, ${rejected} rejected invalid writes/reads, full Nest application startup.`);
 }
 main().finally(() => db.$disconnect()).catch(error => { console.error(error); process.exitCode = 1; });

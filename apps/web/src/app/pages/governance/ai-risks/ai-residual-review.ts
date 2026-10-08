@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -13,7 +14,7 @@ interface ResidualReviewContext {
   tasks:Array<{id:string;kind:string;roleCode:string;canReturn:boolean;outcomes:Outcome[]}>;
   history:Array<{id:string;round:number;decisions:Array<{id:string;kind:string;decision:Outcome;actorRoleCode:string;justification:string;evidenceIds:string[];conditions:string[]}>}>;
 }
-@Component({selector:'app-ai-residual-review',standalone:true,imports:[FormsModule,AppIcon,StatusChip],templateUrl:'./ai-residual-review.html',
+@Component({selector:'app-ai-residual-review',standalone:true,imports:[AiEvidencePanel,FormsModule,AppIcon,StatusChip],templateUrl:'./ai-residual-review.html',
   styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiResidualReview {
   readonly riskId=input.required<string>();readonly updated=output<void>();

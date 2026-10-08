@@ -1,3 +1,4 @@
+import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { DualDatePipe } from '../../../shared/dual-date.pipe';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
@@ -11,7 +12,7 @@ interface ReviewContext {
   version:number;canReverseAuthority:boolean;reversals:Array<{id:string;actorRoleCode:string;justification:string;previousDecisionId:string;createdAt:string}>;cadenceReady:boolean;canRegister:boolean;canRecalculate:boolean;canReassess:boolean;canAddTrigger:boolean;reassessments:Array<{id:string;triggerCode:string;justification:string;evidenceIds:string[];createdAt:string;additionalTriggers:Array<{id:string;triggerCode:string;justification:string;evidenceIds:string[];createdAt:string}>}>;
   history:Array<{id:string;round:number;bandCode:string;intervalDays:number;dueAt:string;anchorAt:string;referenceVersionId:string;cadenceLabelEn:string;cadenceLabelAr:string;cadenceReferenceVersionId:string|null;displayCadenceLabelEn:string|null;displayCadenceLabelAr:string|null;status:'scheduled'|'due_soon'|'overdue'|'completed'|'superseded';canComplete:boolean;signals:Array<{threshold:number;createdAt:string}>;completion:{justification:string;evidenceIds:string[];completedAt:string}|null}>;
 }
-@Component({selector:'app-ai-risk-monitoring',standalone:true,imports:[FormsModule,DualDatePipe,AppIcon,StatusChip],templateUrl:'./ai-risk-monitoring.html',
+@Component({selector:'app-ai-risk-monitoring',standalone:true,imports:[AiEvidencePanel,FormsModule,DualDatePipe,AppIcon,StatusChip],templateUrl:'./ai-risk-monitoring.html',
   styleUrls:['../ai-review/ai-review.scss','./ai-risk-assessment.scss','./ai-risk-monitoring.scss'],changeDetection:ChangeDetectionStrategy.OnPush})
 export class AiRiskMonitoring {
   readonly riskId=input.required<string>();readonly updated=output<void>();

@@ -1,3 +1,10 @@
+/// <reference lib="es2022.intl" />
+import PDFDocument from 'pdfkit';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import bidiFactory from 'bidi-js';
+
 export type ReportFormat = 'json' | 'csv' | 'pdf';
 
 export interface ReportColumn {
@@ -48,50 +55,92 @@ export function toCsv(result: ReportResult): string {
   return [header, ...rows].join('\r\n');
 }
 
-function pdfEscape(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
-
-export function toSimplePdf(result: ReportResult): Buffer {
-  const lines = [
-    result.title,
-    `Generated: ${result.generatedAt}`,
-    ...Object.entries(result.summary).map(([key, value]) => `${key}: ${value ?? '-'}`),
-    '',
-    result.columns.map((column) => column.label).join(' | '),
-    ...result.rows.slice(0, 40).map((row) => result.columns.map((column) => row[column.key] ?? '-').join(' | ')),
-  ].slice(0, 48);
-  const content = [
-    'BT',
-    '/F1 10 Tf',
-    '40 780 Td',
-    ...lines.flatMap((line, index) => [
-      index === 0 ? '/F1 14 Tf' : '/F1 10 Tf',
-      `(${pdfEscape(String(line).slice(0, 120))}) Tj`,
-      '0 -16 Td',
-    ]),
-    'ET',
-  ].join('\n');
-  const objects = [
-    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
-    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-    `5 0 obj << /Length ${Buffer.byteLength(content, 'utf8')} >> stream\n${content}\nendstream endobj`,
-  ];
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  for (const object of objects) {
-    offsets.push(Buffer.byteLength(pdf, 'utf8'));
-    pdf += `${object}\n`;
+/** Complete, wrapping, multi-page PDF with an embedded EN/AR font. */
+export async function toSimplePdf(result: ReportResult): Promise<Buffer> {
+  const fontPath = resolve(__dirname, '../resources/fonts/NotoSansArabic.ttf');
+  const font = readFileSync(fontPath);
+  if (createHash('sha256').update(font).digest('hex') !== '63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e') throw new Error('Report font checksum mismatch');
+  const document = new PDFDocument({ size: 'A4', margin: 42, compress: false, info: { Title: result.title, Subject: 'Complete DGOP report: ' + result.rows.length + ' rows' } });
+  const chunks: Buffer[] = [];
+  const complete = new Promise<Buffer>((done, fail) => {
+    document.on('data', (chunk: Buffer) => chunks.push(chunk));
+    document.on('end', () => done(Buffer.concat(chunks)));
+    document.on('error', fail);
+  });
+  const bidi = bidiFactory();
+  document.font(font);
+  // Shape each logical direction run as a whole. PDFKit's word wrapper places
+  // Arabic words left-to-right; Unicode bidi ordering must precede positioning.
+  const runs = (line: string, direction?: 'ltr' | 'rtl') => {
+    const embedding = bidi.getEmbeddingLevels(line, direction);
+    const order = bidi.getReorderedIndices(line, embedding);
+    const chunks: string[] = [];
+    for (let start = 0; start < order.length;) {
+      const first = order[start], level = embedding.levels[first], step = level % 2 ? -1 : 1;
+      let end = start + 1;
+      while (end < order.length && embedding.levels[order[end]] === level && order[end] === order[end - 1] + step) end++;
+      const low = Math.min(first, order[end - 1]), high = Math.max(first, order[end - 1]);
+      chunks.push(line.slice(low, high + 1));
+      start = end;
+    }
+    return { chunks, rtl: (embedding.paragraphs[0]?.level ?? 0) % 2 === 1 };
+  };
+  const width = document.page.width - document.page.margins.left - document.page.margins.right;
+  const measureRun = (chunk: string) => document.widthOfString(chunk, { features: [] });
+  const measure = (line: string, direction?: 'ltr' | 'rtl') => runs(line, direction).chunks.reduce((sum, chunk) => sum + measureRun(chunk), 0);
+  const paragraph = (text: string, size = 10) => {
+    document.fontSize(size);
+    const height = Math.max(size * 1.7, document.currentLineHeight(true));
+    const draw = (line: string, direction: 'ltr' | 'rtl') => {
+      if (document.y + height > document.page.height - document.page.margins.bottom) document.addPage();
+      const y = document.y, { chunks, rtl } = runs(line, direction);
+      let x = document.page.margins.left + (rtl ? Math.max(0, width - measure(line, direction)) : 0);
+      document.markContent('Span', { actual: line });
+      for (const chunk of chunks) { document.text(chunk, x, y, { lineBreak: false, features: [] }); x += measureRun(chunk); }
+      document.endMarkedContent();
+      document.x = document.page.margins.left;
+      document.y = y + height;
+    };
+    for (const sourceLine of text.split(/\r?\n/)) {
+      const direction = runs(sourceLine).rtl ? 'rtl' : 'ltr';
+      let line = '';
+      for (const word of sourceLine.split(/\s+/u).filter(Boolean)) {
+        const candidate = line ? line + ' ' + word : word;
+        if (measure(candidate, direction) <= width) { line = candidate; continue; }
+        if (line) draw(line, direction);
+        line = '';
+        // Long identifiers must also wrap without losing any characters.
+        for (const { segment } of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(word)) {
+          if (line && measure(line + segment, direction) > width) { draw(line, direction); line = ''; }
+          line += segment;
+        }
+      }
+      draw(line, direction);
+    }
+  };
+  paragraph(result.title, 16);
+  paragraph('Generated: ' + result.generatedAt, 9);
+  paragraph('Complete rows: ' + result.rows.length, 9);
+  for (const [key, value] of Object.entries(result.summary)) paragraph(key + ': ' + (value ?? '-'), 9);
+  document.moveDown();
+  for (let index = 0; index < result.rows.length; index++) {
+    paragraph('Record ' + (index + 1));
+    for (const column of result.columns) {
+      paragraph(column.label + ':', 8);
+      const value = String(result.rows[index][column.key] ?? '-');
+      paragraph(value);
+    }
+    document.moveDown(0.5);
   }
-  const xrefStart = Buffer.byteLength(pdf, 'utf8');
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i < offsets.length; i += 1) {
-    pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  }
-  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-  return Buffer.from(pdf, 'utf8');
+  // The companion CSV preserves exact values for downstream reconciliation.
+  document.file(Buffer.from(toCsv(result), 'utf8'), { name: result.id + '.csv', description: 'Complete machine-readable report rows' });
+  // PDFKit 0.20.2 emits invalid empty ToUnicode entries for fontkit's Arabic
+  // decoration glyphs. Map those glyphs to an invisible separator. ActualText
+  // and the UTF-8 attachment retain the exact logical text for accessibility.
+  const embedded = document as unknown as { _fontFamilies: Record<string, { unicode?: number[][] }> };
+  for (const item of Object.values(embedded._fontFamilies)) if (item.unicode) item.unicode = item.unicode.map((points) => points.length ? points : [0x200b]);
+  document.end();
+  return complete;
 }
 
 export function filterDefinitions(

@@ -19,6 +19,26 @@
       <button type="button" class="ds-btn ds-btn--primary" (click)="load()">{{ t('crud.retry') }}</button>
     </div>
   } @else if (data(); as d) {
+    @if (scenario(); as preview) {
+      <div class="ds-card explain" role="status">
+        <h2 class="card-title">{{ t('scoring.demoScenarioTitle') }}</h2>
+        <p>{{ t('scoring.demoScenarioNotice') }}</p>
+        <div class="kpi-row">
+          <div class="kpi">
+            <span class="kpi__label">{{ t('scoring.demoScenarioScore') }}</span>
+            <span class="kpi__value">{{ preview.scenario.overall.score }}%</span>
+            <span class="kpi__meta">{{ preview.scenario.overall.satisfiedCount }} / {{ preview.scenario.overall.specCount }}</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi__label">{{ t('scoring.operationalEvidenceOnly') }}</span>
+            <span class="kpi__value">{{ preview.operational.overall.score }}%</span>
+          </div>
+        </div>
+        <p class="muted">{{ t('scoring.demoFixtureVersion') }}: {{ preview.fixtureVersion }} · {{ t('scoring.demoEvaluatedAt') }}: {{ preview.evaluatedAt }}</p>
+      </div>
+    } @else if (scenarioError()) {
+      <div class="ds-card"><p class="error">{{ t('scoring.demoScenarioError') }}</p></div>
+    }
     @if (showExplanation()) {
       <div class="ds-card explain">
         <h3 class="sub-title">{{ t('scoring.explain.title') }}</h3>

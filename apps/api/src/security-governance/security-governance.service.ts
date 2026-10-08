@@ -15,6 +15,7 @@ import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/bus
 import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { claimGovernanceWrite } from '../common/governance-write';
 import {
   CreateAccessReviewDto,
   CreateAccessReviewCampaignDto,
@@ -813,26 +814,27 @@ export class SecurityGovernanceService {
     if (existing.review.status === AccessReviewStatus.completed) {
       throw new BadRequestException('Completed access reviews cannot be changed');
     }
-    const actorUser = existing.review.ownerUserId
-      ? await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } })
-      : null;
-    const isAdmin = roleCodes.some((role) => ['system_admin', 'dmo_admin'].includes(role));
-    if (existing.review.ownerUserId && actorUser?.id !== existing.review.ownerUserId && !isAdmin) {
-      throw new ForbiddenException('Only the review owner or an administrator can decide this item');
+    const actorUser = await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } });
+    if (actorUser?.id === existing.userId) throw new ForbiddenException('A reviewer cannot certify or change their own access');
+    if (existing.review.ownerUserId && actorUser?.id !== existing.review.ownerUserId) {
+      throw new ForbiddenException('Only the assigned review owner can decide this item');
     }
-    const item = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.accessReviewItem.update({
-        where: { id },
+    if (existing.decision !== AccessReviewDecision.pending) throw new BadRequestException('This review item already has a decision');
+    if (!dto.justification?.trim()) throw new BadRequestException('A documented review justification is required');
+    const item = await claimGovernanceWrite(() => this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM access_reviews WHERE id = ${existing.reviewId} FOR UPDATE`;
+      const updated = await claimGovernanceWrite(() => tx.accessReviewItem.update({
+        where: { id, decision: AccessReviewDecision.pending, updatedAt: existing.updatedAt, review: { status: AccessReviewStatus.active } },
         data: {
           decision: dto.decision as AccessReviewDecision,
           justification: dto.justification ?? null,
           reviewer: actor,
           reviewedAt: new Date(),
         },
-      });
+      }));
       if (dto.decision === 'revoke' && existing.grantId) {
         await tx.accessGrant.update({
-          where: { id: existing.grantId },
+          where: { id: existing.grantId, version: existing.grant?.version },
           data: {
             status: 'pending_revocation', enforcementStatus: 'pending', revokedBy: actor,
             revocationReason: dto.justification?.trim() || `Revoked through access review ${existing.reviewId}`,
@@ -842,7 +844,7 @@ export class SecurityGovernanceService {
       }
       if (dto.decision === 'modify' && existing.grantId) {
         await tx.accessGrant.update({
-          where: { id: existing.grantId },
+          where: { id: existing.grantId, version: existing.grant?.version },
           data: {
             status: 'requested', ownerDecision: 'pending', ownerDecisionBy: null, ownerDecisionAt: null,
             enforcementStatus: 'not_enforced', updatedBy: actor, version: { increment: 1 },
@@ -859,13 +861,13 @@ export class SecurityGovernanceService {
           throw new BadRequestException('A shortened expiry must be earlier than the current expiry');
         }
         await tx.accessGrant.update({
-          where: { id: existing.grantId },
-          data: { expiresAt: newExpiry, status: 'expiring', updatedBy: actor, version: { increment: 1 } },
+          where: { id: existing.grantId, version: existing.grant?.version },
+          data: { expiresAt: newExpiry, updatedBy: actor, version: { increment: 1 } },
         });
       }
       if (dto.decision === 'suspend' && existing.grantId) {
         await tx.accessGrant.update({
-          where: { id: existing.grantId },
+          where: { id: existing.grantId, version: existing.grant?.version },
           data: { status: 'suspended', enforcementStatus: 'pending', updatedBy: actor, version: { increment: 1 } },
         });
       }
@@ -878,9 +880,9 @@ export class SecurityGovernanceService {
           data: { status: AccessReviewStatus.completed, completedAt: new Date() },
         });
       }
+      await this.audit.logRequired({ actor, action: 'access_review_item.decide', entityType: 'access_review_item', entityId: id, metadata: { decision: updated.decision, grantId: existing.grantId, grantVersion: existing.grant?.version ?? null, newExpiresAt: dto.newExpiresAt ?? null, justification: dto.justification ?? null } }, tx);
       return updated;
-    });
-    await this.audit.log({ actor, action: 'access_review_item.decide', entityType: 'access_review_item', entityId: id, metadata: { decision: item.decision, grantId: existing.grantId, newExpiresAt: dto.newExpiresAt ?? null, justification: dto.justification ?? null } });
+    }));
     return item;
   }
 

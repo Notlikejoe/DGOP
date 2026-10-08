@@ -1,10 +1,12 @@
+import { environmentFile } from './runtime-env.mjs';
+import { runtimeCommand } from './node-runtime.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const envPath = join(root, '.env');
+const envPath = environmentFile(root);
 if (!existsSync(envPath)) {
   console.error('Local seed requires the ignored root .env file. Run `npm run demo:prepare` first.');
   process.exit(1);
@@ -38,15 +40,11 @@ if (!localHosts.has(databaseUrl.hostname.toLowerCase())) {
 }
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const result = spawnSync(npmCommand, ['run', 'db:seed'], {
+const selected = runtimeCommand(root, npmCommand, ['run', 'db:seed'], { ...process.env, NODE_ENV: 'development', DGOP_ALLOW_DESTRUCTIVE_SEED: 'true', DGOP_ALLOW_PRODUCTION_SEED: 'false' });
+const result = spawnSync(selected.command, selected.args, {
   cwd: root,
-  env: {
-    ...process.env,
-    NODE_ENV: 'development',
-    DGOP_ALLOW_DESTRUCTIVE_SEED: 'true',
-    DGOP_ALLOW_PRODUCTION_SEED: 'false',
-  },
+  env: selected.env,
   stdio: 'inherit',
-  shell: process.platform === 'win32',
+  shell: false,
 });
 process.exit(result.status ?? 1);

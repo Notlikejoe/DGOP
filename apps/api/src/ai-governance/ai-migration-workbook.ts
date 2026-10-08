@@ -41,8 +41,10 @@ export function parseMigrationWorkbook(bytes:Buffer,source:string,expectedDigest
  const book=xml('xl/workbook.xml').workbook,relations=array(xml('xl/_rels/workbook.xml.rels').Relationships?.Relationship);
  const strings=array(xml('xl/sharedStrings.xml',true).sst?.si).map(text),styles=xml('xl/styles.xml',true).styleSheet;
  const formats=new Map(array(styles?.numFmts?.numFmt).map(x=>[Number(x['@_numFmtId']),String(x['@_formatCode'])])),xfs=array(styles?.cellXfs?.xf);
- const sheets:SourceSheet[]=[];let cellCount=0;
+ const sheets:SourceSheet[]=[],names=new Set<string>(),relationshipIds=new Set<string>();let cellCount=0;
+ for(const rel of relations){const id=rel['@_Id'];if(typeof id!=='string'||!id||relationshipIds.has(id))throw new Error('Workbook relationship is ambiguous');relationshipIds.add(id);}
  for(const sheet of array(book?.sheets?.sheet)){
+  const name=sheet['@_name'];if(typeof name!=='string'||!name.trim()||names.has(name.toLocaleLowerCase()))throw new Error('Workbook sheet name is ambiguous');names.add(name.toLocaleLowerCase());
   const rel=relations.find(r=>r['@_Id']===sheet['@_r:id']);if(!rel||rel['@_TargetMode']==='External')throw new Error('Workbook sheet relationship is unsupported');
   const target=String(rel['@_Target']);if(target.includes('..'))throw new Error('Workbook sheet path is unsupported');
   const part=target.startsWith('/')?target.slice(1):'xl/'+target,ws=xml(part).worksheet,cells:Record<string,SourceCell>={};
@@ -50,7 +52,7 @@ export function parseMigrationWorkbook(bytes:Buffer,source:string,expectedDigest
    const address=String(c['@_r']);if(!/^[A-Z]{1,3}[1-9]\d{0,4}$/.test(address)||++cellCount>50_000||cells[address])throw new Error('Workbook cell limits exceeded');
    const type=c['@_t'],raw=c.v===undefined?'':text(c.v);let value:SourceCell['value']=null;
    if(type==='s'){const index=Number(raw);if(!raw||!Number.isInteger(index)||strings[index]===undefined)throw new Error('Workbook shared string is invalid');value=strings[index];}
-   else if(type==='inlineStr')value=text(c.is);else if(type==='b')value=raw==='1';else if(type==='str'||type==='e'||type==='d')value=raw||null;
+   else if(type==='inlineStr')value=text(c.is);else if(type==='b'){if(raw!=='0'&&raw!=='1')throw new Error('Workbook boolean cell is invalid');value=raw==='1';}else if(type==='str'||type==='e'||type==='d')value=raw||null;
    else if(raw!==''){value=Number(raw);if(!Number.isFinite(value))throw new Error('Workbook numeric cell is invalid');}
    const cell:SourceCell={value};if(typeof value==='number')cell.numericText=raw;if(c.f!==undefined)cell.formula=text(c.f);
    const formatId=Number(xfs[Number(c['@_s']??0)]?.['@_numFmtId']??0),format=formats.get(formatId)??({9:'0%',10:'0.00%'} as Record<number,string>)[formatId];if(format)cell.numberFormat=format;
@@ -62,6 +64,6 @@ export function parseMigrationWorkbook(bytes:Buffer,source:string,expectedDigest
   }
   sheets.push({name:String(sheet['@_name']),cells});
  }
- const namedRanges:Record<string,string>={};for(const n of array(book?.definedNames?.definedName)){const name=String(n['@_name']);if(name.startsWith('_xlnm.'))continue;if(namedRanges[name])throw new Error('Workbook named range is ambiguous');namedRanges[name]=text(n);}
+ const namedRanges:Record<string,string>={};for(const n of array(book?.definedNames?.definedName)){const name=String(n['@_name']);if(name.startsWith('_xlnm.'))continue;if(Object.prototype.hasOwnProperty.call(namedRanges,name))throw new Error('Workbook named range is ambiguous');namedRanges[name]=text(n);}
  return {source,sha256,sheets,namedRanges};
 }

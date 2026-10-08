@@ -1,9 +1,12 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import { AiRiskLibraryService } from './ai-risk-library.service';
 import { ProposeRiskLibraryDto, PublishRiskLibraryDto } from './ai-risk-library.dto';
 @Controller('ai/risk-library')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiRiskLibraryController {
  constructor(private readonly library:AiRiskLibraryService){}
  @Get('lookups') lookups(@CurrentUser() u:AuthUser){return this.library.lookups(u.id);}

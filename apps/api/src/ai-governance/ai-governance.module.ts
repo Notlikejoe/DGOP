@@ -1,3 +1,6 @@
+import { AiCapabilitiesController } from './ai-capabilities.controller';
+import { AiEvidenceController } from './ai-evidence.controller';
+import { AiEvidenceService } from './ai-evidence.service';
 import { AiOperationalAlertsService } from './ai-operational-alerts.service';
 import { AiAuditQueryService } from './ai-audit-query.service';
 import { AiAuditQueryController } from './ai-audit-query.controller';
@@ -5,6 +8,8 @@ import { AiWorkflowProjectionService } from './ai-workflow-projection.service';
 import { AiSeverityService } from './ai-severity.service';
 import { AiSeverityController } from './ai-severity.controller';
 import { AiRiskStrategyService } from './ai-risk-strategy.service';
+import { AiLifecycleController } from './ai-lifecycle.controller';
+import { AiLifecycleService } from './ai-lifecycle.service';
 import { AiRiskStrategyController } from './ai-risk-strategy.controller';
 import { AiHistoryService } from './ai-history.service';
 import { AiHistoryController } from './ai-history.controller';
@@ -60,8 +65,8 @@ import { AiRiskReviewController } from './ai-risk-review.controller';
 
 @Module({
   imports: [AccessModule],
-  controllers: [AiAuditQueryController, AiSeverityController, AiRiskStrategyController, AiHistoryController, AiCycleAController, AiLibrarySourceController, AiControlLinksController, AiAssetRiskController, AiSourceCorrectionsController, AiMigrationPreviewController, AiRiskLibraryController, AiDashboardReportsController, AiDashboardController, AiReviewOperationsController, AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController, AiRiskReviewController],
-  providers: [AiOperationalAlertsService, AiAuditQueryService, AiSeverityService, AiWorkflowProjectionService, AiRiskStrategyService, AiHistoryService, AiCategoryControlsService, AiMigrationPilotService, AiSourceNativeService, AiLibrarySourceService, AiControlDomainsService, AiLibraryControlLinksService, AiAssetRiskService, AiSourceCorrectionsService, AiMigrationPreviewService, AiRiskLibraryService, AiRiskInitiationService, AiDashboardReportsService, AiDashboardService, AiReviewDisplayService, AiMonthlyReviewService, AiAnnualReviewService, AiReviewReportService, AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService, AiTreatmentService, AiResidualAssessmentService, AiResidualDecisionService, AiRiskReviewService],
+  controllers: [AiLifecycleController, AiEvidenceController, AiCapabilitiesController, AiAuditQueryController, AiSeverityController, AiRiskStrategyController, AiHistoryController, AiCycleAController, AiLibrarySourceController, AiControlLinksController, AiAssetRiskController, AiSourceCorrectionsController, AiMigrationPreviewController, AiRiskLibraryController, AiDashboardReportsController, AiDashboardController, AiReviewOperationsController, AiIntakeController, AiClassificationController, AiDecisionController, AiRegistrationController, AiRiskIntakeController, AiRiskReviewController],
+  providers: [AiLifecycleService, AiEvidenceService, AiOperationalAlertsService, AiAuditQueryService, AiSeverityService, AiWorkflowProjectionService, AiRiskStrategyService, AiHistoryService, AiCategoryControlsService, AiMigrationPilotService, AiSourceNativeService, AiLibrarySourceService, AiControlDomainsService, AiLibraryControlLinksService, AiAssetRiskService, AiSourceCorrectionsService, AiMigrationPreviewService, AiRiskLibraryService, AiRiskInitiationService, AiDashboardReportsService, AiDashboardService, AiReviewDisplayService, AiMonthlyReviewService, AiAnnualReviewService, AiReviewReportService, AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiAssetFacade, AiRegistrationService, AiRiskIntakeService, AiRiskAssessmentService, AiRiskAdoptionService, AiRiskResponseService, AiTreatmentService, AiResidualAssessmentService, AiResidualDecisionService, AiRiskReviewService],
   exports: [AiOperationalAlertsService, AiWorkflowProjectionService, AiDashboardReportsService, AiIdentifiersService, AiAuthorizationService, AiWorkflowRoutingService, AiIntakeService, AiClassificationService, AiDecisionService, AiRiskReviewService],
 })
 export class AiGovernanceModule {}

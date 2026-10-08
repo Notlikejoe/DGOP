@@ -15,7 +15,7 @@ export class AiHistoryService {
       throw new BadRequestException('Use a positive page and page size 1–50');
     return this.prisma.$transaction(async tx => {
       await this.authorization.authorizeAny(userId, ['case.view.aiuc.org', 'case.view.aiuc.all'], tx);
-      const access = await this.reports.access(tx, userId);
+      const access = await this.reports.access(tx, userId, true);
       if (access.aggregateOnly) throw new ForbiddenException('Aggregate dashboard authority cannot reveal case histories');
       const where: Prisma.AiUseCaseWhereInput = { deletedAt: null, isSampleData: false,
         useCaseRef: { not: null }, risks: { some: access.where } };
@@ -47,6 +47,7 @@ export class AiHistoryService {
                 select: { completionPct: true } } } },
             reviews: { orderBy: { dueAt: 'desc' }, take: 10, select: {
               id: true, dueAt: true, bandCode: true, completion: { select: { completedAt: true } },
+              retirement: { select: { createdAt: true, requestId: true } },
               cancellation: { select: { createdAt: true } } } },
           } },
         } });

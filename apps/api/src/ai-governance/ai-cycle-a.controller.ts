@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Min, ValidateNested } from 'class-validator';
@@ -14,6 +15,8 @@ class BindingDto {@IsString() @Length(1,300) rowKey!:string;@IsUUID('4') targetI
 class CaptureDto extends ReasonDto {@IsInt() @Min(0) expectedRound!:number;@IsString() @Matches(/^[0-9a-f]{64}$/) expectedDigest!:string;@IsUUID('4') requestKey!:string;@IsArray() @ArrayMaxSize(250) @ValidateNested({each:true}) @Type(()=>BindingDto) bindings!:BindingDto[];}
 class DraftDto extends ReasonDto {@IsString() @Length(1,300) rowKey!:string;@IsString() @Matches(/^[0-9a-f]{64}$/) expectedDigest!:string;@IsUUID('4') requestKey!:string;@IsOptional() @IsUUID('4') useCaseId?:string;}
 @Controller('ai')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiCycleAController {
  constructor(private readonly categories:AiCategoryControlsService,private readonly pilot:AiMigrationPilotService,private readonly native:AiSourceNativeService){}
  @Get('category-control-mappings') categoriesContext(@CurrentUser() u:AuthUser){return this.categories.context(u.id);}

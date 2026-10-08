@@ -22,7 +22,10 @@ import {
   IsString,
   Min,
   Max,
+  MaxLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePrivacyLegalBasisDto {
   @IsString() @IsNotEmpty() code!: string;
@@ -84,18 +87,30 @@ export class CreateDsrRequestDto {
   @IsEnum(DsrRequestType) requestType!: DsrRequestType;
   @IsString() @IsNotEmpty() description!: string;
   @IsOptional() @IsBoolean() identityValidated?: boolean;
+  @IsOptional() @IsString() @MaxLength(500) identityEvidenceReference?: string | null;
   @IsOptional() @IsString() assetId?: string | null;
   @IsOptional() @IsString() domainId?: string | null;
   @IsOptional() @IsString() assignedPersonId?: string | null;
   @IsOptional() @IsDateString() dueAt?: string | null;
 }
 
+export class DsrDeadlineExtensionDto {
+  @IsDateString() dueAt!: string;
+  @IsString() @IsNotEmpty() @MaxLength(1200) reason!: string;
+  @IsDateString() communicatedAt!: string;
+  @IsString() @IsNotEmpty() @MaxLength(500) communicationReference!: string;
+}
+
 export class UpdateDsrRequestDto {
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
   @IsOptional() @IsEnum(DsrRequestStatus) status?: DsrRequestStatus;
   @IsOptional() @IsBoolean() identityValidated?: boolean;
   @IsOptional() @IsString() assignedPersonId?: string | null;
   @IsOptional() @IsString() decisionSummary?: string | null;
   @IsOptional() @IsDateString() fulfilledAt?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) identityEvidenceReference?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) completionEvidenceReference?: string | null;
+  @IsOptional() @ValidateNested() @Type(() => DsrDeadlineExtensionDto) deadlineExtension?: DsrDeadlineExtensionDto;
 }
 
 export class CreateBreachDto {
@@ -109,12 +124,19 @@ export class CreateBreachDto {
 }
 
 export class UpdateBreachDto {
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
   @IsOptional() @IsEnum(BreachStatus) status?: BreachStatus;
   @IsOptional() @IsEnum(BreachSeverity) severity?: BreachSeverity;
   @IsOptional() @IsDateString() containedAt?: string | null;
   @IsOptional() @IsDateString() notifiedAt?: string | null;
   @IsOptional() @IsBoolean() regulatorNotified?: boolean;
   @IsOptional() @IsBoolean() subjectNotified?: boolean;
+  @IsOptional() @IsBoolean() regulatorNotificationRequired?: boolean | null;
+  @IsOptional() @IsBoolean() subjectNotificationRequired?: boolean | null;
+  @IsOptional() @IsString() @MaxLength(1200) notificationDecisionReason?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) regulatorNotificationEvidenceReference?: string | null;
+  @IsOptional() @IsDateString() subjectNotifiedAt?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) subjectNotificationEvidenceReference?: string | null;
 }
 
 export class CreateConsentRecordDto {

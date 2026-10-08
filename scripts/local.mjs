@@ -1,3 +1,4 @@
+import { environmentFile } from './runtime-env.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -185,7 +186,7 @@ async function main() {
   const command = process.argv[2];
   if (!['setup', 'check', 'credentials', 'start'].includes(command)) throw new Error('Use local:setup, local:check, local:credentials or start:local.');
   if (command === 'setup') runScript('prepare-demo-env.mjs', ['--local']);
-  const envPath = join(root, '.env');
+  const envPath = environmentFile(root);
   if (!existsSync(envPath)) throw new Error('Run npm run local:prepare, then configure DATABASE_URL in .env.');
   const env = { ...parseEnv(readFileSync(envPath, 'utf8')), ...process.env };
   const config = localConfig(env);

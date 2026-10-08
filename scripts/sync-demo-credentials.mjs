@@ -1,10 +1,11 @@
+import { environmentFile } from './runtime-env.mjs';
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const envPath = join(root, '.env');
+const envPath = environmentFile(root);
 const require = createRequire(import.meta.url);
 const { PrismaClient } = require(join(root, 'apps', 'api', 'node_modules', '@prisma', 'client'));
 const bcrypt = require(join(root, 'apps', 'api', 'node_modules', 'bcryptjs'));

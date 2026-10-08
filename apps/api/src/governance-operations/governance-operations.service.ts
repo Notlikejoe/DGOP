@@ -26,6 +26,7 @@ import {
   TaskStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { operationalEvidenceWhere } from '../evidence/evidence-status';
 import { boundedEnvInteger } from '../common/runtime-safety';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { AuditService } from '../audit/audit.service';
@@ -830,7 +831,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       this.prisma.abacDecisionLog.count(),
       this.prisma.maskingPolicy.count({ where: { deletedAt: null, isActive: true } }),
       this.prisma.ndiEvidence.count({
-        where: { deletedAt: null, status: NdiEvidenceStatus.approved, provenance: 'operational' },
+        where: operationalEvidenceWhere(),
       }),
       this.prisma.ndiAuditPack.count(),
       this.prisma.auditLog.count(),
@@ -1469,7 +1470,7 @@ export class GovernanceOperationsService implements OnModuleInit, OnModuleDestro
       }),
       this.prisma.ndiEvidence.count({ where: { deletedAt: null, provenance: 'operational' } }),
       this.prisma.ndiEvidence.count({
-        where: { deletedAt: null, status: NdiEvidenceStatus.approved, provenance: 'operational' },
+        where: operationalEvidenceWhere(now),
       }),
       this.prisma.ndiAuditPack.count(),
       this.prisma.ndiSpecification.count({ where: { deletedAt: null, isActive: true } }),

@@ -59,7 +59,10 @@ export async function testPhase3C(db: PrismaClient, f: { riskId: string; riskOwn
   await assert.rejects(service.review(f.riskOwnerId, f.riskId, adoptionTask.id, decision(version)), /WF-05/);
   await db.userRole.delete({ where: { userId_roleId: { userId: ownerOfficer.userId, roleId: ownerOfficer.roleId } } });
   const auditorCommittee = await db.userRole.create({ data: { userId: f.auditorId, roleId: ethicsRole.id } });
-  await assert.rejects(service.review(f.auditorId, f.riskId, ethicsTask.id, decision(version)), /GEN-30/);
+  const decisionsBeforeAuditor=await db.aiRiskAssessmentDecision.count({where:{assessmentId:firstRound.id}});
+  await assert.rejects(service.review(f.auditorId, f.riskId, ethicsTask.id, decision(version)), /explicit eligible role grant/);
+  assert.equal(await db.aiRiskAssessmentDecision.count({where:{assessmentId:firstRound.id}}),decisionsBeforeAuditor,'An Auditor with a real Committee membership remains read-only');
+  assert.equal((await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId}})).version,version);
   await db.userRole.delete({ where: { userId_roleId: { userId: auditorCommittee.userId, roleId: auditorCommittee.roleId } } });
   await assert.rejects(service.review(f.officerId, f.riskId, ethicsTask.id, decision(version)), /competent role/);
   await assert.rejects(service.review(reviewer.id, f.riskId, ethicsTask.id, { ...decision(version), justification: ' ' }), /justification/);

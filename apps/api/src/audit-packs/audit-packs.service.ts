@@ -189,6 +189,7 @@ export class AuditPacksService {
         originalName: evidence.originalName,
         sha256: evidence.sha256,
         status: evidence.status,
+        provenance: evidence.provenance,
         reviewedAt: evidence.reviewedAt?.toISOString() ?? null,
         expiryDate: evidence.expiryDate?.toISOString() ?? null,
       })),
@@ -212,6 +213,7 @@ export class AuditPacksService {
       frameworks: ['SDAIA NDI', 'NCA ECC-2:2024', 'PDPL 2023', 'DGOP ABAC', 'Data Quality', 'Training & Certification', 'Stewardship'],
     };
     const baseFiles: ZipEntry[] = [
+      { path: 'evidence-eligibility.json', body: JSON.stringify({ mode: 'operational', eligibleProvenance: 'operational', exclusions: ['synthetic_demo', 'seeded_uat', 'not_current_approved'], syntheticEvidenceEarnsCredit: false }, null, 2) },
       { path: 'summary.json', body: JSON.stringify(summary, null, 2) },
       { path: 'specifications.json', body: JSON.stringify(specRows, null, 2) },
       { path: 'gaps.json', body: JSON.stringify(gaps, null, 2) },
@@ -252,10 +254,10 @@ export class AuditPacksService {
   private async specifications(actor: AuthUser, domainId?: string) {
     const { where, personId } = await this.specVisibilityWhere(actor, domainId);
     const evidenceWhere: Prisma.NdiEvidenceWhereInput = this.hasBroadAuditPackAccess(actor)
-      ? { deletedAt: null, status: NdiEvidenceStatus.approved }
+      ? { deletedAt: null, status: NdiEvidenceStatus.approved, provenance: 'operational', OR: [{ expiryDate: null }, { expiryDate: { gte: new Date() } }] }
       : {
           AND: [
-            { deletedAt: null, status: NdiEvidenceStatus.approved },
+            { deletedAt: null, status: NdiEvidenceStatus.approved, provenance: 'operational', OR: [{ expiryDate: null }, { expiryDate: { gte: new Date() } }] },
             {
               OR: [
                 { submittedBy: actor.email },
@@ -285,6 +287,7 @@ export class AuditPacksService {
             originalName: true,
             sha256: true,
             status: true,
+            provenance: true,
             reviewedAt: true,
             expiryDate: true,
           },

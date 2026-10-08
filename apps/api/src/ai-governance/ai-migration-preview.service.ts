@@ -9,11 +9,12 @@ import { AiAuthorizationService } from './ai-authorization.service';
 import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { AiRiskAssessmentService } from './ai-risk-assessment.service';
 import { governanceDigest, governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
-import { AI_MIGRATION_SOURCES, parseMigrationWorkbook, SourceWorkbook } from './ai-migration-workbook';
+import { parseMigrationWorkbook, SourceWorkbook } from './ai-migration-workbook';
 import { buildMigrationPreview, MIGRATION_PREVIEW_VERSION, PreviewEnvironment, PreviewRow } from './ai-migration-preview';
 import { jsonRecord } from './ai-risk-scoring';
 import { reportCsvCell } from './ai-dashboard-reports.service';
 import { isSystemAdministrator } from '../auth/system-admin';
+import { migrationSources } from './ai-migration-sources';
 
 const include=Prisma.validator<Prisma.AiMigrationPreviewInclude>()({dispositions:{orderBy:[{createdAt:'asc'},{id:'asc'}]},review:true});
 type Saved=Prisma.AiMigrationPreviewGetPayload<{include:typeof include}>;
@@ -32,7 +33,7 @@ export class AiMigrationPreviewService {
  protected async sources():Promise<SourceWorkbook[]>{
   // Operator-controlled fixed directory, never a request-supplied path or remote URL.
   const root=resolve(process.env.AI_MIGRATION_SOURCE_DIR??resolve(__dirname,'../../../../storage/ai-sources'));
-  try{return await Promise.all(AI_MIGRATION_SOURCES.map(async s=>parseMigrationWorkbook(await readFile(resolve(root,s.file)),s.source,s.sha256)));}
+  try{return await Promise.all(migrationSources().sources.map(async s=>parseMigrationWorkbook(await readFile(resolve(root,s.file)),s.source,s.sha256)));}
   catch{throw new ConflictException('Retained source files are unavailable or differ from the approved source manifest');}
  }
  private async environment(tx:Prisma.TransactionClient):Promise<PreviewEnvironment>{
@@ -46,7 +47,7 @@ export class AiMigrationPreviewService {
  async context(userId:string){
   const a=await this.access(this.prisma,userId),permissions=await this.prisma.rolePermission.findMany({where:{role:{code:{in:a.actor.roles},isActive:true,deletedAt:null}},include:{permission:true,role:{select:{code:true}}}});
   const holds=(role:string,code:string)=>permissions.some(p=>p.role.code===role&&p.permission.resource+'.'+p.permission.action===code);
-  const administratorOverride=isSystemAdministrator(a.actor.roles);return {version:MIGRATION_PREVIEW_VERSION,administratorOverride,canPropose:administratorOverride||!a.actor.roles.includes('auditor')&&holds('AI_GOVERNANCE_OFFICER','refdata.propose.ai'),canReview:administratorOverride||!a.actor.roles.includes('auditor')&&holds('dmo_admin','airs.library.import')&&holds('dmo_admin','refdata.publish'),sources:AI_MIGRATION_SOURCES.map(s=>({source:s.source,file:s.file,sha256:s.sha256})),productionReady:false};
+  const administratorOverride=isSystemAdministrator(a.actor.roles);return {version:MIGRATION_PREVIEW_VERSION,administratorOverride,canPropose:administratorOverride||!a.actor.roles.includes('auditor')&&holds('AI_GOVERNANCE_OFFICER','refdata.propose.ai'),canReview:administratorOverride||!a.actor.roles.includes('auditor')&&holds('dmo_admin','airs.library.import')&&holds('dmo_admin','refdata.publish'),sourceMode:migrationSources().sourceMode,sources:migrationSources().sources.map(s=>({source:s.source,file:s.file,sha256:s.sha256})),productionReady:false};
  }
  async create(userId:string,dto:{requestKey:string;justification:string;evidenceIds:string[]}){
   const justification=governanceText(dto.justification);if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(dto.requestKey))throw new BadRequestException('Use a stable source-preparation request key');
@@ -54,7 +55,7 @@ export class AiMigrationPreviewService {
   return governanceTransaction(this.prisma,async tx=>{
    await this.access(tx,userId,'propose');const evidenceIds=await governanceEvidence(tx,dto.evidenceIds),requestDigest=governanceDigest({userId,justification,evidenceIds}),existing=await tx.aiMigrationPreview.findUnique({where:{requestKey:dto.requestKey},include});
    if(existing){if(existing.requestDigest!==requestDigest)throw new ConflictException('Source request key belongs to another proposal');return {...this.view(existing),created:false};}
-   const env=await this.environment(tx),report=buildMigrationPreview(books,env),digest=governanceDigest(report),row=await tx.aiMigrationPreview.create({data:{requestKey:dto.requestKey,requestDigest,digest,environmentDigest:governanceDigest(env),report:report as unknown as Prisma.InputJsonObject,createdBy:userId,justification,evidenceIds},include});
+   const env=await this.environment(tx),report={...buildMigrationPreview(books,env),sourceMode:migrationSources().sourceMode,demoOnly:migrationSources().sourceMode==='synthetic_demo'},digest=governanceDigest(report),row=await tx.aiMigrationPreview.create({data:{requestKey:dto.requestKey,requestDigest,digest,environmentDigest:governanceDigest(env),report:report as unknown as Prisma.InputJsonObject,createdBy:userId,justification,evidenceIds},include});
    await this.audit.logRequired({actor:userId,action:'ai.migration.preview.propose',entityType:'ai_migration_preview',entityId:row.id,metadata:{digest,sources:report.sources,counts:report.reconciliation.counts,mode:'VALIDATE_ONLY',justification,evidenceIds}},tx);
    return {...this.view(row),created:true};
   });

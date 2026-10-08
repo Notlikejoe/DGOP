@@ -155,7 +155,7 @@
 
       <div class="component-block">
         <h3>{{ t('ds.forms') }}</h3>
-        <div class="sample-field search-engine">
+        <div class="sample-field search-engine" [hidden]="!canSearch">
           <label for="design-global-search">{{ t('search.title') }}</label>
           <div class="search-box">
             <input

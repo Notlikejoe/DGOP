@@ -6,6 +6,9 @@ import { AuditService } from '../audit/audit.service';
 import { AuthUser, JwtPayload } from './auth.types';
 import { AccessService } from '../access/access.service';
 import { ScopeService } from '../access/scope.service';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { accessRevision, aiCapabilities } from './access-snapshot';
 import {
   isProductionLikeRuntime,
   isUnsafeDefaultAdminCredential,
@@ -22,6 +25,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly access: AccessService,
     private readonly scope: ScopeService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async login(email: string, password: string, ip?: string) {
@@ -76,26 +80,23 @@ export class AuthService {
       metadata: { ip },
     });
 
-    return { accessToken, user: await this.toProfile(user) };
+    const profile = await this.toProfile(user.id, user.tokenVersion);
+    if (!profile) throw new UnauthorizedException();
+    return { accessToken, user: profile };
   }
 
   async me(userId: string) {
-    const user = await this.users.findByIdWithRoles(userId);
-    if (!user) throw new UnauthorizedException();
-    return this.toProfile(user);
+    const profile = await this.toProfile(userId);
+    if (!profile) throw new UnauthorizedException();
+    return profile;
   }
 
   async sessionFromToken(token?: string | null) {
     if (!token) return null;
-    try {
-      const payload = this.jwt.verify<JwtPayload>(token);
-      const user = await this.users.findByIdWithRoles(payload.sub);
-      if (!user?.isActive) return null;
-      if (payload.tokenVersion !== user.tokenVersion) return null;
-      return this.toProfile(user);
-    } catch {
-      return null;
-    }
+    let payload: JwtPayload;
+    try { payload = this.jwt.verify<JwtPayload>(token); } catch { return null; }
+    // Infrastructure failures must remain errors, not a false logout or cookie deletion.
+    return this.toProfile(payload.sub, payload.tokenVersion);
   }
 
   async logout(user: AuthUser) {
@@ -112,6 +113,7 @@ export class AuthService {
   private activeUserRoles(user: {
     userRoles: {
       role: {
+        id: string;
         code: string;
         nameEn: string;
         nameAr: string;
@@ -123,29 +125,19 @@ export class AuthService {
     return user.userRoles.filter((ur) => ur.role.isActive !== false && ur.role.deletedAt == null);
   }
 
-  private async toProfile(user: {
-    id: string;
-    email: string;
-    displayName: string;
-    isActive: boolean;
-    lastLoginAt: Date | null;
-    tokenVersion: number;
-    userRoles: {
-      role: {
-        code: string;
-        nameEn: string;
-        nameAr: string;
-        isActive?: boolean;
-        deletedAt?: Date | null;
-      };
-    }[];
-  }) {
+  private async toProfile(userId: string, tokenVersion?: number) {
+    return this.prisma.$transaction(async tx => {
+    const user = await tx.user.findUnique({ where: { id: userId }, include: { userRoles: { include: { role: true } } } });
+    if (!user?.isActive || tokenVersion !== undefined && user.tokenVersion !== tokenVersion) return null;
     const activeRoles = this.activeUserRoles(user);
     const roleCodes = activeRoles.map((ur) => ur.role.code);
-    const [permissions, scopes] = await Promise.all([
-      this.access.permissionsForRoleCodes(roleCodes),
-      this.scope.resolve(roleCodes),
+    const [permissions, scopes, grants] = await Promise.all([
+      this.access.permissionsForRoleCodes(roleCodes, tx),
+      this.scope.resolve(roleCodes, tx),
+      tx.rolePermission.findMany({ where: { roleId: { in: activeRoles.map(ur => ur.role.id) } },
+        include: { permission: true, role: { select: { code: true } } } }),
     ]);
+    const ai = aiCapabilities(roleCodes, grants, scopes);
     return {
       id: user.id,
       email: user.email,
@@ -159,6 +151,9 @@ export class AuthService {
       })),
       permissions,
       scopes,
+      aiCapabilities: ai,
+      accessRevision: accessRevision(roleCodes, permissions, scopes, ai),
     };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 3000 });
   }
 }

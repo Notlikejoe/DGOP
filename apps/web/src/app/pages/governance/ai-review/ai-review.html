@@ -8,6 +8,7 @@
       <section class="configuration-gate" role="status"><app-icon name="alert" /><div><strong>{{ t('aiReview.config.title') }}</strong><p>{{ t('aiReview.config.body') }}</p></div><span>{{ config.issues.join(' · ') }}</span></section>
     }
   }
+  @if (referencesUnavailable()) { <section class="configuration-gate" role="status">{{ t('access.live.references') }}</section> }
 
   @if (state() === 'loading') {
     <section class="ds-card state-card">{{ t('crud.loading') }}</section>
@@ -32,12 +33,9 @@
 
     <p-tabs class="review-queue-tabs" [value]="tab()" (valueChange)="changeTab($event)">
       <p-tablist>
-        <p-tab value="triage">{{ t('aiReview.tab.triage') }} <span>{{ triageCases().length }}</span></p-tab>
-        <p-tab value="classification">{{ t('aiReview.tab.classification') }} <span>{{ classificationCases().length }}</span></p-tab>
-        <p-tab value="verification">{{ t('aiReview.tab.verification') }} <span>{{ verificationCases().length }}</span></p-tab>
-        <p-tab value="specialist">{{ t('aiReview.tab.specialist') }} <span>{{ specialistCases().length }}</span></p-tab>
-        <p-tab value="decision">{{ t('aiReview.tab.decision') }} <span>{{ decisionCases().length }}</span></p-tab>
-        <p-tab value="registration">{{ t('aiReview.tab.registration') }} <span>{{ registrationCases().length }}</span></p-tab>
+        @for (visibleTab of visibleTabs(); track visibleTab) {
+          <p-tab [value]="visibleTab">{{ t('aiReview.tab.' + visibleTab) }} <span>{{ rowsFor(visibleTab).length }}</span></p-tab>
+        }
       </p-tablist>
     </p-tabs>
 

@@ -182,8 +182,8 @@ export class SecurityGovernancePage implements OnInit {
   protected readonly simulatorOpen = signal(false);
   protected readonly simulatorLoading = signal(false);
   protected readonly busy = signal(false);
-  protected readonly canCreate = this.auth.hasPermission('security_governance.create');
-  protected readonly canDecide = this.auth.hasPermission('security_governance.edit');
+  protected get canCreate(): boolean { return this.auth.hasPermission('security_governance.create'); }
+  protected get canDecide(): boolean { return this.auth.hasPermission('security_governance.edit'); }
   protected readonly canSimulate =
     this.auth.hasPermission('security_governance.create') &&
     this.auth.hasPermission('access_grants.view') &&

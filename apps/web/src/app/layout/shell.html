@@ -1,5 +1,15 @@
+@if (accessBlocked()) {
+  <section class="access-screen-cover" role="alertdialog" aria-modal="true" [attr.aria-label]="t(auth.accessStatus() === 'checking' ? 'access.live.checking' : 'access.live.unavailable')" (keydown.tab)="keepConnectionFocus($event)">
+    <div class="access-notice">
+      <p>{{ t(auth.accessStatus() === 'checking' ? 'access.live.checking' : 'access.live.unavailable') }}</p>
+      <button #accessRetry type="button" class="ds-btn ds-btn--primary" (click)="auth.refreshAccess()">{{ t('crud.retry') }}</button>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="logout()">{{ t('action.logout') }}</button>
+    </div>
+  </section>
+}
 <div
   class="shell"
+  [attr.inert]="accessBlocked() ? '' : null"
   [class.shell--resizing]="sidebarResizing()"
   [style.--sidebar-width]="sidebarWidth() + 'px'"
 >
@@ -368,7 +378,15 @@
     </header>
 
     <main class="content" id="main-content" tabindex="-1">
-      <router-outlet />
+      @if (accessNotice()) {
+        <section class="access-notice" role="status" aria-live="polite" aria-atomic="true">
+          <p>{{ t(accessNotice() === 'removed' ? 'access.live.removed' : 'access.live.updated') }}</p>
+          <button type="button" class="ds-btn ds-btn--ghost" (click)="accessNotice.set('')">{{ t('access.live.dismiss') }}</button>
+        </section>
+      }
+      <div [hidden]="accessBlocked()" [attr.inert]="accessBlocked() ? '' : null">
+        @for (generation of pageKeys(); track generation) { <router-outlet /> }
+      </div>
     </main>
   </div>
 </div>

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { isSyntheticPopulationProfile } from '../common/synthetic-population-profile';
 import {
   BadRequestException,
   ForbiddenException,
@@ -300,6 +301,7 @@ export class EvidenceService {
           mimeType: file.mimetype,
           sizeBytes: file.size,
           sha256,
+          provenance: isSyntheticPopulationProfile() ? 'synthetic_demo' : 'operational',
           submittedBy: this.actorEmail(actor),
           submittedAt: submitNow ? new Date() : null,
           expiryDate,

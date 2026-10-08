@@ -421,8 +421,8 @@ export class AccessManagementPage implements OnInit {
     changeReason: '',
   };
 
-  protected readonly canCreate = this.auth.hasPermission('access_grants.create');
-  protected readonly canEdit = this.auth.hasPermission('access_grants.edit');
+  protected get canCreate(): boolean { return this.auth.hasPermission('access_grants.create'); }
+  protected get canEdit(): boolean { return this.auth.hasPermission('access_grants.edit'); }
   protected readonly statusOptions = [
     'requested',
     'scheduled',

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface EffectiveScope {
@@ -37,8 +38,8 @@ const EMPTY_SCOPE: EffectiveScope = { orgUnits: [], domains: [], maxClassRank: n
 export class ScopeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async resolve(roleCodes: string[]): Promise<EffectiveScope> {
-    const roles = (await this.prisma.role.findMany({
+  async resolve(roleCodes: string[], client: Prisma.TransactionClient = this.prisma): Promise<EffectiveScope> {
+    const roles = (await client.role.findMany({
       where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
       include: { dataScopes: true },
     })) as RoleWithScope[];
@@ -48,11 +49,13 @@ export class ScopeService {
       roles,
       'org_unit',
       'organizationUnit',
+      client,
     );
     const domains = await this.resolveDimension(
       roles,
       'data_domain',
       'dataDomain',
+      client,
     );
 
     let maxClassRank: number | null = -1;
@@ -72,6 +75,7 @@ export class ScopeService {
     roles: RoleWithScope[],
     scopeType: 'org_unit' | 'data_domain',
     model: 'organizationUnit' | 'dataDomain',
+    client: Prisma.TransactionClient,
   ): Promise<string[] | 'all'> {
     const base = new Set<string>();
     const expand = new Set<string>();
@@ -87,7 +91,7 @@ export class ScopeService {
       }
     }
     if (expand.size > 0) {
-      const descendants = await this.descendantsOf(model, [...expand]);
+      const descendants = await this.descendantsOf(model, [...expand], client);
       descendants.forEach((id) => base.add(id));
     }
     return [...base];
@@ -97,9 +101,10 @@ export class ScopeService {
   private async descendantsOf(
     model: 'organizationUnit' | 'dataDomain',
     rootIds: string[],
+    client: Prisma.TransactionClient,
   ): Promise<string[]> {
     const all: { id: string; parentId: string | null }[] = await (
-      this.prisma as unknown as Record<string, any>
+      client as unknown as Record<string, any>
     )[model].findMany({
       where: { deletedAt: null },
       select: { id: true, parentId: true },

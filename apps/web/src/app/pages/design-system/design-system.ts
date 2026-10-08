@@ -6,6 +6,8 @@ import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
 import { AppIcon, AppIconName } from '../../shared/app-icon';
 import { NAV_SECTIONS, NavItem, NavSectionId } from '../../layout/navigation';
+import { AuthService } from '../../core/auth.service';
+import { canSeeTool } from '../../core/page-access';
 
 interface ConsoleMetric {
   labelKey: string;
@@ -67,6 +69,8 @@ interface GlobalSearchResponse {
   styleUrl: './design-system.scss',
 })
 export class DesignSystem implements OnDestroy {
+  private readonly auth = inject(AuthService);
+  protected get canSearch(): boolean { return this.auth.hasPermission('search.view'); }
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   protected readonly activeTreeIndex = signal(0);
@@ -107,7 +111,7 @@ export class DesignSystem implements OnDestroy {
     },
   ];
 
-  protected readonly trees: DesignTree[] = [
+  protected get trees(): DesignTree[] { return [
     {
       titleKey: 'ds.tree.governance.title',
       subtitleKey: 'ds.tree.governance.subtitle',
@@ -126,7 +130,7 @@ export class DesignSystem implements OnDestroy {
       rootKey: 'nav.section.administration',
       groups: this.groupsFor(['administration']),
     },
-  ];
+  ]; }
 
   protected readonly rules: RuleCard[] = [
     {
@@ -155,6 +159,7 @@ export class DesignSystem implements OnDestroy {
   }
 
   protected onSearchInput(value: string): void {
+    if (!this.auth.hasPermission('search.view')) { this.clearSearch(); return; }
     this.searchQuery.set(value);
     this.searchResponse.set(null);
     if (this.searchTimer) clearTimeout(this.searchTimer);
@@ -183,6 +188,7 @@ export class DesignSystem implements OnDestroy {
   }
 
   private runSearch(query: string): void {
+    if (!this.auth.hasPermission('search.view')) return;
     const requestId = ++this.searchRequestId;
     this.searchState.set('loading');
     const params = new HttpParams().set('q', query).set('limit', '5');
@@ -203,7 +209,7 @@ export class DesignSystem implements OnDestroy {
   private groupsFor(sectionIds: NavSectionId[]): DesignTree['groups'] {
     const items = sectionIds.flatMap(
       (id) => NAV_SECTIONS.find((section) => section.id === id)?.items ?? [],
-    );
+    ).filter(item => canSeeTool(this.auth, item));
     const groups: DesignTree['groups'] = [];
     for (const item of items) {
       const key = item.groupKey ?? 'hub.group.other';

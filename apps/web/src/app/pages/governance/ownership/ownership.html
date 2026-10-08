@@ -105,6 +105,7 @@
     }
   </div>
 
+  @if (referencesUnavailable().size > 0) { <p role="status">{{ t('access.live.references') }}</p> }
   @if (modalOpen()) {
     <app-modal [title]="t(editingId() ? 'own.editTitle' : 'own.newTitle')" (close)="close()">
       <form class="form" (ngSubmit)="save()">
@@ -217,7 +218,7 @@
       </div>
       <div footer>
         <button type="button" class="ds-btn ds-btn--ghost" (click)="closeSubmit()">{{ t('crud.cancel') }}</button>
-        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!approverId() || submitting()" (click)="submitForApproval()">
+        <button type="button" class="ds-btn ds-btn--primary" [disabled]="!approversReady() || !approverId() || submitting()" (click)="submitForApproval()">
           {{ submitting() ? t('crud.saving') : t('own.submitForApproval') }}
         </button>
       </div>

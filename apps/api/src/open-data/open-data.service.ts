@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isSyntheticPopulationProfile } from '../common/synthetic-population-profile';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -424,6 +425,7 @@ export class OpenDataService {
         originalName: fileName,
         mimeType: OPEN_DATA_SYSTEM_EVIDENCE_MIME,
         sizeBytes: buffer.length,
+        provenance: isSyntheticPopulationProfile() ? 'synthetic_demo' : 'operational',
         sha256,
         submittedBy: actor,
         submittedAt: generatedAt,

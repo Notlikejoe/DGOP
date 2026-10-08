@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, permissionGuard } from './core/auth.guards';
+import { authGuard, permissionGuard, pageAccessGuard } from './core/auth.guards';
 
 export const routes: Routes = [
   {
@@ -14,6 +14,7 @@ export const routes: Routes = [
   {
     path: '',
     canActivate: [authGuard],
+    canActivateChild: [pageAccessGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -97,33 +98,33 @@ export const routes: Routes = [
       },
       {
         path: 'governance/ai-use-cases',
-        canActivate: [permissionGuard('case.view.aiuc.own')],
+        canActivate: [pageAccessGuard],
         loadComponent: () =>
           import('./pages/governance/ai-use-cases/ai-use-cases').then((m) => m.AiUseCasesPage),
       },
       {
         path: 'governance/ai-migration',
-        canActivate: [permissionGuard(['refdata.propose.ai','airs.library.import','case.view.airs.all'])],
+        canActivate: [pageAccessGuard],
         loadComponent: () => import('./pages/governance/ai-migration/ai-migration').then(m => m.AiMigrationPage),
       },
       {
         path: 'governance/ai-dashboard',
-        canActivate: [permissionGuard(['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'])],
+        canActivate: [pageAccessGuard],
         loadComponent: () => import('./pages/governance/ai-dashboard/ai-dashboard').then(m => m.AiDashboardPage),
       },
       {
         path: 'governance/ai-reviews',
-        canActivate: [permissionGuard(['dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'])],
+        canActivate: [pageAccessGuard],
         loadComponent: () => import('./pages/governance/ai-reviews/ai-reviews').then(m => m.AiReviewsPage),
       },
       {
         path: 'governance/ai-risks',
-        canActivate: [permissionGuard(['case.view.airs.own', 'case.view.airs.org', 'case.view.airs.all'])],
+        canActivate: [pageAccessGuard],
         loadComponent: () => import('./pages/governance/ai-risks/ai-risks').then((m) => m.AiRisksPage),
       },
       {
         path: 'governance/ai-review',
-        canActivate: [permissionGuard(['case.view.aiuc.org', 'case.approve.aiuc', 'aiuc.asset.register', 'aiuc.asset.approve'])],
+        canActivate: [pageAccessGuard],
         loadComponent: () =>
           import('./pages/governance/ai-review/ai-review').then((m) => m.AiReviewPage),
       },

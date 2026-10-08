@@ -19,6 +19,16 @@ export interface UserProfile {
   roles: RoleRef[];
   permissions: string[];
   scopes?: ScopeSummary;
+  accessRevision?: string;
+  aiCapabilities?: AiCapabilities;
+}
+
+export interface AiCapabilities {
+  administratorOversight: boolean;
+  readMode: 'governance' | 'audit' | 'executive' | 'own' | 'none';
+  permissions: string[];
+  screens: { useCases: boolean; risks: boolean; review: boolean; reviewOperations: boolean; dashboard: boolean; migration: boolean };
+  panels: { triage?: boolean; classification?: boolean; classificationVerification: boolean; specialist?: boolean; decision?: boolean; registration: boolean };
 }
 
 export interface LoginResponse {

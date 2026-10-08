@@ -45,7 +45,8 @@ export async function testPhase1B(db:PrismaClient) {
   const proposal={nameEn:'Test tier',nameAr:'تصنيف اختباري',sourceSha256:'a'.repeat(64),sourceLocator:'synthetic fixture, not workbook seed',justification:'Test proposal',values:[{code:'LOW',labelEn:'Low',labelAr:'منخفض',sortOrder:0,metadata:{score:1}}]};
   const draft=await service.propose(proposer.id,'R_SDAIA_TIER',proposal);
   assert.equal((await service.review(publisher.id,draft.id)).values[0].labelAr,'منخفض');
-  await assert.rejects(service.review(admin.id,draft.id));
+  assert.equal((await service.review(admin.id,draft.id)).id,draft.id,'Administrator oversight can inspect governed content without publishing it');
+  await assert.rejects(service.publish(admin.id,draft.id,'Administrator is not the business custodian'));
   await assert.rejects(service.publish(publisher.id,draft.id,'Without approval'));
   await service.approve(approver.id,draft.id,'Independent test approval');
   await db.governedReferenceValue.update({where:{versionId_code:{versionId:draft.id,code:'LOW'}},data:{labelEn:'Changed'}});
@@ -93,7 +94,8 @@ export async function testPhase1B(db:PrismaClient) {
     const bearer=(id:string)=>({authorization:`Bearer ${jwt.sign({sub:id,tokenVersion:0,roles:['system_admin']})}`});
     assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`)).status,401);
     assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`,{headers:bearer(publisher.id)})).status,200);
-    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`,{headers:bearer(admin.id)})).status,403);
+    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}`,{headers:bearer(admin.id)})).status,200);
+    assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}/publish`,{method:'POST',headers:{...bearer(admin.id),'content-type':'application/json'},body:JSON.stringify({justification:'Technical administrator is not the business publisher'})})).status,403);
     assert.equal((await fetch(`${base}/api/ai/reference-data/proposals/${next.id}/publish`,{method:'POST',headers:{...bearer(publisher.id),'content-type':'application/json'},body:JSON.stringify({justification:'test',injectedField:true})})).status,400);
   } finally {await app.close();}
   console.log('Phase 1B integration passed: catalog idempotency, explicit grants, role/membership controls, SoD audit, reference approval digest, atomic replacement, concurrent publication and audit-failure rollback.');

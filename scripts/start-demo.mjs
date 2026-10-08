@@ -1,3 +1,4 @@
+import { loadEnvironment, applyEnvironment } from './runtime-env.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -5,25 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
-function loadRootEnv() {
-  const envPath = join(root, '.env');
-  if (!existsSync(envPath)) return;
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!process.env[key]) process.env[key] = value;
-  }
-}
+function loadRootEnv() { return loadEnvironment(root); }
 
 function requireEnv(name, validate = (value) => !!value) {
   const value = process.env[name];
@@ -80,7 +63,7 @@ function originsAreSafe(value) {
   return origins.length > 0 && origins.every(originIsSafe);
 }
 
-loadRootEnv();
+applyEnvironment(root);
 process.env.NODE_ENV = 'production';
 process.env.DGOP_REQUIRE_STRICT_RUNTIME = 'true';
 process.env.HEALTH_INCLUDE_DETAILS ??= 'false';

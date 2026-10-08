@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../access/scope.service';
-import { AiAuthorizationService } from './ai-authorization.service';
+import { AiAuthorizationService, effectiveAiPermissions } from './ai-authorization.service';
 import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { aiRoleMayHold, AiPermission, splitAiPermission } from './ai-permissions';
 import { aiReviewStatus } from './ai-risk-review.service';
@@ -42,8 +42,8 @@ export class AiReviewReportService {
     const actor=await this.authorization.authorizeAny(userId,reportPermissions,tx);
     const grants=await tx.rolePermission.findMany({where:{role:{is:{code:{in:actor.roles},isActive:true,deletedAt:null}},
       permission:{is:{OR:reportPermissions.map(splitAiPermission)}}},include:{permission:true,role:{select:{code:true}}}});
-    const permissions=new Set(grants.filter(g=>aiRoleMayHold(g.role.code,`${g.permission.resource}.${g.permission.action}` as AiPermission)).map(g=>`${g.permission.resource}.${g.permission.action}`));
-    const governance=permissions.has('case.view.airs.all')&&!permissions.has('dashboard.view.exec.ai')||permissions.has('dashboard.view.aiuc')||permissions.has('dashboard.view.airs')&&actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER','AI_COMPLIANCE_OFFICER'].includes(r));
+    const permissions=effectiveAiPermissions(actor.roles,grants);
+    const governance=actor.administratorOversight||permissions.has('case.view.airs.all')&&!permissions.has('dashboard.view.exec.ai')||permissions.has('dashboard.view.aiuc')||permissions.has('dashboard.view.airs')&&actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER','AI_COMPLIANCE_OFFICER'].includes(r));
     const aggregateOnly=!governance&&!actor.roles.includes('auditor')&&permissions.has('dashboard.view.exec.ai');
     const mode=aggregateOnly?'executive':actor.roles.includes('auditor')?'audit':governance?'governance':'risk_owner';
     let where:Prisma.AiRiskWhereInput;

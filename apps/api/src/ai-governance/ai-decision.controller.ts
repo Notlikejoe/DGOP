@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -6,11 +7,13 @@ import { AiDecisionService } from './ai-decision.service';
 import { RecordAiucDecisionDto } from './ai-decision.dto';
 
 @Controller('ai/use-cases/decisions')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiDecisionController {
   constructor(private readonly service: AiDecisionService) {}
 
   @Get('queue')
-  @RequirePermissions('case.approve.aiuc')
+  @RequireAnyPermissions('case.approve.aiuc','case.view.aiuc.org','case.view.aiuc.all')
   queue(@CurrentUser() user: AuthUser) { return this.service.queue(user.id); }
 
   @Post(':id/:taskId')

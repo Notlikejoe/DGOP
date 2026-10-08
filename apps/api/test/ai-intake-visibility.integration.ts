@@ -8,14 +8,14 @@ import { AiIntakeService } from '../src/ai-governance/ai-intake.service';
 export async function testIntakeVisibility(db: PrismaClient, app: INestApplication, officerId: string) {
   const intake = app.get(AiIntakeService);
   const requester = await db.user.findUniqueOrThrow({ where: { email: 'intake-requester@phase2a.test' } });
-  const rows = await intake.listVisible(officerId);
+  const rows = (await intake.listVisible(officerId)).data;
   const shared = rows.find(row => row.requesterUserId === requester.id && row.workflowCase && row.intakeRevisions[0]?.submittedAt);
   assert.ok(shared, 'Organization readers see other requesters submitted native AIUC cases');
   assert.equal(shared.canEdit, false);
   assert.equal((await intake.getVisible(officerId, shared.id)).canEdit, false);
   const privateDraft = await intake.createDraft(requester.id, { usecase_name: 'Private synthetic visibility draft' });
   assert.equal((await intake.getVisible(requester.id, privateDraft.id)).canEdit, true);
-  assert.ok(!(await intake.listVisible(officerId)).some(row => row.id === privateDraft.id));
+  assert.ok(!(await intake.listVisible(officerId)).data.some(row => row.id === privateDraft.id));
   await assert.rejects(intake.getVisible(officerId, privateDraft.id), /not found/);
   await assert.rejects(intake.updateDraft(officerId, shared.id, shared.version, { problem_desc: 'Forbidden edit' }));
 
@@ -37,7 +37,7 @@ export async function testIntakeVisibility(db: PrismaClient, app: INestApplicati
 
   const auditorRole = await db.role.findUniqueOrThrow({ where: { code: 'auditor' } });
   const auditor = await db.user.create({ data: { email: `intake-auditor-${randomUUID()}@isolated.test`, displayName: 'Synthetic intake Auditor', passwordHash: 'not-a-login', userRoles: { create: { roleId: auditorRole.id } } } });
-  const visible = await intake.listVisible(auditor.id);
+  const visible = (await intake.listVisible(auditor.id)).data;
   assert.ok(visible.some(row => row.id === shared.id));
   assert.ok(visible.every(row => !row.canEdit));
   assert.ok(!visible.some(row => row.id === privateDraft.id));

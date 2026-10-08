@@ -92,6 +92,7 @@ type Over = {
   userRoleCandidates?: any[];
   userRoleCandidatesByRole?: Record<string, any[]>;
   setCalls?: any[][];
+  businessTaskGrant?: boolean;
   attachmentCount?: number;
   attachmentCreates?: any[];
 };
@@ -99,6 +100,7 @@ type Over = {
 function makeService(over: Over): WorkflowService {
   const prisma: any = {
     $transaction: async (fn: (client: any) => unknown) => fn(prisma),
+    rolePermission: { findFirst: async () => over.businessTaskGrant ? { role: {code:'dmo_admin'} } : null },
     businessSequence: {
       upsert: async () => ({ value: BigInt((over.workflowCases?.length ?? 0) + 1) }),
     },
@@ -1476,7 +1478,7 @@ test('workflow designer lifecycle: submit, approve and publish records reviewer 
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn.publish'));
 });
 
-test('workflow designer lifecycle: system administrator override is explicit and audited', async () => {
+test('workflow designer lifecycle: administrators require independent review and publication', async () => {
   const template = designerTemplateFixture();
   const xml = designerFixtureBpmn(template);
   const over: Over = { template, workflowCases: [], templateUpdates: [], templateVersionCreates: [], auditEntries: [] };
@@ -1484,8 +1486,13 @@ test('workflow designer lifecycle: system administrator override is explicit and
   const designer = { id: 'admin-designer', email: 'admin-designer@dgop.local', roles: ['system_admin'] };
 
   await svc.submitTemplateReview(template.id, { bpmnXml: xml, comment: 'Ready' }, designer);
-  await svc.approveTemplateReview(template.id, { comment: 'Administrator approval' }, designer);
-  await svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Administrator publish' }, designer);
+  await assert.rejects(() => svc.approveTemplateReview(template.id, { comment: 'Self approval' }, designer), /different workflow actor/);
+  assert.ok(!over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
+  const reviewer = { id: 'admin-reviewer', email: 'admin-reviewer@dgop.local', roles: ['system_admin', 'workflow_reviewer'] };
+  const publisher = { id: 'admin-publisher', email: 'admin-publisher@dgop.local', roles: ['system_admin', 'workflow_publisher'] };
+  await svc.approveTemplateReview(template.id, { comment: 'Independent administrator review' }, reviewer);
+  await assert.rejects(() => svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Self publish' }, reviewer), /different workflow actor/);
+  await svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Independent publication' }, publisher);
   assert.equal(over.templateVersionCreates?.length, 1);
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.bpmn.publish'));
@@ -2667,14 +2674,33 @@ test('decideTask: routed task activates the next route stage', async () => {
 });
 
 // ---------- segregation of duties ----------
-test('decideTask: system administrator can decide their own approval case', async () => {
+test('decideTask: an administrator with an eligible business grant cannot approve their own case', async () => {
   const over: Over = {
+    businessTaskGrant: true,
     task: { id: 't1', assigneeUserId: 'u1', status: 'pending', caseId: 'c1', case: { type: 'owner_assignment_approval', createdBy: 'u1@dgop.local', assignmentId: 'as1' } },
     assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
   };
   const svc = makeService(over);
-  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin'] } as never);
-  assert.equal(over.assignmentUpdate?.approvalStatus, 'approved');
+  await assert.rejects(svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin', 'dmo_admin'] } as never), /cannot decide an approval you submitted/);
+  assert.equal(over.assignmentUpdate, undefined);
+});
+
+test('business task authority: administrator oversight does not bypass assignment, role, or a revoked business grant', async () => {
+  const task = { id: 'business-task', assigneeUserId: 'assigned', assigneeRoleCode: 'dmo_admin', status: 'pending', caseId: 'business-case', case: { type: 'general', status: 'submitted', createdBy: 'other@dgop.local' } };
+  for (const [actor, message] of [
+    [{ id: 'other', email: 'other-admin@dgop.local', roles: ['system_admin', 'dmo_admin'] }, /Only the assigned user/],
+    [{ id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin'] }, /assigned business role/],
+    [{ id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin', 'dmo_admin'] }, /explicit business role grant/],
+  ] as const) {
+    const svc = makeService({ task });
+    await assert.rejects(svc.decideTask(task.id, { decision: 'approved' } as never, actor as never), message);
+    await assert.rejects(svc.saveTaskFormDraft(task.id, { data: {} }, actor as never));
+    await assert.rejects(svc.submitTaskForm(task.id, { data: {} }, actor as never));
+  }
+  const over: Over = { task, businessTaskGrant: true };
+  const svc = makeService(over);
+  await svc.decideTask(task.id, { decision: 'approved' } as never, { id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin', 'dmo_admin'] });
+  assert.equal(over.task?.status, 'completed');
 });
 
 test('submitAssignmentForApproval: approver must differ from submitter', async () => {
@@ -2757,7 +2783,7 @@ test('decideTask: approving an approval task activates the assignment', async ()
     assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
   };
   const svc = makeService(over);
-  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never);
+  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['dmo_admin'] } as never);
   assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'approved');
   assert.strictEqual(over.assignmentUpdate?.isActive, true);
 });
@@ -2786,7 +2812,7 @@ test('decideTask: approving a proposed primary owner demotes the previous accoun
   await svc.decideTask(
     't1',
     { decision: 'approved' } as never,
-    { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never,
+    { id: 'u-appr', email: 'appr@dgop.local', roles: ['dmo_admin'] } as never,
   );
   assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'approved');
   assert.strictEqual(over.assignmentBulkUpdates?.[0].data.isPrimary, false);
@@ -2800,7 +2826,7 @@ test('decideTask: rejecting an approval task rejects the assignment', async () =
     assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
   };
   const svc = makeService(over);
-  await svc.decideTask('t1', { decision: 'rejected' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never);
+  await svc.decideTask('t1', { decision: 'rejected' } as never, { id: 'u-appr', email: 'appr@dgop.local', roles: ['dmo_admin'] } as never);
   assert.strictEqual(over.assignmentUpdate?.approvalStatus, 'rejected');
   assert.strictEqual(over.assignmentUpdate?.isActive, false);
 });
@@ -2835,7 +2861,7 @@ test('decideTask: return for clarification opens an information task for the sub
   await svc.decideTask(
     't1',
     { decision: WORKFLOW_RETURN_FOR_CLARIFICATION, comment: 'Need owner evidence.' } as never,
-    { id: 'u-appr', email: 'appr@dgop.local', roles: ['system_admin'] } as never,
+    { id: 'u-appr', email: 'appr@dgop.local', roles: ['dmo_admin'] } as never,
   );
 
   assert.strictEqual(over.taskBulkUpdates?.[0].decision, null);

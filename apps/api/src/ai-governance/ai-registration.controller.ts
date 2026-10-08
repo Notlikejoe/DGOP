@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -6,6 +7,8 @@ import { AiRegistrationService } from './ai-registration.service';
 import { ApproveAiRegistrationDto, ProposeAiRegistrationDto } from './ai-registration.dto';
 
 @Controller('ai/use-cases/registration')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiRegistrationController {
   constructor(private readonly service: AiRegistrationService) {}
 

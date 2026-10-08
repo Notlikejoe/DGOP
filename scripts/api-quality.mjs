@@ -1,3 +1,4 @@
+import { controllerRoutes } from './api-route-scan.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,56 +43,18 @@ const viewPermissionAllowlist = new Set([
   // Self-service acknowledgement; service enforces assignee/role scope and writes audit.
   'apps/api/src/governance-operations/governance-operations.controller.ts:readNotification',
 ]);
-const routeBlocks = [];
-const methodOrClass = /^\s*(?:export\s+)?(?:abstract\s+)?(?:class\s+(?<className>[A-Za-z_$][\w$]*)|(?:public\s+|private\s+|protected\s+)?(?:async\s+)?(?<method>[A-Za-z_$][\w$]*)\s*\()/u;
-const topLevelDecorator = /^@(?<decorator>\w+)\b(?<args>[^\n]*)/u;
-const methodDecorator = /^\s{2}@(?<decorator>\w+)\b(?<args>[^\n]*)/u;
-
-for (const file of walk(srcDir)) {
-  const lines = readFileSync(file, 'utf8').split(/\r?\n/u);
-  let controllerDecorators = [];
-  let decorators = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const topDecorator = lines[index].match(topLevelDecorator);
-    if (topDecorator) {
-      controllerDecorators.push({ line: index + 1, name: topDecorator.groups.decorator, text: lines[index] });
-      continue;
-    }
-
-    const methodDecoratorMatch = lines[index].match(methodDecorator);
-    if (methodDecoratorMatch) {
-      decorators.push({
-        line: index + 1,
-        name: methodDecoratorMatch.groups.decorator,
-        text: lines[index],
-      });
-      continue;
-    }
-
-    const match = lines[index].match(methodOrClass);
-    if (!match) continue;
-    if (match.groups?.className) {
-      decorators = [];
-      continue;
-    }
-    if (decorators.length) {
-      routeBlocks.push({
-        file,
-        methodLine: index + 1,
-        method: match.groups?.method ?? 'unknown',
-        controllerDecorators,
-        decorators,
-      });
-      decorators = [];
-    }
-  }
-}
+const routeBlocks = walk(srcDir).flatMap(file => controllerRoutes(file,readFileSync(file,'utf8')));
 
 const authorizationAllowlist = new Set([
   // Authenticated self-service routes. JwtAuthGuard still requires a valid user.
   'apps/api/src/auth/auth.controller.ts:me',
   'apps/api/src/auth/auth.controller.ts:logout',
   'apps/api/src/ownership/people.controller.ts:me',
+  // Authenticated installation context exposes only the server-owned demo flag.
+  // JwtAuthGuard resolves an active user and the handler requires its identity.
+  'apps/api/src/scoring/scoring.controller.ts:context',
+  // Authenticated self-service returns only the caller's live capability map.
+  'apps/api/src/ai-governance/ai-capabilities.controller.ts:get',
 ]);
 const publicRouteAllowlist = new Set([
   'apps/api/src/auth/auth.controller.ts:login',
@@ -107,12 +70,12 @@ for (const block of routeBlocks) {
   if (!hasRoute) continue;
   const allDecorators = [...block.controllerDecorators, ...block.decorators].map((decorator) => decorator.name);
   const hasAuthorizationDecision = allDecorators.some((name) =>
-    ['Public', 'RequirePermissions', 'Roles'].includes(name),
+    ['Public', 'RequirePermissions', 'RequireAnyPermissions', 'Roles'].includes(name),
   );
   const key = `${relative(root, block.file).replaceAll('\\', '/')}:${block.method}`;
   if (!hasAuthorizationDecision && !authorizationAllowlist.has(key)) {
     unauthorisedDecision.push(
-      `${relative(root, block.file)}:${block.methodLine} ${block.method} has no explicit Public, RequirePermissions, or Roles decision`,
+      `${relative(root, block.file)}:${block.methodLine} ${block.method} has no explicit Public, RequirePermissions, RequireAnyPermissions, or Roles decision`,
     );
   }
 }
@@ -146,7 +109,7 @@ for (const block of routeBlocks) {
   const http = block.decorators.find((decorator) => mutatingMethods.has(decorator.name));
   if (!http) continue;
   const permissions = block.decorators
-    .filter((decorator) => decorator.name === 'RequirePermissions')
+    .filter((decorator) => ['RequirePermissions','RequireAnyPermissions'].includes(decorator.name))
     .flatMap((decorator) => [...decorator.text.matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]));
   if (permissions.length > 0 && permissions.every((permission) => permission.endsWith('.view'))) {
     const key = `${relative(root, block.file).replaceAll('\\', '/')}:${block.method}`;
@@ -388,7 +351,7 @@ if (
 }
 if (
   !auditPacksServiceText.includes('BROAD_AUDIT_PACK_ROLES') ||
-  !auditPacksServiceText.includes('this.scoring.readiness(actor)') ||
+  !auditPacksServiceText.includes('this.scoring.readiness(actor, generatedAt)') ||
   !auditPacksServiceText.includes('this.scoring.gaps(actor') ||
   !auditPacksServiceText.includes('requestedBy: actor.email') ||
   !auditPacksServiceText.includes('specVisibilityWhere') ||

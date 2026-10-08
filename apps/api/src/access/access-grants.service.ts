@@ -22,6 +22,8 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { ScopeService, EffectiveScope } from "./scope.service";
 import { OwnerDelegateValidationService } from "./owner-delegate-validation.service";
+import { isManagedDemoProfile } from '../common/demo-profile';
+import { enforcementOperationAllowed, enforcementGrantOutcome, REMOVAL_STATES, type EnforcementOperation } from './access-enforcement.logic';
 import {
   AccessMatrixQueryDto,
   BulkCreateAccessGrantDto,
@@ -1264,7 +1266,7 @@ export class AccessGrantsService {
         },
         include: grantInclude,
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: "access_grant.requested",
@@ -1421,7 +1423,7 @@ export class AccessGrantsService {
             changedBy: user.email,
           },
         });
-        await this.audit.log(
+        await this.audit.logRequired(
           {
             actor: user.email,
             action: "access_grant.bulk_requested",
@@ -1540,7 +1542,7 @@ export class AccessGrantsService {
           changedBy: user.email,
         },
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: "access_grant.modified",
@@ -1564,22 +1566,13 @@ export class AccessGrantsService {
 
   async decideGrant(id: string, dto: DecideAccessGrantDto, user: AuthUser) {
     const existing = await this.getGrant(id, user);
+    if (existing.createdBy === user.email || existing.ownerDecision === 'pending' && existing.updatedBy === user.email) throw new ForbiddenException('Grant creators and pending-request editors cannot approve or reject their own requests');
     if (!ACTIVE_GRANT_STATUSES.has(existing.status)) {
       throw new BadRequestException(
         "Only requested or active grants can receive an owner decision",
       );
     }
-    const isAdmin = user.roles.some((role) => ADMIN_ROLES.includes(role));
-    if (!isAdmin) {
-      const validation = await this.ownerDelegate.validateActiveOwnerOrDelegate(
-        {
-          assetId: existing.assetId,
-          actorUserId: user.id,
-          actorEmail: user.email,
-        },
-      );
-      if (!validation.allowed) throw new ForbiddenException(validation.reason);
-    }
+    await this.assertBusinessOwnerAuthority(user, existing.assetId);
     const approved = dto.decision === "approved";
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.claimGrantVersion(tx, id, dto.expectedVersion);
@@ -1599,7 +1592,7 @@ export class AccessGrantsService {
         },
         include: grantInclude,
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: `access_grant.owner_${dto.decision}`,
@@ -1620,68 +1613,14 @@ export class AccessGrantsService {
     return updated;
   }
 
-  async updateEnforcement(
-    id: string,
-    dto: UpdateAccessGrantEnforcementDto,
-    user: AuthUser,
-  ) {
-    const existing = await this.getGrant(id, user);
-    if (existing.ownerDecision !== "approved") {
-      throw new BadRequestException(
-        "Only owner-approved grants can be enforcement-updated",
-      );
-    }
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await this.claimGrantVersion(tx, id, dto.expectedVersion);
-      const revocationOutcome = [
-        "pending_revocation",
-        "revocation_failed",
-        "expired",
-        "suspended",
-      ].includes(existing.status);
-      const grant = await tx.accessGrant.update({
-        where: { id },
-        data: {
-          enforcementStatus:
-            revocationOutcome && dto.enforcementStatus === "enforced"
-              ? "revoked"
-              : dto.enforcementStatus,
-          ...(revocationOutcome && dto.enforcementStatus === "enforced"
-            ? {
-                status: "revoked",
-                revokedAt: new Date(),
-                revokedBy: user.email,
-              }
-            : revocationOutcome && dto.enforcementStatus === "failed"
-              ? { status: "revocation_failed" }
-              : {}),
-          updatedBy: user.email,
-          version: { increment: 1 },
-        },
-        include: grantInclude,
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: "access_grant.enforcement_update",
-          entityType: "access_grant",
-          entityId: id,
-          metadata: {
-            previousEnforcementStatus: existing.enforcementStatus,
-            newEnforcementStatus: dto.enforcementStatus,
-            comment: dto.comment ?? null,
-          },
-        },
-        tx,
-      );
-      return grant;
-    });
-    return updated;
+  async updateEnforcement(id: string, _dto: UpdateAccessGrantEnforcementDto, user: AuthUser) {
+    await this.getGrant(id, user);
+    throw new BadRequestException('Direct enforcement status changes are retired; use provider completion or explicit manual evidence');
   }
 
   async revokeGrant(id: string, dto: RevokeAccessGrantDto, user: AuthUser) {
     const existing = await this.getGrant(id, user);
-    await this.assertOwnerAuthority(user, existing.assetId);
+    await this.assertBusinessOwnerAuthority(user, existing.assetId);
     if (["pending_revocation", "revoked"].includes(existing.status))
       return existing;
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -1699,7 +1638,7 @@ export class AccessGrantsService {
         },
         include: grantInclude,
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: "access_grant.revoked",
@@ -1785,7 +1724,7 @@ export class AccessGrantsService {
 
   async validateGrantImport(dto: ValidateAccessGrantImportDto, user: AuthUser) {
     const outcomes = await this.buildGrantImportPlan(dto.csv, user);
-    await this.audit.log({
+    await this.audit.logRequired({
       actor: user.email,
       action: "access_grant.import_validate",
       entityType: "access_grant_import",
@@ -1808,6 +1747,7 @@ export class AccessGrantsService {
     }
     if (!plan.length)
       throw new BadRequestException("CSV contains no data rows to commit");
+    for (const row of plan) if (row.action === 'revoke' && row.existing) await this.assertBusinessOwnerAuthority(user, row.existing.assetId);
     const committed = await this.prisma.$transaction(async (tx) => {
       const results: Array<{
         row: number;
@@ -1854,7 +1794,7 @@ export class AccessGrantsService {
               changedBy: user.email,
             },
           });
-          await this.audit.log(
+          await this.audit.logRequired(
             {
               actor: user.email,
               action: "access_grant.import_create",
@@ -1905,6 +1845,11 @@ export class AccessGrantsService {
                     },
                   }
                 : {}),
+              ownerDecision: 'pending',
+              ownerDecisionBy: null,
+              ownerDecisionAt: null,
+              status: 'requested',
+              enforcementStatus: 'not_enforced',
               updatedBy: user.email,
               version: { increment: 1 },
             },
@@ -1921,7 +1866,7 @@ export class AccessGrantsService {
               changedBy: user.email,
             },
           });
-          await this.audit.log(
+          await this.audit.logRequired(
             {
               actor: user.email,
               action: "access_grant.import_update",
@@ -1985,7 +1930,7 @@ export class AccessGrantsService {
               changedBy: user.email,
             },
           });
-          await this.audit.log(
+          await this.audit.logRequired(
             {
               actor: user.email,
               action: "access_grant.import_revoke",
@@ -2014,7 +1959,7 @@ export class AccessGrantsService {
           });
         }
       }
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: "access_grant.import_commit",
@@ -2044,8 +1989,23 @@ export class AccessGrantsService {
   async reconcileGrantLifecycle(user: AuthUser) {
     const now = new Date();
     const visibleAssetWhere = await this.assetVisibilityWhereForUser(user);
-    const [scheduled, activated, expired] = await this.prisma.$transaction(
+    const [scheduled, activated, expired, repaired] = await this.prisma.$transaction(
       async (tx) => {
+        const legacy = await tx.accessGrant.findMany({ where: { status: 'expiring', asset: visibleAssetWhere }, include: { permissions: true }, orderBy: { id: 'asc' }, take: 100 });
+        let repaired = 0;
+        for (const previous of legacy) {
+          const elapsed = !!previous.expiresAt && previous.expiresAt <= now;
+          const status = elapsed ? 'expired' : previous.ownerDecision !== 'approved' ? 'requested' : previous.startsAt > now ? 'scheduled' : 'active';
+          const claimed = await tx.accessGrant.updateMany({ where: { id: previous.id, status: 'expiring', version: previous.version }, data: {
+            status, ...(elapsed ? { enforcementStatus: 'pending', revokedAt: null, revocationReason: 'Legacy expiry state reconciled; removal confirmation is outstanding' } : {}),
+            updatedBy: user.email, version: { increment: 1 },
+          } });
+          if (claimed.count !== 1) continue;
+          const grant = await tx.accessGrant.findUniqueOrThrow({ where: { id: previous.id } });
+          await tx.accessGrantVersion.create({ data: { grantId: grant.id, version: grant.version, snapshotJson: this.grantSnapshot(grant, previous.permissions.map((p) => p.permissionCode)), changeReason: 'Repair legacy expiring state without implying external removal', changedBy: user.email } });
+          await this.audit.logRequired({ actor: user.email, action: 'access_grant.legacy_expiry_repaired', entityType: 'access_grant', entityId: grant.id, metadata: { previousStatus: previous.status, newStatus: status, previousVersion: previous.version, newVersion: grant.version, externalRemovalConfirmed: false } }, tx);
+          repaired += 1;
+        }
         const scheduledResult = await tx.accessGrant.updateMany({
           where: {
             ownerDecision: "approved",
@@ -2092,7 +2052,7 @@ export class AccessGrantsService {
             version: { increment: 1 },
           },
         });
-        await this.audit.log(
+        await this.audit.logRequired(
           {
             actor: user.email,
             action: "access_grant.lifecycle_reconcile",
@@ -2110,6 +2070,7 @@ export class AccessGrantsService {
           scheduledResult.count,
           activatedResult.count,
           expiredResult.count,
+          repaired,
         ] as const;
       },
     );
@@ -2118,96 +2079,48 @@ export class AccessGrantsService {
       scheduled,
       activated,
       expired,
-      totalChanged: scheduled + activated + expired,
+      repaired,
+      totalChanged: scheduled + activated + expired + repaired,
     };
   }
 
-  async dispatchEnforcement(
-    id: string,
-    dto: DispatchAccessEnforcementDto,
-    user: AuthUser,
-  ) {
-    const grant = await this.getGrant(id, user);
-    if (grant.ownerDecision !== "approved" || grant.status !== "active") {
-      throw new BadRequestException(
-        "Only active owner-approved grants can be dispatched for enforcement",
-      );
-    }
-    if (grant.version !== dto.expectedVersion)
-      throw new ConflictException(
-        "Grant changed before enforcement could be dispatched",
-      );
-    const inFlight = await this.prisma.accessEnforcementAttempt.findFirst({
-      where: {
-        grantId: grant.id,
-        operation: dto.operation,
-        status: { in: ["queued", "running", "retrying"] },
-      },
-      orderBy: { createdAt: "desc" },
+  async dispatchEnforcement(id: string, dto: DispatchAccessEnforcementDto, user: AuthUser) {
+    await this.getGrant(id, user);
+    const managedSimulation = isManagedDemoProfile() && process.env.DGOP_DEMO_ADAPTERS === 'true';
+    const connectorCode = dto.connectorCode?.trim() || (managedSimulation ? 'demo_simulator' : 'pilot_contract');
+    if (connectorCode === 'demo_simulator' && !managedSimulation) throw new BadRequestException('Simulated connector is restricted to the managed local demonstration');
+    const idempotencyKey = `access-enforcement:${id}:v${dto.expectedVersion}:${dto.operation}`;
+    return this.prisma.$transaction(async (tx) => {
+      const replay = await tx.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+      if (replay) {
+        if (replay.connectorCode !== connectorCode) throw new ConflictException('Dispatch key was already used with another connector');
+        return { attempt: replay, deduplicated: true };
+      }
+      try { await this.claimGrantVersion(tx, id, dto.expectedVersion); }
+      catch (error) {
+        const concurrentReplay = await tx.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+        if (!concurrentReplay || concurrentReplay.connectorCode !== connectorCode) throw error;
+        return { attempt: concurrentReplay, deduplicated: true };
+      }
+      const grant = await tx.accessGrant.findUniqueOrThrow({ where: { id }, include: grantInclude });
+      if (!enforcementOperationAllowed(dto.operation as EnforcementOperation, grant)) throw new BadRequestException('This operation is not permitted in the current grant state');
+      const inFlight = await tx.accessEnforcementAttempt.findFirst({ where: { grantId: id, operation: dto.operation, completionVersion: grant.version, status: { in: ['queued', 'running', 'retrying'] } } });
+      if (inFlight) return { attempt: inFlight, deduplicated: true };
+      const attempt = await tx.accessEnforcementAttempt.create({ data: {
+        grantId: id, idempotencyKey, operation: dto.operation,
+        requestVersion: grant.version, completionVersion: grant.version + 1,
+        connectorCode,
+        requestJson: { grantCode: grant.code, grantVersion: grant.version, operation: dto.operation, assetId: grant.assetId, principalType: grant.principalType, principalId: grant.principalId, permissionCodes: this.grantPermissionCodes(grant) },
+        createdBy: user.email,
+      } });
+      await tx.accessGrant.update({ where: { id }, data: {
+        ...(dto.operation === 'verify' ? {} : { enforcementStatus: 'pending' }),
+        ...(dto.operation === 'revoke' ? { status: 'pending_revocation' } : {}),
+        updatedBy: user.email, version: { increment: 1 },
+      } });
+      await this.audit.logRequired({ actor: user.email, action: 'access_grant.enforcement_dispatch', entityType: 'access_enforcement_attempt', entityId: attempt.id, metadata: { grantId: id, operation: dto.operation, requestVersion: grant.version, completionVersion: grant.version + 1, connectorCode: attempt.connectorCode } }, tx);
+      return { attempt, deduplicated: false, contract: { delivery: 'operator_handoff', idempotencyKey, callback: 'Record an explicit provider observation using this attempt and its completion version; automated delivery is not configured' } };
     });
-    if (inFlight) return { attempt: inFlight, deduplicated: true };
-    const idempotencyKey = `access-enforcement:${grant.id}:v${grant.version}:${dto.operation}`;
-    const existing = await this.prisma.accessEnforcementAttempt.findUnique({
-      where: { idempotencyKey },
-    });
-    if (existing) return { attempt: existing, deduplicated: true };
-    const attempt = await this.prisma.$transaction(async (tx) => {
-      await this.claimGrantVersion(tx, id, dto.expectedVersion);
-      const created = await tx.accessEnforcementAttempt.create({
-        data: {
-          grantId: grant.id,
-          idempotencyKey,
-          operation: dto.operation,
-          connectorCode: dto.connectorCode?.trim() || "pilot_contract",
-          requestJson: {
-            grantCode: grant.code,
-            grantVersion: grant.version,
-            assetId: grant.assetId,
-            principalType: grant.principalType,
-            principalId: grant.principalId,
-            permissionCodes: this.grantPermissionCodes(grant),
-          } as Prisma.InputJsonValue,
-          createdBy: user.email,
-        },
-      });
-      await tx.accessGrant.update({
-        where: { id },
-        data: {
-          enforcementStatus: "pending",
-          ...(dto.operation === "revoke"
-            ? { status: "pending_revocation" }
-            : {}),
-          updatedBy: user.email,
-          version: { increment: 1 },
-        },
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: "access_grant.enforcement_dispatch",
-          entityType: "access_enforcement_attempt",
-          entityId: created.id,
-          metadata: {
-            grantId: grant.id,
-            operation: dto.operation,
-            connectorCode: created.connectorCode,
-          },
-        },
-        tx,
-      );
-      return created;
-    });
-    return {
-      attempt,
-      deduplicated: false,
-      contract: {
-        delivery: "at_least_once",
-        idempotencyKey,
-        retry: "bounded exponential backoff",
-        callback:
-          "provider must return the idempotency key and terminal status",
-      },
-    };
   }
 
   async applyGrantRules(
@@ -2255,6 +2168,8 @@ export class AccessGrantsService {
           grantId: grant.id,
           idempotencyKey,
           operation,
+          requestVersion: grant.version,
+          completionVersion: grant.version + 1,
           connectorCode: "dgop_policy_store",
           status: "succeeded",
           attemptCount: 1,
@@ -2298,7 +2213,7 @@ export class AccessGrantsService {
               version: { increment: 1 },
             },
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: revocation
@@ -2322,232 +2237,81 @@ export class AccessGrantsService {
     return { attempt, deduplicated: false };
   }
 
-  async completeManualEnforcement(
-    id: string,
-    dto: CompleteManualAccessEnforcementDto,
-    user: AuthUser,
-  ) {
-    const grant = await this.getGrant(id, user);
-    if (grant.version !== dto.expectedVersion)
-      throw new ConflictException(
-        "Grant changed before manual enforcement could be completed",
-      );
-    if (grant.ownerDecision !== "approved" || grant.status !== "active") {
-      throw new BadRequestException(
-        "Only active owner-approved grants can receive manual provisioning evidence",
-      );
-    }
+  async completeManualEnforcement(id: string, dto: CompleteManualAccessEnforcementDto, user: AuthUser) {
+    await this.getGrant(id, user);
+    const operation = dto.operation ?? 'grant';
+    if ((operation === 'grant' && dto.enforcementStatus === 'revoked') || (operation === 'revoke' && dto.enforcementStatus === 'enforced')) throw new BadRequestException('The outcome must match the explicit manual operation');
     const evidenceReference = dto.evidenceReference.trim();
-    const evidenceFingerprint = createHash("sha256")
-      .update(
-        `${grant.id}:${grant.version}:${dto.enforcementStatus}:${evidenceReference}`,
-      )
-      .digest("hex")
-      .slice(0, 24);
-    const idempotencyKey = `access-enforcement:manual:${grant.id}:v${grant.version}:${evidenceFingerprint}`;
-    const existing = await this.prisma.accessEnforcementAttempt.findUnique({
-      where: { idempotencyKey },
+    if (!evidenceReference) throw new BadRequestException('Manual completion evidence is required');
+    const fingerprint = createHash('sha256').update(JSON.stringify({ operation, outcome: dto.enforcementStatus, evidenceReference, comment: dto.comment?.trim() || null })).digest('hex');
+    const idempotencyKey = `access-enforcement:manual:${id}:v${dto.expectedVersion}:${fingerprint}`;
+    return this.prisma.$transaction(async (tx) => {
+      const replay = await tx.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+      if (replay) return { attempt: replay, deduplicated: true };
+      try { await this.claimGrantVersion(tx, id, dto.expectedVersion); }
+      catch (error) {
+        const concurrentReplay = await tx.accessEnforcementAttempt.findUnique({ where: { idempotencyKey } });
+        if (!concurrentReplay) throw error;
+        return { attempt: concurrentReplay, deduplicated: true };
+      }
+      const grant = await tx.accessGrant.findUniqueOrThrow({ where: { id }, include: grantInclude });
+      if (!enforcementOperationAllowed(operation, grant)) throw new BadRequestException('This manual operation is not permitted in the current grant state');
+      const completedAt = new Date();
+      const success = dto.enforcementStatus !== 'failed';
+      const attempt = await tx.accessEnforcementAttempt.create({ data: {
+        grantId: id, idempotencyKey, operation: operation === 'revoke' ? 'manual_revoke' : 'manual_provision', connectorCode: 'manual_provisioning',
+        requestVersion: grant.version, completionVersion: grant.version + 1,
+        status: success ? 'succeeded' : 'failed', attemptCount: 1, maxAttempts: 1, startedAt: completedAt, completedAt,
+        requestJson: { grantCode: grant.code, grantVersion: grant.version, operation, requestedStatus: dto.enforcementStatus },
+        responseJson: { evidenceReference, comment: dto.comment?.trim() || null, completedBy: user.email, manualProvisioning: true, appliedToGrant: true },
+        createdBy: user.email,
+      } });
+      await tx.accessGrant.update({ where: { id }, data: { ...enforcementGrantOutcome(operation, success, user.email, completedAt), updatedBy: user.email, version: { increment: 1 } } });
+      await this.audit.logRequired({ actor: user.email, action: 'access_grant.enforcement_manual_complete', entityType: 'access_enforcement_attempt', entityId: attempt.id, metadata: { grantId: id, operation, outcome: dto.enforcementStatus, evidenceReference, requestVersion: grant.version } }, tx);
+      return { attempt, deduplicated: false };
     });
-    if (existing) return { attempt: existing, deduplicated: true };
-
-    const completedAt = new Date();
-    const attempt = await this.prisma.$transaction(async (tx) => {
-      await this.claimGrantVersion(tx, id, dto.expectedVersion);
-      const created = await tx.accessEnforcementAttempt.create({
-        data: {
-          grantId: grant.id,
-          idempotencyKey,
-          operation: "manual_provision",
-          connectorCode: "manual_provisioning",
-          status: dto.enforcementStatus === "enforced" ? "succeeded" : "failed",
-          attemptCount: 1,
-          maxAttempts: 1,
-          startedAt: completedAt,
-          completedAt,
-          requestJson: {
-            grantCode: grant.code,
-            grantVersion: grant.version,
-            requestedStatus: dto.enforcementStatus,
-          } as Prisma.InputJsonValue,
-          responseJson: {
-            evidenceReference,
-            comment: dto.comment?.trim() || null,
-            completedBy: user.email,
-            manualProvisioning: true,
-          } as Prisma.InputJsonValue,
-          createdBy: user.email,
-        },
-      });
-      await tx.accessGrant.update({
-        where: { id: grant.id },
-        data: {
-          enforcementStatus:
-            [
-              "pending_revocation",
-              "revocation_failed",
-              "expired",
-              "suspended",
-            ].includes(grant.status) && dto.enforcementStatus === "enforced"
-              ? "revoked"
-              : dto.enforcementStatus,
-          ...([
-            "pending_revocation",
-            "revocation_failed",
-            "expired",
-            "suspended",
-          ].includes(grant.status)
-            ? dto.enforcementStatus === "enforced"
-              ? {
-                  status: "revoked",
-                  revokedAt: completedAt,
-                  revokedBy: user.email,
-                }
-              : dto.enforcementStatus === "failed"
-                ? { status: "revocation_failed" }
-                : {}
-            : {}),
-          updatedBy: user.email,
-          version: { increment: 1 },
-        },
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: "access_grant.enforcement_manual_complete",
-          entityType: "access_enforcement_attempt",
-          entityId: created.id,
-          metadata: {
-            grantId: grant.id,
-            grantCode: grant.code,
-            enforcementStatus: dto.enforcementStatus,
-            evidenceReference,
-          },
-        },
-        tx,
-      );
-      return created;
-    });
-    return { attempt, deduplicated: false };
   }
 
-  async completeEnforcementAttempt(
-    attemptId: string,
-    dto: CompleteAccessEnforcementAttemptDto,
-    user: AuthUser,
-  ) {
-    const attempt = await this.prisma.accessEnforcementAttempt.findUnique({
-      where: { id: attemptId },
-      include: { grant: { include: grantInclude } },
+  async completeEnforcementAttempt(attemptId: string, dto: CompleteAccessEnforcementAttemptDto, user: AuthUser) {
+    const visible = await this.prisma.accessEnforcementAttempt.findUnique({ where: { id: attemptId }, include: { grant: { include: grantInclude } } });
+    if (!visible) throw new NotFoundException('Access enforcement attempt not found');
+    await this.assertAssetVisible(user.roles, visible.grant.assetId);
+    const providerReference = dto.providerReference.trim();
+    if (!providerReference) throw new BadRequestException('Provider observation reference is required');
+    const observation = { status: dto.status, providerReference, errorCode: dto.status === 'failed' ? dto.errorCode?.trim() || 'provider_failed' : null, message: dto.message?.trim() || null };
+    const fingerprint = createHash('sha256').update(JSON.stringify(observation)).digest('hex');
+    return this.prisma.$transaction(async (tx) => {
+      // Lock the grant first in every enforcement command to keep concurrent commands ordered.
+      await tx.$queryRaw`SELECT id FROM access_grants WHERE id = ${visible.grantId} FOR UPDATE`;
+      const attempt = await tx.accessEnforcementAttempt.findUniqueOrThrow({ where: { id: attemptId }, include: { grant: { include: grantInclude } } });
+      if (!['grant', 'update', 'revoke', 'verify'].includes(attempt.operation) || attempt.requestVersion == null || attempt.completionVersion == null) throw new BadRequestException('Legacy or non-provider attempt must be redispatched through an explicit operation');
+      if (dto.expectedVersion !== attempt.completionVersion) throw new ConflictException('Observation version must match the immutable dispatched completion version');
+      if (['succeeded', 'failed'].includes(attempt.status)) {
+        const previous = attempt.responseJson as Record<string, unknown> | null;
+        if (previous?.observationFingerprint !== fingerprint) throw new ConflictException('A different terminal observation is already recorded for this attempt');
+        return { attempt, grant: attempt.grant, deduplicated: true, appliedToGrant: previous?.appliedToGrant === true, requiresReconciliation: previous?.requiresReconciliation === true };
+      }
+      const operation = attempt.operation as EnforcementOperation;
+      const simulated = isManagedDemoProfile() && attempt.connectorCode === 'demo_simulator';
+      const applicable = attempt.grant.version === attempt.completionVersion && enforcementOperationAllowed(operation, attempt.grant);
+      const completedAt = new Date();
+      const requiresReconciliation = !applicable && operation !== 'verify' && dto.status === 'succeeded';
+      const claimed = await tx.accessEnforcementAttempt.updateMany({ where: { id: attemptId, status: { in: ['queued', 'running', 'retrying'] } }, data: {
+        status: dto.status, completedAt, errorCode: observation.errorCode, errorMessage: dto.status === 'failed' ? observation.message || 'Provider reported enforcement failure' : null,
+        responseJson: { ...observation, completedBy: user.email, observationFingerprint: fingerprint, appliedToGrant: applicable && operation !== 'verify', requiresReconciliation, simulated, ...(simulated ? { externalDelivery: false } : {}) },
+      } });
+      if (claimed.count !== 1) throw new ConflictException('Attempt changed before observation could be recorded');
+      let grant = attempt.grant;
+      if (applicable && operation !== 'verify') {
+        await this.claimGrantVersion(tx, attempt.grantId, attempt.completionVersion);
+        grant = await tx.accessGrant.update({ where: { id: attempt.grantId }, data: { ...enforcementGrantOutcome(operation, dto.status === 'succeeded', user.email, completedAt), updatedBy: user.email, version: { increment: 1 } }, include: grantInclude });
+      } else if (requiresReconciliation && ['grant', 'update'].includes(operation) && (REMOVAL_STATES.has(grant.status) || grant.status === 'revoked')) {
+        // A delayed external grant may have restored physical access: keep removal outstanding.
+        grant = await tx.accessGrant.update({ where: { id: attempt.grantId }, data: { status: 'pending_revocation', enforcementStatus: 'pending', revokedAt: null, revocationReason: 'A superseded provisioning result requires fresh removal confirmation', updatedBy: user.email, version: { increment: 1 } }, include: grantInclude });
+      }
+      await this.audit.logRequired({ actor: user.email, action: applicable ? 'access_grant.enforcement_' + dto.status : 'access_grant.enforcement_observation_superseded', entityType: 'access_enforcement_attempt', entityId: attemptId, metadata: { grantId: attempt.grantId, operation, providerReference, requestVersion: attempt.requestVersion, completionVersion: attempt.completionVersion, currentGrantVersion: attempt.grant.version, appliedToGrant: applicable && operation !== 'verify', requiresReconciliation, simulated, ...(simulated ? { externalDelivery: false } : {}) } }, tx);
+      return { attempt: await tx.accessEnforcementAttempt.findUniqueOrThrow({ where: { id: attemptId } }), grant, deduplicated: false, appliedToGrant: applicable && operation !== 'verify', requiresReconciliation };
     });
-    if (!attempt)
-      throw new NotFoundException("Access enforcement attempt not found");
-    await this.assertAssetVisible(user.roles, attempt.grant.assetId);
-    if (["succeeded", "failed"].includes(attempt.status)) {
-      return { attempt, deduplicated: true };
-    }
-    if (attempt.grant.version !== dto.expectedVersion) {
-      throw new ConflictException(
-        "Grant changed before the enforcement result could be recorded",
-      );
-    }
-    const completedAt = new Date();
-    const success = dto.status === "succeeded";
-    const revocation =
-      attempt.operation === "revoke" ||
-      [
-        "pending_revocation",
-        "revocation_failed",
-        "expired",
-        "suspended",
-      ].includes(attempt.grant.status);
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.claimGrantVersion(tx, attempt.grantId, dto.expectedVersion);
-      const claimed = await tx.accessEnforcementAttempt.updateMany({
-        where: {
-          id: attemptId,
-          status: { in: ["queued", "running", "retrying"] },
-        },
-        data: {
-          status: dto.status,
-          completedAt,
-          errorCode: success
-            ? null
-            : dto.errorCode?.trim() || "provider_failed",
-          errorMessage: success
-            ? null
-            : dto.message?.trim() ||
-              "The provider reported enforcement failure",
-          responseJson: {
-            providerReference: dto.providerReference.trim(),
-            message: dto.message?.trim() || null,
-            completedBy: user.email,
-          },
-        },
-      });
-      if (claimed.count !== 1)
-        throw new BadRequestException(
-          "Enforcement attempt changed before completion could be recorded",
-        );
-      const grant = await tx.accessGrant.update({
-        where: { id: attempt.grantId },
-        data: success
-          ? revocation
-            ? {
-                status: "revoked",
-                enforcementStatus: "revoked",
-                revokedAt: completedAt,
-                revokedBy: user.email,
-                updatedBy: user.email,
-                version: { increment: 1 },
-              }
-            : {
-                enforcementStatus: "enforced",
-                updatedBy: user.email,
-                version: { increment: 1 },
-              }
-          : revocation
-            ? {
-                status: "revocation_failed",
-                enforcementStatus: "failed",
-                updatedBy: user.email,
-                version: { increment: 1 },
-              }
-            : {
-                enforcementStatus: "failed",
-                updatedBy: user.email,
-                version: { increment: 1 },
-              },
-        include: grantInclude,
-      });
-      await this.audit.log(
-        {
-          actor: user.email,
-          action: success
-            ? "access_grant.enforcement_succeeded"
-            : "access_grant.enforcement_failed",
-          entityType: "access_enforcement_attempt",
-          entityId: attemptId,
-          metadata: {
-            grantId: grant.id,
-            grantCode: grant.code,
-            operation: attempt.operation,
-            connectorCode: attempt.connectorCode,
-            providerReference: dto.providerReference.trim(),
-            errorCode: success
-              ? null
-              : dto.errorCode?.trim() || "provider_failed",
-          },
-        },
-        tx,
-      );
-      return {
-        attempt: await tx.accessEnforcementAttempt.findUniqueOrThrow({
-          where: { id: attemptId },
-        }),
-        grant,
-      };
-    });
-    return { ...result, deduplicated: false };
   }
 
   private async buildGrantImportPlan(
@@ -3125,6 +2889,15 @@ export class AccessGrantsService {
       actorEmail: user.email,
     });
     if (!validation.allowed) throw new ForbiddenException(validation.reason);
+  }
+
+  private async assertBusinessOwnerAuthority(user: AuthUser, assetId: string): Promise<void> {
+    const validation = await this.ownerDelegate.validateActiveOwnerOrDelegate({ assetId, actorUserId: user.id, actorEmail: user.email });
+    if (!validation.allowed) throw new ForbiddenException(validation.reason);
+    const roles = await this.prisma.role.findMany({ where: { code: { in: user.roles.filter(role => !ADMIN_ROLES.includes(role) && role !== 'auditor') }, isActive: true, deletedAt: null, permissions: { some: { permission: { resource: 'access_grants', action: 'edit' } } } }, select: { code: true } });
+    if (!roles.length) throw new ForbiddenException('A live access decision business role is required');
+    const asset = await this.prisma.dataAsset.findFirst({ where: { id: assetId, ...(await this.assetVisibilityWhere(roles.map(role => role.code))) }, select: { id: true } });
+    if (!asset) throw new NotFoundException('data asset not found in the business decision scope');
   }
 
   private accessImportRowLimit(): number {

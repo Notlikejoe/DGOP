@@ -82,6 +82,9 @@ test('DPIA gate status rolls up to action required or approved', () => {
     dpiaStatusFromGates([
       { status: PrivacyGateStatus.approved },
       { status: PrivacyGateStatus.not_required },
+      { status: PrivacyGateStatus.approved },
+      { status: PrivacyGateStatus.approved },
+      { status: PrivacyGateStatus.approved },
     ]),
     PrivacyWorkStatus.approved,
   );
@@ -100,7 +103,7 @@ test('privacy lists do not expose unanchored records to scoped users', async () 
         count: async () => 0,
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
     } as never,
@@ -146,7 +149,7 @@ test('privacy list filters reject invalid status values before Prisma receives t
         count: async () => 0,
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
     } as never,
@@ -181,7 +184,7 @@ test('privacy summary scopes consent and retention counters', async () => {
         },
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
     } as never,
@@ -194,7 +197,7 @@ test('privacy summary scopes consent and retention counters', async () => {
 test('scoped users cannot create unanchored DSR requests', async () => {
   const service = new PrivacyService(
     {} as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
     } as never,
@@ -222,7 +225,7 @@ test('direct DPIA status and risk updates are blocked', async () => {
         }),
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
@@ -249,7 +252,7 @@ test('DPIA creators cannot approve their own gates', async () => {
         }),
       },
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,
@@ -323,7 +326,7 @@ test('createDpia opens a routed privacy workflow case', async () => {
     {
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
     } as never,
-    { log: async () => undefined } as never,
+    { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,

@@ -1,3 +1,4 @@
+import { RequireAnyPermissions } from '../auth/decorators';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { CurrentUser } from '../auth/decorators';
@@ -9,6 +10,8 @@ import { AiReviewDisplayService } from './ai-review-display.service';
 import { AiMonthlyReviewService } from './ai-monthly-review.service';
 
 @Controller('ai/review-operations')
+// Service methods additionally enforce purpose grants, scope, assignment and independent duties.
+@RequireAnyPermissions('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all','case.view.airs.own','case.view.airs.org','case.view.airs.all','dashboard.view.exec.ai')
 export class AiReviewOperationsController {
   constructor(private readonly annual:AiAnnualReviewService,private readonly reports:AiReviewReportService,private readonly display:AiReviewDisplayService,private readonly monthly:AiMonthlyReviewService){}
   @Get('cadence-config') cadence(@CurrentUser() u:AuthUser){return this.display.read(u.id);}

@@ -1,3 +1,4 @@
+import { loadEnvironment, applyEnvironment } from './runtime-env.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { get } from 'node:https';
@@ -10,24 +11,7 @@ const toolsDir = join(root, 'tools');
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const isDryRun = process.argv.includes('--dry-run');
 
-function loadRootEnv() {
-  const env = { ...process.env };
-  const envPath = join(root, '.env');
-  if (!existsSync(envPath)) return env;
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (!env[key]) env[key] = value;
-  }
-  return env;
-}
+function loadRootEnv() { return loadEnvironment(root); }
 
 function cloudflaredPath() {
   return join(toolsDir, process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');

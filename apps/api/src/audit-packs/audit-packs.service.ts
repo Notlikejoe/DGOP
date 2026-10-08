@@ -5,6 +5,7 @@ import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/bus
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth.types';
 import { ScoringService } from '../scoring/scoring.service';
+import { isOperationalEvidence, operationalEvidenceExclusion } from '../evidence/evidence-status';
 import { CreateNdiAuditPackDto } from './audit-packs.dto';
 import { buildManifest, packReadiness, sha256, zipStore, type ZipEntry } from './audit-packs.logic';
 
@@ -106,7 +107,8 @@ export class AuditPacksService {
       { path: 'manifest.json', body: JSON.stringify(manifest, null, 2) },
       ...stored.files,
     ];
-    return zipStore(files);
+    const generatedAt = (manifest as { generatedAt?: string }).generatedAt;
+    return zipStore(files, generatedAt ? new Date(generatedAt) : new Date('1980-01-01T00:00:00Z'));
   }
 
   private async nextCode(): Promise<string> {
@@ -168,8 +170,8 @@ export class AuditPacksService {
       if (!exists) throw new BadRequestException('NDI domain not found');
     }
     const [detail, gaps, specs, workflowDecisions, hooks] = await Promise.all([
-      domainId ? this.scoring.domainDetail(actor, domainId) : this.scoring.readiness(actor),
-      this.scoring.gaps(actor, domainId ? { domainId } : undefined),
+      domainId ? this.scoring.domainDetail(actor, domainId, generatedAt) : this.scoring.readiness(actor, generatedAt),
+      this.scoring.gaps(actor, domainId ? { domainId } : undefined, generatedAt),
       this.specifications(actor, domainId),
       this.workflowDecisions(actor),
       this.complianceHooks(actor),
@@ -183,16 +185,25 @@ export class AuditPacksService {
       type: spec.type,
       maturityLevel: spec.maturityLevel,
       owner: spec.owner?.fullNameEn ?? null,
-      evidence: spec.evidence.map((evidence) => ({
+      evidence: spec.evidence.filter((evidence) => isOperationalEvidence(evidence, generatedAt)).map((evidence) => ({
         id: evidence.id,
         title: evidence.title,
         originalName: evidence.originalName,
         sha256: evidence.sha256,
         status: evidence.status,
+        provenance: evidence.provenance,
         reviewedAt: evidence.reviewedAt?.toISOString() ?? null,
         expiryDate: evidence.expiryDate?.toISOString() ?? null,
       })),
     }));
+    const excludedEvidence = specs.flatMap((spec) => spec.evidence
+      .filter((evidence) => !isOperationalEvidence(evidence, generatedAt))
+      .map((evidence) => ({
+        id: evidence.id, specCode: spec.code, originalName: evidence.originalName,
+        sha256: evidence.sha256, status: evidence.status, provenance: evidence.provenance,
+        expiryDate: evidence.expiryDate?.toISOString() ?? null,
+        exclusionReason: operationalEvidenceExclusion(evidence, generatedAt)!,
+      })));
     const approvedEvidenceCount = specRows.reduce((sum, spec) => sum + spec.evidence.length, 0);
     const score = 'overall' in detail ? detail.overall.score : detail.score;
     const specCount = 'overall' in detail ? detail.overall.specCount : detail.specCount;
@@ -206,6 +217,8 @@ export class AuditPacksService {
       readinessScore: score,
       specCount,
       approvedEvidenceCount,
+      excludedEvidenceCount: excludedEvidence.length,
+      scoringBasis: 'operational_evidence_only' as const,
       gapCount: gaps.length,
       blockerCount,
       generatedAt: generatedAt.toISOString(),
@@ -224,6 +237,8 @@ export class AuditPacksService {
         scope,
         generatedAt: generatedAt.toISOString(),
         frameworks: summary.frameworks,
+        scoringBasis: 'operational_evidence_only',
+        excludedEvidence,
         evidence: specRows.flatMap((spec) =>
           spec.evidence.map((evidence) => ({
             id: evidence.id,
@@ -231,6 +246,7 @@ export class AuditPacksService {
             originalName: evidence.originalName,
             sha256: evidence.sha256,
             status: evidence.status,
+            provenance: evidence.provenance,
             expiryDate: evidence.expiryDate,
           })),
         ),
@@ -252,10 +268,10 @@ export class AuditPacksService {
   private async specifications(actor: AuthUser, domainId?: string) {
     const { where, personId } = await this.specVisibilityWhere(actor, domainId);
     const evidenceWhere: Prisma.NdiEvidenceWhereInput = this.hasBroadAuditPackAccess(actor)
-      ? { deletedAt: null, status: NdiEvidenceStatus.approved }
+      ? { deletedAt: null }
       : {
           AND: [
-            { deletedAt: null, status: NdiEvidenceStatus.approved },
+            { deletedAt: null },
             {
               OR: [
                 { submittedBy: actor.email },
@@ -285,6 +301,7 @@ export class AuditPacksService {
             originalName: true,
             sha256: true,
             status: true,
+            provenance: true,
             reviewedAt: true,
             expiryDate: true,
           },
@@ -309,7 +326,7 @@ export class AuditPacksService {
             }),
       },
       orderBy: { completedAt: 'desc' },
-      take: 100,
+      take: 20001,
       select: {
         id: true,
         title: true,
@@ -319,6 +336,7 @@ export class AuditPacksService {
         case: { select: { code: true, title: true, type: true } },
       },
     });
+    if (rows.length > 20000) throw new BadRequestException('Audit pack exceeds 20,000 workflow decisions. Use a narrower export; no incomplete pack was generated.');
     return rows.map((row) => ({
       taskId: row.id,
       caseCode: row.case.code,

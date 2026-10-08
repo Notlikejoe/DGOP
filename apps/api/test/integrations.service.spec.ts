@@ -57,7 +57,7 @@ function serviceWith(
   prisma.businessSequence ??= sequenceDelegate();
   return new IntegrationsService(
     prisma as never,
-    { log: async (entry: unknown) => auditLog.push(entry) } as never,
+    { log: async (entry: unknown) => auditLog.push(entry), logRequired: async (entry: unknown) => auditLog.push(entry) } as never,
     { resolve: async () => scope } as never,
   );
 }
@@ -1164,8 +1164,13 @@ test('receiveWebhook persists, processes, reconciles, and audits integration eve
     },
     $transaction: async (fn: (client: unknown) => unknown) =>
       fn({
+        $queryRaw: async () => [],
         businessSequence: sequenceDelegate(),
         integrationEvent: {
+          create: async (args: any) => {
+            eventRow = { id: 'event-1', attempts: 0, maxAttempts: 3, ...args.data };
+            return eventRow;
+          },
           findUnique: async () => ({ ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } }),
           update: async (args: any) => {
             eventRow = { ...eventRow, ...args.data, connector };
@@ -1237,6 +1242,7 @@ test('retryEvent reprocesses retry-scheduled events through the same engine', as
     },
     $transaction: async (fn: (client: unknown) => unknown) =>
       fn({
+        $queryRaw: async () => [],
         businessSequence: sequenceDelegate(),
         integrationEvent: {
           findUnique: async () => ({ ...eventRow, connector: { id: connector.id, code: connector.code, type: 'data_quality', configJson: {} } }),

@@ -1,3 +1,5 @@
+import { applyEnvironment } from './runtime-env.mjs';
+import { demoConfig, atomicJson, readManifest, applyDemoEnvironment, assertDemoFixtureWrite } from './demo-profile.mjs';
 // Installs the retained SDAIA workbook risk library into an isolated local DGOP preview.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -7,9 +9,11 @@ import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-Object.assign(process.env,parseEnv(readFileSync(resolve(root,'.env'),'utf8')));
+applyEnvironment(root, true);
+const config = demoConfig(root);
+applyDemoEnvironment(config);
 const connection=new URL(process.env.DATABASE_URL);
-if(process.argv[2]!=='--local-demo'||connection.hostname!=='127.0.0.1'||connection.port!=='55436'||!/^\/dgop_ai_preview_\d+$/.test(connection.pathname)||process.env.NODE_ENV!=='development')throw Error('Explicit isolated local preview required; original database is prohibited');
+assertDemoFixtureWrite(config,process.argv[2]);
 
 const source=JSON.parse(readFileSync(resolve(root,'scripts/data/sdaia-ai-risk-library.json'),'utf8'));
 if(source.schemaVersion!==1||source.rows?.length!==66||source.rows[0]?.libraryRef!=='AIRL-001'||source.rows.at(-1)?.libraryRef!=='AIRL-066')throw Error('The retained SDAIA risk-library dataset is incomplete');
@@ -22,7 +26,7 @@ const app=await NestFactory.createApplicationContext(AppModule,{logger:false});
 const db=app.get(load('prisma/prisma.service','PrismaService'));
 const publications=app.get(load('master-data/ai-reference-publication.service','AiReferencePublicationService'));
 const library=app.get(load('ai-governance/ai-risk-library.service','AiRiskLibraryService'));
-const manifestPath=resolve(root,'storage/ai-preview/demo-manifest.json');
+const manifestPath = config.manifestPath;
 const manifest=existsSync(manifestPath)?JSON.parse(readFileSync(manifestPath,'utf8')):null;
 if(!manifest||manifest.demoOnly!==true||manifest.database!==connection.pathname.slice(1))throw Error('Run the local AI demonstration installer before importing its risk library');
 for(const actor of ['officer','ethics','custodian'])if(!manifest.actors?.[actor])throw Error(`Local demonstration actor is missing: ${actor}`);

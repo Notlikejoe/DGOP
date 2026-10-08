@@ -236,7 +236,8 @@ function makeService(overrides: Record<string, any> = {}) {
     },
     $transaction: async (fn: any) => fn(prisma),
   };
-  const audit = { log: async (entry: any) => data.audit.push(entry) };
+  const audit = { log: async (entry: any) => data.audit.push(entry),
+      logRequired: async (entry: any) => data.audit.push(entry) };
   const scope = { resolve: async () => data.scope };
   const workflow = {
     openRoutedCase: async (input: any) => {
@@ -446,7 +447,6 @@ test('saveAssessment: completed assessment creates approval tasks and ODIAO work
     status: OpenDataCandidateStatus.assessment,
     ownerPersonId: 'owner-1',
     stewardPersonId: 'steward-1',
-    odiaoReviewerPerson: { userId: 'user-odiao' },
     personalDataAssessment: OpenDataPersonalDataAssessment.aggregated,
     publicationValueScore: 90,
     publicationFrequency: OpenDataPublicationFrequency.monthly,
@@ -454,6 +454,7 @@ test('saveAssessment: completed assessment creates approval tasks and ODIAO work
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     publishedAt: null,
     nextReviewAt: null,
   };
@@ -499,6 +500,7 @@ test('updateStatus: manual approval is blocked until all assessment approvals ar
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     publishedAt: null,
     nextReviewAt: null,
   };
@@ -540,6 +542,7 @@ test('updateApproval: all approved steps move candidate to approved', async () =
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     publishedAt: null,
     nextReviewAt: null,
   };
@@ -562,7 +565,7 @@ test('updateApproval: all approved steps move candidate to approved', async () =
     reviewItemsJson: [],
   });
   await service.updateApproval(
-    ['system_admin'],
+    ['od_officer'],
     candidate.id,
     'approval-6',
     { decision: OpenDataApprovalDecision.approved, note: 'Approved.' },
@@ -593,6 +596,7 @@ test('updateApproval: rejects users without authority for the approval step', as
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     publishedAt: null,
     nextReviewAt: null,
   };
@@ -626,6 +630,7 @@ test('updateApproval: missing OD NDI spec fails closed instead of skipping evide
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     publishedAt: null,
     nextReviewAt: null,
   };
@@ -650,10 +655,10 @@ test('updateApproval: missing OD NDI spec fails closed instead of skipping evide
   await assert.rejects(
     () =>
       service.updateApproval(
-        ['system_admin'],
+        ['od_officer'],
         candidate.id,
         'approval-nospec-6',
-        { decision: OpenDataApprovalDecision.approved },
+        { decision: OpenDataApprovalDecision.approved, note: 'Independent approval assessment.' },
         'odiao@dgop.local',
       ),
     /Required Open Data NDI specification/,
@@ -675,6 +680,7 @@ test('publish: creates portal sync record and moves candidate to published', asy
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     portalUrl: null,
     publishedAt: null,
     nextReviewAt: null,
@@ -690,6 +696,8 @@ test('publish: creates portal sync record and moves candidate to published', asy
     approvals,
     assessments: [{ status: 'completed', resultSignal: 'ready' }],
   });
+  data.asset = { ...asset, classificationId: 'class-public', classification: { ...asset.classification, rank: 1 } };
+  data.candidate.eligibilityJson = (await (service as any).buildEligibility(candidate.assetId, candidate)).eligibilityJson;
   await service.publish(
     ['system_admin'],
     candidate.id,
@@ -720,6 +728,7 @@ test('createReview and recordUsage keep published data governed and measured', a
     eligibilityScore: 100,
     eligibilityJson: { overallSignal: 'ready' },
     createdBy: 'owner@dgop.local',
+    odiaoReviewerPerson: { email: 'odiao@dgop.local', userId: 'user-odiao' },
     publishedAt: new Date(),
     nextReviewAt: null,
   };

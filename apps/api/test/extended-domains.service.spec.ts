@@ -29,6 +29,10 @@ function sequenceDelegate() {
   return { upsert: async () => ({ value: ++value }) };
 }
 
+function transactionalFixture<T extends object>(client: T) {
+  return Object.assign(client, { $transaction: async (write: (tx: T) => Promise<unknown>) => write(client) });
+}
+
 test('match scoring defaults guide the five-step resolution flow', () => {
   assert.equal(clampScore(121), 100);
   assert.equal(clampScore(-10), 0);
@@ -245,7 +249,7 @@ test('runMdmMatching creates governed candidates with engine explanations', asyn
     subjects: [{ dataSubject: different ? { code: 'EMPLOYEE', nameEn: 'Employee', nameAr: 'Employee' } : { code: 'CUSTOMER', nameEn: 'Customer', nameAr: 'Customer' } }],
   });
   const service = new ExtendedDomainsService(
-    {
+    transactionalFixture({
       businessSequence: sequenceDelegate(),
       dataAsset: {
         findMany: async () => {
@@ -258,17 +262,19 @@ test('runMdmMatching creates governed candidates with engine explanations', asyn
               ];
         },
       },
+      mdmMatchRule: { findMany: async () => [] },
       mdmMatchCandidate: {
         findMany: async () => [],
+        findFirst: async () => null,
         findUnique: async () => null,
-        upsert: async (args: any) => {
-          persisted = args.create;
-          return { id: 'match-1', ...args.create };
+        create: async (args: any) => {
+          persisted = args.data;
+          return { id: 'match-1', ...args.data };
         },
       },
-    } as never,
+    }) as never,
     {
-      log: async (entry: any) => {
+      logRequired: async (entry: any) => {
         auditMetadata = entry.metadata;
       },
     } as never,
@@ -313,22 +319,23 @@ test('runMdmMatching skips existing reverse-direction match candidates', async (
   });
   let assetQuery = 0;
   const service = new ExtendedDomainsService(
-    {
+    transactionalFixture({
       dataAsset: {
         findMany: async () => {
           assetQuery++;
           return assetQuery === 1 ? [assetRow('asset-1')] : [assetRow('asset-2')];
         },
       },
+      mdmMatchRule: { findMany: async () => [] },
       mdmMatchCandidate: {
         findMany: async () => [{ sourceAssetId: 'asset-2', candidateAssetId: 'asset-1' }],
-        upsert: async () => {
+        create: async () => {
           persisted = true;
           return {};
         },
       },
-    } as never,
-    { log: async () => {} } as never,
+    }) as never,
+    { logRequired: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
 
@@ -348,6 +355,7 @@ test('MDM match creators cannot make their own final resolution decision', async
   let updated = false;
   const service = new ExtendedDomainsService(
     {
+      mdmMatchRule: { findMany: async () => [] },
       mdmMatchCandidate: {
         findFirst: async () => ({ id: 'match-1', createdBy: 'creator@dgop.local' }),
         update: async () => {

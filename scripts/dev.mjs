@@ -1,3 +1,5 @@
+import { loadEnvironment, applyEnvironment } from './runtime-env.mjs';
+import { runtimeCommand } from './node-runtime.mjs';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -7,34 +9,15 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const children = [];
 
-function loadRootEnv() {
-  const env = { ...process.env };
-  const envPath = join(root, '.env');
-  if (!existsSync(envPath)) return env;
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const index = line.indexOf('=');
-    if (index <= 0) continue;
-    const key = line.slice(0, index).trim();
-    let value = line.slice(index + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!env[key]) env[key] = value;
-  }
-  return env;
-}
+function loadRootEnv() { return loadEnvironment(root); }
 
 function start(label, args, env) {
-  const child = spawn(npmCmd, args, {
+  const selected = runtimeCommand(root, npmCmd, args, env);
+  const child = spawn(selected.command, selected.args, {
     cwd: root,
-    env,
+    env: selected.env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: false,
   });
   children.push(child);
   child.on('exit', (code, signal) => {

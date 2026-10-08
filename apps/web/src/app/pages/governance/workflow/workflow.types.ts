@@ -47,6 +47,7 @@ export interface CaseEvent {
 }
 
 export interface CaseRow {
+  createdBy?: string;
   aiGovernance?: { effectiveSeverityCode?: string | null; overrideEventId?: string | null; severityCode: string | null; assessmentKind: string | null; operationalStatusCode: string | null };
   id: string;
   code: string;

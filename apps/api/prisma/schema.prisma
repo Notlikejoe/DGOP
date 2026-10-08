@@ -1043,6 +1043,7 @@ model WorkflowCase {
 /// A unit of work inside a workflow case, assigned to a user account.
 model WorkflowTask {
   aiStrategyEvents AiRiskStrategyEvent[]
+  aiSeverityEvents AiRiskSeverityEvent[]
   reassessmentTrigger AiReassessmentTrigger?
   aiAnnualReview AiAnnualReview?
   reassessment AiRiskReassessment?
@@ -2671,6 +2672,17 @@ model PrivacyGate {
 }
 
 model PrivacyDsrRequest {
+  extensionDueAt DateTime?
+  extensionReason String?
+  extensionCommunicatedAt DateTime?
+  extensionCommunicationReference String?
+  extensionRecordedBy String?
+  version Int @default(1)
+  receivedAt DateTime @default(now())
+  identityVerifiedAt DateTime?
+  identityVerifiedBy String?
+  identityEvidenceReference String?
+  completionEvidenceReference String?
   id                String           @id @default(uuid())
   requestNumber     String           @unique
   requesterName     String
@@ -2707,6 +2719,15 @@ model PrivacyDsrRequest {
 }
 
 model PrivacyBreach {
+  version Int @default(1)
+  regulatorNotificationRequired Boolean?
+  subjectNotificationRequired Boolean?
+  notificationDecisionReason String?
+  notificationDecisionAt DateTime?
+  notificationDecisionBy String?
+  regulatorNotificationEvidenceReference String?
+  subjectNotifiedAt DateTime?
+  subjectNotificationEvidenceReference String?
   id                String         @id @default(uuid())
   code              String         @unique
   title             String
@@ -3362,6 +3383,8 @@ model AccessPrincipalDirectory {
 
 /// Append-only connector handoff ledger for external access enforcement.
 model AccessEnforcementAttempt {
+  requestVersion Int?
+  completionVersion Int?
   id             String      @id @default(uuid())
   grantId        String
   idempotencyKey String      @unique
@@ -4976,7 +4999,7 @@ model AiUseCase {
   operationalStatusCode String?
   operationalStrategyEventId String?
   operationalDecisionId String?
-  operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict)
+  operationalDecision AiRiskAssessmentDecision? @relation(fields: [operationalDecisionId], references: [id], onDelete: Restrict, map: "ai_use_case_operational_decision_fk")
   id                 String                 @id @default(uuid())
   useCaseRef         String?                @unique
   workflowCaseId     String?                @unique
@@ -5690,12 +5713,13 @@ model AiRiskSeverityEvent {
  evidenceIds Json
  clientIp String?
  createdAt DateTime @default(now())
- risk AiRisk @relation(fields:[riskId],references:[id],onDelete:Restrict)
- assessment AiAssessmentRound @relation(fields:[assessmentId],references:[id],onDelete:Restrict)
- relatedEvent AiRiskSeverityEvent? @relation("AiSeverityBasis",fields:[relatedEventId],references:[id],onDelete:Restrict)
+ risk AiRisk @relation(fields:[riskId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ assessment AiAssessmentRound @relation(fields:[assessmentId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ relatedEvent AiRiskSeverityEvent? @relation("AiSeverityBasis",fields:[relatedEventId],references:[id],onDelete:Restrict,onUpdate:NoAction)
+ task WorkflowTask? @relation(fields:[taskId],references:[id],onDelete:Restrict,onUpdate:NoAction)
  outcomes AiRiskSeverityEvent[] @relation("AiSeverityBasis")
  @@unique([riskId,round])
- @@index([assessmentId,round])
+ @@index([assessmentId,round],map:"ai_risk_severity_events_assessmentid_round_idx")
  @@map("ai_risk_severity_events")
 }
 

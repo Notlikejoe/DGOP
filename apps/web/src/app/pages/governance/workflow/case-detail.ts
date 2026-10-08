@@ -163,11 +163,15 @@ export class WorkflowCasePage implements OnInit {
     return ['closed', 'implemented', 'rejected', 'cancelled', 'failed'].includes(status);
   }
 
-  /** A task can be decided by its assignee or an admin while still open. */
+  /** Decisions follow actual business assignment and proposer independence. */
   protected canDecide(task: Task): boolean {
     if (this.governedAi) return false;
     if (task.status === 'completed' || task.status === 'cancelled') return false;
-    return this.isAdmin || task.assigneeUserId === this.auth.currentUser()?.id;
+    const user=this.auth.currentUser(),roles=user?.roles.map(role=>role.code)??[],role=task.assigneeRoleCode??task.templateStage?.assigneeRoleCode;
+    if(!user||roles.includes('auditor')||!roles.some(code=>code!=='system_admin'))return false;
+    if(role&&(role==='system_admin'||!roles.includes(role)))return false;
+    if((task.type==='approval'||['owner_assignment_approval','steward_assignment_approval'].includes(this.wfCase()?.type??''))&&this.wfCase()?.createdBy===user.email)return false;
+    return this.auth.hasPermission('workflow_tasks.edit')&&(task.assigneeUserId===user.id||!task.assigneeUserId&&!!role&&roles.includes(role));
   }
 
   protected submitCase(): void {

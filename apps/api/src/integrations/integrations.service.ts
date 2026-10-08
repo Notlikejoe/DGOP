@@ -875,11 +875,13 @@ export class IntegrationsService implements OnModuleInit {
       where: { dedupeKey },
       select: eventSafeSelect,
     });
-    if (existing) return existing;
+    if (existing) return existing.status === IntegrationEventStatus.queued ? this.processIntegrationEvent(existing.id, 'webhook') : existing;
 
-    const event = await this.prisma.integrationEvent.create({
+    const code = await this.nextEventCode();
+    const event = await this.prisma.$transaction(async (tx) => {
+    const created = await tx.integrationEvent.create({
       data: {
-        code: await this.nextEventCode(),
+        code,
         dedupeKey,
         connectorId: connector.id,
         adapterType: adapterType as IntegrationAdapterType,
@@ -889,18 +891,27 @@ export class IntegrationsService implements OnModuleInit {
         entityType: dto.entityType ?? null,
         entityId: dto.entityId ?? null,
         status: IntegrationEventStatus.queued,
+        maxAttempts: 3,
         severity: normalization.normalized.severity as IntegrationImportErrorSeverity,
         payloadJson: payload as Prisma.InputJsonValue,
         actor: 'webhook',
       },
     });
-    await this.audit.log({
+    await this.audit.logRequired({
       actor: 'webhook',
       action: 'integration.webhook.receive',
       entityType: 'integration_event',
-      entityId: event.id,
+      entityId: created.id,
       metadata: { connectorCode: connector.code, eventType, adapterType },
+    }, tx);
+    return created;
+    }).catch(async (error) => {
+      if (error?.code !== 'P2002') throw error;
+      const duplicate = await this.prisma.integrationEvent.findUnique({ where: { dedupeKey }, select: eventSafeSelect });
+      if (!duplicate) throw error;
+      return duplicate;
     });
+    if (event.status !== IntegrationEventStatus.queued) return event;
     return this.processIntegrationEvent(event.id, 'webhook');
   }
 
@@ -911,6 +922,7 @@ export class IntegrationsService implements OnModuleInit {
     });
     if (!event) throw new NotFoundException('integration event not found');
     const retryableStatuses: IntegrationEventStatus[] = [
+      IntegrationEventStatus.queued,
       IntegrationEventStatus.failed,
       IntegrationEventStatus.retry_scheduled,
       IntegrationEventStatus.dead_letter,
@@ -1309,17 +1321,19 @@ export class IntegrationsService implements OnModuleInit {
 
   private async processIntegrationEvent(id: string, actor: string, retryReason?: string | null) {
     const processed = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM integration_events WHERE id = ${id} FOR UPDATE`;
       const event = await tx.integrationEvent.findUnique({
         where: { id },
         include: { connector: { select: { id: true, code: true, type: true, configJson: true } } },
       });
       if (!event) throw new NotFoundException('integration event not found');
+      if (event.status === IntegrationEventStatus.succeeded || event.attempts >= Math.min(event.maxAttempts, 3)) return tx.integrationEvent.findUniqueOrThrow({ where: { id }, select: eventSafeSelect });
       const adapterType = event.adapterType as IntegrationAdapterKey;
       const normalization = normalizeIntegrationEventPayload(adapterType, event.eventType, event.payloadJson);
       const next = nextIntegrationEventStatus({
         accepted: normalization.accepted,
         currentAttempts: event.attempts,
-        maxAttempts: event.maxAttempts,
+        maxAttempts: Math.min(event.maxAttempts, 3),
       });
       const now = new Date();
       const lastError = normalization.accepted
@@ -1407,25 +1421,24 @@ export class IntegrationsService implements OnModuleInit {
           },
         });
       }
-      return updated;
-    });
-
-    await this.audit.log({
+      await this.audit.logRequired({
       actor,
       action:
-        processed.status === IntegrationEventStatus.succeeded
+        updated.status === IntegrationEventStatus.succeeded
           ? 'integration.event.process'
-          : processed.status === IntegrationEventStatus.dead_letter
+          : updated.status === IntegrationEventStatus.dead_letter
             ? 'integration.event.dead_letter'
             : 'integration.event.retry_scheduled',
       entityType: 'integration_event',
-      entityId: processed.id,
+      entityId: updated.id,
       metadata: {
-        code: processed.code,
-        connectorCode: processed.connector?.code ?? null,
-        status: processed.status,
-        attempts: processed.attempts,
+        code: updated.code,
+        connectorCode: updated.connector?.code ?? null,
+        status: updated.status,
+        attempts: updated.attempts,
       },
+      }, tx);
+      return updated;
     });
     return processed;
   }

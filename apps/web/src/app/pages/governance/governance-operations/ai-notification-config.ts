@@ -31,7 +31,7 @@ interface Template {id:string;code:string;name:string;sourceType:string;titleTem
 export class AiNotificationConfig implements OnInit {
  private readonly http=inject(HttpClient);private readonly auth=inject(AuthService);protected readonly i18n=inject(I18nService);private readonly toast=inject(ToastService);
  protected readonly rows=signal<Template[]>([]);protected readonly state=signal<'loading'|'ok'|'error'>('loading');protected readonly draft=signal<Template|null>(null);protected readonly working=signal(false);
- protected canConfigure(){return this.auth.hasAnyRole(['dmo_admin'])&&!this.auth.hasAnyRole(['auditor'])&&this.auth.hasPermission('governance_operations.edit');}
+ protected canConfigure(){const roles=this.auth.currentUser()?.roles.map(role=>role.code)??[];return roles.includes('dmo_admin')&&!roles.includes('auditor')&&this.auth.hasPermission('governance_operations.edit');}
  protected t(key:string){return this.i18n.t(key);}
  protected subject(row:Template){return row.titleTemplate.split('\n')[this.i18n.lang()==='ar'?1:0]??row.titleTemplate;}
  ngOnInit(){if(this.canConfigure())void this.load();}

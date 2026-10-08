@@ -1,3 +1,4 @@
+import { environmentFile } from './runtime-env.mjs';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -5,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const envPath = join(root, '.env');
+const envPath = environmentFile(root);
 const localOnly = process.argv.includes('--local');
 
 const unsafeSecrets = new Set([

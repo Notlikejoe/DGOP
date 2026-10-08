@@ -80,7 +80,10 @@ export async function testPhase3D(db: PrismaClient, f: { riskId: string; riskOwn
   await assert.rejects(service.context(f.privacyId, f.riskId), /not found/);
   await db.roleDataScope.delete({ where: { id: excluded.id } });
   await db.userRole.create({ data: { userId: f.auditorId, roleId: privacyRole.id } });
-  await assert.rejects(service.decide(f.auditorId, f.riskId, privacyTask.id, decision(version)), /GEN-30/);
+  const decisionsBeforeAuditor=await db.aiRiskResponseDecision.count();
+  await assert.rejects(service.decide(f.auditorId, f.riskId, privacyTask.id, decision(version)), /explicit eligible role grant/);
+  assert.equal(await db.aiRiskResponseDecision.count(),decisionsBeforeAuditor,'An Auditor with a real consultation role cannot record a business decision');
+  assert.equal((await db.aiRisk.findUniqueOrThrow({where:{id:f.riskId}})).version,version);
   await db.userRole.delete({ where: { userId_roleId: { userId: f.auditorId, roleId: privacyRole.id } } });
   await assert.rejects(failed.decide(f.privacyId, f.riskId, privacyTask.id, decision(version)), /Injected response audit failure/);
   await service.decide(f.privacyId, f.riskId, privacyTask.id, decision(version++, 'return'));

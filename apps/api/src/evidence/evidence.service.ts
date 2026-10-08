@@ -13,11 +13,14 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth.types';
+import { isManagedDemoProfile } from '../common/demo-profile';
+import { claimGovernanceWrite } from '../common/governance-write';
 import { CreateEvidenceDto, EvidenceStatus, ReviewEvidenceDto } from './evidence.dto';
 import {
   EvidenceEffectiveStatus,
   effectiveEvidenceStatus,
   isCurrentApproved,
+  isOperationalEvidence,
 } from './evidence-status';
 
 /** Per-specification evidence rollup consumed by the scoring engine. */
@@ -160,15 +163,16 @@ export class EvidenceService {
    */
   async rollupForSpecs(
     specIds: string[],
-    options: { authoritativeOnly?: boolean } = { authoritativeOnly: true },
+    options: { authoritativeOnly?: boolean; syntheticScenario?: boolean; now?: Date } = { authoritativeOnly: true },
   ): Promise<Map<string, SpecEvidenceRollup>> {
     const result = new Map<string, SpecEvidenceRollup>();
+    if (options.syntheticScenario && !isManagedDemoProfile()) throw new NotFoundException('Demo scenario is unavailable');
     if (specIds.length === 0) return result;
     const rows = await this.prisma.ndiEvidence.findMany({
       where: {
         specId: { in: specIds },
         deletedAt: null,
-        ...(options.authoritativeOnly === false ? {} : { provenance: 'operational' }),
+        provenance: options.syntheticScenario ? 'seeded_uat' : 'operational',
       },
       select: {
         specId: true,
@@ -176,9 +180,10 @@ export class EvidenceService {
         expiryDate: true,
         submittedAt: true,
         reviewedAt: true,
+        provenance: true,
       },
     });
-    const now = new Date();
+    const now = options.now ?? new Date();
     for (const r of rows) {
       let roll = result.get(r.specId);
       if (!roll) {
@@ -195,7 +200,7 @@ export class EvidenceService {
       const eff = effectiveEvidenceStatus(r, now);
       roll.total += 1;
       roll.counts[eff] += 1;
-      if (isCurrentApproved(r, now)) {
+      if (options.syntheticScenario ? isCurrentApproved(r, now) : isOperationalEvidence(r, now)) {
         roll.hasCurrentApproved = true;
         if (r.reviewedAt && (!roll.latestApprovedAt || r.reviewedAt > roll.latestApprovedAt)) {
           roll.latestApprovedAt = r.reviewedAt;
@@ -264,7 +269,10 @@ export class EvidenceService {
 
   private async requireReviewAccess(id: string, actor: AuthUser) {
     const evidence = await this.get(id, actor);
-    if (this.hasBroadEvidenceAccess(actor)) return evidence;
+    if (evidence.submittedBy === actor.email) throw new ForbiddenException('You cannot review evidence you submitted');
+    if (actor.roles.includes('auditor')) throw new ForbiddenException('Auditor access is read only');
+    if (actor.roles.includes('dmo_admin')) return evidence;
+    if (!actor.roles.includes('ndi_reviewer')) throw new ForbiddenException('An eligible assigned evidence reviewer role is required');
     const personId = await this.actorPersonId(actor);
     if (personId && evidence.spec?.ownerPersonId === personId) return evidence;
     throw new ForbiddenException('Only an assigned evidence reviewer can review this evidence');
@@ -289,12 +297,14 @@ export class EvidenceService {
 
     let evidence;
     try {
-      evidence = await this.prisma.ndiEvidence.create({
+      evidence = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.ndiEvidence.create({
         data: {
           specId: dto.specId,
           title: dto.title,
           descriptionEn: dto.descriptionEn ?? null,
           status: submitNow ? 'submitted' : 'draft',
+          provenance: isManagedDemoProfile() ? 'seeded_uat' : 'operational',
           fileName: storedName,
           originalName: file.originalname,
           mimeType: file.mimetype,
@@ -305,18 +315,31 @@ export class EvidenceService {
           expiryDate,
         },
       });
+      await this.audit.logRequired({
+        actor: this.actorEmail(actor),
+        action: submitNow ? 'evidence.submit' : 'evidence.create',
+        entityType: 'evidence',
+        entityId: created.id,
+        metadata: { specId: dto.specId, sha256, originalName: file.originalname },
+      }, tx);
+      return created;
+      });
     } catch (error) {
       await unlink(storedPath).catch(() => undefined);
       throw error;
     }
-    await this.audit.log({
-      actor: this.actorEmail(actor),
-      action: submitNow ? 'evidence.submit' : 'evidence.create',
-      entityType: 'evidence',
-      entityId: evidence.id,
-      metadata: { specId: dto.specId, sha256, originalName: file.originalname },
-    });
     return this.decorate(evidence);
+  }
+
+  private async change(e: { id: string; status: string; updatedAt: Date }, data: Prisma.NdiEvidenceUpdateInput,
+    actor: AuthUser, action: string, metadata?: Record<string, unknown>) {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await claimGovernanceWrite(() => tx.ndiEvidence.update({
+        where: { id: e.id, status: e.status as EvidenceStatus, updatedAt: e.updatedAt, deletedAt: null }, data,
+      }));
+      await this.audit.logRequired({ actor: actor.email, action, entityType: 'evidence', entityId: e.id, metadata }, tx);
+      return updated;
+    });
   }
 
   async submit(id: string, actor: AuthUser) {
@@ -325,16 +348,7 @@ export class EvidenceService {
     if (e.status !== 'draft' && e.status !== 'rejected') {
       throw new BadRequestException('Only draft or rejected evidence can be submitted');
     }
-    const updated = await this.prisma.ndiEvidence.update({
-      where: { id },
-      data: { status: 'submitted', submittedBy: this.actorEmail(actor), submittedAt: new Date() },
-    });
-    await this.audit.log({
-      actor: this.actorEmail(actor),
-      action: 'evidence.submit',
-      entityType: 'evidence',
-      entityId: id,
-    });
+    const updated = await this.change(e, { status: 'submitted', submittedBy: this.actorEmail(actor), submittedAt: new Date() }, actor, 'evidence.submit');
     return this.decorate(updated);
   }
 
@@ -348,22 +362,12 @@ export class EvidenceService {
       throw new ForbiddenException('You cannot review evidence you submitted');
     }
     const status: EvidenceStatus = dto.decision === 'approve' ? 'approved' : 'rejected';
-    const updated = await this.prisma.ndiEvidence.update({
-      where: { id },
-      data: {
+    const updated = await this.change(e, {
         status,
         reviewedBy: this.actorEmail(actor),
         reviewedAt: new Date(),
         reviewComment: dto.comment ?? null,
-      },
-    });
-    await this.audit.log({
-      actor: this.actorEmail(actor),
-      action: `evidence.${dto.decision}`,
-      entityType: 'evidence',
-      entityId: id,
-      metadata: { comment: dto.comment ?? null },
-    });
+      }, actor, `evidence.${dto.decision}`, { comment: dto.comment ?? null });
     return this.decorate(updated);
   }
 
@@ -372,35 +376,16 @@ export class EvidenceService {
     if (e.status !== 'approved') {
       throw new BadRequestException('Only approved evidence can be revoked');
     }
-    const updated = await this.prisma.ndiEvidence.update({
-      where: { id },
-      data: { status: 'revoked', reviewedBy: this.actorEmail(actor), reviewedAt: new Date() },
-    });
-    await this.audit.log({
-      actor: this.actorEmail(actor),
-      action: 'evidence.revoke',
-      entityType: 'evidence',
-      entityId: id,
-    });
+    const updated = await this.change(e, { status: 'revoked', reviewedBy: this.actorEmail(actor), reviewedAt: new Date() }, actor, 'evidence.revoke');
     return this.decorate(updated);
   }
 
   async remove(id: string, actor: AuthUser) {
     const e = await this.get(id, actor);
     this.assertEvidenceOwnership(actor, e);
-    await this.prisma.ndiEvidence.update({ where: { id }, data: { deletedAt: new Date() } });
-    // Best-effort file cleanup; never fail the request on a missing file.
-    try {
-      await unlink(this.storagePath(e.fileName));
-    } catch {
-      /* ignore */
-    }
-    await this.audit.log({
-      actor: this.actorEmail(actor),
-      action: 'evidence.delete',
-      entityType: 'evidence',
-      entityId: id,
-    });
+    // Withdrawal excludes the record from credit while preserving its proof bytes
+    // for historical decisions, audit packs and retention/legal-hold review.
+    await this.change(e, { deletedAt: new Date() }, actor, 'evidence.delete', { fileRetained: true, sha256: e.sha256 });
     return { success: true };
   }
 

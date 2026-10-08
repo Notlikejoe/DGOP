@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   CaseStatus,
   FoiAppealStatus,
@@ -16,6 +16,7 @@ import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { parsePageParams, toPaged } from '../common/pagination';
 import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
+import { claimGovernanceWrite } from '../common/governance-write';
 import {
   CreateFoiAppealDto,
   CreateFoiDisclosureDto,
@@ -64,6 +65,12 @@ export class FoiService {
     private readonly scope: ScopeService,
     private readonly workflow?: WorkflowService,
   ) {}
+
+  private async assertAssignedOfficer(personId: string | null, actor: string): Promise<void> {
+    if (!personId) throw new ForbiddenException('Assign an independent officer before making this decision');
+    const person = await this.prisma.person.findFirst({ where: { id: personId, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
+    if (!person) throw new ForbiddenException('Only the assigned independent officer can make this decision');
+  }
 
   private assetScopeWhere(scope: EffectiveScope): Prisma.DataAssetWhereInput {
     const where: Prisma.DataAssetWhereInput = { deletedAt: null };
@@ -350,7 +357,9 @@ export class FoiService {
   }
 
   async update(roleCodes: string[], id: string, dto: UpdateFoiRequestDto, actor: string) {
-    await this.requireRequest(roleCodes, id);
+    const current = await this.requireRequest(roleCodes, id);
+    if (dto.status !== undefined) throw new BadRequestException('FOI status is controlled by review, decision, disclosure and appeal actions');
+    if (!['registered', 'under_review', 'extended'].includes(current.status)) throw new BadRequestException('A decided FOI request cannot be edited; use the appeal process');
     const asset = await this.assertAssetVisible(roleCodes, dto.assetId);
     const dataDomainId = dto.dataDomainId ?? asset?.domainId;
     await Promise.all([
@@ -378,19 +387,37 @@ export class FoiService {
       ...(dataDomainId !== undefined ? { dataDomain: dataDomainId ? { connect: { id: dataDomainId } } : { disconnect: true } } : {}),
       ...(dto.classificationId !== undefined || asset?.classificationId !== undefined ? { classification: (dto.classificationId ?? asset?.classificationId) ? { connect: { id: dto.classificationId ?? asset?.classificationId ?? '' } } : { disconnect: true } } : {}),
     };
-    await this.prisma.foiRequest.update({ where: { id }, data });
-    await this.audit.log({ actor, action: 'foi_request.update', entityType: 'foi_request', entityId: id });
+    await this.prisma.$transaction(async (tx) => {
+      await claimGovernanceWrite(() => tx.foiRequest.update({ where: { id, updatedAt: current.updatedAt, status: current.status }, data }));
+      // Changed scope/content invalidates review conclusions on the old request.
+      if (['assetId', 'dataDomainId', 'classificationId', 'subject', 'description'].some((key) => dto[key] !== undefined)) await tx.foiReview.updateMany({ where: { requestId: id }, data: { status: FoiReviewStatus.pending, completedAt: null } });
+      await this.audit.logRequired({ actor, action: 'foi_request.update', entityType: 'foi_request', entityId: id }, tx);
+    });
     return this.get(roleCodes, id);
   }
 
   async saveReview(roleCodes: string[], id: string, dto: SaveFoiReviewDto, actor: string) {
-    await this.requireRequest(roleCodes, id);
+    const current = await this.requireRequest(roleCodes, id);
+    if (!['registered', 'under_review', 'extended'].includes(current.status)) throw new BadRequestException('Only an open FOI request can be reviewed');
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
-    await this.prisma.foiReview.upsert({
+    const previous = current.reviews.find((review) => review.reviewType === dto.reviewType);
+    const status = dto.status ?? FoiReviewStatus.completed;
+    if (status !== FoiReviewStatus.pending) {
+      if (current.createdBy === actor) throw new ForbiddenException('FOI creators cannot review their own request');
+      const eligible: Record<string, readonly string[]> = { classification: ['data_owner', 'foi_officer'], privacy: ['privacy_officer'], legal: ['dmo_admin', 'foi_officer'] };
+      if (!roleCodes.some((role) => eligible[dto.reviewType]?.includes(role))) throw new ForbiddenException('An eligible business reviewer role is required');
+      if (!previous?.reviewerPersonId || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== previous.reviewerPersonId)) throw new BadRequestException('Assign the FOI reviewer before making a decision');
+      await this.assertAssignedOfficer(previous.reviewerPersonId, actor);
+      if (!dto.note?.trim() || !dto.evidenceSummary?.trim()) throw new BadRequestException('A review conclusion and supporting evidence summary are required');
+      if (previous.status !== FoiReviewStatus.pending) throw new BadRequestException('The review already has a decision');
+    }
+    await this.prisma.$transaction(async (tx) => {
+    await claimGovernanceWrite(() => tx.foiRequest.update({ where: { id, updatedAt: current.updatedAt, status: current.status }, data: { status: FoiRequestStatus.under_review, updatedBy: actor } }));
+    await tx.foiReview.upsert({
       where: { requestId_reviewType: { requestId: id, reviewType: dto.reviewType } },
       update: {
         status: dto.status ?? FoiReviewStatus.completed,
-        reviewerPersonId: dto.reviewerPersonId ?? null,
+        reviewerPersonId: dto.reviewerPersonId === undefined ? undefined : dto.reviewerPersonId,
         note: dto.note ?? null,
         evidenceSummary: dto.evidenceSummary ?? null,
         completedAt: dto.status === FoiReviewStatus.pending ? null : new Date(),
@@ -406,8 +433,8 @@ export class FoiService {
         createdBy: actor,
       },
     });
-    await this.prisma.foiRequest.update({ where: { id }, data: { status: FoiRequestStatus.under_review, updatedBy: actor } });
-    await this.audit.log({ actor, action: 'foi_review.save', entityType: 'foi_request', entityId: id, metadata: { reviewType: dto.reviewType } });
+    await this.audit.logRequired({ actor, action: 'foi_review.save', entityType: 'foi_request', entityId: id, metadata: { reviewType: dto.reviewType } }, tx);
+    });
     return this.get(roleCodes, id);
   }
 
@@ -430,10 +457,19 @@ export class FoiService {
 
   async saveDecision(roleCodes: string[], id: string, dto: SaveFoiDecisionDto, actor: string) {
     const current = await this.requireRequest(roleCodes, id);
+    if (current.createdBy === actor) throw new ForbiddenException('FOI creators cannot decide their own request');
+    if (!roleCodes.includes('foi_officer')) throw new ForbiddenException('An assigned FOI officer business role is required');
+    await this.assertAssignedOfficer(current.assignedOfficerPersonId, actor);
+    if (!['registered', 'under_review', 'extended'].includes(current.status)) throw new BadRequestException('Only an open FOI request can receive a final decision');
+    if (!current.identityValidated || !current.contactValidated) throw new BadRequestException('Validate requester identity and contact before deciding disclosure');
+    if (dto.outcome !== FoiDecisionOutcome.extended && (current.reviews.length !== 3 || current.reviews.some((review) => review.status !== FoiReviewStatus.completed))) throw new BadRequestException('Complete classification, privacy and legal reviews before making a final decision');
+    if (!dto.summary?.trim() || !dto.justification?.trim()) throw new BadRequestException('A decision summary and justification are required');
     const extendedDueAt = dto.outcome === FoiDecisionOutcome.extended
       ? (dto.extendedDueAt ? new Date(dto.extendedDueAt) : addKsaBusinessDays(current.dueAt, 10))
       : null;
+    if (extendedDueAt && (current.extendedDueAt || extendedDueAt <= current.dueAt || extendedDueAt > addKsaBusinessDays(current.dueAt, 10))) throw new BadRequestException('A single justified extension may add at most ten business days');
     await this.prisma.$transaction(async (tx) => {
+      await claimGovernanceWrite(() => tx.foiRequest.update({ where: { id, status: current.status, updatedAt: current.updatedAt }, data: { updatedBy: actor } }));
       await tx.foiDecision.create({
         data: {
           requestId: id,
@@ -468,7 +504,7 @@ export class FoiService {
           comment: dto.outcome,
         }, tx);
       }
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'foi_decision.save',
         entityType: 'foi_request',
@@ -484,12 +520,19 @@ export class FoiService {
     if (!canDiscloseFoi(current.status)) {
       throw new BadRequestException('FOI request must be approved or partially approved before disclosure');
     }
-    const decision = current.decisions.find((row) => row.outcome === FoiDecisionOutcome.approved || row.outcome === FoiDecisionOutcome.partially_approved);
+    const decision = current.decisions[0];
+    if (!decision || ![FoiDecisionOutcome.approved, FoiDecisionOutcome.partially_approved].includes(decision.outcome as any) || decision.outcome !== current.decisionOutcome) throw new BadRequestException('Disclosure requires the latest recorded approval decision');
+    if (!current.identityValidated || !current.contactValidated) throw new BadRequestException('Validate the release recipient before disclosure');
+    if (!roleCodes.includes('foi_officer')) throw new ForbiddenException('An assigned FOI officer must record disclosure');
+    await this.assertAssignedOfficer(current.assignedOfficerPersonId, actor);
+    if (![current.requesterEmail, current.requesterPhone, current.requesterName].filter(Boolean).includes(dto.recipient)) throw new BadRequestException('The recipient must match the validated requester');
+    if (!dto.summary?.trim()) throw new BadRequestException('Document the approved release scope and delivery proof');
     await this.prisma.$transaction(async (tx) => {
+      await claimGovernanceWrite(() => tx.foiRequest.update({ where: { id, status: current.status, updatedAt: current.updatedAt, decisionOutcome: decision.outcome }, data: { updatedBy: actor } }));
       await tx.foiDisclosure.create({
         data: {
           requestId: id,
-          decisionId: decision?.id ?? null,
+          decisionId: decision.id,
           method: dto.method ?? 'secure_link',
           recipient: dto.recipient,
           recordUrl: dto.recordUrl ?? null,
@@ -510,7 +553,7 @@ export class FoiService {
           completeOpenTasks: true,
         }, tx);
       }
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'foi_disclosure.create',
         entityType: 'foi_request',
@@ -521,14 +564,18 @@ export class FoiService {
   }
 
   async createAppeal(roleCodes: string[], id: string, dto: CreateFoiAppealDto, actor: string) {
-    await this.requireRequest(roleCodes, id);
+    const request = await this.requireRequest(roleCodes, id);
+    if (!['approved', 'partially_approved', 'rejected', 'disclosed', 'closed'].includes(request.status) || !request.decisions.length) throw new BadRequestException('An appeal requires a recorded final decision');
+    if (dto.status !== undefined && dto.status !== FoiAppealStatus.submitted) throw new BadRequestException('New appeals must start as submitted');
+    if (!dto.reason?.trim()) throw new BadRequestException('Document the appeal grounds');
     await this.assertPerson(dto.assignedOfficerPersonId, 'Appeal officer');
     const appeal = await this.prisma.$transaction(async (tx) => {
+      await claimGovernanceWrite(() => tx.foiRequest.update({ where: { id, status: request.status, updatedAt: request.updatedAt }, data: { status: FoiRequestStatus.appealed, updatedBy: actor } }));
       const created = await tx.foiAppeal.create({
         data: {
           requestId: id,
           appealNumber: await this.nextAppealNumber(tx),
-          status: dto.status ?? FoiAppealStatus.submitted,
+          status: FoiAppealStatus.submitted,
           reason: dto.reason,
           dueAt: addKsaBusinessDays(new Date(), 10),
           assignedOfficerPersonId: dto.assignedOfficerPersonId ?? null,
@@ -539,7 +586,7 @@ export class FoiService {
       const workflowCaseId = await this.createWorkflowForAppeal(tx, created, roleCodes, actor);
       await tx.foiAppeal.update({ where: { id: created.id }, data: { workflowCaseId } });
       await tx.foiRequest.update({ where: { id }, data: { status: FoiRequestStatus.appealed, updatedBy: actor } });
-      await this.audit.log({
+      await this.audit.logRequired({
         actor,
         action: 'foi_appeal.create',
         entityType: 'foi_request',

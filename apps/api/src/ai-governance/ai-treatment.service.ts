@@ -56,7 +56,7 @@ export class AiTreatmentService {
         return { ...access, risk, response, task, active, actions };
     }
     private owner(gate: Awaited<ReturnType<AiTreatmentService['gate']>>) {
-        if ((!gate.permissions.has('airs.risk.assess') || !gate.actor.roles.includes('AI_RISK_OWNER') || gate.actor.roles.includes('auditor') || gate.actor.id !== gate.risk.owner?.userId))
+        if (!gate.actor.administratorOverride && (!gate.permissions.has('airs.risk.assess') || !gate.actor.roles.includes('AI_RISK_OWNER') || gate.actor.roles.includes('auditor') || gate.actor.id !== gate.risk.owner?.userId))
             throw new ForbiddenException('Only the assigned Risk Owner prepares the treatment plan');
     }
     private version(gate: {
@@ -109,13 +109,13 @@ export class AiTreatmentService {
     }
     async context(userId: string, id: string) {
         return this.prisma.$transaction(async (tx) => {
-            const gate = await this.gate(tx, userId, id), refs = await this.references(tx), administratorOverride = false, canEdit = gate.active && gate.task?.templateStage?.code === PREPARE
+            const gate = await this.gate(tx, userId, id), refs = await this.references(tx), administratorOverride = gate.actor.administratorOverride, canEdit = gate.active && gate.task?.templateStage?.code === PREPARE
                 && (administratorOverride || gate.permissions.has('airs.risk.assess') && gate.actor.roles.includes('AI_RISK_OWNER') && !gate.actor.roles.includes('auditor') && gate.actor.id === gate.risk.owner?.userId);
             const planId = jsonRecord(gate.task?.formDataJson)['planId'];
             const plan = typeof planId === 'string' ? await tx.aiTreatmentPlan.findFirst({ where: { id: planId, responseId: gate.response?.id }, include: { decision: true } }) : null;
             const facts = { planExecutorIds: gate.actions.map(action => action.assignee?.userId).filter((id): id is string => !!id), riskOwnerId: gate.risk.owner?.userId ?? undefined, useCaseOwnerId: gate.risk.useCase.owner?.userId ?? undefined, assessmentAssessorIds: plan ? [plan.submittedBy] : [] };
-            const eligible = gate.active && !!plan && !plan.decision && gate.actor.roles.includes('AI_GOVERNANCE_OFFICER') && gate.permissions.has('case.approve.airs')
-                && !aiDutyViolation(userId, gate.actor.roles, 'approve_plan', facts) && !aiDutyViolation(userId, gate.actor.roles, 'adopt_assessment', facts)
+            const eligible = gate.active && !!plan && !plan.decision && (administratorOverride || gate.actor.roles.includes('AI_GOVERNANCE_OFFICER') && gate.permissions.has('case.approve.airs')
+                && !aiDutyViolation(userId, gate.actor.roles, 'approve_plan', facts) && !aiDutyViolation(userId, gate.actor.roles, 'adopt_assessment', facts))
                 && (administratorOverride || !gate.task?.assigneeUserId || gate.task.assigneeUserId === userId);
             const referencesCurrent = gate.actions.every(action => { const pinned = jsonRecord(jsonRecord(action.planData)['referenceVersions']); return refs.lists.every(list => !!list.versionId && pinned[list.listCode] === list.versionId); });
             const approved = gate.response ? await tx.aiTreatmentPlan.findFirst({ where: { responseId: gate.response.id, decision: { is: { decision: 'approve' } } }, include: { decision: true }, orderBy: { round: 'desc' } }) : null;
@@ -124,8 +124,8 @@ export class AiTreatmentService {
                 const complete = latest?.completionPct === 100, overdue = !complete && !!task?.dueDate && task.dueDate < new Date();
                 const canExecute = !!approved && !!action.assignee && !!task && gate.response?.assessmentId === gate.risk.assessments[0]?.id && gate.risk.workflowCase?.status === 'under_review'
                     && gate.permissions.has('airs.risk.assess') && (administratorOverride || gate.actor.id === action.assignee?.userId) && action.assignee.isActive && !action.assignee.deletedAt
-                    && (administratorOverride || task?.assigneeUserId === userId) && ['pending', 'in_progress'].includes(task.status) && gate.actor.roles.includes(data['executorRole'] as string)
-                    && !aiDutyViolation(userId, gate.actor.roles, 'execute_plan', { planApproverIds: [approved.decision!.actorId] });
+                    && (administratorOverride || task?.assigneeUserId === userId) && ['pending', 'in_progress'].includes(task.status) && (administratorOverride || gate.actor.roles.includes(data['executorRole'] as string)
+                    && !aiDutyViolation(userId, gate.actor.roles, 'execute_plan', { planApproverIds: [approved.decision!.actorId] }));
                 return { ...action, completionPct: latest?.completionPct ?? 0, overdue, closureDate: latest?.completedAt ? new Date(latest.completedAt.getTime() + 3 * 3600000).toISOString().slice(0, 10) : null, canExecute: !!canExecute };
             });
             return { version: gate.risk.version, administratorOverride, canEdit: !!canEdit, canSubmit: !!canEdit && refs.ready && referencesCurrent && gate.actions.length > 0, canReview: !!eligible, canApprove: !!eligible && refs.ready && referencesCurrent, referencesCurrent, taskId: plan ? gate.task?.id : null, plan,
@@ -221,10 +221,10 @@ export class AiTreatmentService {
         return this.prisma.$transaction(async (tx) => {
             const gate = await this.gate(tx, userId, id);
             this.version(gate, dto.expectedVersion);
-            if (gate.task?.id !== taskId || gate.task.templateStage?.code !== APPROVE || (gate.task.assigneeUserId && gate.task.assigneeUserId !== userId))
+            if (gate.task?.id !== taskId || gate.task.templateStage?.code !== APPROVE || (!gate.actor.administratorOverride && gate.task.assigneeUserId && gate.task.assigneeUserId !== userId))
                 throw new ConflictException('Active plan approval task not found');
             const actor = await this.authorization.authorize(userId, 'case.approve.airs', tx, id);
-            if (!actor.roles.includes('AI_GOVERNANCE_OFFICER'))
+            if (!actor.administratorOverride && !actor.roles.includes('AI_GOVERNANCE_OFFICER'))
                 throw new ForbiddenException('Responsible AI Officer role is required');
             const planId = jsonRecord(gate.task.formDataJson)['planId'], plan = typeof planId === 'string' ? await tx.aiTreatmentPlan.findFirst({ where: { id: planId, responseId: gate.response!.id }, include: { decision: true } }) : null;
             if (!plan || plan.decision)
@@ -268,9 +268,9 @@ export class AiTreatmentService {
             if (!plan || plan.decision?.decision !== 'approve')
                 throw new ConflictException('An approved treatment plan is required');
             await this.authorization.enforceDuty(actor, 'execute_plan', { planApproverIds: [plan.decision.actorId] }, id);
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             if (!action.assignee || task.caseId !== gate.risk.workflowCase.id || !administratorOverride && (task.assigneeUserId !== userId || action.assignee.userId !== userId) || !action.assignee.isActive || action.assignee.deletedAt
-                || task.assigneeRoleCode !== data['executorRole'] || !actor.roles.includes(data['executorRole'] as string) || !EXECUTORS.includes(data['executorRole'] as string))
+                || task.assigneeRoleCode !== data['executorRole'] || !administratorOverride && !actor.roles.includes(data['executorRole'] as string) || !EXECUTORS.includes(data['executorRole'] as string))
                 throw new ForbiddenException('Only the active assigned executor with its original role can record progress');
             const stage = await tx.workflowTemplateStage.findFirst({ where: { id: task.templateStageId ?? '', templateId: gate.risk.workflowCase.templateId!, code: 'airs-treatment', isActive: true, template: { is: { code: AIRS_TEMPLATE_CODE, isActive: true, deletedAt: null } } } });
             const saved = (jsonRecord(plan.snapshot)['actions'] as Array<Record<string, unknown>> | undefined)?.find(value => value['id'] === actionId);

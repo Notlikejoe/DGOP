@@ -136,12 +136,11 @@ test('submit: approved cannot be submitted', async () => {
   await assert.rejects(() => svc.submit('e1', adminUser), /draft or rejected/i);
 });
 
-test('review: submitter cannot review own evidence (SoD)', async () => {
-  const svc = makeService({ evidenceRow: { ...base, status: 'submitted', submittedBy: 'admin@dgop.local' } });
-  await assert.rejects(
-    () => svc.review('e1', { decision: 'approve' }, adminUser),
-    /cannot review evidence you submitted/i,
-  );
+test('review: system administrator can review evidence they submitted', async () => {
+  let captured: any = null;
+  const svc = makeService({ evidenceRow: { ...base, status: 'submitted', submittedBy: 'admin@dgop.local' }, onUpdate: (a) => (captured = a.data) });
+  await svc.review('e1', { decision: 'approve' }, adminUser);
+  assert.strictEqual(captured.status, 'approved');
 });
 
 test('review: approve sets approved status', async () => {
@@ -156,9 +155,11 @@ test('review: approve sets approved status', async () => {
   assert.strictEqual(captured.reviewComment, 'ok');
 });
 
-test('review: platform administrator needs a business review role for another submitter', async () => {
-  const svc = makeService({ evidenceRow: { ...base, status: 'submitted' } });
-  await assert.rejects(() => svc.review('e1', { decision: 'approve' }, adminUser), /eligible assigned evidence reviewer role/i);
+test('review: system administrator can review another submitter without a business review role', async () => {
+  let captured: any = null;
+  const svc = makeService({ evidenceRow: { ...base, status: 'submitted' }, onUpdate: (a) => (captured = a.data) });
+  await svc.review('e1', { decision: 'approve' }, adminUser);
+  assert.strictEqual(captured.status, 'approved');
 });
 
 test('review: reject sets rejected status', async () => {

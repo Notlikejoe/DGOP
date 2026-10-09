@@ -2674,33 +2674,25 @@ test('decideTask: routed task activates the next route stage', async () => {
 });
 
 // ---------- segregation of duties ----------
-test('decideTask: an administrator with an eligible business grant cannot approve their own case', async () => {
+test('decideTask: system administrator can approve a case they submitted', async () => {
   const over: Over = {
     businessTaskGrant: true,
     task: { id: 't1', assigneeUserId: 'u1', status: 'pending', caseId: 'c1', case: { type: 'owner_assignment_approval', createdBy: 'u1@dgop.local', assignmentId: 'as1' } },
     assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
   };
   const svc = makeService(over);
-  await assert.rejects(svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin', 'dmo_admin'] } as never), /cannot decide an approval you submitted/);
-  assert.equal(over.assignmentUpdate, undefined);
+  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin', 'dmo_admin'] } as never);
+  assert.equal(over.assignmentUpdate?.approvalStatus, 'approved');
 });
 
-test('business task authority: administrator oversight does not bypass assignment, role, or a revoked business grant', async () => {
-  const task = { id: 'business-task', assigneeUserId: 'assigned', assigneeRoleCode: 'dmo_admin', status: 'pending', caseId: 'business-case', case: { type: 'general', status: 'submitted', createdBy: 'other@dgop.local' } };
-  for (const [actor, message] of [
-    [{ id: 'other', email: 'other-admin@dgop.local', roles: ['system_admin', 'dmo_admin'] }, /Only the assigned user/],
-    [{ id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin'] }, /assigned business role/],
-    [{ id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin', 'dmo_admin'] }, /explicit business role grant/],
-  ] as const) {
-    const svc = makeService({ task });
-    await assert.rejects(svc.decideTask(task.id, { decision: 'approved' } as never, actor as never), message);
-    await assert.rejects(svc.saveTaskFormDraft(task.id, { data: {} }, actor as never));
-    await assert.rejects(svc.submitTaskForm(task.id, { data: {} }, actor as never));
-  }
-  const over: Over = { task, businessTaskGrant: true };
-  const svc = makeService(over);
-  await svc.decideTask(task.id, { decision: 'approved' } as never, { id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin', 'dmo_admin'] });
-  assert.equal(over.task?.status, 'completed');
+test('business task authority: system administrator bypasses assignment, queue role, and business grant checks', async () => {
+  const actor = { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] } as never;
+  const task = () => ({ id: 'business-task', assigneeUserId: 'assigned', assigneeRoleCode: 'dmo_admin', status: 'pending', caseId: 'business-case', case: { type: 'general', status: 'submitted', createdBy: 'other@dgop.local' } });
+  const decision: Over = { task: task() };
+  await makeService(decision).decideTask('business-task', { decision: 'approved' } as never, actor);
+  assert.equal(decision.task?.status, 'completed');
+  await makeService({ task: task() }).saveTaskFormDraft('business-task', { data: {} }, actor);
+  await makeService({ task: task() }).submitTaskForm('business-task', { data: {} }, actor);
 });
 
 test('submitAssignmentForApproval: approver must differ from submitter', async () => {

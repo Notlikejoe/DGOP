@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AiAuthorizationService } from './ai-authorization.service';
 import { AIUC_STAGE, AiWorkflowRoutingService } from './ai-workflow-routing.service';
 import { aiNoticeAccess } from './ai-notifications';
+import { isSystemAdministrator } from '../auth/system-admin';
 import { governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
 import { AI_CLASSIFICATION_CRITERIA, AiCalculationInputV1, assertCalculationInputV1, } from './ai-governance.contracts';
 const CLASSIFICATION_TASK_TITLE = 'Six-criterion SDAIA classification assessment';
@@ -217,7 +218,7 @@ export class AiClassificationService {
             });
             if (!task)
                 throw new ConflictException('No active AIUC classification task exists');
-            if(!actor.roles.includes('AI_WORKING_GROUP')||task.assigneeUserId&&task.assigneeUserId!==actor.id)
+            if(!actor.administratorOverride&&(!actor.roles.includes('AI_WORKING_GROUP')||task.assigneeUserId&&task.assigneeUserId!==actor.id))
                 throw new ForbiddenException('Only the assigned Working Group can assess this classification');
             const config = await this.resolveConfiguration(tx);
             if (!config.ready || !config.scoreVersionId || !config.tierVersionId) {
@@ -335,7 +336,7 @@ export class AiClassificationService {
         const previousLevel = levels.indexOf(String(decision['actorRole']));
         const access = await aiNoticeAccess(tx, userId, current.workflowCaseId);
         const grants = await tx.rolePermission.findMany({ where: { role: { code: { in: ['AI_ETHICS_COMMITTEE', 'AI_EXECUTIVE_TEAM', 'STEERING_COMMITTEE'] }, isActive: true, deletedAt: null, userRoles: { some: { userId } } }, permission: { resource: 'aiuc.classify', action: 'reverse' } }, include: { role: true } });
-        const administratorOverride = false;
+        const administratorOverride = !!access && isSystemAdministrator(access.roles);
         const role = administratorOverride ? 'STEERING_COMMITTEE' : grants.map(g => g.role.code).sort((a, b) => levels.indexOf(a) - levels.indexOf(b)).find(r => levels.indexOf(r) > previousLevel);
         const owner = current.ownerPersonId ? await tx.person.findUnique({ where: { id: current.ownerPersonId }, select: { userId: true } }) : null;
         const calculated = source ? classificationResult(source.result) : null;
@@ -399,12 +400,12 @@ export class AiClassificationService {
             });
             if (!task)
                 throw new ConflictException('No active Responsible AI Officer verification task exists');
-            if(task.assigneeUserId&&task.assigneeUserId!==actor.id)
+            if(!actor.administratorOverride&&task.assigneeUserId&&task.assigneeUserId!==actor.id)
                 throw new ForbiddenException('Only the assigned officer can record this classification decision');
             const source = current.assessments[0];
             if (!source)
                 throw new ConflictException('A calculated classification round is required before verification');
-            if (source.createdBy === actor.id) {
+            if (!actor.administratorOverride && source.createdBy === actor.id) {
                 throw new ForbiddenException('The classification assessor cannot verify or override the same round');
             }
             const calculated = classificationResult(source.result);
@@ -553,7 +554,7 @@ export class AiClassificationService {
         const justification = requiredText(justificationValue, 'Return justification');
         return this.prisma.$transaction(async (tx) => {
             const actor = await this.authorization.authorize(userId, 'aiuc.classify.assess', tx, id);
-            if (!actor.roles.includes('AI_GOVERNANCE_OFFICER')) {
+            if (!actor.administratorOverride && !actor.roles.includes('AI_GOVERNANCE_OFFICER')) {
                 throw new ForbiddenException('Responsible AI Officer role is required for classification verification');
             }
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: classificationCase });
@@ -568,11 +569,11 @@ export class AiClassificationService {
             if (!task)
                 throw new ConflictException('No active Responsible AI Officer verification task exists');
             const source = current.assessments[0];
-            if(task.assigneeUserId&&task.assigneeUserId!==actor.id)
+            if(!actor.administratorOverride&&task.assigneeUserId&&task.assigneeUserId!==actor.id)
                 throw new ForbiddenException('Only the assigned officer can return this classification');
             if (!source)
                 throw new ConflictException('A calculated classification round is required before verification');
-            if (source.createdBy === actor.id)
+            if (!actor.administratorOverride && source.createdBy === actor.id)
                 throw new ForbiddenException('The classification assessor cannot verify the same round');
             const calculated = classificationResult(source.result);
             const now = new Date();
@@ -668,10 +669,10 @@ export class AiClassificationService {
                 },
                 include: { templateStage: { select: { code: true, nameEn: true } } },
             });
-            if (!task || !task.assigneeRoleCode || !actor.roles.includes(task.assigneeRoleCode)) {
+            if (!task || !task.assigneeRoleCode || (!actor.administratorOverride && !actor.roles.includes(task.assigneeRoleCode))) {
                 throw new ForbiddenException('The specialist review task is not assigned to an active actor role');
             }
-            if (task.assigneeUserId && task.assigneeUserId !== actor.id) {
+            if (!actor.administratorOverride && task.assigneeUserId && task.assigneeUserId !== actor.id) {
                 throw new ForbiddenException('Only the named assignee may complete this specialist review task');
             }
             if (task.templateStage?.code === AIUC_STAGE.ethics) {

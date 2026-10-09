@@ -1234,6 +1234,17 @@ async function main() {
       create: { userId: admin.id, roleId: adminRole.id },
     });
   }
+  // The local platform administrator can execute every business queue and approval.
+  // Auditor is intentionally omitted because its read-only duty conflicts with writes;
+  // system_admin already grants unrestricted audit access.
+  const administratorOperationalRoles = await prisma.role.findMany({
+    where: { isActive: true, deletedAt: null, code: { notIn: ['system_admin', 'auditor'] } },
+    select: { id: true },
+  });
+  await prisma.userRole.createMany({
+    data: administratorOperationalRoles.map((role) => ({ userId: admin.id, roleId: role.id })),
+    skipDuplicates: true,
+  });
 
   for (const c of classifications) {
     await prisma.classification.upsert({ where: { code: c.code }, update: c, create: c });

@@ -15,7 +15,7 @@ export class AiOperationalAlertsService {
  async visibility(userId:string):Promise<Prisma.GovernanceNotificationWhereInput>{
   const ordinary={OR:[{sourceType:null},{sourceType:{notIn:AI_ALERT_SOURCES}}]};
   const alternatives:Prisma.GovernanceNotificationWhereInput[]=[ordinary];
-  try{const access=await this.risks.visibility(userId);alternatives.push({sourceType:{in:AI_ALERT_SOURCES.filter(s=>s!=='ai_use_case')},workflowCase:{is:{aiRisk:{is:access.where}}},AND:[{OR:[{assigneeUserId:null},{assigneeUserId:userId}]}]});}
+  try{const access=await this.risks.visibility(userId);if(access.actor.administratorOverride)return {};alternatives.push({sourceType:{in:AI_ALERT_SOURCES.filter(s=>s!=='ai_use_case')},workflowCase:{is:{aiRisk:{is:access.where}}},AND:[{OR:[{assigneeUserId:null},{assigneeUserId:userId}]}]});}
   catch(e){if(!(e instanceof ForbiddenException))throw e;}
   // AIUC notices also support requester-only users without any AIRS purpose grant.
   const assigned=await this.db.governanceNotification.findMany({where:{sourceType:'ai_use_case',assigneeUserId:userId,workflowCaseId:{not:null}},select:{workflowCaseId:true},distinct:['workflowCaseId']});

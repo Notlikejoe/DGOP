@@ -27,15 +27,15 @@ export class AiSeverityService {
         const candidate = await tx.aiRiskSeverityEvent.findFirst({ where: { riskId: id, kind: 'proposal', outcomes: { none: { kind: { in: ['approved', 'returned'] } } } }, orderBy: { round: 'desc' } });
         const task = candidate?.taskId ? await tx.workflowTask.findUnique({ where: { id: candidate.taskId }, include: { templateStage: { include: { template: true } } } }) : null;
         const pending = task?.status === 'pending' ? candidate : null;
-        const administratorOverride = false;
+        const administratorOverride = access.actor.administratorOverride;
         const independent = administratorOverride || !access.actor.roles.includes('auditor') && ![risk.owner?.userId, risk.useCase.owner?.userId].includes(userId);
-        const roles = authorities.filter(role => access.permissionRoles['airs.severity.override']?.includes(role)), role = roles.find(role => authorities.indexOf(role) < 3);
+        const roles = administratorOverride ? authorities : authorities.filter(role => access.permissionRoles['airs.severity.override']?.includes(role)), role = administratorOverride ? 'AI_GOVERNANCE_OFFICER' : roles.find(role => authorities.indexOf(role) < 3);
         const settled = typeof calculation['assessmentId'] === 'string' ? await tx.aiRiskSeverityEvent.findFirst({ where: { riskId: id, assessmentId: calculation['assessmentId'], kind: { in: ['approved', 'reversed'] } }, orderBy: { round: 'desc' } }) : null;
-        const assigned = independent && !!pending && (administratorOverride || pending.actorId !== userId) && !!task && task.status === 'pending' && task.assigneeRoleCode !== null && roles.includes(task.assigneeRoleCode) &&
+        const assigned = independent && !!pending && (administratorOverride || pending.actorId !== userId) && !!task && task.status === 'pending' && task.assigneeRoleCode !== null && (administratorOverride || roles.includes(task.assigneeRoleCode)) &&
             (administratorOverride || !task.assigneeUserId || task.assigneeUserId === userId) && task.caseId === risk.workflowCase.id && task.templateStage?.code === 'airs-severity-override' && task.templateStage.isActive &&
             task.templateStage.template.code === AIRS_TEMPLATE_CODE && task.templateStage.template.isActive && !task.templateStage.template.deletedAt &&
             jsonRecord(task.formDataJson)['proposalId'] === pending.id && jsonRecord(task.formDataJson)['assessmentId'] === pending.assessmentId;
-        const reverseRole = settled?.kind === 'approved' ? roles.find(role => authorities.indexOf(role) + 1 > settled.authorityLevel) : undefined;
+        const reverseRole = settled?.kind === 'approved' ? (administratorOverride ? 'STEERING_COMMITTEE' : roles.find(role => authorities.indexOf(role) + 1 > settled.authorityLevel)) : undefined;
         return { ...access, risk, calculation, events, pending, task, settled, role, reverseRole, administratorOverride,
             canPropose: independent && !!role && !pending && typeof calculation['assessmentId'] === 'string' && typeof calculation['severityCode'] === 'string',
             canApprove: assigned && pending!.assessmentId === calculation['assessmentId'], canReturn: assigned,

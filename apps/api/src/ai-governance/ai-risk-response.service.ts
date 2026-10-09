@@ -72,8 +72,9 @@ export class AiRiskResponseService {
     private owner(actor: {
         id: string;
         roles: string[];
+        administratorOverride: boolean;
     }, ownerId: string | null | undefined) {
-        if ((!actor.roles.includes('AI_RISK_OWNER') || actor.id !== ownerId))
+        if (!actor.administratorOverride && (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== ownerId))
             throw new ForbiddenException('Only the assigned Risk Owner proposes the response');
     }
     private version(gate: {
@@ -94,7 +95,7 @@ export class AiRiskResponseService {
     async context(userId: string, id: string) {
         return this.prisma.$transaction(async (tx) => {
             const gate = await this.gate(tx, userId, id), refs = await this.references(tx), { actor, permissions, response } = gate;
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             const owner = gate.active && permissions.has('airs.risk.assess') && (administratorOverride || actor.roles.includes('AI_RISK_OWNER') && actor.id === gate.risk.owner?.userId && !actor.roles.includes('auditor'));
             const current = !!response && await this.referenceCurrent(tx, response.referenceVersionId);
             const consultationRequired = jsonRecord(response?.payload)['consultationRequired'] === true;
@@ -171,10 +172,10 @@ export class AiRiskResponseService {
                 throw new ConflictException('A submitted response is required');
             const task = [gate.coordinator!, ...gate.consultations].find(task => task.id === taskId);
             const kind = task?.templateStage?.code === AIRS_STAGE.response ? 'officer' : jsonRecord(task?.formDataJson)['kind'] as 'privacy' | 'security';
-            if (!task || !roles[kind] || task.assigneeRoleCode !== roles[kind] || (task.assigneeUserId && task.assigneeUserId !== userId))
+            if (!task || !roles[kind] || task.assigneeRoleCode !== roles[kind] || (!gate.actor.administratorOverride && task.assigneeUserId && task.assigneeUserId !== userId))
                 throw new ConflictException('Active response decision task not found');
             const actor = await this.authorization.authorizeBusiness(userId, kind === 'officer' ? 'case.approve.airs' : 'case.view.airs.org', tx, id);
-            if (!actor.roles.includes(roles[kind]))
+            if (!actor.administratorOverride && !actor.roles.includes(roles[kind]))
                 throw new ForbiddenException('The configured response role is required');
             await this.authorization.enforceDuty(actor, kind === 'officer' ? 'adopt_assessment' : 'task', gate.facts, id);
             if (dto.decision === 'approve') {

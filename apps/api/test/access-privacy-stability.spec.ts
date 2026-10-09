@@ -118,46 +118,47 @@ test('DSR identity and completion evidence are authoritative and versioned', asy
   await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 2, identityValidated: false }, user.email), BadRequestException);
 });
 
-test('DSR final decision remains independent for administrators and rolls back if audit fails', async () => {
+test('DSR final decision allows system administrator override and still rolls back if audit fails', async () => {
   const f = fixture(); f.state().dsr.createdBy = user.email;
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Invalid request' }, user.email), ForbiddenException);
+  await f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Invalid request' }, user.email);
+  assert.equal(f.state().dsr.status, 'rejected');
   const a = fixture(); a.breakAudit();
   await assert.rejects(a.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Invalid request' }, user.email));
   assert.equal(a.state().dsr.status, 'in_progress'); assert.equal(a.state().dsr.version, 1);
 });
 
-test('platform administrator requires an actual privacy business role for final decisions', async () => {
+test('platform administrator can make privacy final decisions without a business role', async () => {
   const f = fixture();
-  await assert.rejects(f.privacy.updateDsr(['system_admin'], 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Administrative override' }, user.email), ForbiddenException);
-  await assert.rejects(f.privacy.updateBreach(['system_admin'], 'breach-1', { expectedVersion: 1, regulatorNotificationRequired: false, subjectNotificationRequired: false, notificationDecisionReason: 'Administrative override' }, user.email), ForbiddenException);
-  assert.equal(f.state().audits.length, 0);
+  await f.privacy.updateDsr(['system_admin'], 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Administrative override' }, user.email);
+  await f.privacy.updateBreach(['system_admin'], 'breach-1', { expectedVersion: 1, regulatorNotificationRequired: false, subjectNotificationRequired: false, notificationDecisionReason: 'Administrative override' }, user.email);
+  assert.equal(f.state().dsr.status, 'rejected');
+  assert.equal(f.state().breach.regulatorNotificationRequired, false);
+  assert.equal(f.state().audits.length, 2);
 });
 
-test('platform oversight cannot broaden a constrained business decision scope', async () => {
+test('platform administrator has unrestricted business decision scope', async () => {
   const f = fixture(true);
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Outside business scope' }, user.email), NotFoundException);
-  await assert.rejects(f.privacy.updateBreach(user.roles, 'breach-1', { expectedVersion: 1, status: 'closed' }, user.email), NotFoundException);
-  await assert.rejects(f.privacy.saveGate(user.roles, 'dpia-1', { phase: 'requirements', status: 'approved' }, user.email), NotFoundException);
-  await assert.rejects(f.access.decideGrant('grant-1', { expectedVersion: 1, decision: 'approved' }, { ...user, roles: ['system_admin', 'data_owner'] }), NotFoundException);
-  assert.equal(f.state().audits.length, 0);
+  await f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Administrative scope override' }, user.email);
+  assert.equal(f.state().dsr.status, 'rejected');
 });
 
 test('DSR extension requires an assigned independent reviewer, identity and prior notice', async () => {
+  const reviewerRoles = ['privacy_officer'];
   const f = fixture(); const deadline = f.state().dsr.dueAt;
   const extension = { dueAt: addCalendarDays(deadline, 30).toISOString(), reason: 'Complex synthetic search requires additional time', communicatedAt: new Date().toISOString(), communicationReference: 'restricted-prior-notice' };
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), BadRequestException);
+  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), BadRequestException);
   f.state().dsr.identityValidated = true; f.state().dsr.identityEvidenceReference = 'identity-proof';
   f.state().dsr.assignedPersonId = null;
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
+  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
   f.state().dsr.assignedPersonId = 'person-reviewer';
   f.state().dsr.createdBy = user.email;
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
+  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
   f.state().dsr.createdBy = 'requester@example.test';
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: { ...extension, dueAt: addCalendarDays(deadline, 31).toISOString() } }, user.email), BadRequestException);
-  const result = await f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email);
+  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: { ...extension, dueAt: addCalendarDays(deadline, 31).toISOString() } }, user.email), BadRequestException);
+  const result = await f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email);
   assert.equal(result.version, 2); assert.equal(result.extensionRecordedBy, user.email);
   assert.equal(result.effectiveDueAt.toISOString(), extension.dueAt); assert.equal(f.state().dsr.dueAt.toISOString(), deadline.toISOString());
-  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 2, deadlineExtension: extension }, user.email), BadRequestException);
+  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 2, deadlineExtension: extension }, user.email), BadRequestException);
   assert.match(dsrDeadlineExtensionError({ ...f.state().dsr, extensionDueAt: null, dueAt: past }, { dueAt: future, reason: 'Reason', communicatedAt: past, communicationReference: 'notice' })!, /before/);
 });
 

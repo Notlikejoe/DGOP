@@ -246,7 +246,7 @@ export class AiMigrationPilotService {
     }) { const justification = governanceText(dto.justification); if (!['approve', 'return'].includes(dto.outcome))
         throw new BadRequestException('Approve or return required'); return governanceTransaction(this.db, async (tx) => { const v = await tx.aiMigrationPilotCapture.findUnique({ where: { id }, include: { review: true } }); if (!v)
         throw new NotFoundException('Pilot capture not found'); await this.snapshot(tx, userId, v.snapshotId, 'review'); const actor = await this.auth.authorizeAny(userId, ['case.view.airs.org', 'case.view.airs.all'], tx); await tx.$executeRaw `SELECT pg_advisory_xact_lock(hashtext('ai-native-pilot'),hashtext(${v.snapshotId}))`; const head = await tx.aiMigrationPilotCapture.findFirst({ where: { snapshotId: v.snapshotId }, orderBy: { round: 'desc' } }); if (v.review || head?.id !== id || v.digest !== dto.expectedDigest || governanceDigest(v.report) !== v.digest)
-        throw new ConflictException('Review latest intact pending pilot capture'); if (v.createdBy === userId)
+        throw new ConflictException('Review latest intact pending pilot capture'); if (!actor.administratorOverride && v.createdBy === userId)
         throw new ForbiddenException('Independent DMO pilot reviewer required'); if (dto.outcome === 'approve') {
         const { snapshot } = await this.corrections.approvedSnapshot(tx, userId, v.snapshotId, 'review'), fresh = await this.report(tx, v.snapshotId, snapshot.report, v.bindings as unknown as PilotBinding[]);
         if (!fresh.pilotReady || governanceDigest(fresh) !== v.digest)

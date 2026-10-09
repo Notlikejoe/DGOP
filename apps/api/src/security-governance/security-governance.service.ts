@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite } from '../common/governance-write';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateAccessReviewDto,
   CreateAccessReviewCampaignDto,
@@ -799,6 +800,7 @@ export class SecurityGovernanceService {
   }
 
   async updateReviewItem(id: string, roleCodes: string[], dto: UpdateAccessReviewItemDto, actor: string) {
+    const administratorOverride = isSystemAdministrator(roleCodes);
     const existing = await this.prisma.accessReviewItem.findUnique({
       where: { id },
       include: {
@@ -815,8 +817,8 @@ export class SecurityGovernanceService {
       throw new BadRequestException('Completed access reviews cannot be changed');
     }
     const actorUser = await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } });
-    if (actorUser?.id === existing.userId) throw new ForbiddenException('A reviewer cannot certify or change their own access');
-    if (existing.review.ownerUserId && actorUser?.id !== existing.review.ownerUserId) {
+    if (!administratorOverride && actorUser?.id === existing.userId) throw new ForbiddenException('A reviewer cannot certify or change their own access');
+    if (!administratorOverride && existing.review.ownerUserId && actorUser?.id !== existing.review.ownerUserId) {
       throw new ForbiddenException('Only the assigned review owner can decide this item');
     }
     if (existing.decision !== AccessReviewDecision.pending) throw new BadRequestException('This review item already has a decision');

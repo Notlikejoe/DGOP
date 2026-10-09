@@ -6,6 +6,7 @@ import { ScoringService } from '../scoring/scoring.service';
 import { AuthUser } from '../auth/auth.types';
 import { awarenessReadinessScore } from '../training/training.logic';
 import { DataQualityService } from '../data-quality/data-quality.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 
 export interface DashboardStats {
   assets: { total: number; withOwner: number; unassigned: number; coveragePct: number };
@@ -84,6 +85,7 @@ export class DashboardService {
   }
 
   private workflowTaskOwnershipWhere(userId: string, roleCodes: string[]): Record<string, unknown>[] {
+    if (isSystemAdministrator(roleCodes)) return [{}];
     const ownership: Record<string, unknown>[] = [{ assigneeUserId: userId }];
     if (roleCodes.length) {
       ownership.push({

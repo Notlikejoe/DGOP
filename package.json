@@ -14,6 +14,7 @@
     "db:seed:ai-review-demo": "node scripts/seed-ai-review-example.mjs --local-demo",
     "db:seed:ai-risk-library": "node scripts/seed-ai-risk-library.mjs --local-demo",
     "db:sync-demo-credentials": "node scripts/sync-demo-credentials.mjs",
+    "db:grant-system-admin": "node scripts/grant-system-admin.mjs",
     "db:local:start": "node scripts/local-postgres.mjs start",
     "db:local:stop": "node scripts/local-postgres.mjs stop",
     "db:local:status": "node scripts/local-postgres.mjs status",

@@ -61,8 +61,8 @@ export class AiLifecycleService {
    const businessRoles=actor.roles.filter(role=>role!=='system_admin'&&role!=='auditor');
    const [pending,completed,grants]=await Promise.all([tx.aiLifecycleRequest.count({where:{useCaseId:id,status:{in:open}}}),tx.aiLifecycleRequest.count({where:{useCaseId:id,status:'applied'}}),tx.rolePermission.findMany({where:{role:{code:{in:businessRoles},isActive:true,deletedAt:null}},select:{role:{select:{code:true}},permission:{select:{resource:true,action:true}}}})]);
    const holds=(role:string,permission:string)=>grants.some(g=>g.role.code===role&&g.permission.resource+'.'+g.permission.action===permission);
-   const canPropose=pending===0&&businessRoles.some(role=>holds(role,'case.create.aiuc'))&&!actor.roles.includes('auditor')&&uc.lifecycleState!=='retired'&&(uc.requesterUserId===userId||uc.owner?.userId===userId||actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r)));
-   const data=rows.map(r=>{const contributors=r.workflowCase.tasks.filter(t=>['classification','dimension','likelihood'].includes(String(jsonRecord(t.formDataJson)['kind']))).map(t=>t.formSubmittedBy).filter((id):id is string=>!!id);return {...r,canWithdraw:open.includes(r.status)&&[r.proposerId,uc.owner?.userId].includes(userId),proposedUseAllowed:false,tasks:r.workflowCase.tasks.map(t=>{const kind=String(jsonRecord(t.formDataJson)['kind']),role=t.assigneeRoleCode??'',final=['verification','privacy','security','ethics','authority','confirmation'].includes(kind);return {...t,canAct:open.includes(r.status)&&t.status==='pending'&&t.assigneeUserId===userId&&!actor.roles.includes('auditor')&&businessRoles.includes(role)&&holds(role,purpose(role))&&(!final||independentLifecycleActor(userId,uc.requesterUserId,uc.owner?.userId??null,r.proposerId,['verification','authority','confirmation'].includes(kind)?contributors:[],kind==='confirmation'?r.authorityActorId??undefined:undefined))};})};});
+   const canPropose=pending===0&&uc.lifecycleState!=='retired'&&(actor.administratorOverride||businessRoles.some(role=>holds(role,'case.create.aiuc'))&&!actor.roles.includes('auditor')&&(uc.requesterUserId===userId||uc.owner?.userId===userId||actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r))));
+   const data=rows.map(r=>{const contributors=r.workflowCase.tasks.filter(t=>['classification','dimension','likelihood'].includes(String(jsonRecord(t.formDataJson)['kind']))).map(t=>t.formSubmittedBy).filter((id):id is string=>!!id);return {...r,canWithdraw:open.includes(r.status)&&(actor.administratorOverride||[r.proposerId,uc.owner?.userId].includes(userId)),proposedUseAllowed:false,tasks:r.workflowCase.tasks.map(t=>{const kind=String(jsonRecord(t.formDataJson)['kind']),role=t.assigneeRoleCode??'',final=['verification','privacy','security','ethics','authority','confirmation'].includes(kind);return {...t,canAct:open.includes(r.status)&&t.status==='pending'&&(actor.administratorOverride||t.assigneeUserId===userId&&!actor.roles.includes('auditor')&&businessRoles.includes(role)&&holds(role,purpose(role))&&(!final||independentLifecycleActor(userId,uc.requesterUserId,uc.owner?.userId??null,r.proposerId,['verification','authority','confirmation'].includes(kind)?contributors:[],kind==='confirmation'?r.authorityActorId??undefined:undefined)))};})};});
    return {...toPaged(data,total,p),summary:{pending,completed},
     useCaseId:id,useCaseVersion:uc.version,state:uc.lifecycleState,effectiveUseAllowed:operationalUseAllowed(uc.lifecycleState,uc.operationalStatusCode),canPropose,
     effective:uc.effectiveConfiguration??{...this.baseline(uc),origin:'legacy_registration_review_needed'},baselineAssurance:uc.effectiveConfiguration?.sourceRequestId?'approved_snapshot':'review_needed'};
@@ -81,7 +81,7 @@ export class AiLifecycleService {
   const justification=governanceText(dto.justification);
   return governanceTransaction(this.db,async tx=>{const actor=await this.authorization.authorizeBusiness(userId,'case.create.aiuc',tx,id),uc=await this.current(tx,id);
    if(uc.version!==dto.expectedVersion)throw new ConflictException('AI use case changed; reload');
-   if(![uc.requesterUserId,uc.owner?.userId].includes(userId)&&!actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r)))throw new ForbiddenException('Only its requester, owner or scoped governance staff may propose lifecycle work');
+   if(!actor.administratorOverride&&![uc.requesterUserId,uc.owner?.userId].includes(userId)&&!actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER'].includes(r)))throw new ForbiddenException('Only its requester, owner or scoped governance staff may propose lifecycle work');
    try{lifecycleTransition(uc.lifecycleState,dto.action);}catch(e){throw new ConflictException((e as Error).message);}
    if(await tx.aiLifecycleRequest.count({where:{useCaseId:id,status:{in:open}}}))throw new ConflictException('Complete or return the existing lifecycle request first');
    if(!dto.assignments||Object.keys(dto.assignments).length>15)throw new BadRequestException('Provide bounded named assignments');
@@ -92,7 +92,7 @@ export class AiLifecycleService {
    const payload={...prior,...changes};if(dto.action==='change'&&governanceDigest(payload)===governanceDigest(prior))throw new BadRequestException('The change must alter the configuration');
    const validated=await this.intake.validateLifecycleConfiguration(tx,payload,uc.requesterUserId);
    const dataOwner=String(prior['data_owner']??'');await this.nominee(tx,uc,'data_owner',dataOwner);
-   if(!independentLifecycleActor(dataOwner,uc.requesterUserId,uc.owner?.userId??null,userId))throw new ForbiddenException('The Data Owner must be independent of the lifecycle proposal');
+   if(!actor.administratorOverride&&!independentLifecycleActor(dataOwner,uc.requesterUserId,uc.owner?.userId??null,userId))throw new ForbiddenException('The Data Owner must be independent of the lifecycle proposal');
    if(!uc.asset!.isActive)throw new ConflictException('Restore the governed asset through its native workflow before lifecycle changes');
    const classVersion=await tx.governedReferenceVersion.findUniqueOrThrow({where:{id:validated.references.versionPins['L_CLASS']},include:{values:true}});
    const classCode=jsonRecord(classVersion.values.find(v=>v.code===payload['data_classification'])?.metadata)['assetClassificationCode'];
@@ -124,12 +124,13 @@ export class AiLifecycleService {
   if(governanceDigest(this.pins(uc))!==governanceDigest({...jsonRecord(r.sourceSnapshot),referencePins:undefined,facts:undefined})){
    const s=jsonRecord(r.sourceSnapshot);if(governanceDigest(this.pins(uc))!==governanceDigest({asset:s['asset'],ownerPersonId:s['ownerPersonId'],risks:s['risks'],obligations:s['obligations']}))throw new ConflictException('Asset, risk, ownership or obligations changed; return this request and reassess');
   }
-  const task=await tx.workflowTask.findFirst({where:{id:taskId,caseId:r.workflowCaseId,status:'pending',assigneeUserId:userId}});
+  const actor=await this.authorization.authorizeAny(userId,['case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all'],tx);
+  const task=await tx.workflowTask.findFirst({where:{id:taskId,caseId:r.workflowCaseId,status:'pending',...(actor.administratorOverride?{}:{assigneeUserId:userId})}});
   if(!task||jsonRecord(task.formDataJson)['lifecycleRequestId']!==id)throw new ForbiddenException('Act only on your named active lifecycle task');
-  const role=task.assigneeRoleCode!;await this.nominee(tx,uc,role,userId);
+  const role=task.assigneeRoleCode!;if(!actor.administratorOverride)await this.nominee(tx,uc,role,userId);
   const pins=jsonRecord(r.sourceSnapshot)['referencePins'];const referenceIds=Object.values(jsonRecord(pins));
   await this.currentReferences(tx,referenceIds as string[]);
-  return {r,uc,task,role,form:jsonRecord(task.formDataJson)};
+  return {r,uc,task,role,actor,form:jsonRecord(task.formDataJson)};
  }
  private async currentReferences(tx:Prisma.TransactionClient,ids:string[]){if(!ids.length)throw new ConflictException('Pinned reference provenance is required');const rows=await tx.$queryRaw<{id:string}[]>`SELECT id FROM governed_reference_versions WHERE id IN (${Prisma.join(ids)}) AND state='published' AND "effectiveFrom"<=CURRENT_TIMESTAMP AND ("effectiveTo" IS NULL OR "effectiveTo">CURRENT_TIMESTAMP) FOR SHARE`;if(rows.length!==new Set(ids).size)throw new ConflictException('Pinned references changed; return this lifecycle request and reassess');}
  async assess(userId:string,id:string,taskId:string,dto:AssessAiLifecycleDto){const justification=governanceText(dto.justification);
@@ -162,9 +163,9 @@ export class AiLifecycleService {
   return governanceTransaction(this.db,async tx=>{const g=await this.gate(tx,userId,id,dto.expectedVersion,taskId),kind=String(g.form['kind']);
    if(!['verification','privacy','security','ethics','authority','confirmation'].includes(kind))throw new ConflictException('Complete reassessment before deciding');
    const contributors=(await tx.workflowTask.findMany({where:{caseId:g.r.workflowCaseId,formSubmittedBy:{not:null}},select:{formSubmittedBy:true,formDataJson:true}})).filter(t=>['classification','dimension','likelihood'].includes(String(jsonRecord(t.formDataJson)['kind']))).map(t=>t.formSubmittedBy!);
-   if(!independentLifecycleActor(userId,g.uc.requesterUserId,g.uc.owner?.userId??null,g.r.proposerId,['verification','authority','confirmation'].includes(kind)?contributors:[],kind==='confirmation'?g.r.authorityActorId??undefined:undefined))throw new ForbiddenException('Lifecycle business decisions must be independent of request, ownership, proposal and reassessment');
+   if(!g.actor.administratorOverride&&!independentLifecycleActor(userId,g.uc.requesterUserId,g.uc.owner?.userId??null,g.r.proposerId,['verification','authority','confirmation'].includes(kind)?contributors:[],kind==='confirmation'?g.r.authorityActorId??undefined:undefined))throw new ForbiddenException('Lifecycle business decisions must be independent of request, ownership, proposal and reassessment');
    if(kind==='authority'){const authority=await this.routing.decisionAssignment(tx,g.r.authorityTier);if(g.role!==authority.role||g.form['assignmentRuleId']!==authority.ruleId)throw new ConflictException('Configured tier authority changed; return and reassess');}
-   if(kind==='confirmation'&&userId!==jsonRecord(g.r.proposedPayload)['data_owner'])throw new ForbiddenException('The nominated Data Owner must separately confirm this lifecycle decision');
+   if(!g.actor.administratorOverride&&kind==='confirmation'&&userId!==jsonRecord(g.r.proposedPayload)['data_owner'])throw new ForbiddenException('The nominated Data Owner must separately confirm this lifecycle decision');
    if(dto.conditions?.length&&kind!=='authority')throw new BadRequestException('Only the tier authority can add approval obligations');
    const conditions=(dto.conditions??[]).map(s=>s.trim());if(conditions.some(s=>!s||s.length>1000)||new Set(conditions).size!==conditions.length)throw new BadRequestException('Approval obligations must be distinct non-empty conditions');
    if(dto.decision==='approve'&&['change','resume'].includes(g.r.action)&&g.r.authorityTier==='UNACCEPTABLE')throw new ConflictException('Unacceptable or critical reassessment cannot activate a changed or resumed configuration');

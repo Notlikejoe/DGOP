@@ -82,7 +82,7 @@ export class AiReferencePublicationService {
             await this.lock(tx);
             const actor = await this.auth.authorize(userId, 'refdata.approve.ai', tx);
             const version = await this.draft(tx, id);
-            if (version.createdBy === userId)
+            if (!actor.administratorOverride && version.createdBy === userId)
                 throw new ForbiddenException('The proposer cannot independently approve the proposal');
             if (!AI_REGULATORY_LISTS.has(version.listCode))
                 throw new BadRequestException('This list does not require regulatory approval');
@@ -97,7 +97,7 @@ export class AiReferencePublicationService {
             await this.lock(tx);
             const actor = await this.auth.authorize(userId, 'refdata.publish', tx);
             const version = await this.draft(tx, id);
-            if ((version.createdBy === userId || version.approvedBy === userId))
+            if (!actor.administratorOverride && (version.createdBy === userId || version.approvedBy === userId))
                 throw new ForbiddenException('Publication requires an independent custodian');
             if (!version.values.length)
                 throw new BadRequestException('An empty reference list cannot be published');

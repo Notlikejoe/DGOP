@@ -22,6 +22,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 import { parseCsv } from '../common/csv';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
@@ -922,7 +923,7 @@ export class DataQualityService {
       if (existing.status !== DataQualityRuleStatus.in_review) {
         throw new BadRequestException('Only rules in review can be approved');
       }
-      if (existing.createdBy === actor) {
+      if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor) {
         throw new BadRequestException('Rule creators cannot approve their own rule');
       }
       next.status = DataQualityRuleStatus.approved;

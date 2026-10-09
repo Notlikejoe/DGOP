@@ -30,13 +30,13 @@ export class AiMigrationPreviewService {
             throw new ForbiddenException('Source preparation requires full organization, domain and classification coverage with a governance role');
         if (operation === 'propose') {
             await this.authorization.authorize(userId, 'refdata.propose.ai', tx);
-            if (!a.actor.roles.includes('AI_GOVERNANCE_OFFICER'))
+            if (!a.actor.administratorOverride && !a.actor.roles.includes('AI_GOVERNANCE_OFFICER'))
                 throw new ForbiddenException('Responsible AI Officer proposes source preparation');
         }
         if (operation === 'review') {
             await this.authorization.authorize(userId, 'airs.library.import', tx);
             await this.authorization.authorize(userId, 'refdata.publish', tx);
-            if (!a.actor.roles.includes('dmo_admin'))
+            if (!a.actor.administratorOverride && !a.actor.roles.includes('dmo_admin'))
                 throw new ForbiddenException('Independent DMO source-preparation review required');
         }
         return a;
@@ -63,7 +63,7 @@ export class AiMigrationPreviewService {
     async context(userId: string) {
         const a = await this.access(this.prisma, userId), permissions = await this.prisma.rolePermission.findMany({ where: { role: { code: { in: a.actor.roles }, isActive: true, deletedAt: null } }, include: { permission: true, role: { select: { code: true } } } });
         const holds = (role: string, code: string) => permissions.some(p => p.role.code === role && p.permission.resource + '.' + p.permission.action === code);
-        const administratorOverride = false;
+        const administratorOverride = a.actor.administratorOverride;
         return { version: MIGRATION_PREVIEW_VERSION, administratorOverride, canPropose: administratorOverride || !a.actor.roles.includes('auditor') && holds('AI_GOVERNANCE_OFFICER', 'refdata.propose.ai'), canReview: administratorOverride || !a.actor.roles.includes('auditor') && holds('dmo_admin', 'airs.library.import') && holds('dmo_admin', 'refdata.publish'), sourceMode: migrationSources().sourceMode, sources: migrationSources().sources.map(s => ({ source: s.source, file: s.file, sha256: s.sha256 })), productionReady: false };
     }
     async create(userId: string, dto: {
@@ -166,7 +166,7 @@ export class AiMigrationPreviewService {
             if (!row)
                 throw new NotFoundException('Source preview not found');
             const report = this.report(row);
-            if (row.createdBy === userId)
+            if (!access.actor.administratorOverride && row.createdBy === userId)
                 throw new ForbiddenException('Source-preparation reviewer must be independent of its proposer');
             if (row.review || dto.expectedDigest !== row.digest)
                 throw new ConflictException('Source preview changed or its review is closed');

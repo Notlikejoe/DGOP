@@ -55,12 +55,12 @@ export class AiRiskAdoptionService {
     async context(userId: string, id: string) {
         return this.prisma.$transaction(async (tx) => {
             const gate = await this.gate(tx, userId, id), { actor, permissions, risk, assessment } = gate;
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             const referencesCurrent = !!assessment && await this.currentReferences(tx, jsonRecord(assessment.inputs)['configuration']);
-            const officer = gate.active && permissions.has('case.approve.airs') && actor.roles.includes('AI_GOVERNANCE_OFFICER')
-                && !aiDutyViolation(actor.id, actor.roles, 'adopt_assessment', gate.facts);
-            const committee = gate.active && permissions.has('case.view.airs.org') && actor.roles.includes('AI_ETHICS_COMMITTEE')
-                && !aiDutyViolation(actor.id, actor.roles, 'ethics_review', gate.facts);
+            const officer = gate.active && (administratorOverride || permissions.has('case.approve.airs') && actor.roles.includes('AI_GOVERNANCE_OFFICER')
+                && !aiDutyViolation(actor.id, actor.roles, 'adopt_assessment', gate.facts));
+            const committee = gate.active && (administratorOverride || permissions.has('case.view.airs.org') && actor.roles.includes('AI_ETHICS_COMMITTEE')
+                && !aiDutyViolation(actor.id, actor.roles, 'ethics_review', gate.facts));
             return { version: risk.version, assessmentId: assessment?.id ?? null, round: assessment?.round ?? null, ethicsRequired: gate.ethicsRequired,
                 ethicsApproved: gate.ethicsApproved, referencesCurrent, recused: actor.roles.includes('AI_ETHICS_COMMITTEE')
                     && aiDutyViolation(actor.id, actor.roles, 'ethics_review', gate.facts) === 'GEN-29',
@@ -78,12 +78,12 @@ export class AiRiskAdoptionService {
     async prepare(userId: string, id: string, expectedVersion: number, clientIp?: string) {
         return this.prisma.$transaction(async (tx) => {
             const actor = await this.authorization.authorize(userId, 'case.approve.airs', tx, id), gate = await this.gate(tx, userId, id);
-            if (!actor.roles.includes('AI_GOVERNANCE_OFFICER'))
+            if (!actor.administratorOverride && !actor.roles.includes('AI_GOVERNANCE_OFFICER'))
                 throw new ForbiddenException('Only the Responsible AI Officer prepares assessment adoption');
             await this.authorization.enforceDuty(actor, 'adopt_assessment', gate.facts, id);
             if (!gate.active || gate.risk.version !== expectedVersion || gate.adoptionTasks.length !== 1 || !gate.ethicsRequired || gate.ethicsApproved || gate.ethicsTasks.length)
                 throw new ConflictException('Assessment review gate changed; reload before preparation');
-            if (gate.adoptionTasks[0].assigneeUserId && gate.adoptionTasks[0].assigneeUserId !== actor.id)
+            if (!actor.administratorOverride && gate.adoptionTasks[0].assigneeUserId && gate.adoptionTasks[0].assigneeUserId !== actor.id)
                 throw new ForbiddenException('The adoption coordinator is assigned to another officer');
             const task = await this.routing.createStageTask(tx, gate.risk.workflowCase!.id, AIRS_STAGE.ethics, new Date(), { templateCode: AIRS_TEMPLATE_CODE,
                 formDataJson: { assessmentId: gate.assessment!.id, ethicsReviewRequired: true, riskRef: gate.risk.riskRef } });
@@ -108,12 +108,12 @@ export class AiRiskAdoptionService {
             if (risk.version !== dto.expectedVersion)
                 throw new ConflictException('AI risk changed; reload before recording the decision');
             const task = [...gate.adoptionTasks, ...gate.ethicsTasks].find(task => task.id === taskId);
-            const administratorOverride = false;
+            const administratorOverride = gate.actor.administratorOverride;
             if (!task || task.status !== TaskStatus.pending || (!administratorOverride && task.assigneeUserId && task.assigneeUserId !== userId))
                 throw new ConflictException('Active assessment decision task not found');
             const kind = task.assigneeRoleCode === 'AI_ETHICS_COMMITTEE' ? 'ethics' : 'adoption';
             const actor = await this.authorization.authorizeBusiness(userId, kind === 'ethics' ? 'case.view.airs.org' : 'case.approve.airs', tx, id);
-            if (!actor.roles.includes(task.assigneeRoleCode!))
+            if (!actor.administratorOverride && !actor.roles.includes(task.assigneeRoleCode!))
                 throw new ForbiddenException('The assessment task requires its configured competent role');
             await this.authorization.enforceDuty(actor, kind === 'ethics' ? 'ethics_review' : 'adopt_assessment', gate.facts, id);
             if (kind === 'ethics' && !gate.ethicsRequired)

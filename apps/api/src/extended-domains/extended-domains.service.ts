@@ -17,6 +17,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite, requireTransition } from '../common/governance-write';
 import { parseMdmRule } from './mdm-rule';
 import { operationalEvidenceWhere } from '../evidence/evidence-status';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateArchitectureReviewDto,
   CreateMdmMatchDto,
@@ -479,7 +480,7 @@ export class ExtendedDomainsService {
       this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
     ]);
     const final = dto.status === MdmMatchStatus.merged || dto.status === MdmMatchStatus.rejected || dto.status === MdmMatchStatus.superseded;
-    if (final && existing.createdBy === actor) {
+    if (!isSystemAdministrator(roleCodes) && final && existing.createdBy === actor) {
       throw new ForbiddenException('MDM match creators cannot make the final resolution decision');
     }
     if (['merged', 'rejected', 'superseded'].includes(existing.status)) throw new ConflictException('Final MDM dispositions are immutable; create a new candidate for another review');
@@ -643,7 +644,7 @@ export class ExtendedDomainsService {
 
   async decideReferenceVersion(roleCodes: string[], id: string, dto: ReferenceDecisionDto, actor: string) {
     const existing = await this.findVisibleReference(roleCodes, id);
-    if (existing.createdBy === actor && FINAL_REFERENCE_DECISIONS.has(dto.decision)) {
+    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && FINAL_REFERENCE_DECISIONS.has(dto.decision)) {
       throw new ForbiddenException('Reference version creators cannot make the final decision');
     }
     const status = referenceVersionStatus(dto.decision);
@@ -711,7 +712,7 @@ export class ExtendedDomainsService {
     const calculated = certificationStatus({ qualityScore, completenessScore, ownerConfirmed, glossaryAligned, lineageReviewed });
     if (dto.status === MetadataCertificationStatus.certified && calculated !== MetadataCertificationStatus.certified) throw new BadRequestException('Metadata does not meet the required certification checks');
     const status = dto.status === MetadataCertificationStatus.certified || dto.status === undefined ? calculated : dto.status;
-    if (existing.createdBy === actor && status === MetadataCertificationStatus.certified) {
+    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && status === MetadataCertificationStatus.certified) {
       throw new ForbiddenException('Metadata certification creators cannot certify their own metadata');
     }
     const row = await claimGovernanceWrite(() => this.prisma.$transaction(async (tx) => {
@@ -788,7 +789,7 @@ export class ExtendedDomainsService {
       this.findVisibleArchitectureReview(roleCodes, id),
       this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
     ]);
-    if (existing.createdBy === actor && isArchitectureDecisionFinal(dto.decision)) {
+    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && isArchitectureDecisionFinal(dto.decision)) {
       throw new ForbiddenException('Architecture review creators cannot make the final decision');
     }
     const row = await this.prisma.architectureReview.update({

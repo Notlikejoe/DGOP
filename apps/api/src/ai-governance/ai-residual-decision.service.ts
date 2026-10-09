@@ -76,7 +76,7 @@ export class AiResidualDecisionService {
     private decision(g: Awaited<ReturnType<AiResidualDecisionService['gate']>>, kind: string) { return g.assessment?.decisions.find(d => d.kind === kind); }
     private allowed(g: Awaited<ReturnType<AiResidualDecisionService['gate']>>, task: Awaited<ReturnType<AiResidualDecisionService['gate']>>['current'][number]) {
         const rule = stageRules[task.templateStage!.code];
-        const administratorOverride = false;
+        const administratorOverride = g.actor.administratorOverride;
         if (!rule || !g.active || task.assigneeRoleCode !== rule.role || !administratorOverride && (!g.permissions.has(rule.permission) || !g.actor.roles.includes(rule.role) || (task.assigneeUserId && task.assigneeUserId !== g.actor.id) || !!aiDutyViolation(g.actor.id, g.actor.roles, rule.action, g.facts, false)))
             return false;
         if (rule.band && rule.band !== g.result['bandCode'])
@@ -107,7 +107,7 @@ export class AiResidualDecisionService {
             const g = await this.gate(tx, userId, id), referencesCurrent = !!g.assessment && await this.references(tx, g.input);
             const accepted = g.parentCurrent && !!g.assessment && !g.assessment.decisions.some(d => d.decision === 'return') && g.assessment.decisions.some(d => d.decision === 'accept' &&
                 (d.kind === 'countersign' || d.kind === 'executive' || d.kind === 'accept_owner' && g.result['bandCode'] === 'LOW'));
-            return { version: g.risk.version, administratorOverride: false, assessmentId: g.assessment?.id ?? null, round: g.assessment?.round ?? null, bandCode: g.result['bandCode'] ?? null,
+            return { version: g.risk.version, administratorOverride: g.actor.administratorOverride, assessmentId: g.assessment?.id ?? null, round: g.assessment?.round ?? null, bandCode: g.result['bandCode'] ?? null,
                 score: g.result['score'] ?? null, adopted: g.parentCurrent && !g.assessment?.decisions.some(d => d.decision === 'return') && this.decision(g, 'adoption')?.decision === 'approve', riskAccepted: accepted, operationalStatusCode: g.useCase.operationalStatusCode,
                 referencesCurrent, prerequisitesReady: g.prerequisites.ready, tasks: g.current.map(task => {
                     const rule = stageRules[task.templateStage!.code], canReturn = this.allowed(g, task);

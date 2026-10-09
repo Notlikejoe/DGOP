@@ -48,16 +48,16 @@ export class AiRiskReviewService {
         const kind = { LOW: 'accept_owner', MEDIUM: 'countersign', HIGH: 'executive', CRITICAL: 'steering' }[g.result['bandCode'] as string];
         return g.assessment.decisions.find(d => d.kind === kind && (g.result['bandCode'] === 'CRITICAL' ? ['restrict', 'stop'].includes(d.decision) : d.decision === 'accept'));
     }
-    private manages(g: Gate) { return !g.actor.roles.includes('auditor') && g.permissions.has('airs.cadence.manage') && g.actor.roles.some(r => ['AI_WORKING_GROUP', 'AI_GOVERNANCE_OFFICER'].includes(r)); }
+    private manages(g: Gate) { return g.actor.administratorOverride || !g.actor.roles.includes('auditor') && g.permissions.has('airs.cadence.manage') && g.actor.roles.some(r => ['AI_WORKING_GROUP', 'AI_GOVERNANCE_OFFICER'].includes(r)); }
     private reversalAuthority(g: Gate) {
         const previous = this.terminal(g);
         if (!previous || !g.permissions.has('airs.risk.reverse'))
             return null;
         const previousLevel = authorityLevels[previous.actorRoleCode];
         ;
-        if (g.actor.roles.includes('auditor') || [previous.actorId, g.risk.owner?.userId, g.facts.useCaseOwnerId].includes(g.actor.id))
+        if (!g.actor.administratorOverride && (g.actor.roles.includes('auditor') || [previous.actorId, g.risk.owner?.userId, g.facts.useCaseOwnerId].includes(g.actor.id)))
             return null;
-        const role = g.actor.roles.filter(r => authorityLevels[r] > previousLevel && g.permissionRoles['airs.risk.reverse']?.includes(r)).sort((a, b) => authorityLevels[b] - authorityLevels[a])[0];
+        const role = g.actor.administratorOverride ? 'STEERING_COMMITTEE' : g.actor.roles.filter(r => authorityLevels[r] > previousLevel && g.permissionRoles['airs.risk.reverse']?.includes(r)).sort((a, b) => authorityLevels[b] - authorityLevels[a])[0];
         return role ? { role, level: authorityLevels[role], previousLevel } : null;
     }
     private async cadence(tx: Prisma.TransactionClient) {
@@ -97,7 +97,7 @@ export class AiRiskReviewService {
             const g = await this.decisions.gate(tx, userId, id), history = await tx.aiRiskReview.findMany({ where: { riskId: id }, include: reviewInclude, orderBy: { round: 'desc' } }), cadence = await this.cadence(tx);
             const ownerActive = !!g.risk.owner?.userId && !!await tx.person.findFirst({ where: { id: g.risk.ownerPersonId!, isActive: true, deletedAt: null }, select: { id: true } });
             const reassessments = await tx.aiRiskReassessment.findMany({ where: { riskId: id }, orderBy: { inherentRound: 'desc' }, include: { additionalTriggers: { orderBy: { createdAt: 'desc' } } } });
-            const administratorOverride = false;
+            const administratorOverride = g.actor.administratorOverride;
             return { version: g.risk.version, administratorOverride, reassessments, reversals: await tx.aiRiskAuthorityReversal.findMany({ where: { riskId: id }, orderBy: { createdAt: 'desc' } }), canReverseAuthority: !!this.reversalAuthority(g) && ['implemented', 'decision_made'].includes(g.risk.workflowCase?.status ?? ''), canAddTrigger: !!reassessments.length && g.risk.workflowCase?.status === 'under_review' && (this.manages(g) || ownerActive && g.risk.owner?.userId === userId && g.actor.roles.includes('AI_RISK_OWNER') && g.permissions.has('airs.risk.assess') && !g.actor.roles.includes('auditor')), canReassess: !!this.terminal(g) && ['implemented', 'decision_made'].includes(g.risk.workflowCase?.status ?? '') && (this.manages(g) || ownerActive && g.risk.owner?.userId === userId && g.actor.roles.includes('AI_RISK_OWNER') && g.permissions.has('airs.risk.assess') && !g.actor.roles.includes('auditor')), cadenceReady: !!cadence, canRegister: !!cadence && this.manages(g) && !!this.terminal(g) && (!history.length || !!history[0].cancellation) && g.risk.workflowCase?.status === 'decision_made', canRecalculate: this.manages(g) && history.length > 0,
                 history: history.map(r => ({ ...r, task: undefined, status: r.cancellation ? 'superseded' : aiReviewStatus(!!r.completion, r.dueAt), canComplete: !!cadence && !!this.terminal(g) && !r.completion && !r.cancellation && ownerActive && g.risk.workflowCase?.status === 'implemented' && (administratorOverride || r.assignedOwnerId === userId && g.risk.owner?.userId === userId && g.permissions.has('airs.risk.assess') && g.actor.roles.includes('AI_RISK_OWNER') && !g.actor.roles.includes('auditor')) && r.task.status === 'pending' })) };
         }, options);
@@ -123,7 +123,7 @@ export class AiRiskReviewService {
         if (!dto.justification?.trim() || dto.justification.length > 5000 || !Array.isArray(dto.evidenceIds) || !dto.evidenceIds.length || dto.evidenceIds.length > 20 || dto.evidenceIds.some(v => typeof v !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(v)))
             throw new BadRequestException('Written review justification and 1–20 existing evidence identifiers are required');
         return this.prisma.$transaction(async (tx) => {
-            const g = await this.decisions.gate(tx, userId, id), actor = await this.authorization.authorize(userId, 'airs.risk.assess', tx, id), administratorOverride = false;
+            const g = await this.decisions.gate(tx, userId, id), actor = await this.authorization.authorize(userId, 'airs.risk.assess', tx, id), administratorOverride = actor.administratorOverride;
             const r = await tx.aiRiskReview.findFirst({ where: { id: reviewId, riskId: id }, include: reviewInclude });
             if (!r || r.completion || r.cancellation || g.risk.version !== dto.expectedVersion || g.risk.workflowCase?.status !== 'implemented' || !this.terminal(g) || this.terminal(g)!.id !== r.acceptanceDecisionId)
                 throw new ConflictException('Review gate/version changed; reload');

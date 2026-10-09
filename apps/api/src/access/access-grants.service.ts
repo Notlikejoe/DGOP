@@ -23,6 +23,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { ScopeService, EffectiveScope } from "./scope.service";
 import { OwnerDelegateValidationService } from "./owner-delegate-validation.service";
 import { isManagedDemoProfile } from '../common/demo-profile';
+import { isSystemAdministrator } from '../auth/system-admin';
 import { enforcementOperationAllowed, enforcementGrantOutcome, REMOVAL_STATES, type EnforcementOperation } from './access-enforcement.logic';
 import {
   AccessMatrixQueryDto,
@@ -1566,7 +1567,7 @@ export class AccessGrantsService {
 
   async decideGrant(id: string, dto: DecideAccessGrantDto, user: AuthUser) {
     const existing = await this.getGrant(id, user);
-    if (existing.createdBy === user.email || existing.ownerDecision === 'pending' && existing.updatedBy === user.email) throw new ForbiddenException('Grant creators and pending-request editors cannot approve or reject their own requests');
+    if (!isSystemAdministrator(user.roles) && (existing.createdBy === user.email || existing.ownerDecision === 'pending' && existing.updatedBy === user.email)) throw new ForbiddenException('Grant creators and pending-request editors cannot approve or reject their own requests');
     if (!ACTIVE_GRANT_STATUSES.has(existing.status)) {
       throw new BadRequestException(
         "Only requested or active grants can receive an owner decision",

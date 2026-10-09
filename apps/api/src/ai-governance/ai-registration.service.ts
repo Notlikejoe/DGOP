@@ -122,10 +122,10 @@ export class AiRegistrationService {
         return this.prisma.$transaction(async (tx) => {
             const actor = await this.authorization.authorize(userId, 'aiuc.asset.register', tx, id);
             const context = await this.context(tx, id, taskId, AIUC_STAGE.assetRegistration, dto.expectedVersion);
-            if (!actor.roles.includes('AI_WORKING_GROUP') || context.task.assigneeRoleCode !== 'AI_WORKING_GROUP'
-                || context.task.assigneeUserId && context.task.assigneeUserId !== actor.id)
+            if (!actor.administratorOverride && (!actor.roles.includes('AI_WORKING_GROUP') || context.task.assigneeRoleCode !== 'AI_WORKING_GROUP'
+                || context.task.assigneeUserId && context.task.assigneeUserId !== actor.id))
                 throw new ForbiddenException('The working-group registration task is required');
-            if ([actor.id, context.current.requesterUserId, context.current.owner?.userId, context.adoption['actorId']].includes(context.dataOwner.userId)) {
+            if (!actor.administratorOverride && [actor.id, context.current.requesterUserId, context.current.owner?.userId, context.adoption['actorId']].includes(context.dataOwner.userId)) {
                 throw new ConflictException('The nominated Data Owner is not independent of registration, request, ownership and tier decision');
             }
             await this.authorization.authorize(context.dataOwner.userId!, 'aiuc.asset.approve', tx, id);
@@ -159,8 +159,8 @@ export class AiRegistrationService {
             const actor = await this.authorization.authorize(userId, 'aiuc.asset.approve', tx, id);
             const context = await this.context(tx, id, taskId, AIUC_STAGE.assetApproval, dto.expectedVersion);
             const proposal = record(context.form['registrationProposal']);
-            const administratorOverride = false;
-            if (!actor.roles.includes('data_owner') || context.task.assigneeRoleCode !== 'data_owner'
+            const administratorOverride = actor.administratorOverride;
+            if (!administratorOverride && (!actor.roles.includes('data_owner') || context.task.assigneeRoleCode !== 'data_owner')
                 || !administratorOverride && (actor.id !== context.task.assigneeUserId || actor.id !== context.dataOwner.userId
                     || actor.id !== proposal['dataOwnerUserId']))
                 throw new ForbiddenException('Only the nominated active Data Owner can decide asset registration');

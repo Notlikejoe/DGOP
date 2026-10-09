@@ -52,9 +52,10 @@ export class AiRiskAssessmentService {
     private owner(actor: {
         id: string;
         roles: string[];
+        administratorOverride: boolean;
     }, risk: Risk) {
         ;
-        if (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== risk.owner?.userId)
+        if (!actor.administratorOverride && (!actor.roles.includes('AI_RISK_OWNER') || actor.id !== risk.owner?.userId))
             throw new ForbiddenException('Only the assigned Risk Owner coordinates this assessment');
     }
     async referencesCurrent(tx: Prisma.TransactionClient, config: RiskScoringConfiguration, lock = false) {
@@ -99,7 +100,7 @@ export class AiRiskAssessmentService {
             const pinned = (coordinator ? jsonRecord(coordinator.formDataJson)['configuration'] : jsonRecord(risk.assessments[0]?.inputs)['configuration']) as RiskScoringConfiguration | undefined;
             const config = pinned ? { ...pinned, ready: scoringConfigurationIssues(pinned).length === 0, issues: scoringConfigurationIssues(pinned) } : await this.configuration(tx);
             const referencesCurrent = !!pinned && await this.referencesCurrent(tx, pinned);
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             const canAssess = risk.workflowCase?.status === 'under_review' && (administratorOverride || permissions.has('airs.risk.assess') && !actor.roles.includes('auditor'));
             const owner = canAssess && (administratorOverride || actor.id === risk.owner?.userId && actor.roles.includes('AI_RISK_OWNER'));
             const contributions = tasks.filter(task => jsonRecord(task.formDataJson)['coordinatorTaskId'] === coordinator?.id && jsonRecord(task.formDataJson)['dimension']);
@@ -168,7 +169,7 @@ export class AiRiskAssessmentService {
             await tx.workflowEvent.create({ data: { caseId: risk.workflowCase!.id, taskId: coordinator.id, actor: actor.id, action: restart ? 'airs.impact.restarted' : 'airs.impact.started', comment: `Round ${round}` } });
             await this.audit.logRequired({ actor: actor.id, action: restart ? 'airs.impact.restarted' : 'airs.impact.started', entityType: 'ai_risk', entityId: id,
                 metadata: { coordinatorTaskId: coordinator.id, restartedFromTaskId: restart ? currentCoordinator.id : null, justification: restart ? restartReason.trim() : null,
-                    round, referenceVersions: config.referenceVersions, administratorOverride: false, clientIp: clientIp ?? null } }, tx);
+                    round, referenceVersions: config.referenceVersions, administratorOverride: actor.administratorOverride, clientIp: clientIp ?? null } }, tx);
             return { id, version: expectedVersion + 1 };
         }, options);
     }
@@ -185,7 +186,7 @@ export class AiRiskAssessmentService {
             const data = jsonRecord(task?.formDataJson), mapping = config.dimensions.find(value => value.dimension === data['dimension']);
             if (!task || task.status !== TaskStatus.pending || !mapping || task.assigneeRoleCode !== mapping.assessorRoleCode)
                 throw new ConflictException('Active dimension task not found');
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             if (!administratorOverride && (!actor.roles.includes(mapping.assessorRoleCode) || task.assigneeUserId && task.assigneeUserId !== actor.id
                 || mapping.assessorRoleCode === 'AI_RISK_OWNER' && risk.owner?.userId !== actor.id))
                 throw new ForbiddenException('Only the competent assigned role can score this dimension');
@@ -248,7 +249,7 @@ export class AiRiskAssessmentService {
                     action: 'airs.inherent.scored', comment: `${computed.score}: ${computed.bandCode}; pending adoption` } });
             await this.audit.logRequired({ actor: actor.id, action: 'airs.inherent.scored', entityType: 'ai_risk', entityId: id,
                 metadata: { assessmentId: assessment.id, round, result, adoptionTaskId: adoption.id,
-                    administratorOverride: false, clientIp: clientIp ?? null } }, tx);
+                    administratorOverride: actor.administratorOverride, clientIp: clientIp ?? null } }, tx);
             return { id, version: dto.expectedVersion + 1, assessmentId: assessment.id, result, nextTaskId: adoption.id };
         }, options);
     }

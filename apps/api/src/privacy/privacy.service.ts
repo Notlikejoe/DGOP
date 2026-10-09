@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite } from '../common/governance-write';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateBreachDto,
   CreateConsentRecordDto,
@@ -123,18 +124,21 @@ export class PrivacyService {
   ) {}
 
   private assertPrivacyDecisionAuthority(roleCodes: string[]): void {
+    if (isSystemAdministrator(roleCodes)) return;
     if (!roleCodes.includes('privacy_officer')) throw new ForbiddenException('An assigned privacy officer business role is required for this decision');
   }
 
   private async privacyDecisionRoles(roleCodes: string[]): Promise<string[]> {
+    if (isSystemAdministrator(roleCodes)) return roleCodes;
     this.assertPrivacyDecisionAuthority(roleCodes);
     const role = await this.prisma.role.findFirst({ where: { code: 'privacy_officer', isActive: true, deletedAt: null, permissions: { some: { permission: { resource: 'privacy_operations', action: 'edit' } } } }, select: { code: true } });
     if (!role) throw new ForbiddenException('A live privacy officer decision permission is required');
-    // Technical oversight and unrelated roles must not broaden a business decision.
+    // Business users remain bound to the live privacy-officer grant.
     return [role.code];
   }
 
-  private async assertAssignedDecisionActor(tx: Prisma.TransactionClient, assignedPersonId: string | null, actor: string): Promise<void> {
+  private async assertAssignedDecisionActor(tx: Prisma.TransactionClient, assignedPersonId: string | null, actor: string, roleCodes: string[]): Promise<void> {
+    if (isSystemAdministrator(roleCodes)) return;
     if (!assignedPersonId) throw new ForbiddenException('Assign a privacy officer before making this decision');
     const assigned = await tx.person.findFirst({ where: { id: assignedPersonId, isActive: true, deletedAt: null, OR: [{ email: { equals: actor, mode: 'insensitive' } }, { user: { email: { equals: actor, mode: 'insensitive' }, isActive: true } }] }, select: { id: true } });
     if (!assigned) throw new ForbiddenException('Only the currently assigned privacy officer can make this decision');
@@ -486,7 +490,7 @@ export class PrivacyService {
     if (dto.residualRiskScore !== undefined && !dto.decisionSummary?.trim()) throw new BadRequestException('A documented mitigation justification is required for a residual risk change');
     await this.getDpia(await this.privacyDecisionRoles(roleCodes), id);
     return this.prisma.$transaction(async (tx) => {
-    if (dto.residualRiskScore !== undefined) await this.assertAssignedDecisionActor(tx, existing.reviewerPersonId, actor);
+    if (dto.residualRiskScore !== undefined) await this.assertAssignedDecisionActor(tx, existing.reviewerPersonId, actor, roleCodes);
     const row = await claimGovernanceWrite(() => tx.privacyDpia.update({
       where: { id, updatedAt: existing.updatedAt },
       data: {
@@ -511,7 +515,7 @@ export class PrivacyService {
     const decisionRoles = await this.privacyDecisionRoles(roleCodes);
     const dpia = await this.getDpia(decisionRoles, id);
     if (dto.status && dto.status !== PrivacyGateStatus.pending) this.assertPrivacyDecisionAuthority(roleCodes);
-    if (dto.status && dto.status !== PrivacyGateStatus.pending && dpia.createdBy === actor) {
+    if (!isSystemAdministrator(roleCodes) && dto.status && dto.status !== PrivacyGateStatus.pending && dpia.createdBy === actor) {
       throw new ForbiddenException('DPIA creators cannot approve or block their own privacy gates');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
@@ -523,8 +527,8 @@ export class PrivacyService {
     const deciding = dto.status !== undefined && dto.status !== PrivacyGateStatus.pending;
     const assignedId = existingGate?.reviewerPersonId ?? dpia.reviewerPersonId;
     if (deciding) {
-      if (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assignedId) throw new BadRequestException('Assign the reviewer while the gate is pending before making a decision');
-      await this.assertAssignedDecisionActor(tx, assignedId, actor);
+      if (!isSystemAdministrator(roleCodes) && dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assignedId) throw new BadRequestException('Assign the reviewer while the gate is pending before making a decision');
+      await this.assertAssignedDecisionActor(tx, assignedId, actor, roleCodes);
       if (!dto.note?.trim()) throw new BadRequestException('A documented control assessment or not-required justification is required');
       if (existingGate && existingGate.status !== PrivacyGateStatus.pending) throw new ConflictException('This gate already has a decision; reopen the assessment before deciding again');
     }
@@ -632,13 +636,13 @@ export class PrivacyService {
       if (exists.version !== dto.expectedVersion) throw new ConflictException('DSR changed; reload before saving');
       const finalStatuses: DsrRequestStatus[] = ['fulfilled', 'rejected', 'closed'];
       if ((dto.status && finalStatuses.includes(dto.status)) || dto.identityValidated === true) this.assertPrivacyDecisionAuthority(roleCodes);
-      if (dto.status && finalStatuses.includes(dto.status) && exists.createdBy === actor) throw new ForbiddenException('DSR creators cannot make their own final decisions');
+      if (!isSystemAdministrator(roleCodes) && dto.status && finalStatuses.includes(dto.status) && exists.createdBy === actor) throw new ForbiddenException('DSR creators cannot make their own final decisions');
       const proofChanged = dto.identityEvidenceReference !== undefined && (dto.identityEvidenceReference?.trim() || null) !== exists.identityEvidenceReference
         || dto.completionEvidenceReference !== undefined && (dto.completionEvidenceReference?.trim() || null) !== exists.completionEvidenceReference
         || !!dto.fulfilledAt && new Date(dto.fulfilledAt).getTime() !== exists.fulfilledAt?.getTime();
       const decides = !!dto.deadlineExtension || proofChanged || dto.identityValidated === true || !!dto.status && finalStatuses.includes(dto.status);
-      if (decides) await this.assertAssignedDecisionActor(tx, exists.assignedPersonId, actor);
-      if (dto.deadlineExtension && exists.createdBy === actor) throw new ForbiddenException('DSR creators cannot approve their own deadline extensions');
+      if (decides) await this.assertAssignedDecisionActor(tx, exists.assignedPersonId, actor, roleCodes);
+      if (!isSystemAdministrator(roleCodes) && dto.deadlineExtension && exists.createdBy === actor) throw new ForbiddenException('DSR creators cannot approve their own deadline extensions');
       const now = new Date();
       const merged = {
         ...exists,
@@ -748,8 +752,8 @@ export class PrivacyService {
         || !!dto.subjectNotifiedAt && new Date(dto.subjectNotifiedAt).getTime() !== exists.subjectNotifiedAt?.getTime();
       const decidesNotification = decisionChanged || notificationEvidenceChanged || dto.regulatorNotified === true || dto.subjectNotified === true || !!dto.status && ['closed', 'false_positive', 'notified'].includes(dto.status);
       if (decidesNotification) this.assertPrivacyDecisionAuthority(roleCodes);
-      if (exists.createdBy === actor && decidesNotification) throw new ForbiddenException('Incident creators cannot approve their own notification obligations, completion or final decisions');
-      if (decidesNotification) await this.assertAssignedDecisionActor(tx, exists.assignedPersonId, actor);
+      if (!isSystemAdministrator(roleCodes) && exists.createdBy === actor && decidesNotification) throw new ForbiddenException('Incident creators cannot approve their own notification obligations, completion or final decisions');
+      if (decidesNotification) await this.assertAssignedDecisionActor(tx, exists.assignedPersonId, actor, roleCodes);
       if ((exists.regulatorNotified && dto.regulatorNotified === false) || (exists.subjectNotified && dto.subjectNotified === false)) throw new BadRequestException('Recorded notification completion cannot be erased');
       const now = new Date();
       const merged = {

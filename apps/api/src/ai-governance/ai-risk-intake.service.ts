@@ -104,9 +104,10 @@ export class AiRiskIntakeService {
     }>, actor: {
         id: string;
         roles: string[];
+        administratorOverride: boolean;
     }, permissions: Set<string>) {
         const draft = !['SUSPENDED', 'ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '') && item.workflowCase?.status === 'draft' && !item.riskRef && !actor.roles.includes('auditor');
-        const administratorOverride = false;
+        const administratorOverride = actor.administratorOverride;
         const { createdBy, initiationKey, ...publicItem } = item;
         return { ...publicItem, canAssignOwner: draft && (administratorOverride || actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')),
             canEdit: draft && (administratorOverride || item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs')),
@@ -149,7 +150,7 @@ export class AiRiskIntakeService {
     async lookups(userId: string) {
         const { actor, permissions } = await this.visibility(userId);
         const lists = await this.references();
-        const riskOwners = (actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')) ? await this.prisma.person.findMany({ where: {
+        const riskOwners = (actor.administratorOverride || actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')) ? await this.prisma.person.findMany({ where: {
                 isActive: true, deletedAt: null, user: { is: { isActive: true, userRoles: { none: { role: { is: { code: 'auditor', isActive: true, deletedAt: null } } }, some: { role: { is: { code: 'AI_RISK_OWNER', isActive: true, deletedAt: null,
                                         permissions: { some: { permission: { is: splitAiPermission('case.create.airs') } } } } } } } } },
             }, select: { userId: true, fullNameEn: true, fullNameAr: true }, orderBy: { fullNameEn: 'asc' }, take: 500 }) : [];
@@ -165,7 +166,7 @@ export class AiRiskIntakeService {
             throw new ConflictException('New risk intake is paused because the linked AI use case is suspended or archived');
         if (item.version !== version)
             throw new ConflictException('AI risk changed; reload before editing');
-        if (ownerOnly && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id))
+        if (ownerOnly && !actor.administratorOverride && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id))
             throw new ForbiddenException('Only the assigned Risk Owner can edit or submit this intake');
         return { actor, item };
     }
@@ -174,7 +175,7 @@ export class AiRiskIntakeService {
             throw new BadRequestException('Owner assignment justification is required');
         return this.prisma.$transaction(async (tx) => {
             const { actor, item } = await this.writable(tx, userId, id, dto.expectedVersion, false);
-            if (!actor.roles.includes('AI_WORKING_GROUP'))
+            if (!actor.administratorOverride && !actor.roles.includes('AI_WORKING_GROUP'))
                 throw new ForbiddenException('The working group assigns the risk intake owner');
             const nominee = await this.authorization.authorize(dto.ownerUserId, 'case.create.airs', tx, id);
             if (!nominee.roles.includes('AI_RISK_OWNER'))
@@ -249,7 +250,7 @@ export class AiRiskIntakeService {
             const { actor, item } = await this.writable(tx, userId, id, version, false);
             if (!item.initiationKey)
                 throw new ConflictException('Automatic handoff risks cannot be deleted');
-            if (item.createdBy !== actor.id && !actor.roles.includes('AI_WORKING_GROUP'))
+            if (!actor.administratorOverride && item.createdBy !== actor.id && !actor.roles.includes('AI_WORKING_GROUP'))
                 throw new ForbiddenException('Only the draft creator or AI Working Group can delete this risk draft');
             const now = new Date();
             await tx.workflowTask.updateMany({ where: { caseId: item.workflowCase!.id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },

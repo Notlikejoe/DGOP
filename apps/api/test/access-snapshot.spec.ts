@@ -20,7 +20,8 @@ async function main() {
   const partial = aiCapabilities(['AI_GOVERNANCE_OFFICER'], [grant('AI_GOVERNANCE_OFFICER', 'case.view.airs.org')], { ...scope, orgUnits: ['finance'] });
   assert(!partial.screens.migration);
   const adminOnly = aiCapabilities(['system_admin'], [], scope);
-  assert(adminOnly.screens.dashboard && !adminOnly.panels.classificationVerification);
+  assert(adminOnly.screens.dashboard && Object.values(adminOnly.panels).every(Boolean));
+  assert.equal(adminOnly.permissions.length, new Set(adminOnly.permissions).size);
   const mixed = aiCapabilities(['auditor', 'AI_GOVERNANCE_OFFICER'], [grant('AI_GOVERNANCE_OFFICER', 'aiuc.classify.assess')], scope);
   assert(!mixed.panels.classificationVerification);
   const revision = accessRevision(['b', 'a'], ['edit', 'read'], { orgUnits: ['2','1'], domains: [], maxClassRank: 2 }, none);

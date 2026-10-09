@@ -14,6 +14,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth.types';
+import { isSystemAdministrator } from '../auth/system-admin';
 import { isManagedDemoProfile } from '../common/demo-profile';
 import { claimGovernanceWrite } from '../common/governance-write';
 import { CreateEvidenceDto, EvidenceStatus, ReviewEvidenceDto } from './evidence.dto';
@@ -271,6 +272,7 @@ export class EvidenceService {
 
   private async requireReviewAccess(id: string, actor: AuthUser) {
     const evidence = await this.get(id, actor);
+    if (isSystemAdministrator(actor.roles)) return evidence;
     if (evidence.submittedBy === actor.email) throw new ForbiddenException('You cannot review evidence you submitted');
     if (actor.roles.includes('auditor')) throw new ForbiddenException('Auditor access is read only');
     if (actor.roles.includes('dmo_admin')) return evidence;
@@ -360,7 +362,7 @@ export class EvidenceService {
       throw new BadRequestException('Only submitted evidence can be reviewed');
     }
     // Separation of duties: the submitter cannot review their own evidence.
-    if (e.submittedBy === this.actorEmail(actor)) {
+    if (!isSystemAdministrator(actor.roles) && e.submittedBy === this.actorEmail(actor)) {
       throw new ForbiddenException('You cannot review evidence you submitted');
     }
     const status: EvidenceStatus = dto.decision === 'approve' ? 'approved' : 'rejected';

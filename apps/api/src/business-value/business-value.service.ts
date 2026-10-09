@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite, requireTransition } from '../common/governance-write';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateBusinessImpactAssessmentDto,
   CreateBusinessLineageDto,
@@ -269,7 +270,7 @@ export class BusinessValueService {
 
   async decideGlossaryTerm(roleCodes: string[], id: string, dto: DecideGlossaryTermDto, actor: string) {
     const existing = await this.findVisibleGlossary(roleCodes, id);
-    if (existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
+    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Glossary term creators cannot make the final review decision');
     }
     requireTransition(existing.status, dto.status, {
@@ -344,7 +345,7 @@ export class BusinessValueService {
 
   async updateLineage(roleCodes: string[], id: string, dto: UpdateBusinessLineageDto, actor: string) {
     const existing = await this.findVisibleLineage(roleCodes, id);
-    if (existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
+    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
       throw new ForbiddenException('Lineage creators cannot verify their own lineage map');
     }
     const impactScore = dto.impactScore === undefined ? existing.impactScore : clampScore(dto.impactScore, existing.impactScore);
@@ -446,7 +447,7 @@ export class BusinessValueService {
 
   async decideLifecycle(roleCodes: string[], id: string, dto: DecideLifecycleDecisionDto, actor: string) {
     const existing = await this.findVisibleLifecycle(roleCodes, id);
-    if (existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
+    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Lifecycle decision creators cannot approve or reject their own decision');
     }
     requireTransition(existing.status, dto.status, { proposed: ['approved', 'rejected'], approved: ['implemented', 'rejected'], implemented: [], rejected: [] });

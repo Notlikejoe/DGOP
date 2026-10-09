@@ -19,7 +19,7 @@ export function aiCapabilities(roles: string[], grants: { role: { code: string }
     return roles.includes(g.role.code) && AI_PERMISSIONS.includes(code) && aiRoleMayHold(g.role.code, code)
       && (code.startsWith('case.view.') || code.startsWith('dashboard.view.') || g.role.code !== 'system_admin' && !auditor);
   }).map(g => `${g.permission.resource}.${g.permission.action}`))].sort();
-  if (admin) for (const code of AI_PERMISSIONS) if (code.startsWith('case.view.') || code.startsWith('dashboard.view.')) if (!permissions.includes(code)) permissions.push(code);
+  if (admin) for (const code of AI_PERMISSIONS) if (!permissions.includes(code)) permissions.push(code);
   permissions.sort();
   const has = (code: string) => permissions.includes(code);
   const useCases = admin || ['own', 'org', 'all'].some(s => has(`case.view.aiuc.${s}`));
@@ -29,9 +29,9 @@ export function aiCapabilities(roles: string[], grants: { role: { code: string }
     || has('dashboard.view.airs') && roles.some(r => ['AI_WORKING_GROUP', 'AI_GOVERNANCE_OFFICER', 'AI_COMPLIANCE_OFFICER'].includes(r));
   const executive = !governance && !auditor && has('dashboard.view.exec.ai');
   const report = reportGrant && (executive || risks && (auditor || governance || roles.includes('AI_RISK_OWNER') && has('dashboard.view.airs')));
-  const classificationVerification = (admin || has('aiuc.classify.assess')) && roles.includes('AI_GOVERNANCE_OFFICER');
+  const classificationVerification = admin || has('aiuc.classify.assess') && roles.includes('AI_GOVERNANCE_OFFICER');
   const classification = admin || has('aiuc.classify.assess');
-  const specialist = (admin || has('case.view.aiuc.org')) && roles.some(r => ['privacy_officer','security_reviewer','AI_ETHICS_COMMITTEE'].includes(r));
+  const specialist = admin || has('case.view.aiuc.org') && roles.some(r => ['privacy_officer','security_reviewer','AI_ETHICS_COMMITTEE'].includes(r));
   const decision = admin || has('case.approve.aiuc');
   const registration = admin || has('aiuc.asset.register') || has('aiuc.asset.approve');
   return {

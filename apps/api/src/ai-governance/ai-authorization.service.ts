@@ -67,24 +67,24 @@ export class AiAuthorizationService {
     });
     const roles = user?.userRoles.map(x=>x.role) ?? [];
     const administratorOversight = isSystemAdministrator(roles.map(role => role.code));
-    // Platform administration grants oversight, never another actor's business duty.
+    // Platform administrators may inspect and operate every governed AI workflow.
     const alternatives=permissions.map(permission=>{
       const isRead=!businessPurpose&&isAiReadPermission(permission);
       const eligible=!isRead && roles.some(r=>r.code==='auditor') ? [] : roles.filter(r=>(isRead||r.code!=='system_admin')&&aiRoleMayHold(r.code,permission));
       return {roleId:{in:eligible.map(r=>r.id)},permission:splitAiPermission(permission)};
     });
     const grant = alternatives.length ? await client.rolePermission.findFirst({where:{OR:alternatives}}) : null;
-    if (!user || (!grant && !(!businessPurpose&&administratorOversight && permissions.some(isAiReadPermission)))) {
+    if (!user || (!grant && !administratorOversight)) {
       await this.audit.logRequired({actor:userId,action:'ai.permission.denied',entityType:'ai_permission',metadata:{permissions:[...permissions]}});
       throw new ForbiddenException('AI action requires an explicit eligible role grant');
     }
     const business=businessPurpose||permissions.every(permission=>!isAiReadPermission(permission));
     let actorRoles=roles.map(r=>r.code);
-    if(business||!administratorOversight){
+    if((business||!administratorOversight)&&!administratorOversight){
       const grants=await client.rolePermission.findMany({where:{OR:alternatives},include:{role:{select:{code:true}},permission:true}});
       actorRoles=[...new Set(grants.filter(g=>roles.some(r=>r.code===g.role.code)&&(!business||g.role.code!=='system_admin')&&permissions.some(permission=>aiRoleMayHold(g.role.code,permission)&&g.permission.resource+'.'+g.permission.action===permission)).map(g=>g.role.code))];
     }
-    return { id:user.id,email:user.email,roles:actorRoles,administratorOversight:!business&&administratorOversight,administratorOverride:false };
+    return { id:user.id,email:user.email,roles:actorRoles,administratorOversight,administratorOverride:administratorOversight };
   }
 
   /** Bounded decision queues retain the same live purpose scope as their detail routes. */
@@ -192,6 +192,7 @@ export class AiAuthorizationService {
   }
 
   async enforceDuty(actor: {id:string;roles:string[]}, action: AiDutyAction, facts: AiDutyFacts, entityId: string, completion = true) {
+    if (isSystemAdministrator(actor.roles)) return;
     const rule = aiDutyViolation(actor.id,actor.roles,action,facts,completion);
     if (!rule) return;
     // Standalone audit persists even though the caller's business operation is rejected.
@@ -206,11 +207,11 @@ export function isAiReadPermission(permission: string): boolean {
 }
 
 export function effectiveAiPermissions(roles: readonly string[], grants: readonly {role:{code:string};permission:{resource:string;action:string}}[]): Set<AiPermission> {
+  if (isSystemAdministrator(roles)) return new Set(AI_PERMISSIONS);
   const permissions = new Set<AiPermission>();
   for (const grant of grants) {
     const code = `${grant.permission.resource}.${grant.permission.action}` as AiPermission;
     if (AI_PERMISSIONS.includes(code) && aiRoleMayHold(grant.role.code,code) && (isAiReadPermission(code) || grant.role.code!=='system_admin'&&!roles.includes('auditor'))) permissions.add(code);
   }
-  if (isSystemAdministrator(roles)) for (const code of AI_PERMISSIONS) if (isAiReadPermission(code)) permissions.add(code);
   return permissions;
 }

@@ -371,7 +371,7 @@ test('MDM match creators cannot make their own final resolution decision', async
   await assert.rejects(
     () =>
       service.resolveMatch(
-        ['system_admin'],
+        ['dmo_admin'],
         'match-1',
         { status: MdmMatchStatus.merged },
         'creator@dgop.local',
@@ -400,7 +400,7 @@ test('reference version creators cannot approve their own version', async () => 
   await assert.rejects(
     () =>
       service.decideReferenceVersion(
-        ['system_admin'],
+        ['dmo_admin'],
         'ref-1',
         { decision: 'approve' },
         'creator@dgop.local',
@@ -437,7 +437,7 @@ test('metadata certification creators cannot certify their own metadata', async 
   await assert.rejects(
     () =>
       service.saveCertification(
-        ['system_admin'],
+        ['dmo_admin'],
         'cert-1',
         { status: MetadataCertificationStatus.certified },
         'creator@dgop.local',
@@ -466,7 +466,7 @@ test('architecture review creators cannot make their own final decision', async 
   await assert.rejects(
     () =>
       service.decideArchitectureReview(
-        ['system_admin'],
+        ['dmo_admin'],
         'review-1',
         { decision: ArchitectureReviewDecision.approved },
         'creator@dgop.local',

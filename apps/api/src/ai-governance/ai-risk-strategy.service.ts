@@ -42,10 +42,10 @@ export class AiRiskStrategyService {
         const ownerActive = !!risk.ownerPersonId && !!await tx.person.findFirst({ where: { id: risk.ownerPersonId, userId: risk.owner?.userId, isActive: true, deletedAt: null }, select: { id: true } });
         const active = !!task && !!adoption && !!approved && !!response && !response.decisions.some(d => d.decision === 'return') && risk.workflowCase?.status === 'under_review' && ownerActive;
         const last = events.at(-1) ?? null;
-        const administratorOverride = false;
+        const administratorOverride = access.actor.administratorOverride;
         const independent = administratorOverride || !access.actor.roles.includes('auditor') && ![risk.owner?.userId, risk.useCase.owner?.userId, response?.submittedBy].includes(userId);
         const assigned = !!task && (administratorOverride || !task.assigneeUserId || task.assigneeUserId === userId) && !!task.assigneeRoleCode && (administratorOverride || access.actor.roles.includes(task.assigneeRoleCode));
-        const authority = active && independent && assigned && !!access.permissionRoles['airs.strategy.decide']?.includes(task!.assigneeRoleCode!);
+        const authority = active && independent && assigned && (administratorOverride || !!access.permissionRoles['airs.strategy.decide']?.includes(task!.assigneeRoleCode!));
         const owner = active && ownerActive && (administratorOverride || risk.owner?.userId === userId && access.actor.roles.includes('AI_RISK_OWNER') && access.permissions.has('airs.risk.assess') && !access.actor.roles.includes('auditor'));
         const escalation = last?.escalationId ? await tx.governanceEscalation.findUnique({ where: { id: last.escalationId } }) : null;
         return { ...access, risk, assessment, adoption, response, events, last, task, current, escalation, administratorOverride,

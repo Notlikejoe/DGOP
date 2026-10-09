@@ -107,8 +107,8 @@ export class AiDecisionService {
                 throw new ConflictException('A classification override requires its recorded higher-authority reference before adoption');
             }
             const assignment = await this.routing.decisionAssignment(tx, approvedTierCode);
-            if (task.assigneeRoleCode !== assignment.role || !actor.roles.includes(assignment.role)
-                || (task.assigneeUserId && task.assigneeUserId !== actor.id)) {
+            if (task.assigneeRoleCode !== assignment.role || (!actor.administratorOverride && (!actor.roles.includes(assignment.role)
+                || (task.assigneeUserId && task.assigneeUserId !== actor.id)))) {
                 throw new ForbiddenException('The decision must be recorded by its configured tier authority');
             }
             if (!aiucAllowedDecisions(approvedTierCode).includes(dto.decision)) {

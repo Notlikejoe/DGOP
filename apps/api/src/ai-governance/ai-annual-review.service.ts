@@ -29,7 +29,7 @@ export class AiAnnualReviewService {
             throw new ForbiddenException('Annual reviews require register visibility');
         if (write) {
             actor=await this.authorization.authorize(userId, 'airs.cadence.manage', tx);
-            if ((!actor.roles.includes('AI_GOVERNANCE_OFFICER') || actor.roles.includes('auditor')))
+            if (!actor.administratorOverride && (!actor.roles.includes('AI_GOVERNANCE_OFFICER') || actor.roles.includes('auditor')))
                 throw new ForbiddenException('Annual comprehensive review is owned by the Responsible AI Officer');
         }
         return { ...access, actor, scope: await this.scope.resolve(actor.roles) };
@@ -63,7 +63,7 @@ export class AiAnnualReviewService {
     }
     async units(userId: string) {
         return this.prisma.$transaction(async tx=>{
-            const a=await this.access(tx,userId), canManage=a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor')&&a.scope.domains==='all'&&a.scope.maxClassRank===null;
+            const a=await this.access(tx,userId), canManage=(a.actor.administratorOverride||a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor'))&&a.scope.domains==='all'&&a.scope.maxClassRank===null;
             const units=await tx.organizationUnit.findMany({where:{deletedAt:null,OR:[{isActive:true},{aiAnnualReviews:{some:{}}},{aiMonthlyReviewReports:{some:{}}}],
                 ...(a.scope.orgUnits==='all'?{}:{id:{in:a.scope.orgUnits}})},select:{id:true,nameEn:true,nameAr:true},orderBy:[{nameEn:'asc'},{id:'asc'}]});
             return {canManage,units};
@@ -79,14 +79,14 @@ export class AiAnnualReviewService {
                 rows=>visibleSnapshots(tx,a.where,rows,r=>jsonRecord(r.sourceSnapshot)['members'] as Prisma.JsonValue),r=>{summary.total++;if(r.completion)summary.completed++;else{summary.pending++;if(r.dueAt<=evaluatedAt)summary.overdue++;}});
             const rows=await tx.aiAnnualReview.findMany({where:{id:{in:paged.ids}},include,orderBy:[{round:'desc'},{id:'asc'}]});
             let writable=false;
-            if(a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor')) {
+            if(a.actor.administratorOverride||a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor')) {
                 try{await this.registerScope(tx,userId,unitId,true);writable=true;}catch(e){if(!(e instanceof ForbiddenException)&&!(e instanceof NotFoundException))throw e;}
             }
             const hasCalendar=await tx.aiAnnualReview.count({where:{organizationUnitId:unitId}})>0;
             const data=rows.map(r=>({...r,task:undefined,currentOfficerId:r.handovers[0]?.toOfficerId??r.assignedOfficerId,handoverRound:r.handovers[0]?.round??0,
                 canHandover:writable&&!r.completion&&r.task.status==='pending',status:aiReviewStatus(!!r.completion,r.dueAt),
-                canComplete:writable&&!r.completion&&(r.handovers[0]?.toOfficerId??r.assignedOfficerId)===userId&&r.task.assigneeUserId===userId&&r.task.status==='pending'}));
-            return {...paged.envelope,data,summary,evaluatedAt,organizationUnit:a.unit,administratorOverride:false,canCaptureMonthly:writable,canRegister:writable&&!hasCalendar,readOnly:true};
+                canComplete:writable&&!r.completion&&(a.actor.administratorOverride||((r.handovers[0]?.toOfficerId??r.assignedOfficerId)===userId&&r.task.assigneeUserId===userId))&&r.task.status==='pending'}));
+            return {...paged.envelope,data,summary,evaluatedAt,organizationUnit:a.unit,administratorOverride:a.actor.administratorOverride,canCaptureMonthly:writable,canRegister:writable&&!hasCalendar,readOnly:true};
         },options);
     }
     async nomineeList(userId: string, unitId: string, query: AiReviewQueryDto = new AiReviewQueryDto()) {
@@ -147,7 +147,7 @@ export class AiAnnualReviewService {
                 throw new NotFoundException('Annual review not found');
             const a = await this.registerScope(tx, userId, row.organizationUnitId, true);
             await this.visibleSnapshot(tx, (await this.historyScope(tx,userId,row.organizationUnitId)).where, row);
-            const administratorOverride = false;
+            const administratorOverride = a.actor.administratorOverride;
             if (row.completion || row.round !== dto.expectedRound || (dto.expectedHandoverRound ?? 0) !== (row.handovers[0]?.round ?? 0) || row.task.status !== 'pending' || !administratorOverride && (row.task.assigneeUserId !== userId || (row.handovers[0]?.toOfficerId ?? row.assignedOfficerId) !== userId) || row.task.dueDate?.getTime() !== row.dueAt.getTime() || jsonRecord(row.task.formDataJson)['annualReviewId'] !== row.id)
                 throw new ConflictException('Annual review gate changed or belongs to another officer');
             const evidenceIds = [...new Set(dto.evidenceIds)];

@@ -11,6 +11,7 @@ import { AiAuthorizationService, effectiveAiPermissions } from './ai-authorizati
 import { AiRegisterQueryDto, aiRegisterParams } from './ai-register-query.dto';
 import { toPaged } from '../common/pagination';
 import { ScopeService } from '../access/scope.service';
+import { isSystemAdministrator } from '../auth/system-admin';
 import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
 import { AI_INTAKE_SCHEMA_VERSION, AiIntakeDraftV1, AiIntakeField, AiIntakeV1 } from './ai-governance.contracts';
 import { AiIdentifiersService } from './ai-identifiers.service';
@@ -267,7 +268,7 @@ export class AiIntakeService {
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
             if (!current)
                 throw new NotFoundException('AI use-case draft not found');
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             if (current.requesterUserId !== userId && !administratorOverride)
                 throw new ForbiddenException('Only the requester can edit this AI intake draft');
             const returnedTask = current.workflowCaseId && current.workflowCase?.status === CaseStatus.awaiting_information
@@ -327,7 +328,7 @@ export class AiIntakeService {
         const task = await tx.workflowTask.findFirst({ where: { caseId: uc.workflowCaseId, status: 'pending', assigneeUserId: uc.requesterUserId, templateStage: { code: 'aiuc-completion', isActive: true, template: { code: 'AIUC_APPROVAL_V1', isActive: true, deletedAt: null } } } });
         const grants = await tx.rolePermission.findMany({ where: { role: { isActive: true, deletedAt: null, userRoles: { some: { userId } } }, permission: { OR: [{ resource: 'case.create', action: 'aiuc' }, { resource: 'case.approve', action: 'aiuc' }] } }, include: { role: true, permission: true } });
         const withdrawRole = grants.filter(g => g.permission.resource === 'case.create' && aiRoleMayHold(g.role.code, 'case.create.aiuc')).map(g => g.role.code).sort()[0];
-        const administratorOverride = false;
+        const administratorOverride = isSystemAdministrator(access.roles);
         return { uc, access, task, withdrawRole, administratorOverride, canWithdraw: open && (administratorOverride || uc.requesterUserId === userId && !access.roles.includes('auditor') && !!withdrawRole),
             canCloseNoAction: open && (administratorOverride || uc.workflowCase?.status === 'awaiting_information' && !!task?.dueDate && task.dueDate <= new Date() && !access.roles.includes('auditor') && grants.some(g => g.role.code === 'AI_GOVERNANCE_OFFICER' && g.permission.resource === 'case.approve')) };
     }
@@ -368,7 +369,7 @@ export class AiIntakeService {
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
             if (!current)
                 throw new NotFoundException('AI use-case draft not found');
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             if (current.requesterUserId !== userId && !administratorOverride)
                 throw new ForbiddenException('Only the requester can submit this AI intake');
             if (current.workflowCaseId || current.intakeRevisions[0]?.submittedAt)
@@ -451,7 +452,7 @@ export class AiIntakeService {
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
             if (!current)
                 throw new NotFoundException('AI use case not found');
-            const administratorOverride = false;
+            const administratorOverride = actor.administratorOverride;
             if (current.requesterUserId !== userId && !administratorOverride)
                 throw new ForbiddenException('Only the requester can resubmit this AI intake');
             if (!current.workflowCaseId || current.workflowCase?.status !== CaseStatus.awaiting_information) {
@@ -521,7 +522,7 @@ export class AiIntakeService {
             });
             if (!task)
                 throw new ConflictException('No active AIUC triage task exists');
-            if(!actor.roles.includes('AI_WORKING_GROUP')||task.assigneeUserId&&task.assigneeUserId!==actor.id)
+            if(!actor.administratorOverride&&(!actor.roles.includes('AI_WORKING_GROUP')||task.assigneeUserId&&task.assigneeUserId!==actor.id))
                 throw new ForbiddenException('Only the assigned Working Group can complete AIUC triage');
             const now = new Date();
             const nextStatus = decision === 'accept' ? CaseStatus.under_review

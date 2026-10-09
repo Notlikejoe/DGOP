@@ -29,6 +29,7 @@ import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
 import { isManagedDemoProfile } from '../common/demo-profile';
 import { claimGovernanceWrite } from '../common/governance-write';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateOpenDataCandidateDto,
   CreateOpenDataReviewDto,
@@ -460,7 +461,8 @@ export class OpenDataService {
     approval: { step: string; workflowTaskId?: string | null },
     actor: string,
   ): Promise<void> {
-    if (candidate.createdBy === actor) {
+    const administratorOverride = isSystemAdministrator(roleCodes);
+    if (!administratorOverride && candidate.createdBy === actor) {
       throw new ForbiddenException('The submitter cannot approve their own Open Data candidate');
     }
 
@@ -470,13 +472,13 @@ export class OpenDataService {
       (approval.step === 'steward' && candidate.stewardPerson?.email === actor) ||
       (approval.step === 'odiao' && candidate.odiaoReviewerPerson?.email === actor);
 
-    if (!roleAllowed || (['owner', 'steward', 'odiao'].includes(approval.step) && !personAllowed)) {
+    if (!administratorOverride && (!roleAllowed || (['owner', 'steward', 'odiao'].includes(approval.step) && !personAllowed))) {
       throw new ForbiddenException(`You cannot decide the ${approval.step} Open Data approval step`);
     }
     if (approval.workflowTaskId) {
       const task = await this.prisma.workflowTask.findUnique({ where: { id: approval.workflowTaskId }, select: { assigneeUserId: true, assigneeRoleCode: true } });
       const user = await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } });
-      if (!task || (task.assigneeUserId && task.assigneeUserId !== user?.id) || (!task.assigneeUserId && task.assigneeRoleCode && !roleCodes.includes(task.assigneeRoleCode))) throw new ForbiddenException('Only the assigned business reviewer can decide this Open Data task');
+      if (!task || (!administratorOverride && ((task.assigneeUserId && task.assigneeUserId !== user?.id) || (!task.assigneeUserId && task.assigneeRoleCode && !roleCodes.includes(task.assigneeRoleCode))))) throw new ForbiddenException('Only the assigned business reviewer can decide this Open Data task');
     }
   }
 

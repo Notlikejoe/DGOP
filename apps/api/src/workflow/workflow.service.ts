@@ -34,6 +34,7 @@ import { ScopeService } from '../access/scope.service';
 import { AssignmentsService } from '../ownership/assignments.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { AuthUser } from '../auth/auth.types';
+import { isSystemAdministrator } from '../auth/system-admin';
 import { parsePageParams, toPaged } from '../common/pagination';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { sanitizeAttachmentFilename } from '../common/download';
@@ -5708,7 +5709,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('A completed or cancelled task cannot receive form data');
     }
     const queueRole = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
-    if (task.assigneeUserId !== user.id && !(!task.assigneeUserId && queueRole && user.roles.includes(queueRole))) {
+    if (!isSystemAdministrator(user.roles) && task.assigneeUserId !== user.id && !(!task.assigneeUserId && queueRole && user.roles.includes(queueRole))) {
       throw new ForbiddenException('Only the task assignee or owning role queue can edit this form');
     }
     const businessRoles=await this.assertBusinessTaskRole(user, queueRole);
@@ -5716,19 +5717,13 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return task;
   }
 
-  /** A technical administrator must hold the actual business role and its live grant. */
+  /** The system administrator may operate every task; business users retain role-bound task authority. */
   private async assertBusinessTaskRole(user: AuthUser, queueRole: string | null) {
+    if (isSystemAdministrator(user.roles)) return user.roles;
     if (queueRole && (queueRole === 'system_admin' || !user.roles.includes(queueRole))) {
       throw new ForbiddenException('The task requires its assigned business role');
     }
-    if (!user.roles.includes('system_admin')) return user.roles;
-    const businessRoles = queueRole ? [queueRole] : user.roles.filter(role => !['system_admin', 'auditor'].includes(role));
-    const grant = !user.roles.includes('auditor') && businessRoles.length ? await this.prisma.rolePermission.findFirst({
-      where: { role: { is: { code: { in: businessRoles }, isActive: true, deletedAt: null, userRoles: { some: { userId: user.id } } } }, permission: { is: { resource: 'workflow_tasks', action: 'edit' } } },
-      select: { role: {select:{code:true}} },
-    }) : null;
-    if (!grant) throw new ForbiddenException('Business task actions require an explicit business role grant');
-    return [grant.role.code];
+    return user.roles;
   }
 
   async saveTaskFormDraft(id: string, dto: SaveWorkflowTaskFormDraftDto, user: AuthUser) {
@@ -5821,8 +5816,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   }
 
   async listMyTasks(user: AuthUser, filters: { status?: string; page?: string | number; pageSize?: string | number }) {
-    const ownership: Prisma.WorkflowTaskWhereInput[] = [{ assigneeUserId: user.id }];
-    if (user.roles.length) {
+    const ownership: Prisma.WorkflowTaskWhereInput[] = isSystemAdministrator(user.roles) ? [{}] : [{ assigneeUserId: user.id }];
+    if (!isSystemAdministrator(user.roles) && user.roles.length) {
       ownership.push({
         assigneeUserId: null,
         OR: [
@@ -6598,11 +6593,12 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('This task has already been decided');
     }
     const taskQueueRoleCode = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
+    const administratorOverride = isSystemAdministrator(user.roles);
     const isRoleQueueDecision =
       !task.assigneeUserId &&
       !!taskQueueRoleCode &&
       user.roles.includes(taskQueueRoleCode);
-    if (task.assigneeUserId !== user.id && !isRoleQueueDecision) {
+    if (!administratorOverride && task.assigneeUserId !== user.id && !isRoleQueueDecision) {
       throw new ForbiddenException('Only the assigned user or owning role queue can decide this task');
     }
     const businessRoles=await this.assertBusinessTaskRole(user, taskQueueRoleCode);
@@ -6613,7 +6609,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     const isApprovalTask =
       task.case.type === 'owner_assignment_approval' ||
       task.case.type === 'steward_assignment_approval';
-    if ((isApprovalTask || task.type === 'approval') && task.case.createdBy === user.email) {
+    if (!administratorOverride && (isApprovalTask || task.type === 'approval') && task.case.createdBy === user.email) {
       throw new ForbiddenException('You cannot decide an approval you submitted');
     }
     const returnedForClarification = dto.decision === WORKFLOW_RETURN_FOR_CLARIFICATION;
@@ -6630,7 +6626,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           decision: returnedForClarification ? null : dto.decision as TaskDecision,
           decisionComment: dto.comment ?? null,
           completedAt: new Date(),
-          ...(isRoleQueueDecision ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode } : {}),
+          ...(isRoleQueueDecision || administratorOverride ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode } : {}),
         },
       });
       if (claim.count !== 1) throw new ConflictException('This task was decided by another user');
@@ -6680,7 +6676,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           include: { roleType: true, person: true },
         });
         if (!assignment) throw new BadRequestException('assignment not found for approval workflow');
-        if (assignment.person?.userId === user.id) {
+        if (!administratorOverride && assignment.person?.userId === user.id) {
           throw new ForbiddenException('You cannot approve an assignment naming you as its owner or steward');
         }
         const demotedPrimaryCount = approved

@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite } from '../common/governance-write';
+import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateDataSharingAgreementDto,
   CreateDataSharingRequestDto,
@@ -367,7 +368,8 @@ export class DataSharingService {
 
   async saveReview(roleCodes: string[], id: string, dto: SaveDataSharingReviewDto, actor: string) {
     const request = await this.getRequest(roleCodes, id);
-    if (dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
+    const administratorOverride = isSystemAdministrator(roleCodes);
+    if (!administratorOverride && dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
       throw new ForbiddenException('Request creators cannot approve or reject their own data sharing request');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
@@ -380,10 +382,10 @@ export class DataSharingService {
     const assigned = previous?.reviewerPersonId;
     if (deciding) {
       const roles: Record<string, readonly string[]> = { owner: ['data_owner'], privacy: ['privacy_officer'], security: ['security_officer'], technical: ['technical_steward', 'data_custodian'] };
-      if (!roleCodes.some((role) => roles[dto.step]?.includes(role))) throw new ForbiddenException('An eligible business role is required for this sharing review step');
-      if (!assigned || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assigned)) throw new BadRequestException('Assign the reviewer before deciding the sharing review');
-      const person = await tx.person.findFirst({ where: { id: assigned, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
-      if (!person) throw new ForbiddenException('Only the assigned independent reviewer can decide this sharing step');
+      if (!administratorOverride && !roleCodes.some((role) => roles[dto.step]?.includes(role))) throw new ForbiddenException('An eligible business role is required for this sharing review step');
+      if (!administratorOverride && (!assigned || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assigned))) throw new BadRequestException('Assign the reviewer before deciding the sharing review');
+      const person = administratorOverride ? null : await tx.person.findFirst({ where: { id: assigned!, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
+      if (!administratorOverride && !person) throw new ForbiddenException('Only the assigned independent reviewer can decide this sharing step');
       if (!dto.note?.trim()) throw new BadRequestException('Document the control assessment for this review');
       if (previous?.decision !== DataSharingReviewDecision.pending) throw new BadRequestException('The review already has a decision');
     }

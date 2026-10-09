@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import "./prepare-primeui-license.mjs";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir, tmpdir } from "node:os";

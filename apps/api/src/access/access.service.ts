@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Wildcard permission granted to system_admin (matches every permission). */
@@ -12,15 +13,15 @@ export const WILDCARD = '*';
 export class AccessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async permissionsForRoleCodes(roleCodes: string[]): Promise<string[]> {
+  async permissionsForRoleCodes(roleCodes: string[], client: Prisma.TransactionClient = this.prisma): Promise<string[]> {
     if (roleCodes.length === 0) return [];
-    const activeRoles = await this.prisma.role.findMany({
+    const activeRoles = await client.role.findMany({
       where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
       select: { id: true, code: true },
     });
     if (activeRoles.some((role) => role.code === 'system_admin')) return [WILDCARD];
     if (activeRoles.length === 0) return [];
-    const rows = await this.prisma.rolePermission.findMany({
+    const rows = await client.rolePermission.findMany({
       where: { roleId: { in: activeRoles.map((role) => role.id) } },
       include: { permission: true },
     });

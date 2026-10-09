@@ -41,6 +41,8 @@ const userRow = async (password = 'Correct#123', tokenVersion = 3) => ({
   userRoles: [{ role: { code: 'system_admin', nameEn: 'System Administrator', nameAr: 'System Administrator' } }],
 });
 
+const profileDb = (row: unknown) => ({ $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ user: { findUnique: async () => row }, rolePermission: { findMany: async () => [] } }) });
+
 const profileDeps = () => ({
   access: { permissionsForRoleCodes: async () => ['dashboard.view'] },
   scope: { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) },
@@ -64,6 +66,7 @@ test('login signs the current token version into the JWT payload', async () => {
     { log: async () => undefined } as never,
     deps.access as never,
     deps.scope as never,
+    profileDb(row) as never,
   );
 
   const result = await service.login(row.email, 'Correct#123', '127.0.0.1');
@@ -99,6 +102,7 @@ test('login profile and token ignore inactive assigned roles', async () => {
       },
     } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
+    profileDb(row) as never,
   );
 
   const result = await service.login(row.email, 'Correct#123', '127.0.0.1');
@@ -124,6 +128,7 @@ test('sessionFromToken rejects a token after the user token version changes', as
     { log: async () => undefined } as never,
     deps.access as never,
     deps.scope as never,
+    profileDb(row) as never,
   );
 
   assert.strictEqual(await service.sessionFromToken('old-token'), null);
@@ -147,6 +152,7 @@ test('login fails closed when the success audit event cannot be recorded', async
     } as never,
     deps.access as never,
     deps.scope as never,
+    profileDb(row) as never,
   );
   (service as any).logger = { warn: () => undefined };
 
@@ -179,6 +185,7 @@ test('strict login rejects known unsafe demo passwords for any account', async (
       } as never,
       deps.access as never,
       deps.scope as never,
+    profileDb(row) as never,
     );
     (service as any).logger = { warn: () => undefined };
 
@@ -206,6 +213,7 @@ test('malformed auth cookies are ignored instead of throwing', () => {
 });
 
 test('logout increments the user token version and writes an audit event', async () => {
+  const row = await userRow();
   let bumpedUserId: string | null = null;
   let auditAction: string | null = null;
   const deps = profileDeps();
@@ -215,6 +223,7 @@ test('logout increments the user token version and writes an audit event', async
     { log: async ({ action }: { action: string }) => { auditAction = action; } } as never,
     deps.access as never,
     deps.scope as never,
+    profileDb(row) as never,
   );
 
   await service.logout({ id: 'user-1', email: 'admin@dgop.local', roles: ['system_admin'] });

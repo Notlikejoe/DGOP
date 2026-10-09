@@ -11,7 +11,7 @@ import { AiAuthorizationService } from './ai-authorization.service';
 import { AiRiskIntakeService } from './ai-risk-intake.service';
 import { AiRiskAssessmentService } from './ai-risk-assessment.service';
 import { governanceDigest, governanceEvidence, governanceText, governanceTransaction } from './ai-governance-ledger';
-import { AI_MIGRATION_SOURCES, parseMigrationWorkbook, SourceWorkbook } from './ai-migration-workbook';
+import { parseMigrationWorkbook, SourceWorkbook } from './ai-migration-workbook';
 import { buildMigrationPreview, MIGRATION_PREVIEW_VERSION, PreviewEnvironment, PreviewRow } from './ai-migration-preview';
 import { jsonRecord } from './ai-risk-scoring';
 import { reportCsvCell } from './ai-dashboard-reports.service';

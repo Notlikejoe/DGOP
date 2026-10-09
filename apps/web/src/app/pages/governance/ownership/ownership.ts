@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of, catchError, map, throwError } from 'rxjs';
+import { AccessChangedError } from '../../../core/access-errors';
 import { I18nService } from '../../../core/i18n.service';
 import { AuthService } from '../../../core/auth.service';
-import { ReferenceLookupsService } from '../../../core/reference-lookups.service';
 import { ToastService } from '../../../shared/toast.service';
 import { ConfirmService } from '../../../shared/confirm.service';
 import { Modal } from '../../../shared/modal';
@@ -80,7 +80,6 @@ export class OwnershipPage implements OnInit {
   private readonly http = inject(HttpClient);
   protected readonly i18n = inject(I18nService);
   private readonly auth = inject(AuthService);
-  private readonly referenceLookups = inject(ReferenceLookupsService);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
 
@@ -95,6 +94,11 @@ export class OwnershipPage implements OnInit {
   protected readonly roleTypes = signal<Ref[]>([]);
   protected readonly people = signal<Person[]>([]);
   protected readonly users = signal<UserRef[]>([]);
+  protected readonly referencesUnavailable = signal<Set<string>>(new Set());
+  protected readonly formReferencesReady = computed(() => !['role_types','people',
+    ({asset:'data_assets',domain:'data_domains',capability:'business_capabilities',subject:'data_subjects',org_unit:'org_units',system:'systems'} as const)[this.draft().targetType]]
+    .some(resource => this.referencesUnavailable().has(resource)));
+  protected readonly approversReady = computed(() => !this.referencesUnavailable().has('users') && this.users().length > 0);
   protected readonly lookups = signal<Record<TargetType, Ref[]>>({
     asset: [], domain: [], capability: [], subject: [], org_unit: [], system: [],
   });
@@ -163,32 +167,40 @@ export class OwnershipPage implements OnInit {
   }
 
   private loadLookups(): void {
+    const optional = <T>(resource: string, url: string) => {
+      const missing = () => this.referencesUnavailable.update(values => new Set([...values, resource]));
+      if (!this.auth.hasPermission(resource + '.view')) { missing(); return of<T[]>([]); }
+      return this.http.get<T[] | {data:T[]}>(url).pipe(map(value => Array.isArray(value) ? value : value.data), catchError(error => {
+        if (error instanceof AccessChangedError) return throwError(() => error);
+        missing(); return of<T[]>([]);
+      }));
+    };
     forkJoin({
-      roleTypes: this.referenceLookups.list<Ref>('role_types.view','/api/role-types'),
-      people: this.referenceLookups.list<Person>('people.view','/api/people'),
-      asset: this.referenceLookups.list<Ref>('data_assets.view','/api/assets'),
-      domain: this.referenceLookups.list<Ref>('data_domains.view','/api/data-domains'),
-      capability: this.referenceLookups.list<Ref>('business_capabilities.view','/api/business-capabilities'),
-      subject: this.referenceLookups.list<Ref>('data_subjects.view','/api/data-subjects'),
-      org_unit: this.referenceLookups.list<Ref>('org_units.view','/api/org-units'),
-      system: this.referenceLookups.list<Ref>('systems.view','/api/systems'),
-    }).subscribe((r) => {
+      roleTypes: optional<Ref>('role_types','/api/role-types'),
+      people: optional<Person>('people','/api/people'),
+      asset: optional<Ref>('data_assets','/api/assets'),
+      domain: optional<Ref>('data_domains','/api/data-domains'),
+      capability: optional<Ref>('business_capabilities','/api/business-capabilities'),
+      subject: optional<Ref>('data_subjects','/api/data-subjects'),
+      org_unit: optional<Ref>('org_units','/api/org-units'),
+      system: optional<Ref>('systems','/api/systems'),
+    }).subscribe({next:(r) => {
       this.roleTypes.set(r.roleTypes);
       this.people.set(r.people);
       this.lookups.set({
         asset: r.asset, domain: r.domain, capability: r.capability,
         subject: r.subject, org_unit: r.org_unit, system: r.system,
       });
-    });
+    },error:()=>{}});
     // Users power the "submit for approval" approver picker; tolerate missing users.view.
-    this.referenceLookups.list<UserRef>('users.view','/api/users').subscribe({
+    if (this.auth.hasPermission('assignments.edit')) optional<UserRef>('users','/api/users').subscribe({
       next: (u) => this.users.set(u),
       error: () => {},
     });
   }
 
   // ---------- submit for approval ----------
-  protected get canSubmitForApproval(): boolean { return this.auth.hasPermission('assignments.edit'); }
+  protected get canSubmitForApproval(): boolean { return this.auth.hasPermission('assignments.edit') && this.auth.hasPermission('users.view'); }
 
   protected openSubmit(a: Assignment): void {
     this.submitTarget.set(a);
@@ -373,7 +385,7 @@ export class OwnershipPage implements OnInit {
 
   protected canSave(): boolean {
     const d = this.draft();
-    return !!(d.targetType && d.targetId && d.roleTypeId && d.personId && d.effectiveDate) && this.validationErrors().length === 0;
+    return this.formReferencesReady() && !!(d.targetType && d.targetId && d.roleTypeId && d.personId && d.effectiveDate) && this.validationErrors().length === 0;
   }
 
   protected save(): void {

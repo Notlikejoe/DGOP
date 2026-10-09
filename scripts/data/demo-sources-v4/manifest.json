@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "fixtureVersion": "synthetic-sources-v4",
+  "demoOnly": true,
+  "sourceMode": "synthetic_demo",
+  "productionReady": false,
+  "purpose": "Synthetic engineering source with complete structural counts; original retained workbook acceptance remains separate.",
+  "sources": [
+    {
+      "source": "risk",
+      "file": "demo-risk-v4.xlsx",
+      "sha256": "0e51b707d9d5b4625541143100d6277bbe177f7ad30b433bcabbacd666989512"
+    },
+    {
+      "source": "adoption",
+      "file": "demo-adoption-v4.xlsx",
+      "sha256": "db905bf387afcbc286d34233bcabfd663600e95b4edac54fef30c7a7c7a7f0e5"
+    }
+  ]
+}

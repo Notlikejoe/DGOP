@@ -1,6 +1,6 @@
 import { aiScreenGuard } from './core/auth.guards';
 import { Routes } from '@angular/router';
-import { authGuard, permissionGuard } from './core/auth.guards';
+import { authGuard, permissionGuard, pageAccessGuard } from './core/auth.guards';
 
 export const routes: Routes = [
   {
@@ -15,6 +15,7 @@ export const routes: Routes = [
   {
     path: '',
     canActivate: [authGuard],
+    canActivateChild: [pageAccessGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },

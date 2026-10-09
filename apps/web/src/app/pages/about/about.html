@@ -115,7 +115,7 @@
     </p-card>
 
     <nav class="quick-links" [attr.aria-label]="t('about.links.title')">
-      @for (link of quickLinks; track link.link) {
+      @for (link of quickLinks(); track link.link) {
         <a [routerLink]="link.link">
           <span class="quick-link__icon" aria-hidden="true"><i [class]="link.icon"></i></span>
           <span class="quick-link__copy">

@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n.service';
 import { AppIcon, AppIconName } from '../../shared/app-icon';
+import { canSeeTool } from '../../core/page-access';
 import {
   HUB_CONFIGS,
   HubConfig,
@@ -53,8 +54,7 @@ export class SectionHubPage {
   protected readonly items = computed<NavItem[]>(() =>
     this.config()
       .sectionIds.flatMap((sectionId) => NAV_SECTIONS.find((section) => section.id === sectionId)?.items ?? [])
-      .filter((item) => !item.permission || (typeof item.permission === 'string'
-        ? this.auth.hasPermission(item.permission) : item.permission.some(value => this.auth.hasPermission(value)))),
+      .filter((item) => canSeeTool(this.auth, item)),
   );
 
   protected readonly featuredItems = computed<NavItem[]>(() => {
@@ -185,7 +185,7 @@ export class SectionHubPage {
     ];
   });
 
-  protected readonly queue = computed<QueueItem[]>(() => {
+  private readonly queueCandidates = computed<QueueItem[]>(() => {
     if (this.config().id === 'aiGovernance') return [];
     if (this.config().id === 'governance') {
       return [
@@ -248,6 +248,8 @@ export class SectionHubPage {
       },
     ];
   });
+
+  protected readonly queue = computed(() => this.queueCandidates().filter(item => this.auth.canAccessPage(item.link)));
 
   protected t(key: string): string {
     return this.i18n.t(key);

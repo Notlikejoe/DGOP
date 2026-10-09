@@ -3,6 +3,35 @@
   min-height: 100%;
 }
 
+.access-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  margin-block-end: 1rem;
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--primary, #0f766e);
+  border-radius: .75rem;
+  background: var(--surface, var(--bg));
+  color: var(--text);
+  p { margin: 0; flex: 1 1 15rem; }
+  button { flex-shrink: 0; }
+}
+
+.access-screen-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: var(--bg);
+  color: var(--text);
+  .access-notice { width: min(100%, 42rem); }
+}
+
 .shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;

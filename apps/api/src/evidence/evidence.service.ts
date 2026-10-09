@@ -3,6 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { isSyntheticPopulationProfile } from '../common/synthetic-population-profile';
 import {
   BadRequestException,
   ForbiddenException,
@@ -305,7 +306,7 @@ export class EvidenceService {
           title: dto.title,
           descriptionEn: dto.descriptionEn ?? null,
           status: submitNow ? 'submitted' : 'draft',
-          provenance: isManagedDemoProfile() ? 'synthetic_demo' : 'operational',
+          provenance: isManagedDemoProfile() || isSyntheticPopulationProfile() ? 'synthetic_demo' : 'operational',
           fileName: storedName,
           originalName: file.originalname,
           mimeType: file.mimetype,

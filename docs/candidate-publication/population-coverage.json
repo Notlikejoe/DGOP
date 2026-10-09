@@ -1,0 +1,542 @@
+{
+  "evaluatedAt": "2026-10-09T08:47:13.743Z",
+  "binding": {
+    "source": {
+      "sha256": "5f978b406f85c8f2ee3eeedc8ea7a271f53c58420b8d04f9fea9875286756b37",
+      "files": 1491
+    },
+    "apiLockSha256": "588e3d85a7bb954ada74a836153d896af1aa762309395f03148c21e92ffa7746",
+    "webLockSha256": "a60a51af1244700be47dc0d814de1522ffc30d0cd87ac6816e1ce9ee840c3a04",
+    "apiBuild": {
+      "sha256": "f1b9f477c4360f750cca3132f30c98a04fd54477b424a49a40ae7e266d5a9ba4",
+      "files": 567
+    },
+    "webBuild": {
+      "sha256": "14c4ceb319f7b50c5f8f822ce2b0dc6007f4b9b9ccf08eebaff20edab6dab2b2",
+      "files": 95
+    },
+    "node": "24.19.0"
+  },
+  "database": "dgop_access_sync_qa_20261007",
+  "demoOnly": true,
+  "tools": [
+    {
+      "route": "/dashboard",
+      "scenario": "Read totals derived from the connected Finance and HR examples.",
+      "counts": {
+        "DataAsset": 27,
+        "StewardshipAssignment": 14,
+        "WorkflowTask": 216,
+        "DataQualityIssue": 5
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/about",
+      "scenario": "Explain platform purpose and synthetic demonstration boundaries.",
+      "counts": {},
+      "status": "informational",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance-map",
+      "scenario": "Navigate the governance model and connected tool areas.",
+      "counts": {},
+      "status": "informational",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/assets",
+      "scenario": "Inspect invoice, supplier, employee and payroll assets and their references.",
+      "counts": {
+        "DataAsset": 27
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/ownership",
+      "scenario": "Compare approved ownership with a pending independent stewardship decision.",
+      "counts": {
+        "StewardshipAssignment": 14
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/assignment-rules",
+      "scenario": "Explain Finance and HR ownership routing rules.",
+      "counts": {
+        "AssignmentRule": 8
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/exception-queue",
+      "scenario": "Resolve missing and ambiguous stewardship assignments.",
+      "counts": {
+        "DataAsset": 27,
+        "StewardshipAssignment": 14
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/workflow",
+      "scenario": "Open assigned work and trace completed decisions and attachments.",
+      "counts": {
+        "WorkflowCase": 72,
+        "WorkflowTask": 216
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/data-quality",
+      "scenario": "Review missing supplier identifiers and inconsistent employee data.",
+      "counts": {
+        "DataQualityRule": 5,
+        "DataQualityIssue": 5,
+        "DataQualityProfile": 7
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/security",
+      "scenario": "Inspect masking, a classification request and synthetic incident remediation.",
+      "counts": {
+        "MaskingPolicy": 4,
+        "AccessReview": 3,
+        "DlpIncident": 3,
+        "ClassificationChangeRequest": 3
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/open-data",
+      "scenario": "Compare a pending candidate and a locally published synthetic public dataset.",
+      "counts": {
+        "OpenDataCandidate": 5,
+        "OpenDataPublication": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/foi",
+      "scenario": "Compare an actionable disclosure request with completed response history.",
+      "counts": {
+        "FoiRequest": 4
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/privacy",
+      "scenario": "Follow synthetic HR processing, assessment, requests, consent and incident records.",
+      "counts": {
+        "PrivacyRopaRecord": 3,
+        "PrivacyDpia": 3,
+        "PrivacyDsrRequest": 4,
+        "PrivacyBreach": 3,
+        "PrivacyConsentRecord": 2,
+        "PrivacyRetentionRule": 3
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/data-sharing",
+      "scenario": "Review a sharing proposal and a completed agreement for fictional data.",
+      "counts": {
+        "DataSharingRequest": 4,
+        "DataSharingAgreement": 3
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/transparency",
+      "scenario": "Reconcile disclosure and sharing measures with their source records.",
+      "counts": {
+        "OpenDataCandidate": 5,
+        "FoiRequest": 4,
+        "DataSharingRequest": 4
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/reports",
+      "scenario": "Generate reports from stored governance outcomes.",
+      "counts": {
+        "DataAsset": 27,
+        "WorkflowCase": 72,
+        "NdiEvidence": 16
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/ndi",
+      "scenario": "Inspect synthetic controls and pending/independently reviewed evidence.",
+      "counts": {
+        "NdiSpecification": 12,
+        "NdiEvidence": 16
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/ndi/readiness",
+      "scenario": "Explain readiness calculations and synthetic evidence exclusions.",
+      "counts": {
+        "NdiSpecification": 12,
+        "NdiEvidence": 16
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/ndi/gaps",
+      "scenario": "Inspect honest missing or ineligible operational proof.",
+      "counts": {
+        "NdiSpecification": 12,
+        "NdiEvidence": 16
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/ndi/audit-packs",
+      "scenario": "Open a generated audit pack with provenance and exclusions.",
+      "counts": {
+        "NdiAuditPack": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/extended-domains",
+      "scenario": "Compare supplier duplicates, golden records, reference decisions, certifications and architecture reviews.",
+      "counts": {
+        "MdmMatchCandidate": 2,
+        "MdmGoldenRecord": 2,
+        "ReferenceDataVersion": 2,
+        "MetadataCertification": 2,
+        "ArchitectureReview": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/business-value",
+      "scenario": "Trace invoice and payroll meaning, lineage, value, impact and lifecycle.",
+      "counts": {
+        "BusinessGlossaryTerm": 2,
+        "BusinessLineageMap": 2,
+        "DataAssetValuation": 2,
+        "DataUserSurvey": 2,
+        "AssetLifecycleDecision": 2,
+        "BusinessImpactAssessment": 2,
+        "DataValueKpi": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/operations",
+      "scenario": "Inspect governance responsibilities, maturity, scheduled work and local notifications.",
+      "counts": {
+        "GovernanceCharter": 2,
+        "GovernancePolicy": 2,
+        "DataDomainCouncil": 2,
+        "GovernanceMaturityAssessment": 2,
+        "ComplianceCalendarTemplate": 11,
+        "ComplianceCalendarOccurrence": 17,
+        "GovernanceNotification": 24,
+        "GovernanceEscalation": 15,
+        "GovernanceDecisionRight": 2,
+        "ContinuousImprovementItem": 2,
+        "KsaHoliday": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/training",
+      "scenario": "Compare assigned and completed learning and knowledge-sharing examples.",
+      "counts": {
+        "TrainingCourse": 9,
+        "TrainingAssignment": 21,
+        "CertificationAttempt": 5,
+        "CommunityArticle": 4,
+        "ExpertProfile": 5,
+        "MentorshipPair": 4,
+        "TrainingRequirement": 18,
+        "ContinuingEducationActivity": 5,
+        "CertificationTrack": 5
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/ai-use-cases",
+      "scenario": "Inspect three completed journeys and six actionable intake stages.",
+      "counts": {
+        "AiUseCase": 13,
+        "AiIntakeRevision": 31
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/ai-review",
+      "scenario": "Use independent specialist accounts to view all six pending review queues.",
+      "counts": {
+        "AiUseCase": 13,
+        "WorkflowTask": 216
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/ai-risks",
+      "scenario": "Trace risk assessment, treatment, residual decisions and ongoing review.",
+      "counts": {
+        "AiRisk": 3,
+        "AiAssessmentRound": 19,
+        "AiTreatmentAction": 6,
+        "AiRiskReview": 6
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/ai-reviews",
+      "scenario": "Compare completed and scheduled periodic, monthly and annual reviews.",
+      "counts": {
+        "AiRiskReview": 6,
+        "AiAnnualReview": 4,
+        "AiMonthlyReviewReport": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/ai-dashboard",
+      "scenario": "Read reconciled AI outcomes and saved/scheduled reports.",
+      "counts": {
+        "AiDashboardSnapshot": 2,
+        "AiDashboardScheduleVersion": 2
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/governance/ai-migration",
+      "scenario": "Parse pinned synthetic workbooks, correct, review, publish and reconcile source examples.",
+      "counts": {
+        "AiMigrationPreview": 3,
+        "AiSourceCorrectionVersion": 3,
+        "AiCorrectedSourceSnapshot": 3,
+        "AiLibrarySourceImport": 1,
+        "AiRiskLibraryEntry": 3,
+        "AiSourceNativeDraft": 1
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/governance/access",
+      "scenario": "Compare pending, effective and revoked access with local-only fulfillment.",
+      "counts": {
+        "AccessGrant": 17
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/admin/roles",
+      "scenario": "Inspect the unchanged QA profiles and non-admin specialist roles.",
+      "counts": {
+        "Role": 39,
+        "RolePermission": 1281,
+        "RoleDataScope": 32
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/users",
+      "scenario": "Switch between QA users and independently assigned specialists.",
+      "counts": {
+        "User": 29,
+        "UserRole": 61
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/audit",
+      "scenario": "Trace actual native setup and business events; no invented history.",
+      "counts": {
+        "AuditLog": 2064
+      },
+      "status": "populated",
+      "references": false,
+      "derived": true
+    },
+    {
+      "route": "/admin/people",
+      "scenario": "Inspect linked fictional specialist identities.",
+      "counts": {
+        "Person": 28
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/data-domains",
+      "scenario": "Reuse the Finance and HR domains that define current QA scopes.",
+      "counts": {
+        "DataDomain": 8
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/data-subjects",
+      "scenario": "Inspect invoice, supplier, employee and payroll subjects.",
+      "counts": {
+        "DataSubject": 8
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/capabilities",
+      "scenario": "Inspect Finance and HR business capabilities.",
+      "counts": {
+        "BusinessCapability": 8
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/org-units",
+      "scenario": "Reuse Finance and HR organizational scope boundaries.",
+      "counts": {
+        "OrganizationUnit": 23
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/systems",
+      "scenario": "Inspect two fictional platforms with no external connections.",
+      "counts": {
+        "SystemPlatform": 8
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/integrations",
+      "scenario": "Inspect local synthetic imports and visible failed/pending outcomes.",
+      "counts": {
+        "IntegrationConnector": 10,
+        "IntegrationJob": 8,
+        "IntegrationImportBatch": 3,
+        "IntegrationReconciliationReport": 3
+      },
+      "status": "populated",
+      "references": false,
+      "derived": false
+    },
+    {
+      "route": "/admin/classifications",
+      "scenario": "Reuse installed sensitivity levels when linking demonstration assets.",
+      "counts": {
+        "Classification": 5
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/role-types",
+      "scenario": "Reuse native owner/steward assignment types.",
+      "counts": {
+        "RoleType": 8
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/raci-templates",
+      "scenario": "Reuse installed responsibility templates.",
+      "counts": {
+        "RaciTemplate": 2
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    },
+    {
+      "route": "/admin/status-values",
+      "scenario": "Reuse installed lifecycle values.",
+      "counts": {
+        "StatusValue": 12
+      },
+      "status": "populated",
+      "references": true,
+      "derived": false
+    }
+  ],
+  "sourceArchiveMinimum": "One coherent source import and native draft as specified; immutable archives are not editable business registers."
+}

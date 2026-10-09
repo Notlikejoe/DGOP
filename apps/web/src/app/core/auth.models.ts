@@ -19,6 +19,16 @@ export interface UserProfile {
   roles: RoleRef[];
   permissions: string[];
   scopes?: ScopeSummary;
+  accessRevision?: string;
+  aiCapabilities?: AiCapabilities;
+}
+
+export interface AiCapabilities {
+  administratorOversight: boolean;
+  readMode: 'governance' | 'audit' | 'executive' | 'own' | 'none';
+  permissions: string[];
+  screens: { useCases: boolean; risks: boolean; review: boolean; reviewOperations: boolean; dashboard: boolean; migration: boolean };
+  panels?: { triage?: boolean; classification?: boolean; classificationVerification: boolean; specialist?: boolean; decision?: boolean; registration: boolean };
 }
 
 export interface LoginResponse {
@@ -26,12 +36,6 @@ export interface LoginResponse {
   user: UserProfile;
 }
 
-export interface AiCapabilities {
-  administratorOversight:boolean;
-  readMode:'governance'|'audit'|'executive'|'own'|'none';
-  permissions:string[];
-  screens:Record<'useCases'|'risks'|'review'|'reviewOperations'|'dashboard'|'migration',boolean>;
-}
 
 export interface AiRegisterPage<T,S> {data:T[];total:number;page:number;pageSize:number;totalPages:number;summary:S;}
 

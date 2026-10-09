@@ -167,8 +167,8 @@ export class FoiPage implements OnInit {
   protected readonly disclosureMethods = signal(DISCLOSURE_METHODS);
   protected readonly reviewTypes = signal(REVIEW_TYPES);
 
-  protected readonly canCreate = this.auth.hasPermission('foi_requests.create');
-  protected readonly canEdit = this.auth.hasPermission('foi_requests.edit');
+  protected get canCreate(): boolean { return this.auth.hasPermission('foi_requests.create'); }
+  protected get canEdit(): boolean { return this.auth.hasPermission('foi_requests.edit'); }
 
   protected readonly selected = computed(() => this.requests().find((row) => row.id === this.selectedId()) ?? this.requests()[0] ?? null);
   protected readonly activeTemplates = computed(() => this.templates().filter((template) => template.outcome === this.decisionDraft().outcome));

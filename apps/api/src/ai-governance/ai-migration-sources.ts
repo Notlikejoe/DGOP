@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
-import { isManagedDemoProfile } from '../common/demo-profile';
+import { isSyntheticPopulationProfile } from '../common/synthetic-population-profile';
 import { AI_MIGRATION_SOURCES } from './ai-migration-workbook';
 export const AI_DEMO_MIGRATION_SOURCES = [
  {source:'risk',file:'demo-risk-v1.xlsx',sha256:'2d1f1ad4b7e496b501cc852cdc60cbcc86fdd22707412bece6969fc87ed53c8e'},
@@ -14,15 +14,23 @@ export const AI_COMPLETE_ENGINEERING_MIGRATION_SOURCES = [
  {source:'risk',file:'demo-risk-v3.xlsx',sha256:'deb97cb6366876b697926945f1e413106e3f862a566088aad5744a5691babfd3'},
  {source:'adoption',file:'demo-adoption-v3.xlsx',sha256:'db905bf387afcbc286d34233bcabfd663600e95b4edac54fef30c7a7c7a7f0e5'},
 ];
+export const AI_POPULATION_MIGRATION_SOURCES = [
+ {source:'risk',file:'demo-risk-v4.xlsx',sha256:'0e51b707d9d5b4625541143100d6277bbe177f7ad30b433bcabbacd666989512'},
+ {source:'adoption',file:'demo-adoption-v4.xlsx',sha256:'db905bf387afcbc286d34233bcabfd663600e95b4edac54fef30c7a7c7a7f0e5'},
+];
+export const AI_RECONCILED_POPULATION_SOURCES = [
+ {source:'risk',file:'demo-risk-v5.xlsx',sha256:'ccb980e23571fcc64fb28b201baaa1194e3dda9afe5f2eaaf224be479729f228'},
+ {source:'adoption',file:'demo-adoption-v5.xlsx',sha256:'4747ec5ded5eafd847a1aebe68de4438598e76910c195285d380f474460e8643'},
+];
 export function migrationSources() {
  if(!process.env.AI_MIGRATION_SOURCE_MANIFEST)return {sourceMode:'retained_source',sources:[...AI_MIGRATION_SOURCES]};
- if(!isManagedDemoProfile())throw new Error('Synthetic source selection requires a trusted isolated demo/test profile.');
+ if(!isSyntheticPopulationProfile())throw new Error('Synthetic source selection requires a trusted isolated demo/test profile.');
  const root=resolve(process.env.AI_MIGRATION_SOURCE_DIR??''),path=resolve(process.env.AI_MIGRATION_SOURCE_MANIFEST),inside=relative(root,path);
  if(!inside||inside==='..'||inside.startsWith('..'+sep)||isAbsolute(inside))throw new Error('Synthetic source manifest must stay in its configured source directory.');
  const manifest=JSON.parse(readFileSync(path,'utf8'));
- const pinned=manifest.fixtureVersion==='synthetic-sources-v1'?AI_DEMO_MIGRATION_SOURCES:manifest.fixtureVersion==='synthetic-sources-v2'?AI_ENGINEERING_MIGRATION_SOURCES:manifest.fixtureVersion==='synthetic-sources-v3'?AI_COMPLETE_ENGINEERING_MIGRATION_SOURCES:null;
+ const pinned=manifest.fixtureVersion==='synthetic-sources-v1'?AI_DEMO_MIGRATION_SOURCES:manifest.fixtureVersion==='synthetic-sources-v2'?AI_ENGINEERING_MIGRATION_SOURCES:manifest.fixtureVersion==='synthetic-sources-v3'?AI_COMPLETE_ENGINEERING_MIGRATION_SOURCES:manifest.fixtureVersion==='synthetic-sources-v4'?AI_POPULATION_MIGRATION_SOURCES:manifest.fixtureVersion==='synthetic-sources-v5'?AI_RECONCILED_POPULATION_SOURCES:null;
  if(manifest.manifestVersion!==1||!pinned||manifest.demoOnly!==true||manifest.sourceMode!=='synthetic_demo'||manifest.productionReady!==false||!Array.isArray(manifest.sources)||manifest.sources.length!==2)throw new Error('Invalid synthetic source manifest.');
- if(new Set(manifest.sources.map(s=>s.source)).size!==2||manifest.sources.some(s=>!['risk','adoption'].includes(s.source)||!/^demo-(risk|adoption)-v[123]\.xlsx$/.test(s.file)||!/^[a-f0-9]{64}$/.test(s.sha256)))throw new Error('Unsupported synthetic source fixture.');
+ if(new Set(manifest.sources.map(s=>s.source)).size!==2||manifest.sources.some(s=>!['risk','adoption'].includes(s.source)||!/^demo-(risk|adoption)-v[12345]\.xlsx$/.test(s.file)||!/^[a-f0-9]{64}$/.test(s.sha256)))throw new Error('Unsupported synthetic source fixture.');
  for(const expected of pinned){const actual=manifest.sources.find(source=>source.source===expected.source);if(actual?.file!==expected.file||actual?.sha256!==expected.sha256)throw new Error('Synthetic source manifest differs from the packaged immutable fixture version.');}
  return {sourceMode:'synthetic_demo',sources:[...pinned]};
 }

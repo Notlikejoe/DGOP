@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { ErrorExperienceService, UserFacingError } from '../core/error-experience.service';
 import { I18nService } from '../core/i18n.service';
+import { AccessChangedError, AccessUnavailableError } from '../core/access-errors';
 
 export type ToastKind = 'success' | 'error' | 'info';
 export interface Toast {
@@ -32,6 +33,8 @@ export class ToastService {
   }
 
   errorFrom(error: unknown, fallback?: string): void {
+    if (error instanceof AccessChangedError) return;
+    if (error instanceof AccessUnavailableError) { this.show(this.i18n.t('access.live.unavailable'), 'info'); return; }
     const interpreted = this.errors.interpret(error);
     if (this.errors.shouldExplain(interpreted)) {
       this.activeProblem.set(interpreted);

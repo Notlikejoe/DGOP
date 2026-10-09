@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CardModule } from 'primeng/card';
 import { TagModule } from 'primeng/tag';
 import { I18nService } from '../../core/i18n.service';
+import { AuthService } from '../../core/auth.service';
 
 interface AboutCard {
   icon: string;
@@ -140,7 +141,8 @@ export class AboutPage {
     'about.integration.training',
   ];
 
-  protected readonly quickLinks: QuickLink[] = [
+  private readonly auth = inject(AuthService);
+  private readonly quickLinkCandidates: QuickLink[] = [
     {
       icon: 'pi pi-compass',
       labelKey: 'about.link.governance.title',
@@ -160,6 +162,8 @@ export class AboutPage {
       link: '/governance-map',
     },
   ];
+
+  protected readonly quickLinks = computed(() => this.quickLinkCandidates.filter(item => this.auth.canAccessPage(item.link)));
 
   protected t(key: string): string {
     return this.i18n.t(key);

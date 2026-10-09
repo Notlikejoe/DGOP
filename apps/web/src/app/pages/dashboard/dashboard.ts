@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } 
 import { HttpClient } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { ApiService, HealthResponse } from '../../core/api.service';
+import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n.service';
 import { StatusChip } from '../../shared/status-chip';
 import { AppIcon } from '../../shared/app-icon';
-import { AuthService } from '../../core/auth.service';
+
 
 type State = 'loading' | 'ok' | 'error';
 type GapType = 'missing' | 'expired' | 'rejected' | 'unassigned' | 'stuck';
@@ -68,9 +69,10 @@ interface JourneyNode {
   styleUrl: './dashboard.scss',
 })
 export class Dashboard implements OnInit {
+  private readonly auth = inject(AuthService);
   private readonly api = inject(ApiService);
   private readonly http = inject(HttpClient);
-  private readonly auth = inject(AuthService);
+
   protected readonly i18n = inject(I18nService);
 
   protected readonly state = signal<State>('loading');
@@ -150,7 +152,7 @@ export class Dashboard implements OnInit {
     return Math.max(0, governance.assets.total - this.stewardedAssetCount());
   });
 
-  protected readonly primaryAction = computed<ActionItem | null>(() => {
+  private readonly primaryActionCandidate = computed<ActionItem | null>(() => {
     const s = this.summary();
     if (!s) return null;
     if ((s.workflow?.myOverdueTasks ?? 0) > 0) {
@@ -206,6 +208,8 @@ export class Dashboard implements OnInit {
       link: '/governance/ndi/readiness',
     };
   });
+
+  protected readonly primaryAction = computed(() => { const item=this.primaryActionCandidate(); return item && this.auth.canAccessPage(item.link) ? item : null; });
 
   protected readonly actionItems = computed<ActionItem[]>(() => {
     const s = this.summary();
@@ -277,7 +281,7 @@ export class Dashboard implements OnInit {
     return items;
   });
 
-  protected readonly journeyNodes = computed<JourneyNode[]>(() => {
+  private readonly journeyNodeCandidates = computed<JourneyNode[]>(() => {
     const s = this.summary();
     if (!s) return [];
     return [
@@ -318,6 +322,8 @@ export class Dashboard implements OnInit {
       },
     ];
   });
+
+  protected readonly journeyNodes = computed(() => this.journeyNodeCandidates().filter(item => this.auth.canAccessPage(item.link)));
 
   ngOnInit(): void {
     this.load();

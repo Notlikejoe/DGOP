@@ -1,0 +1,29 @@
+module.exports=async function sources(s){await s.native(async get=>{
+ const previews=get('ai-governance/ai-migration-preview.service','AiMigrationPreviewService'),corrections=get('ai-governance/ai-source-corrections.service','AiSourceCorrectionsService'),imports=get('ai-governance/ai-library-source.service','AiLibrarySourceService'),library=get('ai-governance/ai-risk-library.service','AiRiskLibraryService'),links=get('ai-governance/ai-library-control-links.service','AiLibraryControlLinksService'),native=get('ai-governance/ai-source-native.service','AiSourceNativeService');
+ const officer=await s.actor('officer'),admin=await s.actor('admin'),owner=await s.actor('owner-finance'),reason={justification:s.manifest.marker+'; checksum-pinned synthetic workbook preparation only; no historical authority imported.',evidenceIds:[s.id('proof.finance')]};
+ const m=s.manifest.ai.sources??={requests:{},controls:[]};const key=name=>{m.requests[name]??=s.crypto.randomUUID();s.save();return m.requests[name];};
+ if(!m.previewId){const p=await previews.create(officer.id,{...reason,requestKey:key('preview')});m.previewId=p.id;s.save();}
+ let preview=await previews.get(officer.id,m.previewId),rows=preview.report.rows;
+ s.assert.equal(preview.report.sourceMode,'synthetic_demo');s.assert.equal(preview.report.demoOnly,true);s.assert.deepEqual(preview.report.reconciliation.globalIssues,[]);
+ if(!preview.review){for(const r of rows.filter(r=>r.status==='quarantined'&&!preview.dispositions.some(d=>d.rowKey===r.key)))await previews.disposition(officer.id,preview.id,{...reason,rowKey:r.key,outcome:'defer',expectedDigest:preview.digest});await previews.review(admin.id,preview.id,{...reason,outcome:'accept',expectedDigest:preview.digest});}
+ const context=await corrections.context(officer.id,preview.id);
+ for(const [i,row]of rows.filter(r=>r.kind==='control').slice(0,2).entries()){
+  const code='DEMO_CONTROL_'+(i+1)+'_V1';let v=await s.db.aiControlDomainVersion.findFirst({where:{previewId:preview.id,sourceRowKey:row.key,entry:{controlCode:code}},include:{publication:true}});
+  if(!v)v=await corrections.proposeControl(officer.id,preview.id,{...reason,sourceRowKey:row.key,controlCode:code,expectedRound:0,titleEn:i?'Synthetic quality and fairness checks':'Synthetic human oversight and access checks',titleAr:i?'فحوصات جودة وعدالة توضيحية':'رقابة بشرية وضوابط وصول توضيحية',dimensionCodes:context.dimensions.filter(d=>i?['dim_bias','dim_data_quality'].includes(d.dimension):['dim_privacy','dim_security'].includes(d.dimension)).map(d=>d.code)});
+  if(!v.publication)await corrections.publishControl(admin.id,v.id,{...reason,expectedDigest:v.digest});if(!m.controls.some(c=>c.id===v.id))m.controls.push({id:v.id,rowKey:row.key,code});s.save();
+ }
+ if(!m.correctionId){
+  const entries=[];const maps={library:{dev_stage:'PILOT',ethics_principle:'PRIVACY',risk_category:'PRIVACY'},usecase:{department:'FINANCE',organizationUnitId:s.ref('org.finance'),ownerPersonId:owner.person.id,technology:'ML',stage:'PILOT',personalData:'YES',sensitiveData:'NO',thirdParty:'NO',offshore:'NO',reliance:'ASSISTED',humanIntervention:'REQUIRED',operationalStatus:'ACTIVE'},risk:{category:'PRIVACY',principle:'PRIVACY',devStage:'PILOT',controlEffectiveness:'PARTIAL',strategy:'MITIGATE',ownerPersonId:(await s.actor('risk-owner')).person.id,executorPersonId:(await s.actor('model')).person.id,riskSource:'INTERNAL',riskIntent:'UNINTENDED',riskTiming:'CURRENT'},action:{actionType:'PREVENTIVE',priority:'HIGH',status:'PLANNED',executorPersonId:(await s.actor('model')).person.id}};
+  for(const row of rows){if(row.kind==='library')entries.push({rowKey:row.key,field:'titleEn',value:'Synthetic risk library '+row.sourceRef+' — human oversight, reliability and data protection'});for(const [field,value]of Object.entries(maps[row.kind]??{}))entries.push({rowKey:row.key,field,value});const c=m.controls.find(c=>c.rowKey===row.key);if(c)entries.push({rowKey:row.key,field:'controlVersionId',value:c.id});}
+  const v=await corrections.propose(officer.id,preview.id,{...reason,expectedRound:context.latestRound,requestKey:key('correction'),entries});m.correctionId=v.id;s.save();
+ }
+ let v=await s.db.aiSourceCorrectionVersion.findUniqueOrThrow({where:{id:m.correctionId},include:{review:true,snapshot:true}});
+ if(!v.review)await corrections.review(admin.id,v.id,{...reason,outcome:'approve',expectedDigest:v.digest});
+ const snapshot=v.snapshot??await corrections.capture(officer.id,v.id,{...reason,expectedDigest:v.digest});m.snapshotId=snapshot.id;s.save();
+ const selected=snapshot.report.rows.filter(r=>r.kind==='library'&&r.status==='prepared'&&!r.sample).slice(0,3);s.assert(selected.length>=2,'Prepared source library rows missing');
+ if(!m.importId){const b=await imports.propose(officer.id,snapshot.id,{...reason,requestKey:key('library'),rowKeys:selected.map(r=>r.key),expectedDigest:snapshot.digest});m.importId=b.id;s.save();}
+ const batch=await s.db.aiLibrarySourceImport.findUniqueOrThrow({where:{id:m.importId},include:{items:{include:{version:{include:{publication:true}}}}}});
+ for(const item of batch.items){if(!item.version.publication)await library.publish(admin.id,item.libraryVersionId,reason.justification,reason.evidenceIds);let map=await s.db.aiLibraryControlLinkVersion.findFirst({where:{libraryVersionId:item.libraryVersionId},include:{review:true}});if(!map)map=await links.propose(officer.id,item.libraryVersionId,{...reason,expectedRound:0,controlVersionIds:m.controls.map(c=>c.id)});if(!map.review)await links.review(admin.id,map.id,{...reason,outcome:'approve',expectedDigest:map.digest});}
+ const reconciliation=await imports.reconcile(officer.id,batch.id);s.assert.equal(reconciliation.selectedLibraryZeroDiff,true);s.assert.equal(reconciliation.publishedCount,selected.length);m.reconciliation=reconciliation;s.save();
+ if(!m.nativeDraftId)await require('./population-source-native.cjs')(s,get,reason,officer,admin,owner);
+});};

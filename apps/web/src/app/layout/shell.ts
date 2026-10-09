@@ -6,6 +6,8 @@ import {
   OnDestroy,
   ViewChild,
   computed,
+  effect,
+  untracked,
   inject,
   signal,
 } from '@angular/core';
@@ -18,6 +20,7 @@ import { I18nService } from '../core/i18n.service';
 import { ThemeService } from '../core/theme.service';
 import { CRUMB_MAP, NAV_SECTIONS, NavItem, NavSection } from './navigation';
 import { AppIcon } from '../shared/app-icon';
+import { canSeeTool } from '../core/page-access';
 
 const SIDEBAR_DEFAULT_WIDTH = 264;
 const SIDEBAR_MIN_WIDTH = 236;
@@ -76,6 +79,9 @@ interface GlobalSearchResponse {
   styleUrl: './shell.scss',
 })
 export class Shell implements OnDestroy {
+  @ViewChild('accessRetry') private set accessRetry(value: ElementRef<HTMLButtonElement> | undefined) {
+    if (value) queueMicrotask(() => { if (this.accessBlocked()) value.nativeElement.focus(); });
+  }
   @ViewChild('sidebar') private readonly sidebar?: ElementRef<HTMLElement>;
   @ViewChild('navToggle') private readonly navToggle?: ElementRef<HTMLButtonElement>;
 
@@ -92,6 +98,12 @@ export class Shell implements OnDestroy {
   protected readonly sidebarWidth = signal(this.readStoredSidebarWidth());
   protected readonly sidebarResizing = signal(false);
   protected readonly openTasks = signal(0);
+  protected readonly accessNotice = signal<'updated' | 'removed' | ''>('');
+  protected readonly accessBlocked = computed(() => this.auth.accessStatus() !== 'current');
+  protected readonly pageKeys = computed(() => this.auth.isAuthenticated() && this.auth.canAccessPage(this.url())
+    ? [this.auth.accessGeneration()] : []);
+  private seenAccessGeneration = this.auth.accessGeneration();
+  private seenAccessStatus = this.auth.accessStatus();
   protected readonly expandedSections = signal<Record<string, boolean>>({});
   protected readonly navQuery = signal('');
   protected readonly searchQuery = signal('');
@@ -173,6 +185,26 @@ export class Shell implements OnDestroy {
   );
 
   constructor() {
+    effect(() => {
+      const generation = this.auth.accessGeneration(), status = this.auth.accessStatus();
+      const user = this.auth.currentUser();
+      untracked(() => {
+        if (!user) return;
+        const changed = generation !== this.seenAccessGeneration;
+        const recovered = status === 'current' && this.seenAccessStatus !== 'current';
+        this.seenAccessStatus = status;
+        if (generation !== this.seenAccessGeneration) {
+          this.seenAccessGeneration = generation;
+          this.clearGlobalSearch(); this.navQuery.set(''); this.openTasks.set(0); this.menuOpen.set(false);
+          if (!this.auth.canAccessPage(this.router.url)) {
+            this.accessNotice.set('removed'); void this.router.navigateByUrl('/about');
+          } else this.accessNotice.set('updated');
+          this.refreshOpenTasks();
+        }
+        if (status !== 'current') { this.clearGlobalSearch(); this.openTasks.set(0); }
+        else if (recovered && !changed) this.refreshOpenTasks();
+      });
+    });
     if (this.compactQuery) {
       this.compactNav.set(this.compactQuery.matches);
       this.compactQuery.addEventListener('change', (event) => {
@@ -193,6 +225,22 @@ export class Shell implements OnDestroy {
         this.refreshOpenTasks();
       });
     this.refreshOpenTasks();
+  }
+
+  protected keepConnectionFocus(event: Event): void {
+    const key = event as KeyboardEvent;
+    const buttons = (key.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button');
+    if (!buttons.length) return;
+    key.preventDefault();
+    const index = [...buttons].indexOf(key.target as HTMLButtonElement);
+    buttons[(index + (key.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
+  }
+
+  @HostListener('document:focusin', ['$event'])
+  protected protectConnectionFocus(event: FocusEvent): void {
+    if (this.accessBlocked() && event.target instanceof Element && !event.target.closest('.access-screen-cover')) {
+      document.querySelector<HTMLButtonElement>('.access-screen-cover button')?.focus();
+    }
   }
 
   ngOnDestroy(): void {
@@ -285,13 +333,15 @@ export class Shell implements OnDestroy {
 
   /** Loads the count of the user's open workflow tasks for the inbox badge. */
   private refreshOpenTasks(): void {
-    if (!this.auth.hasPermission('workflow_tasks.view')) return;
+    this.openTasks.set(0);
+    if (!this.auth.hasPermission('workflow_tasks.view') || this.accessBlocked()) return;
+    const generation = this.auth.accessGeneration(), epoch = this.auth.sessionEpoch;
     this.http
       .get<PagedResponse<unknown>>('/api/workflow/tasks/mine', {
         params: { status: 'open', page: '1', pageSize: '1' },
       })
       .subscribe({
-        next: (tasks) => this.openTasks.set(tasks.total),
+        next: (tasks) => { if (generation === this.auth.accessGeneration() && epoch === this.auth.sessionEpoch) this.openTasks.set(tasks.total); },
         error: () => {},
       });
   }
@@ -301,10 +351,7 @@ export class Shell implements OnDestroy {
   }
 
   private canSeeNavItem(item: NavItem): boolean {
-    const screen=({'/governance/ai-use-cases':'useCases','/governance/ai-risks':'risks','/governance/ai-review':'review','/governance/ai-reviews':'reviewOperations','/governance/ai-dashboard':'dashboard','/governance/ai-migration':'migration'} as const)[item.link as '/governance/ai-use-cases'];
-    if(screen)return this.auth.hasAiScreen(screen);
-    return !item.permission || (typeof item.permission === 'string'
-      ? this.auth.hasPermission(item.permission) : item.permission.some(value => this.auth.hasPermission(value)));
+    return canSeeTool(this.auth, item);
   }
 
   protected isWorkspaceSection(section: NavSection): boolean {
@@ -379,6 +426,8 @@ export class Shell implements OnDestroy {
   }
 
   protected onGlobalSearchInput(value: string): void {
+    // Access refresh can clear the panel while this input retains DOM focus.
+    this.searchFocused.set(this.canUseSearch());
     this.searchQuery.set(value);
     this.searchResponse.set(null);
     if (this.searchTimer) {

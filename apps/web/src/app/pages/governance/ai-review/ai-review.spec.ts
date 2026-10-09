@@ -12,7 +12,7 @@ describe('AI review server queues and request ordering',()=>{
     vi.stubGlobal('ResizeObserver',class { observe(){} unobserve(){} disconnect(){} });
     errors=[];
     TestBed.configureTestingModule({imports:[AiReviewPage],providers:[provideHttpClient(),provideHttpClientTesting(),
-      {provide:AuthService,useValue:{hasAiPermission:()=>true,currentUser:()=>({id:'reviewer',roles:[]}),aiCapabilities:()=>null}},
+      {provide:AuthService,useValue:{hasAiPermission:()=>true,currentUser:()=>({id:'reviewer',roles:[]}),hasAiScreen:()=>true,aiCapabilities:()=>({panels:{triage:true,classification:true,classificationVerification:true,specialist:true,decision:true,registration:true}})}},
       {provide:I18nService,useValue:{t:(key:string)=>key,lang:()=> 'en'}},
       {provide:ToastService,useValue:{errorFrom:(error:unknown)=>errors.push(error)}},
     ]});

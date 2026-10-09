@@ -1,0 +1,349 @@
+{
+  "fixtureVersion": "dgop-finance-hr-demo-v1",
+  "demoOnly": true,
+  "isComplianceProof": false,
+  "completedBatches": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "remainingBatches": [],
+  "acceptance": {
+    "status": "passed",
+    "at": "2026-10-09T09:07:24.036Z",
+    "receipt": "C:/Users/Youss/Documents/Codex/work/dgop-access-sync/population/runs/2026-10-09T09-07-22-290Z-batch-5-install/receipt.json",
+    "coverage": "C:/Users/Youss/Documents/Codex/work/dgop-access-sync/population/runs/2026-10-09T08-47-07-976Z-batch-5-verify/coverage.json",
+    "evidence": {
+      "database": "2026-10-09T08:47:09.414Z",
+      "profiles": {
+        "initial": "2026-10-09T08:51:12.092Z",
+        "affectedRetry": "2026-10-09T08:54:27.298Z",
+        "initialFailure": "request throttling while switching profiles",
+        "passingProfiles": 8
+      },
+      "tools": {
+        "initial": "2026-10-09T08:53:05.684Z",
+        "affectedRetry": "2026-10-09T08:54:42.606Z",
+        "initialFailures": [
+          "ambiguous nested main selector",
+          "request throttling"
+        ],
+        "passingTools": 45,
+        "specialists": 15
+      },
+      "persistence": "2026-10-09T08:59:00.703Z",
+      "replay": "2026-10-09T09:04:42.825Z",
+      "interruption": "2026-10-09T09:04:39.256Z",
+      "priorReplayReceiptCorrection": "The 08:58 interruption receipt incorrectly finalized as passed; excluded. Corrected runner explicitly records the controlled interruption as incomplete before the successful resume."
+    },
+    "limitations": [
+      "Genuine PrimeUI license missing",
+      "Local delivery/provisioning simulations only",
+      "Native charter/policy/maturity tools expose no independent approval transitions; examples remain drafts or under review",
+      "4208 version acceptance does not certify the separately merged main application"
+    ]
+  },
+  "ai": {
+    "references": {
+      "L_STREAMS": "09d72144-7795-49e1-a201-17578342e8ae",
+      "L_PROGRAMS": "b855f922-e327-4f6a-b753-c255acd101dd",
+      "L_HUMAN": "7fb70049-8828-4ea5-9553-894b8d7a7fba",
+      "L_STAGE": "e7245b02-b369-4461-81b9-8d440d4d6981",
+      "L_MODEL": "c891504f-e3f5-4db6-92e0-070e6a0ade7f",
+      "L_AVAIL": "63a60ba0-d98e-4f14-a048-d1f3fd6ad18b",
+      "R_YN": "00f3c6ec-ff6e-4f84-9547-3fc84bc36ba3",
+      "L_CLASS": "cdb7f2af-9fac-4504-be73-1687319c986e",
+      "L_BUDGET": "56ca2f8c-0c4e-48df-a8db-e83607464bf2",
+      "R_SDAIA_SCORE": "02410196-9464-4ea6-9636-597829c925a5",
+      "R_SDAIA_TIER": "b155c40f-4d07-44ed-964e-68afb81eac3f",
+      "R_SCORE14": "f9f1adc0-6f80-41ea-b313-7069e46ad021",
+      "R_IMPD": "ea515724-9092-4fef-9ff1-7ddfc8f51c19",
+      "R_LEVEL": "8d07b439-61a3-4acb-9f78-05648101c6b8",
+      "R_LEVEL_DAYS": "46633990-a9c4-4872-af3a-aa3427c0230d",
+      "R_CADENCE": "c0110263-2e71-498f-ab9f-3eb72c451465",
+      "R_LIFECYCLE": "52f32085-4d99-4e8e-95b7-740d56afb3e7",
+      "R_DEPT": "e233311c-b2c7-4647-a84d-7a43d5e79f90",
+      "R_TECH": "b1089078-f761-40be-8663-2664bb31bf07",
+      "R_RELIANCE": "aed41e51-eba0-4c06-ae13-9eedcd67d645",
+      "R_HITL": "b0948eff-4bcf-43cd-a0c9-2ad39659872d",
+      "R_UCSTATUS": "ee2970ba-d3e1-4a34-929d-19a39537c11b",
+      "R_RISKCAT": "8e6b55d6-0306-4201-86fd-f1e8aeffb603",
+      "R_ETHICS": "c37a59f7-de84-4582-9b87-0b9985c06cf6",
+      "R_CTRLEFF": "7394d32c-d31b-4b1b-b177-3dcd34c1c50b",
+      "R_STRATEGY": "9fc337b3-230e-41d6-9cfd-cfb6c4797cfc",
+      "R_SOURCE": "a2b0a845-e5be-45aa-be9e-71a200e4e44c",
+      "R_INTENT": "ddd6efa7-8b6e-47ab-91dd-4bc97e59240f",
+      "R_TIMING": "9412521a-5495-4f7c-9a6b-507d1f58d377",
+      "R_ACTTYPE": "45c0f753-5ea1-4890-be11-998b5156662c",
+      "R_PRIORITY": "c3d0a966-82e2-4d66-8cbc-4267e7e5bab5",
+      "R_TREATSTATUS": "c5f6838a-a9c4-431c-ba84-273ccd3f041f"
+    },
+    "cases": [
+      {
+        "name": "Invoice Classification Assistant",
+        "useCaseId": "fb1d1ac9-2490-4eff-bdb2-6ad298bee1b0",
+        "scope": "finance",
+        "demoOnly": true,
+        "target": "monitoring",
+        "riskId": "ac2495eb-223d-4c72-8dac-8cdcec1c938a",
+        "stage": "monitoring",
+        "complete": true
+      },
+      {
+        "name": "Employee Policy Guidance Assistant",
+        "useCaseId": "1a0dcb98-76f3-49cf-893d-089d7f3d51c5",
+        "scope": "hr",
+        "demoOnly": true,
+        "target": "monitoring",
+        "riskId": "763b6bb2-7a86-4ab3-87a1-27d583675534",
+        "stage": "monitoring",
+        "complete": true
+      },
+      {
+        "name": "Service Request Routing Assistant",
+        "useCaseId": "a1e72a16-9b69-4306-bdfc-1e025bd6d221",
+        "scope": "finance",
+        "demoOnly": true,
+        "target": "monitoring",
+        "riskId": "36665af9-44c7-43bb-8c58-5463fff7b034",
+        "stage": "monitoring",
+        "complete": true
+      }
+    ],
+    "pending": [
+      {
+        "name": "Pending triage — Invoice routing",
+        "useCaseId": "377a53b0-3992-4bf7-8b32-711896cd860d",
+        "scope": "finance",
+        "demoOnly": true,
+        "target": "triage",
+        "stage": "triage",
+        "complete": true
+      },
+      {
+        "name": "Pending classification — Employee policy",
+        "useCaseId": "cb391f6f-fe31-40c2-ba28-b80bbf44b152",
+        "scope": "hr",
+        "demoOnly": true,
+        "target": "classification",
+        "stage": "classification",
+        "complete": true
+      },
+      {
+        "name": "Pending verification — Invoice routing",
+        "useCaseId": "8081188b-1ed0-4438-a48d-4b0e67e1c5af",
+        "scope": "finance",
+        "demoOnly": true,
+        "target": "verification",
+        "stage": "verification",
+        "complete": true
+      },
+      {
+        "name": "Pending specialist-review — Employee policy",
+        "useCaseId": "d0e93263-829e-41df-85fc-6a8a214b7ccf",
+        "scope": "hr",
+        "demoOnly": true,
+        "target": "specialist-review",
+        "stage": "specialist-review",
+        "complete": true
+      },
+      {
+        "name": "Pending decision — Invoice routing",
+        "useCaseId": "cbe078fb-e679-42f5-9041-c33643e95404",
+        "scope": "finance",
+        "demoOnly": true,
+        "target": "decision",
+        "stage": "decision",
+        "complete": true
+      },
+      {
+        "name": "Pending registration — Employee policy",
+        "useCaseId": "446e16d5-6eea-4c45-bd08-dcc22fa47c43",
+        "scope": "hr",
+        "demoOnly": true,
+        "target": "registration",
+        "stage": "registration",
+        "complete": true
+      }
+    ],
+    "reporting": {
+      "finance": {
+        "annualHistory": [
+          {
+            "id": "9f0537d3-d15f-4c6d-bf11-5673d8343f8e",
+            "status": "scheduled"
+          },
+          {
+            "id": "d277660c-4755-4da3-978c-9898c2fef918",
+            "status": "completed"
+          }
+        ],
+        "monthlyMonth": "2026-09",
+        "dashboardSnapshotId": "70b92f1b-212b-4398-809a-f621fb82ea18",
+        "scheduleVersionId": "c9a4ba0d-c2b5-46ff-ba31-1a2ffec299a8",
+        "workerEnabled": false
+      },
+      "hr": {
+        "annualHistory": [
+          {
+            "id": "9946c887-7eef-49d6-9324-fad1839c97e9",
+            "status": "scheduled"
+          },
+          {
+            "id": "509ed83c-6447-45db-9ba2-6a26072a5808",
+            "status": "completed"
+          }
+        ],
+        "monthlyMonth": "2026-09",
+        "dashboardSnapshotId": "7b40207f-1dc3-4dd1-bff3-901060d3c952",
+        "scheduleVersionId": "d2f29359-1316-4e46-9881-8c44eda01ff4",
+        "workerEnabled": false
+      }
+    },
+    "sources": {
+      "requests": {
+        "preview": "37b74dc1-2b21-4df4-93aa-ea7d77ac2528",
+        "correction": "3f0c81b3-9824-4499-ac97-f58be572c971",
+        "library": "0d27e45b-38d9-45ea-bc49-c17309760cce"
+      },
+      "controls": [
+        {
+          "id": "33674bc5-75ff-4024-853a-0a7ccf268aff",
+          "rowKey": "risk:مكتبة ضوابط المعالجة:2",
+          "code": "DEMO_CONTROL_1_V1"
+        },
+        {
+          "id": "c0811c24-cab8-4d99-a0aa-85dc331bfd07",
+          "rowKey": "risk:مكتبة ضوابط المعالجة:3",
+          "code": "DEMO_CONTROL_2_V1"
+        }
+      ],
+      "previewId": "b4a0e37d-6d6d-467a-ac96-2fb9891fd13c",
+      "correctionId": "4eb9b4c9-e639-47dc-b82f-17c5bcecaa94",
+      "snapshotId": "98b82de6-b48a-4563-9249-81ad40efe34b",
+      "importId": "7f25408d-7378-41fd-823d-8402b4b2d3b7",
+      "reconciliation": {
+        "batchId": "7f25408d-7378-41fd-823d-8402b4b2d3b7",
+        "snapshotId": "98b82de6-b48a-4563-9249-81ad40efe34b",
+        "createdAt": "2026-10-08T22:55:34.117Z",
+        "requestedCount": 3,
+        "targetProposalCount": 3,
+        "publishedCount": 3,
+        "sourceLibraryCount": 66,
+        "selectedLibraryZeroDiff": true,
+        "members": [
+          {
+            "rowKey": "risk:مكتبة المخاطر:5",
+            "sourceRef": "AIRL-001",
+            "targetRef": "AIRL-001",
+            "versionId": "1f625966-ac20-4ccc-8109-80dfcb6d3fb5",
+            "published": true,
+            "sourceUnchanged": true,
+            "projectionUnchanged": true,
+            "contentEqual": true,
+            "identifierEqual": true,
+            "targetIntegrity": true
+          },
+          {
+            "rowKey": "risk:مكتبة المخاطر:6",
+            "sourceRef": "AIRL-002",
+            "targetRef": "AIRL-002",
+            "versionId": "3e273e48-2303-4f75-9353-e13ebe8deac9",
+            "published": true,
+            "sourceUnchanged": true,
+            "projectionUnchanged": true,
+            "contentEqual": true,
+            "identifierEqual": true,
+            "targetIntegrity": true
+          },
+          {
+            "rowKey": "risk:مكتبة المخاطر:7",
+            "sourceRef": "AIRL-003",
+            "targetRef": "AIRL-003",
+            "versionId": "06730da5-9fb6-4500-b2a2-321066a18445",
+            "published": true,
+            "sourceUnchanged": true,
+            "projectionUnchanged": true,
+            "contentEqual": true,
+            "identifierEqual": true,
+            "targetIntegrity": true
+          }
+        ],
+        "scope": "selected_library_proposals_only",
+        "overallZeroDiff": null,
+        "pilotSignedOff": false,
+        "productionReady": false
+      },
+      "nativePreparationHistory": [
+        {
+          "requests": {
+            "preview": "bcba5217-3312-432d-ade8-8d4017342e3a",
+            "correction": "c5e0faf1-5f5d-4ce8-8901-23c95840ceac"
+          },
+          "previewId": "319fb8d6-a5c1-489c-8a02-93a6a1dac4ca",
+          "correctionId": "7d80a00a-a1a5-4ec3-8ff1-a78692bf3a50",
+          "snapshotId": "7bfca2b8-5dad-4951-b8af-846fc6dbe2f2",
+          "fixtureVersion": "synthetic-sources-v4",
+          "retainedFailure": "identifier collision and cached band label mismatch"
+        }
+      ],
+      "nativePreparation": {
+        "requests": {
+          "preview": "3184c8ca-3c3d-47e9-89ad-1796f4623785",
+          "correction": "1ee252d6-92f5-4764-8e23-7eab926e422c",
+          "draft": "d38a7d04-43fe-4284-9bfc-244dbbaa8b16"
+        },
+        "fixtureVersion": "synthetic-sources-v5",
+        "previewId": "f3b5e19e-3053-4783-83d5-0238e82e5732",
+        "correctionId": "e6b920bc-cca2-4cc6-8f80-b47b57467994",
+        "snapshotId": "196363a1-ca70-4030-b82d-402a8a993864",
+        "nativeDraftId": "a24db799-6d42-4a44-959e-4369fd0ba8ed"
+      },
+      "nativeDraftId": "a24db799-6d42-4a44-959e-4369fd0ba8ed"
+    }
+  },
+  "sourceIdentity": {
+    "source": {
+      "sha256": "5f978b406f85c8f2ee3eeedc8ea7a271f53c58420b8d04f9fea9875286756b37",
+      "files": 1491
+    },
+    "apiLockSha256": "588e3d85a7bb954ada74a836153d896af1aa762309395f03148c21e92ffa7746",
+    "webLockSha256": "a60a51af1244700be47dc0d814de1522ffc30d0cd87ac6816e1ce9ee840c3a04",
+    "apiBuild": {
+      "sha256": "f1b9f477c4360f750cca3132f30c98a04fd54477b424a49a40ae7e266d5a9ba4",
+      "files": 567
+    },
+    "webBuild": {
+      "sha256": "14c4ceb319f7b50c5f8f822ce2b0dc6007f4b9b9ccf08eebaff20edab6dab2b2",
+      "files": 95
+    },
+    "node": "24.19.0"
+  },
+  "approvedExceptions": {
+    "sharedRoleAiPermissions": {
+      "grants": {
+        "data_owner": [
+          "aiuc.asset.approve"
+        ],
+        "privacy_officer": [
+          "case.view.aiuc.org",
+          "case.view.airs.org",
+          "airs.risk.assess"
+        ],
+        "security_reviewer": [
+          "case.view.aiuc.org",
+          "case.view.airs.org",
+          "airs.risk.assess"
+        ],
+        "business_steward": [
+          "case.view.airs.own",
+          "airs.risk.assess"
+        ]
+      },
+      "authorization": "Human approved required AI permissions in 4208 only",
+      "at": "2026-10-08T22:51:12.019Z"
+    }
+  }
+}

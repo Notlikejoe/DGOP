@@ -31,8 +31,10 @@ export class JwtAuthGuard implements CanActivate {
     const token = this.extractToken(request);
     if (!token) throw new UnauthorizedException('Missing bearer token');
 
-    try {
-      const payload = this.jwt.verify<JwtPayload>(token);
+    let payload: JwtPayload;
+    try { payload = this.jwt.verify<JwtPayload>(token); }
+    catch { throw new UnauthorizedException('Invalid or expired token'); }
+    // A database outage is not proof that a valid session was revoked.
       const row = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         select: {
@@ -57,9 +59,6 @@ export class JwtAuthGuard implements CanActivate {
       };
       (request as Request & { user: AuthUser }).user = user;
       return true;
-    } catch {
-      throw new UnauthorizedException('Invalid or expired token');
-    }
   }
 
   private extractToken(request: Request): string | undefined {

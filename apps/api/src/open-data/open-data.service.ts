@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isSyntheticPopulationProfile } from '../common/synthetic-population-profile';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -431,7 +432,7 @@ export class OpenDataService {
             ? `System-generated evidence that ${candidate.code} completed Open Data assessment approval gates.`
             : `System-generated evidence that ${candidate.code} was published through the Open Data portal sync workflow.`,
         status: NdiEvidenceStatus.submitted,
-        provenance: kind === 'publication' ? 'generated_simulation' : isManagedDemoProfile() ? 'seeded_uat' : 'operational',
+        provenance: kind === 'publication' ? 'generated_simulation' : isSyntheticPopulationProfile() ? 'synthetic_demo' : isManagedDemoProfile() ? 'seeded_uat' : 'operational',
         fileName,
         originalName: fileName,
         mimeType: OPEN_DATA_SYSTEM_EVIDENCE_MIME,

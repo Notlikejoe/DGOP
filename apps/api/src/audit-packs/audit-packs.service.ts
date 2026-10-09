@@ -225,6 +225,7 @@ export class AuditPacksService {
       frameworks: ['SDAIA NDI', 'NCA ECC-2:2024', 'PDPL 2023', 'DGOP ABAC', 'Data Quality', 'Training & Certification', 'Stewardship'],
     };
     const baseFiles: ZipEntry[] = [
+      { path: 'evidence-eligibility.json', body: JSON.stringify({ mode: 'operational', eligibleProvenance: 'operational', exclusions: ['synthetic_demo', 'seeded_uat', 'not_current_approved'], syntheticEvidenceEarnsCredit: false }, null, 2) },
       { path: 'summary.json', body: JSON.stringify(summary, null, 2) },
       { path: 'specifications.json', body: JSON.stringify(specRows, null, 2) },
       { path: 'gaps.json', body: JSON.stringify(gaps, null, 2) },

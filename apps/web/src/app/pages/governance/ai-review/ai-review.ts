@@ -1,3 +1,4 @@
+import { AccessChangedError } from '../../../core/access-errors';
 import { AiEvidencePanel } from '../../../shared/ai-evidence-panel';
 import { formatDualDate } from '../../../shared/dual-date.format';
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
@@ -128,6 +129,13 @@ const INTAKE_FIELDS = [
 })
 export class AiReviewPage implements OnInit, OnDestroy {
   protected readonly auth=inject(AuthService);
+  protected readonly referencesUnavailable = signal(false);
+  protected readonly visibleTabs = computed<ReviewTab[]>(() => REVIEW_TABS.filter(tab => this.canUseTab(tab)));
+  protected canUseTab(tab: ReviewTab): boolean {
+    const panels = this.auth.aiCapabilities()?.panels;
+    return !!panels?.[tab === 'verification' ? 'classificationVerification' : tab];
+  }
+
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   protected readonly i18n = inject(I18nService);
@@ -158,7 +166,7 @@ export class AiReviewPage implements OnInit, OnDestroy {
   protected readonly assetDomainId = signal('');
   protected readonly assetClassificationId = signal('');
   protected readonly assetApprovalStage = computed(() => this.selectedReviewTask()?.templateStage?.code === 'aiuc-asset-approval');
-  protected readonly registrationReady = computed(() => !!this.justification().trim() && !!this.assetDomainId() && !!this.assetClassificationId()
+  protected readonly registrationReady = computed(() => !this.referencesUnavailable() && !!this.justification().trim() && !!this.assetDomainId() && !!this.assetClassificationId()
     && (this.registrationMode() === 'link' ? !!this.existingAssetId().trim() : !!this.assetNameEn().trim() && !!this.assetNameAr().trim()));
   protected readonly selected = signal<AiReviewCase | null>(null);
   protected readonly configuration = signal<ClassificationConfiguration | null>(null);
@@ -222,6 +230,7 @@ export class AiReviewPage implements OnInit, OnDestroy {
 
   protected async load(preferredId?: string): Promise<void> {
     clearTimeout(this.searchTimer);
+    if (!this.canUseTab(this.tab())) this.tab.set(this.visibleTabs()[0] ?? 'triage');
     const generation=++this.requestGeneration, tab=this.tab(), search=this.queueSearch().trim();
     const pages={...this.queuePages()}, selectedId=preferredId??this.selected()?.id;
     if(this.state()!=='ok')this.state.set('loading');
@@ -254,7 +263,7 @@ export class AiReviewPage implements OnInit, OnDestroy {
   }
 
   protected setTab(tab:ReviewTab):void {
-    if(!REVIEW_TABS.includes(tab)||this.working()||tab===this.tab())return;
+    if(!this.canUseTab(tab)||!REVIEW_TABS.includes(tab)||this.working()||tab===this.tab())return;
     this.tab.set(tab); void this.load();
   }
   protected changeQueuePage(page:number):void {
@@ -297,15 +306,16 @@ export class AiReviewPage implements OnInit, OnDestroy {
 
   protected tabLabel(tab = this.tab()): string { return this.t(`aiReview.tab.${tab}`); }
 
-  private rowsFor(tab: ReviewTab, triage = this.triageCases(), classification = this.classificationCases(),
+  protected rowsFor(tab: ReviewTab, triage = this.triageCases(), classification = this.classificationCases(),
     verification = this.verificationCases(), specialist = this.specialistCases(), decision = this.decisionCases(), registration = this.registrationCases()): AiReviewCase[] {
     return tab === 'triage' ? triage : tab === 'classification' ? classification : tab === 'verification' ? verification
       : tab === 'specialist' ? specialist : tab === 'decision' ? decision : registration;
   }
 
   private async loadAssetLookups(): Promise<{ domains: AssetLookup[]; classifications: AssetLookup[] }> {
+    if (!this.canUseTab('registration')) return { domains: [], classifications: [] };
     try { return await firstValueFrom(this.http.get<{ domains: AssetLookup[]; classifications: AssetLookup[] }>('/api/ai/use-cases/registration/lookups')); }
-    catch (error) { if (error instanceof HttpErrorResponse && error.status === 403) return { domains: [], classifications: [] }; throw error; }
+    catch (error) { if (error instanceof AccessChangedError) throw error; this.referencesUnavailable.set(true); return { domains: [], classifications: [] }; }
   }
 
   protected assetLookupLabel(value: AssetLookup): string { return this.i18n.lang() === 'ar' ? value.nameAr : value.nameEn; }
@@ -335,6 +345,8 @@ export class AiReviewPage implements OnInit, OnDestroy {
   }
 
   private async loadQueue(url:string,page:number,search:string):Promise<ReviewQueue> {
+    const stage=REVIEW_TABS.find(stage=>QUEUE_URLS[stage]===url);
+    if(stage&&!this.canUseTab(stage))return emptyQueue(page,true);
     if(url.includes('/reviews/queue')&&!this.auth.hasAiPermission('case.view.aiuc.org'))return emptyQueue(page,true);
     const broad=this.auth.hasAiPermission('case.view.aiuc.org')||this.auth.hasAiPermission('case.view.aiuc.all');
     const purpose=url.includes('registration')?['aiuc.asset.register','aiuc.asset.approve']:url.includes('decisions')?['case.approve.aiuc']:['aiuc.classify.assess'];
@@ -352,18 +364,20 @@ export class AiReviewPage implements OnInit, OnDestroy {
   }
 
   private async loadConfiguration(): Promise<ClassificationConfiguration | null> {
+    if (!this.canUseTab('classification')) return null;
     if(!['aiuc.classify.assess','case.view.aiuc.org','case.view.aiuc.all'].some(permission=>this.auth.hasAiPermission(permission)))return null;
     try {
       return await firstValueFrom(this.http.get<ClassificationConfiguration>('/api/ai/use-cases/classification/configuration'));
     } catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 403) return null;
-      throw error;
+      if (error instanceof AccessChangedError) throw error;
+      this.referencesUnavailable.set(true); return null;
     }
   }
 
   private async loadIntakeLookups(): Promise<IntakeLookups | null> {
+    if (!this.auth.hasAiScreen('useCases')) return null;
     try { return await firstValueFrom(this.http.get<IntakeLookups>('/api/ai/use-cases/lookups')); }
-    catch (error) { if (error instanceof HttpErrorResponse && error.status === 403) return null; throw error; }
+    catch (error) { if (error instanceof AccessChangedError) throw error; this.referencesUnavailable.set(true); return null; }
   }
 
   protected payload(): Record<string, unknown> { return this.selected()?.intakeRevisions[0]?.payload ?? {}; }

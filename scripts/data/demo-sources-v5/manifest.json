@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "fixtureVersion": "synthetic-sources-v5",
+  "demoOnly": true,
+  "sourceMode": "synthetic_demo",
+  "productionReady": false,
+  "purpose": "Synthetic source preparation with reserved fixture identifiers and reconciled methodology labels; no production acceptance.",
+  "sources": [
+    {
+      "source": "risk",
+      "file": "demo-risk-v5.xlsx",
+      "sha256": "ccb980e23571fcc64fb28b201baaa1194e3dda9afe5f2eaaf224be479729f228"
+    },
+    {
+      "source": "adoption",
+      "file": "demo-adoption-v5.xlsx",
+      "sha256": "4747ec5ded5eafd847a1aebe68de4438598e76910c195285d380f474460e8643"
+    }
+  ]
+}

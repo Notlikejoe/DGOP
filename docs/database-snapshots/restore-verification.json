@@ -1,0 +1,128 @@
+{
+  "formatVersion": 1,
+  "verifiedAt": "2026-10-09T10:24:44.846Z",
+  "node": "24.19.0",
+  "scope": "Encrypted backup recovery verification; no application release acceptance implied",
+  "sourceApplicationBaseCommit": "8fbf22753cb4aad980322272778714a1a767dbc6",
+  "snapshots": [
+    {
+      "snapshot": "original-4206",
+      "sourceDatabase": "dgop_dev",
+      "sourceCommit": "b8055ba484208a5c20e171892ae7f137f6ee7249",
+      "verifiedAt": "2026-10-09T10:17:16.448Z",
+      "freshRestorePassed": true,
+      "tables": 201,
+      "rows": 3818,
+      "usernames": 14,
+      "usernameAndRoleComparisonPassed": true,
+      "restoredFiles": 1,
+      "missingSourceFiles": 10,
+      "artifactChecksums": {
+        "database": {
+          "file": "database.dgop.enc",
+          "bytes": 2411948,
+          "sha256": "8e3dce8df28bc1219d9df08690a8484b2af898bbf8cb51fbcaea37c3354c73cf",
+          "plainSha256": "88905c5667f0b1d8983b35e49e757e1dbc24f4792a48ac69b61a376cce907899"
+        },
+        "files": {
+          "file": "files.dgop.enc",
+          "bytes": 257,
+          "sha256": "f1965dcc496b62a7e5e89c3f47c3aecbfbc6b8aeead3d2f05260db3dacaee3a1",
+          "plainSha256": "2de7f8586bfba81ae270e85426236cdde324366d2fa2f7ea2b36064b9d4dcf6a"
+        }
+      }
+    },
+    {
+      "snapshot": "stability-candidate",
+      "sourceDatabase": "dgop_ai_test_governance_1791136192656",
+      "sourceCommit": "316a899ea1932e36604dc89c42597a792dd5c682",
+      "verifiedAt": "2026-10-09T10:24:33.312Z",
+      "freshRestorePassed": true,
+      "tables": 201,
+      "rows": 3989,
+      "usernames": 22,
+      "usernameAndRoleComparisonPassed": true,
+      "restoredFiles": 8,
+      "missingSourceFiles": 0,
+      "artifactChecksums": {
+        "database": {
+          "file": "database.dgop.enc",
+          "bytes": 1670479,
+          "sha256": "a9af2e22127835953b8329fa89d58680a30a68d75d732f96479cd82c5200fbed",
+          "plainSha256": "410080528ff13a2739c7caba73c2f6b7128d48f3d98d076f2a5b06a374afbef7"
+        },
+        "files": {
+          "file": "files.dgop.enc",
+          "bytes": 4279,
+          "sha256": "8341fbc0c89e1dddc45e8e9d74ca6295eb5e40ffa67b374c9b9486cd1b90808c",
+          "plainSha256": "523bca229530241663560a2963b209092a7b1a168347f15599c4a856f1bd2157"
+        }
+      }
+    },
+    {
+      "snapshot": "ai-repair-candidate",
+      "sourceDatabase": "dgop_ai_test_governance_1791304912846",
+      "sourceCommit": "95ab62716399b08eb304e5b9b3863791f6f98f29",
+      "verifiedAt": "2026-10-09T10:24:38.715Z",
+      "freshRestorePassed": true,
+      "tables": 207,
+      "rows": 3831,
+      "usernames": 22,
+      "usernameAndRoleComparisonPassed": true,
+      "restoredFiles": 8,
+      "missingSourceFiles": 0,
+      "artifactChecksums": {
+        "database": {
+          "file": "database.dgop.enc",
+          "bytes": 1701643,
+          "sha256": "e62f5d7b366c2ee5942953672f489e4413bac06f22895331331665fe5102432d",
+          "plainSha256": "3c7ca40cba2e39154b2dd3722a2a0aec82754d544023e1a1d1296980e9836636"
+        },
+        "files": {
+          "file": "files.dgop.enc",
+          "bytes": 4279,
+          "sha256": "0758404de6a57e2e0319fe6844b35f1ae180badf635979423021347502c6f0e8",
+          "plainSha256": "f9662bb6eadb2040b8d23cdad081eba7badfd4403b7c89c6657dfa0ddbfee937"
+        }
+      }
+    },
+    {
+      "snapshot": "populated-4208",
+      "sourceDatabase": "dgop_access_sync_qa_20261007",
+      "sourceCommit": "c15834d2abe562c37ffbcf097080f81841fd85a1",
+      "verifiedAt": "2026-10-09T10:24:44.843Z",
+      "freshRestorePassed": true,
+      "tables": 201,
+      "rows": 6880,
+      "usernames": 29,
+      "usernameAndRoleComparisonPassed": true,
+      "restoredFiles": 8,
+      "missingSourceFiles": 11,
+      "artifactChecksums": {
+        "database": {
+          "file": "database.dgop.enc",
+          "bytes": 2770132,
+          "sha256": "63027ce7e41824df1445177b43dc5f05c6f7f8786e5f80288c3faf089d4a32e7",
+          "plainSha256": "487bd301e151ba12d38ef6458259fe79047f37282715c287e5091156b7d544fa"
+        },
+        "files": {
+          "file": "files.dgop.enc",
+          "bytes": 7837,
+          "sha256": "9b9ed317027f837a8aadc62763750b9cb7d5383579c1868e6630f8ca40a49678",
+          "plainSha256": "61cf10ac8282b1f1538ac98e1c5258ec0316034234f742c6023f88b3406b49f8"
+        }
+      }
+    }
+  ],
+  "toolingVerification": {
+    "encryptionCodecRegressionTestsPassed": 2,
+    "restoreGuardTestsPassed": 3,
+    "syntaxChecksPassed": true,
+    "sourceHashes": {
+      "codec.cjs": "fe79a8ec38edbaff939742cf5278ebcab34466b9570e2dc40b1fd09e10a83b79",
+      "codec.test.cjs": "bb1a4afc31103b9ea09125de2acb5a5dfd4e624faf35fec6821dad39f8b6e7dd",
+      "restore.cjs": "f2d65dc5bf55c01af5668286d9d52c329d7730bc1630717f74820fd049ef01b5",
+      "restore.test.cjs": "4ae5c0be97d4320fc39e01fed2033cc193521e1204646cfe5383335aaf178adb"
+    }
+  }
+}

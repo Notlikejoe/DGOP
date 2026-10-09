@@ -1,0 +1,7 @@
+# Only encrypted snapshots and public manifests belong here.
+*.dump
+*.sql
+*.backup
+*.key
+snapshot-key*.json
+private/

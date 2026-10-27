@@ -6,6 +6,7 @@ import { PrivacyService } from '../src/privacy/privacy.service';
 import { enforcementOperationAllowed, enforcementGrantOutcome } from '../src/access/access-enforcement.logic';
 import { addCalendarDays, breachNotificationStatus, dsrTransitionError, dsrDeadlineExtensionError, notificationObligationsResolved } from '../src/privacy/privacy.logic';
 import { BreachStatus } from '@prisma/client';
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 
 const tests: [string, () => void | Promise<void>][] = [];
 function test(name: string, fn: () => void | Promise<void>) { tests.push([name, fn]); }
@@ -35,8 +36,8 @@ function fixture(businessScoped = false) {
     create: async (args: any) => { const row = { id: 'attempt-' + (state.attempts.length + 1), status: 'queued', ...args.data }; state.attempts.push(row); return structuredClone(row); },
     updateMany: async (args: any) => { const row = state.attempts.find((a: any) => a.id === args.where.id); if (!row || !args.where.status.in.includes(row.status)) return { count: 0 }; update(row, args.data); return { count: 1 }; },
   };
-  const tx: any = { accessGrant: delegate('grant'), privacyDsrRequest: delegate('dsr'), privacyBreach: delegate('breach'), privacyDpia: delegate('dpia'), accessEnforcementAttempt: attempts, person: { findFirst: async (args: any) => args.where.id === 'person-reviewer' ? { id: 'person-reviewer' } : null }, $queryRaw: async () => [] };
-  const db: any = { ...tx, role: { findFirst: async () => ({ code: 'privacy_officer' }), findMany: async () => [{ code: 'data_owner' }] }, dataAsset: { findMany: async () => [], findFirst: async () => businessScoped ? null : { id: 'asset-1' } }, $transaction: async (fn: any) => { const before = structuredClone(state); try { return await fn(tx); } catch (e) { state = before; throw e; } } };
+  const tx: any = {role:liveRoleFixture([fixtureRole('privacy_officer',['privacy_operations.edit']),fixtureRole('data_owner',['access_grants.edit'])]), accessGrant: delegate('grant'), privacyDsrRequest: delegate('dsr'), privacyBreach: delegate('breach'), privacyDpia: delegate('dpia'), accessEnforcementAttempt: attempts, person: { findFirst: async (args: any) => args.where.id === 'person-reviewer' ? { id: 'person-reviewer' } : null }, $queryRaw: async () => [] };
+  const db: any = { ...tx, dataAsset: { findMany: async () => [], findFirst: async () => businessScoped ? null : { id: 'asset-1' } }, $transaction: async (fn: any) => { const before = structuredClone(state); try { return await fn(tx); } catch (e) { state = before; throw e; } } };
   const audit: any = { logRequired: async (entry: any, writer: any) => { assert.equal(writer, tx); if (failAudit) throw new Error('Audit unavailable'); state.audits.push(entry); } };
   const scope = { resolve: async (roles: string[]) => {
     if (businessScoped && !roles.includes('system_admin')) return { orgUnits: 'all', domains: ['allowed-domain'], maxClassRank: 2 };
@@ -118,47 +119,46 @@ test('DSR identity and completion evidence are authoritative and versioned', asy
   await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 2, identityValidated: false }, user.email), BadRequestException);
 });
 
-test('DSR final decision allows system administrator override and still rolls back if audit fails', async () => {
+test('DSR final decision remains independent for administrators and rolls back if audit fails', async () => {
   const f = fixture(); f.state().dsr.createdBy = user.email;
-  await f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Invalid request' }, user.email);
-  assert.equal(f.state().dsr.status, 'rejected');
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Invalid request' }, user.email), ForbiddenException);
   const a = fixture(); a.breakAudit();
   await assert.rejects(a.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Invalid request' }, user.email));
   assert.equal(a.state().dsr.status, 'in_progress'); assert.equal(a.state().dsr.version, 1);
 });
 
-test('platform administrator can make privacy final decisions without a business role', async () => {
+test('platform administrator requires an actual privacy business role for final decisions', async () => {
   const f = fixture();
-  await f.privacy.updateDsr(['system_admin'], 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Administrative override' }, user.email);
-  await f.privacy.updateBreach(['system_admin'], 'breach-1', { expectedVersion: 1, regulatorNotificationRequired: false, subjectNotificationRequired: false, notificationDecisionReason: 'Administrative override' }, user.email);
-  assert.equal(f.state().dsr.status, 'rejected');
-  assert.equal(f.state().breach.regulatorNotificationRequired, false);
-  assert.equal(f.state().audits.length, 2);
+  await assert.rejects(f.privacy.updateDsr(['system_admin'], 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Administrative override' }, user.email), ForbiddenException);
+  await assert.rejects(f.privacy.updateBreach(['system_admin'], 'breach-1', { expectedVersion: 1, regulatorNotificationRequired: false, subjectNotificationRequired: false, notificationDecisionReason: 'Administrative override' }, user.email), ForbiddenException);
+  assert.equal(f.state().audits.length, 0);
 });
 
-test('platform administrator has unrestricted business decision scope', async () => {
+test('platform oversight cannot broaden a constrained business decision scope', async () => {
   const f = fixture(true);
-  await f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Administrative scope override' }, user.email);
-  assert.equal(f.state().dsr.status, 'rejected');
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, status: 'rejected', decisionSummary: 'Outside business scope' }, user.email), NotFoundException);
+  await assert.rejects(f.privacy.updateBreach(user.roles, 'breach-1', { expectedVersion: 1, status: 'closed' }, user.email), NotFoundException);
+  await assert.rejects(f.privacy.saveGate(user.roles, 'dpia-1', { phase: 'requirements', status: 'approved' }, user.email), NotFoundException);
+  await assert.rejects(f.access.decideGrant('grant-1', { expectedVersion: 1, decision: 'approved' }, { ...user, roles: ['system_admin', 'data_owner'] }), NotFoundException);
+  assert.equal(f.state().audits.length, 0);
 });
 
 test('DSR extension requires an assigned independent reviewer, identity and prior notice', async () => {
-  const reviewerRoles = ['privacy_officer'];
   const f = fixture(); const deadline = f.state().dsr.dueAt;
   const extension = { dueAt: addCalendarDays(deadline, 30).toISOString(), reason: 'Complex synthetic search requires additional time', communicatedAt: new Date().toISOString(), communicationReference: 'restricted-prior-notice' };
-  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), BadRequestException);
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), BadRequestException);
   f.state().dsr.identityValidated = true; f.state().dsr.identityEvidenceReference = 'identity-proof';
   f.state().dsr.assignedPersonId = null;
-  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
   f.state().dsr.assignedPersonId = 'person-reviewer';
   f.state().dsr.createdBy = user.email;
-  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email), ForbiddenException);
   f.state().dsr.createdBy = 'requester@example.test';
-  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: { ...extension, dueAt: addCalendarDays(deadline, 31).toISOString() } }, user.email), BadRequestException);
-  const result = await f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email);
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: { ...extension, dueAt: addCalendarDays(deadline, 31).toISOString() } }, user.email), BadRequestException);
+  const result = await f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 1, deadlineExtension: extension }, user.email);
   assert.equal(result.version, 2); assert.equal(result.extensionRecordedBy, user.email);
   assert.equal(result.effectiveDueAt.toISOString(), extension.dueAt); assert.equal(f.state().dsr.dueAt.toISOString(), deadline.toISOString());
-  await assert.rejects(f.privacy.updateDsr(reviewerRoles, 'dsr-1', { expectedVersion: 2, deadlineExtension: extension }, user.email), BadRequestException);
+  await assert.rejects(f.privacy.updateDsr(user.roles, 'dsr-1', { expectedVersion: 2, deadlineExtension: extension }, user.email), BadRequestException);
   assert.match(dsrDeadlineExtensionError({ ...f.state().dsr, extensionDueAt: null, dueAt: past }, { dueAt: future, reason: 'Reason', communicatedAt: past, communicationReference: 'notice' })!, /before/);
 });
 

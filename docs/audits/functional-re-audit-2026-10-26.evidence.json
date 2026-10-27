@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-26",
+  "decision": "NO-GO for complete functional sign-off: three P1 findings",
+  "baseCommit": "67e96a619d88275bcf1df1b074a21bf870bc74b2",
+  "binding": {
+    "source": {
+      "sha256": "691bf09fafe2b2e2d438d8994f36a711d11f6d5ddd1345d46e7aab5ab438710c",
+      "files": 1159
+    },
+    "apiLockSha256": "b679427639d3012166bfc2e4df94c12815937867130e318445daf1bc63e0e5d2",
+    "webLockSha256": "67f444365e94b6fd55d4c42a116fcaf054d7b7af964b220a1d6e956971f8c535",
+    "apiBuild": {
+      "sha256": "05f764d85d5f282256e405aa4599aad98fec3c900917dcee6d3e3ba6c70b68b0",
+      "files": 627
+    },
+    "webBuild": {
+      "sha256": "fe0695d3bbee26baaedbb4636f690dbec1b274c5562ec7a78103af5865b59e49",
+      "files": 101
+    },
+    "node": "24.19.0"
+  },
+  "receiptAttestations": [
+    {
+      "label": "Boundary evidence",
+      "sha256": "c5d90d2d95460249f4b0faee1f7e8a71b7478faae198a88ad9629ed58d0c19ce",
+      "bytes": 2722
+    },
+    {
+      "label": "45-route/25-tab browser receipt",
+      "sha256": "a9f1f9de3771503eea1ca4ff41f5d9de939b6dee9d355c27e76bacca8606abb3",
+      "bytes": 12934
+    },
+    {
+      "label": "Live reporting comparison",
+      "sha256": "82bdb9219729b0f65f3812c7aa64eac874810ad364bd0ae37714d118196eae0d",
+      "bytes": 246811
+    },
+    {
+      "label": "Screenshot",
+      "sha256": "6cd5ca383389d338e2f223ac5aa7d018f7d8fc48c85bdce5507b555a5ee03d40",
+      "bytes": 181299
+    },
+    {
+      "label": "Audit ledger with receipt hashes",
+      "sha256": "91fcb7f7c03a623457e38149305c0e9be5ad79416940ecc223e39274f41b3d28",
+      "bytes": 11459
+    },
+    {
+      "label": "Complete tool-to-database coverage",
+      "sha256": "3dc91f244459977e85e5328c561f17c3e8dadf33622f9ed781ec1dba5d13ddbc",
+      "bytes": 42278
+    },
+    {
+      "label": "Eight-profile contract receipt",
+      "sha256": "f1bdb8fa50cee73ce3564d997598760b894b03a451189ded1460f69798f03bc9",
+      "bytes": 9203
+    },
+    {
+      "label": "Final preservation and audit-chain receipt",
+      "sha256": "66854c24f01df882d1413b843170113244feaf0e6e6b7fd4151c56f2e6a8bd3d",
+      "bytes": 25188
+    },
+    {
+      "label": "Current native regressions",
+      "sha256": "3db4af0c354b5d2edbde4a447a6382ae128b2e8b9ab9ef42cbe2c8b219f87b68",
+      "bytes": 1489
+    }
+  ],
+  "verification": {
+    "apiTestFiles": 57,
+    "frontendTests": 97,
+    "frontendTestFiles": 22,
+    "nativePostgresGroups": 34,
+    "toolRoutes": 45,
+    "dataTabs": 25,
+    "qaProfiles": 8,
+    "departmentalProfiles": 30,
+    "migrations": 98,
+    "unexpectedDrift": 0,
+    "proofDigests": 233,
+    "completedAIJourneys": 3,
+    "pendingAIExamples": 6
+  },
+  "limitations": [
+    "Three P1 functional findings remain; this is not full functional acceptance.",
+    "One PostgreSQL regression required a work-only pagination adapter; the unmodified integration harness needs maintenance.",
+    "70 earlier profile browser assertions are reused with source comparison, not represented as fresh DOM runs.",
+    "No dedicated security audit, production release matrix or capacity soak.",
+    "A genuine PrimeUI license is not configured.",
+    "Ten legacy originals remain unavailable; synthetic evidence receives no operational compliance credit."
+  ],
+  "runtimeArtifactsPublished": false
+}

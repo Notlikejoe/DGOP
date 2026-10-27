@@ -7,7 +7,7 @@ import { I18nService } from '../core/i18n.service';
 @Component({
   selector: 'app-demo-banner',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `@if (enabled()) { <aside role="note" class="demo-banner" [attr.dir]="i18n.dir()">{{ i18n.lang() === 'ar' ? 'عرض تجريبي · بيانات اصطناعية · الوصول والبريد الإلكتروني محاكاة محلية · ليس إثبات امتثال' : 'Demonstration · Synthetic data · Access and email use local simulations · This is not a compliance claim' }}</aside> }`,
+  template: `@if (enabled()) { <aside role="note" class="demo-banner" [attr.dir]="i18n.dir()">{{ i18n.lang() === 'ar' ? 'مساحة عمل محلية · بيانات اصطناعية · الوصول والبريد الإلكتروني محاكاة محلية · ليس إثبات امتثال' : 'Local workspace · Synthetic data · Access and email use local simulations · This is not a compliance claim' }}</aside> }`,
   styles: [`.demo-banner { padding: .55rem 1rem; background: #fff4cf; color: #614b13; border-bottom: 1px solid #e8dba6; font-size: .85rem; text-align: center; line-height: 1.5; }`],
 })
 export class DemoBanner {

@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture,withLiveRoleFixture } from './live-role-fixture';
 /**
  * Unit tests for Sprint 14 security governance decision logic.
  * Run with: ts-node test/security-governance.service.spec.ts
@@ -174,7 +175,7 @@ test('upsertAccessMap uses a stable scope key and updates an existing active map
   let updatedData: any;
   let lookupWhere: any;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       role: { findFirst: async () => ({ id: 'role-1', code: 'dq_steward' }) },
       dataDomain: { findFirst: async () => ({ id: 'domain-1' }) },
       classification: { findFirst: async () => ({ id: 'class-1', rank: 2 }) },
@@ -188,7 +189,7 @@ test('upsertAccessMap uses a stable scope key and updates an existing active map
           return { id: 'map-1', role: { code: 'dq_steward' } };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -216,9 +217,9 @@ test('upsertAccessMap uses a stable scope key and updates an existing active map
 
 test('upsertAccessMap rejects unsafe personal-data grants before persistence', async () => {
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       role: { findFirst: async () => ({ id: 'role-1', code: 'analyst' }) },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -242,9 +243,9 @@ test('upsertAccessMap rejects unsafe personal-data grants before persistence', a
 
 test('createMaskingPolicy rejects global policies for scoped users', async () => {
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [] },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -264,12 +265,12 @@ test('createMaskingPolicy rejects global policies for scoped users', async () =>
 
 test('createDlpIncident rejects assets outside scoped user access', async () => {
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: {
         findMany: async () => [{ id: 'visible-asset' }],
         findFirst: async () => ({ id: 'hidden-asset' }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
@@ -290,7 +291,7 @@ test('createDlpIncident rejects assets outside scoped user access', async () => 
 test('accessReviews scopes included items, not only parent reviews', async () => {
   let includeArg: any;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       accessReview: {
         findMany: async (args: any) => {
@@ -298,7 +299,7 @@ test('accessReviews scopes included items, not only parent reviews', async () =>
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: 2 }),
@@ -314,7 +315,7 @@ test('accessReviews scopes included items, not only parent reviews', async () =>
 test('accessReviews do not expose unlinked items to organization-scoped reviewers', async () => {
   let itemWhere: unknown;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [] },
       accessReview: {
         findMany: async (args: any) => {
@@ -322,7 +323,7 @@ test('accessReviews do not expose unlinked items to organization-scoped reviewer
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
@@ -340,7 +341,7 @@ test('createAccessReviewCampaign includes active role grants as reviewer-ready i
   let createdItems: any[] = [];
   let auditMetadata: any;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       businessSequence: sequenceDelegate(),
       accessGrant: {
         findMany: async () => [
@@ -376,7 +377,7 @@ test('createAccessReviewCampaign includes active role grants as reviewer-ready i
           };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     {
       log: async (entry: any) => {
         auditMetadata = entry.metadata;
@@ -428,7 +429,7 @@ test('updateReviewItem queues linked grant revocation and completes the review',
     },
   };
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findFirst: async () => ({ id: 'asset-1' }) },
       dataDomain: { findFirst: async () => ({ id: 'domain-1' }) },
       classification: { findFirst: async () => ({ id: 'class-1', rank: 2 }) },
@@ -448,7 +449,7 @@ test('updateReviewItem queues linked grant revocation and completes the review',
         }),
       },
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     {
       logRequired: async (entry: any) => {
         auditEntry = entry;
@@ -461,7 +462,7 @@ test('updateReviewItem queues linked grant revocation and completes the review',
 
   await service.updateReviewItem(
     'item-1',
-    ['system_admin'],
+    ['security_officer'],
     { decision: 'revoke', justification: 'Quarterly access review found no active business need' },
     'admin@dgop.local',
   );
@@ -481,7 +482,7 @@ test('updateReviewItem queues linked grant revocation and completes the review',
 test('dlpIncidents do not expose unlinked incidents to organization-scoped reviewers', async () => {
   let dlpWhere: unknown;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [] },
       dlpIncident: {
         findMany: async (args: any) => {
@@ -489,7 +490,7 @@ test('dlpIncidents do not expose unlinked incidents to organization-scoped revie
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
@@ -506,7 +507,7 @@ test('dlpIncidents do not expose unlinked incidents to organization-scoped revie
 test('dlpIncidents allow classification-anchored unlinked incidents for classification scopes', async () => {
   let dlpWhere: unknown;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [] },
       dlpIncident: {
         findMany: async (args: any) => {
@@ -514,7 +515,7 @@ test('dlpIncidents allow classification-anchored unlinked incidents for classifi
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: 2 }),
@@ -532,7 +533,7 @@ test('dlpIncidents allow classification-anchored unlinked incidents for classifi
 test('decisionLog scopes unlinked decisions by allowed domain', async () => {
   let decisionWhere: unknown;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [] },
       abacDecisionLog: {
         findMany: async (args: any) => {
@@ -540,7 +541,7 @@ test('decisionLog scopes unlinked decisions by allowed domain', async () => {
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: null }),
@@ -558,7 +559,7 @@ test('decisionLog scopes unlinked decisions by allowed domain', async () => {
 test('decisionLog resolves identity-group names for auditor-readable history', async () => {
   let groupWhere: any;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findMany: async () => [] },
       abacDecisionLog: {
         findMany: async () => [{
@@ -571,7 +572,7 @@ test('decisionLog resolves identity-group names for auditor-readable history', a
           return [{ externalId: 'GRP-ANALYTICS', nameEn: 'Analytics Group', nameAr: 'مجموعة التحليلات' }];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -587,7 +588,7 @@ test('simulateDecision persists ABAC trace metadata for review-required decision
   let createdDecision: any;
   let auditMetadata: any;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: {
         findFirst: async () => ({
           id: 'asset-1',
@@ -627,7 +628,7 @@ test('simulateDecision persists ABAC trace metadata for review-required decision
           };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     {
       log: async (entry: any) => {
         auditMetadata = entry.metadata;
@@ -667,7 +668,7 @@ test('simulateDecision persists ABAC trace metadata for review-required decision
 test('simulateDecision denies an operation that the effective grant does not include', async () => {
   let decision: AccessDecision | null = null;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: { findFirst: async () => ({ id: 'asset-1', domainId: null, classificationId: null, domain: null, classification: null }) },
       role: { findFirst: async () => ({ id: 'role-1', code: 'analyst', maxClassificationRank: 3 }) },
       user: { findUnique: async () => ({ id: 'user-1' }) },
@@ -683,7 +684,7 @@ test('simulateDecision denies an operation that the effective grant does not inc
           return { id: 'decision-denied', ...args.data };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -703,7 +704,7 @@ test('simulateDecision evaluates enforced identity-group grants and records the 
   let grantWhere: any;
   let createdDecision: any;
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: {
         findFirst: async () => ({
           id: 'asset-1', domainId: 'domain-1', classificationId: 'class-2', domain: null,
@@ -732,7 +733,7 @@ test('simulateDecision evaluates enforced identity-group grants and records the 
           return { id: 'decision-group', ...args.data };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -780,12 +781,12 @@ test('createDlpIncident links new incidents to workflow cases', async () => {
     workflowEvent: { createMany: async () => ({ count: 2 }) },
   };
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       businessSequence: sequenceDelegate(),
       dataAsset: { findFirst: async () => ({ id: 'asset-1' }) },
       dlpIncident: { count: async () => 0, findUnique: async () => null },
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -828,7 +829,7 @@ test('createClassificationRequest links new requests to workflow cases', async (
     workflowEvent: { createMany: async () => ({ count: 2 }) },
   };
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       dataAsset: {
         findFirst: async () => ({
           id: 'asset-1',
@@ -839,7 +840,7 @@ test('createClassificationRequest links new requests to workflow cases', async (
       },
       classification: { findFirst: async () => ({ id: 'class-new', rank: 3 }) },
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -902,9 +903,9 @@ test('backfillWorkflowLinks repairs legacy DLP and classification records', asyn
     },
   };
   const service = new SecurityGovernanceService(
-    {
+    withLiveRoleFixture({
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -926,7 +927,7 @@ test('backfillWorkflowLinks repairs legacy DLP and classification records', asyn
 
 test('backfillWorkflowLinks rejects non-admin callers', async () => {
   const service = new SecurityGovernanceService(
-    {} as never,
+    withLiveRoleFixture({} as never,{role:liveRoleFixture([fixtureRole("security_officer",["security_governance.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),

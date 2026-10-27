@@ -1,3 +1,4 @@
+import { aiCapabilities } from '../auth/access-snapshot';
 import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -5,6 +6,10 @@ import { AuditService } from '../audit/audit.service';
 import { AI_PERMISSIONS, AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
 import { isSystemAdministrator } from '../auth/system-admin';
 import { ScopeService } from '../access/scope.service';
+import { businessRoleCode, liveRoleWhere } from '../auth/business-roles';
+
+/** Internal AI roles express responsibility; every scope/grant lookup uses actual identities. */
+export function actualRoleCodes(actor:{roles:string[];scopeRoles?:string[]}):string[]{return actor.scopeRoles??actor.roles;}
 
 /** Server-resolved facts only. Never bind these facts to a public request DTO. */
 export interface AiDutyFacts {
@@ -49,57 +54,66 @@ export class AiAuthorizationService {
 
   async authorize(userId: string, permission: AiPermission, client: Prisma.TransactionClient = this.prisma, resourceId?: string) {
     const actor=await this.authorizeAny(userId,[permission],client);
-    if(resourceId&&!isAiReadPermission(permission))await this.assertBusinessScope(actor.roles,resourceId,client);
+    if(resourceId&&!isAiReadPermission(permission)){
+      const draft=permission==='case.create.aiuc'?await client.aiUseCase.findFirst({where:{id:resourceId,requesterUserId:userId,workflowCaseId:null,deletedAt:null},select:{organizationUnitId:true}}):null;
+      if(draft){
+        // Requesters may correct their own unsubmitted intake. This is never a
+        // decision grant, and any mapped department must still be within scope.
+        const scope=await new ScopeService(client as PrismaService).resolve(actualRoleCodes(actor));
+        if(scope.orgUnits!=='all'&&draft.organizationUnitId&&!scope.orgUnits.includes(draft.organizationUnitId))throw new NotFoundException('AI draft is outside the granted department');
+      }else await this.assertBusinessScope(actualRoleCodes(actor),resourceId,client);
+    }
     return actor;
   }
 
   /** Specialist decisions use their explicit review-purpose grant, never read oversight. */
   async authorizeBusiness(userId:string,permission:AiPermission,client:Prisma.TransactionClient,resourceId:string){
     const actor=await this.authorizeAny(userId,[permission],client,true);
-    await this.assertBusinessScope(actor.roles,resourceId,client);
+    await this.assertBusinessScope(actualRoleCodes(actor),resourceId,client);
     return actor;
   }
 
   async authorizeAny(userId: string, permissions: readonly AiPermission[], client: Prisma.TransactionClient = this.prisma, businessPurpose=false) {
     const user = await client.user.findFirst({
       where: { id: userId, isActive: true },
-      select: { id:true, email:true, userRoles:{where:{role:{isActive:true,deletedAt:null}},select:{role:{select:{id:true,code:true}}}} },
+      select: { id:true, email:true, userRoles:{where:{role:liveRoleWhere()},select:{role:{select:{id:true,code:true,businessRoleCode:true}}}} },
     });
     const roles = user?.userRoles.map(x=>x.role) ?? [];
     const administratorOversight = isSystemAdministrator(roles.map(role => role.code));
-    // Platform administrators may inspect and operate every governed AI workflow.
+    // Platform administration grants oversight, never another actor's business duty.
     const alternatives=permissions.map(permission=>{
       const isRead=!businessPurpose&&isAiReadPermission(permission);
-      const eligible=!isRead && roles.some(r=>r.code==='auditor') ? [] : roles.filter(r=>(isRead||r.code!=='system_admin')&&aiRoleMayHold(r.code,permission));
+      const eligible=!isRead && roles.some(r=>r.code==='auditor') ? [] : roles.filter(r=>(isRead||r.code!=='system_admin')&&aiRoleMayHold(businessRoleCode(r),permission));
       return {roleId:{in:eligible.map(r=>r.id)},permission:splitAiPermission(permission)};
     });
     const grant = alternatives.length ? await client.rolePermission.findFirst({where:{OR:alternatives}}) : null;
-    if (!user || (!grant && !administratorOversight)) {
+    if (!user || (!grant && !(!businessPurpose&&administratorOversight && permissions.some(isAiReadPermission)))) {
       await this.audit.logRequired({actor:userId,action:'ai.permission.denied',entityType:'ai_permission',metadata:{permissions:[...permissions]}});
       throw new ForbiddenException('AI action requires an explicit eligible role grant');
     }
     const business=businessPurpose||permissions.every(permission=>!isAiReadPermission(permission));
-    let actorRoles=roles.map(r=>r.code);
-    if((business||!administratorOversight)&&!administratorOversight){
-      const grants=await client.rolePermission.findMany({where:{OR:alternatives},include:{role:{select:{code:true}},permission:true}});
-      actorRoles=[...new Set(grants.filter(g=>roles.some(r=>r.code===g.role.code)&&(!business||g.role.code!=='system_admin')&&permissions.some(permission=>aiRoleMayHold(g.role.code,permission)&&g.permission.resource+'.'+g.permission.action===permission)).map(g=>g.role.code))];
+    let scopeRoles=roles.map(r=>r.code);
+    if(business||!administratorOversight){
+      const grants=await client.rolePermission.findMany({where:{OR:alternatives},include:{role:{select:{code:true,businessRoleCode:true}},permission:true}});
+      scopeRoles=[...new Set(grants.filter(g=>roles.some(r=>r.code===g.role.code)&&(!business||g.role.code!=='system_admin')&&permissions.some(permission=>aiRoleMayHold(businessRoleCode(g.role),permission)&&g.permission.resource+'.'+g.permission.action===permission)).map(g=>g.role.code))];
     }
-    return { id:user.id,email:user.email,roles:actorRoles,administratorOversight,administratorOverride:administratorOversight };
+    const bindings=roles.filter(role=>scopeRoles.includes(role.code)).map(role=>({roleCode:role.code,businessRoleCode:businessRoleCode(role)}));
+    return { id:user.id,email:user.email,roles:[...new Set(bindings.map(b=>b.businessRoleCode))],scopeRoles,bindings,administratorOversight:!business&&administratorOversight,administratorOverride:false };
   }
 
   /** Bounded decision queues retain the same live purpose scope as their detail routes. */
-  async filterReadScope<T extends {id:string}>(actor:{roles:string[];administratorOversight:boolean},rows:T[],client:Prisma.TransactionClient=this.prisma):Promise<T[]>{
+  async filterReadScope<T extends {id:string}>(actor:{roles:string[];scopeRoles?:string[];administratorOversight:boolean},rows:T[],client:Prisma.TransactionClient=this.prisma):Promise<T[]>{
     if(actor.administratorOversight)return rows;
-    const visible=await Promise.all(rows.map(async row=>{try{await this.assertBusinessScope(actor.roles,row.id,client);return row;}catch(error){if(error instanceof NotFoundException)return null;throw error;}}));
+    const visible=await Promise.all(rows.map(async row=>{try{await this.assertBusinessScope(actualRoleCodes(actor),row.id,client);return row;}catch(error){if(error instanceof NotFoundException)return null;throw error;}}));
     return visible.filter(row=>row!==null) as T[];
   }
 
   /** Same live purpose scope as detail/action checks, resolved once per queue snapshot.
    * Unregistered classification ceilings use the latest submitted intake and its
    * publication at receipt, so draft edits cannot enlarge the granted scope. */
-  async queueReadScope(actor:{roles:string[];administratorOversight:boolean}, client:Prisma.TransactionClient) {
+  async queueReadScope(actor:{roles:string[];scopeRoles?:string[];administratorOversight:boolean}, client:Prisma.TransactionClient) {
     if(actor.administratorOversight) return {where:{} as Prisma.AiUseCaseWhereInput, filter:async<T extends {id:string}>(rows:T[])=>rows};
-    const scope=await new ScopeService(client as PrismaService).resolve(actor.roles);
+    const scope=await new ScopeService(client as PrismaService).resolve(actualRoleCodes(actor));
     const asset:Prisma.DataAssetWhereInput={deletedAt:null,isActive:true,
       ...(scope.orgUnits==='all'?{}:{orgUnitId:{in:scope.orgUnits}}),
       ...(scope.domains==='all'?{}:{domainId:{in:scope.domains}}),
@@ -137,6 +151,9 @@ export class AiAuthorizationService {
   }
 
   /** Scope for business actions comes only from eligible roles holding the purpose grant. */
+  async businessScopeMatches(roles:string[],resourceId:string,client:Prisma.TransactionClient):Promise<boolean>{
+    try{await this.assertBusinessScope(roles,resourceId,client);return true;}catch(error){if(error instanceof NotFoundException)return false;throw error;}
+  }
   private async assertBusinessScope(roles:string[],resourceId:string,client:Prisma.TransactionClient){
     const scope=await new ScopeService(client as PrismaService).resolve(roles);
     const asset:Prisma.DataAssetWhereInput={deletedAt:null,isActive:true,
@@ -177,22 +194,16 @@ export class AiAuthorizationService {
   }
 
   async capabilities(userId: string, client: Prisma.TransactionClient = this.prisma) {
-    const user=await client.user.findFirst({where:{id:userId,isActive:true},select:{id:true,userRoles:{where:{role:{isActive:true,deletedAt:null}},select:{role:{select:{code:true}}}}}});
+    const user=await client.user.findFirst({where:{id:userId,isActive:true},select:{id:true,userRoles:{where:{role:liveRoleWhere()},select:{role:{select:{code:true,businessRoleCode:true}}}}}});
     if(!user)throw new UnauthorizedException('Active authenticated user required');
-    const actor={roles:user.userRoles.map(row=>row.role.code),administratorOversight:isSystemAdministrator(user.userRoles.map(row=>row.role.code))};
-    const grants = await client.rolePermission.findMany({where:{role:{is:{code:{in:actor.roles},isActive:true,deletedAt:null}}},include:{role:{select:{code:true}},permission:true}});
-    const permissions = effectiveAiPermissions(actor.roles, grants);
-    const holds = (...codes: AiPermission[]) => codes.some(code => permissions.has(code));
-    const governance = actor.administratorOversight || holds('dashboard.view.aiuc') || holds('case.view.airs.all') && !actor.roles.includes('auditor') || holds('dashboard.view.airs') && actor.roles.some(role => ['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER','AI_COMPLIANCE_OFFICER'].includes(role));
-    return {administratorOversight:actor.administratorOversight,readMode:governance?'governance':actor.roles.includes('auditor')&&holds('case.view.aiuc.all','case.view.airs.all')?'audit':holds('dashboard.view.exec.ai')?'executive':permissions.size?'own':'none',permissions:[...permissions],screens:{
-      useCases:holds('case.view.aiuc.own','case.view.aiuc.org','case.view.aiuc.all'),risks:holds('case.view.airs.own','case.view.airs.org','case.view.airs.all'),
-      review:holds('case.view.aiuc.org','case.view.aiuc.all','case.approve.aiuc','aiuc.classify.assess','aiuc.asset.register','aiuc.asset.approve'),reviewOperations:holds('dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'),
-      dashboard:holds('dashboard.view.aiuc','dashboard.view.airs','dashboard.view.exec.ai','case.view.airs.all'),migration:actor.administratorOversight || actor.roles.some(role=>['AI_GOVERNANCE_OFFICER','dmo_admin','auditor'].includes(role)) && holds('case.view.airs.org','case.view.airs.all'),
-    }};
+    const actual=user.userRoles.map(row=>row.role.code);
+    const actor={roles:user.userRoles.map(row=>businessRoleCode(row.role)),administratorOversight:isSystemAdministrator(actual)};
+    const grants = await client.rolePermission.findMany({where:{role:{is:{AND:[liveRoleWhere(),{code:{in:actual}}]}}},include:{role:{select:{code:true,businessRoleCode:true}},permission:true}});
+    const scope=await new ScopeService(client as PrismaService).resolve(actual);
+    return aiCapabilities(actual,grants,scope);
   }
 
   async enforceDuty(actor: {id:string;roles:string[]}, action: AiDutyAction, facts: AiDutyFacts, entityId: string, completion = true) {
-    if (isSystemAdministrator(actor.roles)) return;
     const rule = aiDutyViolation(actor.id,actor.roles,action,facts,completion);
     if (!rule) return;
     // Standalone audit persists even though the caller's business operation is rejected.
@@ -206,12 +217,12 @@ export function isAiReadPermission(permission: string): boolean {
   return permission.startsWith('case.view.') || permission.startsWith('dashboard.view.');
 }
 
-export function effectiveAiPermissions(roles: readonly string[], grants: readonly {role:{code:string};permission:{resource:string;action:string}}[]): Set<AiPermission> {
-  if (isSystemAdministrator(roles)) return new Set(AI_PERMISSIONS);
+export function effectiveAiPermissions(roles: readonly string[], grants: readonly {role:{code:string;businessRoleCode?:string|null};permission:{resource:string;action:string}}[]): Set<AiPermission> {
   const permissions = new Set<AiPermission>();
   for (const grant of grants) {
     const code = `${grant.permission.resource}.${grant.permission.action}` as AiPermission;
-    if (AI_PERMISSIONS.includes(code) && aiRoleMayHold(grant.role.code,code) && (isAiReadPermission(code) || grant.role.code!=='system_admin'&&!roles.includes('auditor'))) permissions.add(code);
+    if (AI_PERMISSIONS.includes(code) && aiRoleMayHold(businessRoleCode(grant.role),code) && (isAiReadPermission(code) || grant.role.code!=='system_admin'&&!roles.includes('auditor'))) permissions.add(code);
   }
+  if (isSystemAdministrator(roles)) for (const code of AI_PERMISSIONS) if (isAiReadPermission(code)) permissions.add(code);
   return permissions;
 }

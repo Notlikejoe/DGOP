@@ -200,23 +200,24 @@
                 @for (e of evidence(); track e.id) {
                   <tr>
                     <td>
-                      <button type="button" class="link-button" (click)="downloadEvidence(e)">{{ e.title }}</button>
+                      <button type="button" class="link-button" [disabled]="e.fileAvailability === 'unavailable'" (click)="downloadEvidence(e)">{{ e.title }}</button>
                       <div class="muted file-name">{{ e.originalName }}</div>
+                      @if (e.fileAvailability === 'unavailable') { <div class="muted" role="status">{{ t('evidence.fileUnavailable') }}</div> }
                     </td>
                     <td><app-status-chip [kind]="evidenceKind(e)" [label]="evidenceStatusLabel(e.effectiveStatus)" /></td>
                     <td>{{ e.submittedBy }}</td>
                     <td>{{ e.expiryDate ? (e.expiryDate | date: 'yyyy-MM-dd') : '—' }}</td>
                     <td>{{ formatBytes(e.sizeBytes) }}</td>
                     <td class="actions-col">
-                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="downloadEvidence(e)">{{ t('evidence.download') }}</button>
+                      <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="e.fileAvailability === 'unavailable'" (click)="downloadEvidence(e)">{{ t('evidence.download') }}</button>
                       @if (canEvidenceCreate && (e.status === 'draft' || e.status === 'rejected')) {
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="busyEvidenceId() === e.id" (click)="submitEvidence(e)">{{ t('evidence.submit') }}</button>
                       }
-                      @if (canEvidenceReview && (e.status === 'submitted' || e.status === 'under_review')) {
+                      @if (canEvidenceReview && e.canReview === true) {
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="busyEvidenceId() === e.id" (click)="reviewEvidence(e, 'approve')">{{ t('evidence.approve') }}</button>
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="busyEvidenceId() === e.id" (click)="reviewEvidence(e, 'reject')">{{ t('evidence.reject') }}</button>
                       }
-                      @if (canEvidenceReview && e.status === 'approved') {
+                      @if (canEvidenceReview && e.canRevoke === true) {
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="busyEvidenceId() === e.id" (click)="revokeEvidence(e)">{{ t('evidence.revoke') }}</button>
                       }
                       @if (canEvidenceDelete) {

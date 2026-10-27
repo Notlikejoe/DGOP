@@ -7,6 +7,8 @@ import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions
 import { jsonRecord } from './ai-risk-scoring';
 import { businessDaysBetween } from '../governance-operations/governance-operations.logic';
 import { governanceTransaction } from './ai-governance-ledger';
+import { businessRoleCode, liveRoleWhere, responsibilityWhere } from '../auth/business-roles';
+import { eligibleSubmittedClassification, submittedClassificationCatalog } from './ai-submitted-scope';
 
 // FD §10.1 subjects are fixed; final body wording remains governed DMO content.
 export const AI_NOTIFICATION_CATALOG = [
@@ -69,27 +71,33 @@ export function aiDeliveryNotBefore(at:Date,cadence:string,quiet:unknown):Date {
 
 /** Installed purpose grants and native scope, evaluated inside the caller's transaction. */
 export async function aiNoticeAccess(tx:Prisma.TransactionClient,userId:string,caseId:string) {
-  const user=await tx.user.findFirst({where:{id:userId,isActive:true},include:{userRoles:{where:{role:{isActive:true,deletedAt:null}},include:{role:true}}}});
+  const user=await tx.user.findFirst({where:{id:userId,isActive:true},include:{userRoles:{where:{role:liveRoleWhere()},include:{role:true}}}});
   if(!user)return null;
-  const roles=user.userRoles.map(r=>r.role.code),c=await tx.workflowCase.findUnique({where:{id:caseId},include:{aiUseCase:{include:{owner:true,asset:{include:{classification:true}}}},aiRisk:{include:{owner:true,useCase:{include:{owner:true,asset:{include:{classification:true}}}}}},tasks:{select:{assigneeUserId:true}}}});
+  const roles=user.userRoles.map(r=>businessRoleCode(r.role)),c=await tx.workflowCase.findUnique({where:{id:caseId},include:{aiUseCase:{include:{owner:true,asset:{include:{classification:true}}}},aiRisk:{include:{owner:true,useCase:{include:{owner:true,asset:{include:{classification:true}}}}}},tasks:{select:{assigneeUserId:true}}}});
   if(!c||!['AIUC','AIRS'].includes(c.type))return null;
   const uc=c.aiUseCase??c.aiRisk?.useCase;if(!uc||uc.deletedAt||uc.isSampleData||c.aiRisk?.deletedAt||c.aiRisk?.isSampleData)return null;
   const suffix=c.type==='AIUC'?'aiuc':'airs';
   const purposes=['own','org','all'].map(v=>`case.view.${suffix}.${v}` as AiPermission);
   const grants=await tx.rolePermission.findMany({where:{roleId:{in:user.userRoles.map(r=>r.roleId)},permission:{OR:purposes.map(splitAiPermission)}},include:{permission:true,role:true}});
-  const permissions=new Set(grants.filter(g=>aiRoleMayHold(g.role.code,`${g.permission.resource}.${g.permission.action}` as AiPermission)).map(g=>`${g.permission.resource}.${g.permission.action}`));
+  const eligible=grants.filter(g=>aiRoleMayHold(businessRoleCode(g.role),`${g.permission.resource}.${g.permission.action}` as AiPermission));
+  const permissions=new Set(eligible.map(g=>`${g.permission.resource}.${g.permission.action}`));
   if(!permissions.size)return null;
   const broad=permissions.has(`case.view.${suffix}.org`)||permissions.has(`case.view.${suffix}.all`);
   const own=uc.requesterUserId===userId||uc.owner?.userId===userId||c.aiRisk?.owner?.userId===userId||c.aiRisk?.createdBy===userId||c.tasks.some(t=>t.assigneeUserId===userId);
   if(!broad&&!own)return null;
   // An own AIUC draft is private; wider access requires an actual submitted revision.
   if(c.type==='AIUC'&&uc.requesterUserId!==userId&&!await tx.aiIntakeRevision.findFirst({where:{useCaseId:uc.id,submittedAt:{not:null}},select:{id:true}}))return null;
-  const scope=await new ScopeService(tx as PrismaService).resolve(roles),asset=uc.asset;
+  const scopeRoles=[...new Set(eligible.map(g=>g.role.code))];
+  const scope=await new ScopeService(tx as PrismaService).resolve(scopeRoles),asset=uc.asset;
   if(scope.orgUnits!=='all'&&(!uc.organizationUnitId||!scope.orgUnits.includes(uc.organizationUnitId)))return null;
   if(asset?.deletedAt||c.type==='AIRS'&&!asset)return null;
   if(scope.domains!=='all'&&(!asset?.domainId||!scope.domains.includes(asset.domainId)))return null;
-  if(scope.maxClassRank!==null&&(!asset?.classification||asset.classification.rank>scope.maxClassRank))return null;
-  return {user,roles,c,uc};
+  if(scope.maxClassRank!==null){
+    if(asset&&(!asset.classification||asset.classification.rank>scope.maxClassRank))return null;
+    if(!asset){const revision=await tx.aiIntakeRevision.findFirst({where:{useCaseId:uc.id,submittedAt:{not:null}},orderBy:{revision:'desc'},select:{payload:true,submittedAt:true}});
+      if(!revision||!eligibleSubmittedClassification(revision.payload,revision.submittedAt,await submittedClassificationCatalog(tx,scope.maxClassRank)))return null;}
+  }
+  return {user,roles,scopeRoles,c,uc};
 }
 export interface AiNoticeInput {code:string;sourceType:string;sourceId:string;caseId:string;taskId?:string;dedupeKey:string;userId:string;role:string;variables:Record<string,string>;severity:GovernanceNotificationSeverity;at?:Date}
 export async function emitAiNotice(tx:Prisma.TransactionClient,audit:AuditService,input:AiNoticeInput) {
@@ -121,8 +129,8 @@ export async function notifyAiTargets(tx:Prisma.TransactionClient,audit:AuditSer
   if(!sourceType)return [];
   const recipients=new Map<string,{id:string;role:string}>();
   for(const target of targets){if(!target.userId&&!target.role)continue;
-    const users=await tx.user.findMany({where:{isActive:true,...(target.userId?{id:target.userId}:{}),...(target.role?{userRoles:{some:{role:{code:target.role,isActive:true,deletedAt:null}}}}:{})},include:{userRoles:{where:{role:{isActive:true,deletedAt:null}},include:{role:true}}}});
-    for(const user of users){const role=target.role??user.userRoles.find(r=>r.role.code!=='auditor'&&r.role.code!=='executive')?.role.code;if(role)recipients.set(user.id,{id:user.id,role});}
+    const users=await tx.user.findMany({where:{isActive:true,...(target.userId?{id:target.userId}:{}),...(target.role?{userRoles:{some:{role:responsibilityWhere(target.role)}}}:{})},include:{userRoles:{where:{role:liveRoleWhere()},include:{role:true}}}});
+    for(const user of users){const candidate=user.userRoles.find(r=>r.role.code!=='auditor'&&r.role.code!=='executive');const role=target.role??(candidate?businessRoleCode(candidate.role):undefined);if(role)recipients.set(user.id,{id:user.id,role});}
   }
   const ids:string[]=[];
   for(const recipient of recipients.values()){const id=await emitAiNotice(tx,audit,{code,sourceType,sourceId,caseId,taskId,dedupeKey:key+':'+recipient.id,userId:recipient.id,role:recipient.role,variables,severity,at});if(id)ids.push(id);}

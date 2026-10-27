@@ -43,21 +43,13 @@
 
 .auth__brand {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-4);
 }
 
-.auth__mark {
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--command-accent) 45%, transparent);
-  border-radius: var(--radius-md);
-  color: var(--command-mark-on);
-  background: var(--command-mark-bg);
-  font-size: var(--font-size-lg);
-  font-weight: 800;
+.auth__logo {
+  width: min(340px, 100%);
 }
 
 .auth__eyebrow {
@@ -267,11 +259,6 @@
     gap: var(--space-3);
   }
 
-  .auth__mark {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
-  }
 
   .auth__story h1 {
     font-size: 1.75rem;

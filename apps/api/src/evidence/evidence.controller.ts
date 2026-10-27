@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  Query,
   Post,
   Res,
   UploadedFile,
@@ -13,7 +14,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { EvidenceService, UploadedFile as EvidenceFile } from './evidence.service';
-import { CreateEvidenceDto, ReviewEvidenceDto } from './evidence.dto';
+import { ApprovedEvidenceQueryDto, CreateEvidenceDto, ReviewEvidenceDto } from './evidence.dto';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import { sanitizeAttachmentFilename } from '../common/download';
@@ -41,6 +42,10 @@ export class EvidenceController {
   listBySpec(@Param('specId') specId: string, @CurrentUser() user: AuthUser) {
     return this.service.listBySpec(specId, user);
   }
+
+  @Get('evidence/approved-options')
+  @RequirePermissions('evidence.view')
+  approvedOptions(@CurrentUser() user:AuthUser,@Query() query:ApprovedEvidenceQueryDto){return this.service.approvedOptions(user,query);}
 
   @Get('evidence/:id')
   @RequirePermissions('evidence.view')

@@ -1,3 +1,5 @@
+import { businessRoleCode } from '../auth/business-roles';
+import { actualRoleCodes } from './ai-authorization.service';
 import { AiSourceCorrectionsService } from './ai-source-corrections.service';
 import { aiRoleMayHold, AiPermission } from './ai-permissions';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -23,8 +25,8 @@ export class AiRiskLibraryService {
     async lookups(userId: string) {
         const a = await this.risks.visibility(userId), now = new Date();
         const lists = await this.prisma.governedReferenceVersion.findMany({ where: { listCode: { in: Object.values(LIBRARY_LISTS) }, state: 'published', effectiveFrom: { lte: now }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: now } }] }, include: { values: true } });
-        const roleGrants = await this.prisma.rolePermission.findMany({ where: { role: { is: { code: { in: a.actor.roles }, isActive: true, deletedAt: null } } }, include: { permission: true, role: { select: { code: true } } } }), permissions = new Set(roleGrants.filter(g => ['refdata.propose.ai', 'airs.library.import', 'refdata.publish'].includes(g.permission.resource + '.' + g.permission.action) && aiRoleMayHold(g.role.code, (g.permission.resource + '.' + g.permission.action) as AiPermission)).map(g => g.permission.resource + '.' + g.permission.action));
-        const administratorOverride = a.actor.administratorOverride;
+        const roleGrants = await this.prisma.rolePermission.findMany({ where: { role: { is: { code: { in: actualRoleCodes(a.actor) }, isActive: true, deletedAt: null } } }, include: { permission: true, role: { select: { code: true, businessRoleCode: true } } } }), permissions = new Set(roleGrants.filter(g => ['refdata.propose.ai', 'airs.library.import', 'refdata.publish'].includes(g.permission.resource + '.' + g.permission.action) && aiRoleMayHold(businessRoleCode(g.role), (g.permission.resource + '.' + g.permission.action) as AiPermission)).map(g => g.permission.resource + '.' + g.permission.action));
+        const administratorOverride = false;
         return { administratorOverride, canPropose: administratorOverride || a.actor.roles.includes('AI_GOVERNANCE_OFFICER') && permissions.has('refdata.propose.ai') && !a.actor.roles.includes('auditor'), canPublish: administratorOverride || a.actor.roles.includes('dmo_admin') && permissions.has('airs.library.import') && permissions.has('refdata.publish') && !a.actor.roles.includes('auditor'), lists: Object.entries(LIBRARY_LISTS).map(([field, code]) => { const v = lists.filter(v => v.listCode === code); return { field, ready: v.length === 1, values: v.length === 1 ? v[0].values.map(x => ({ code: x.code, labelEn: x.labelEn, labelAr: x.labelAr })) : [] }; }) };
     }
     private async pins(tx: Prisma.TransactionClient, content: Record<string, unknown>) {

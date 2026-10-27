@@ -30,6 +30,7 @@ interface DsiReview {
 
 interface DsiRequest {
   id: string;
+  allowedReviewSteps?: string[];
   requestNumber: string;
   requesterOrg: string;
   recipientOrg: string;
@@ -336,13 +337,23 @@ export class DataSharingPage implements OnInit {
     });
   }
 
+  protected reviewStepFor(request: DsiRequest): string {
+    const steps = request.allowedReviewSteps;
+    return steps?.length && !steps.includes(this.reviewDraft().step) ? steps[0] : this.reviewDraft().step;
+  }
+
   protected saveReview(request: DsiRequest): void {
     if (this.saving()) return;
+    const steps = request.allowedReviewSteps ?? [];
+    const step = this.reviewStepFor(request);
+    const decision = steps.length ? this.reviewDraft().decision : 'pending';
+    const reviewerPersonId = decision === 'pending' ? this.reviewDraft().reviewerPersonId : request.reviews.find(review => review.step === step)?.reviewerPerson?.id;
     this.saving.set(true);
-    this.http.post<DsiRequest>(`/api/data-sharing/requests/${request.id}/reviews`, this.clean(this.reviewDraft())).subscribe({
+    this.http.post<DsiRequest>(`/api/data-sharing/requests/${request.id}/reviews`, this.clean({ ...this.reviewDraft(), step, decision, reviewerPersonId })).subscribe({
       next: (updated) => {
         this.toast.success(this.t('dsi.saved.review'));
         this.requests.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+        this.load();
       },
       error: (err) => this.toast.errorFrom(err, this.t('dsi.error.save')),
       complete: () => this.saving.set(false),

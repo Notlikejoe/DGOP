@@ -68,6 +68,9 @@ interface FoiTemplate {
 
 interface FoiRequest {
   id: string;
+  allowedReviewTypes?: string[];
+  canDecide?: boolean;
+  canDisclose?: boolean;
   requestNumber: string;
   requesterName: string;
   requesterEmail?: string | null;
@@ -349,7 +352,13 @@ export class FoiPage implements OnInit {
   }
 
   protected saveReview(request: FoiRequest): void {
-    this.postAction(request, 'reviews', this.clean(this.reviewDraft()), 'foi.review.saved');
+    const reviewType = this.reviewTypeFor(request);
+    if (!reviewType) return;
+    this.postAction(request, 'reviews', this.clean({ ...this.reviewDraft(), reviewType }), 'foi.review.saved');
+  }
+
+  protected reviewTypeFor(request: FoiRequest): string {
+    return request.allowedReviewTypes?.includes(this.reviewDraft().reviewType) ? this.reviewDraft().reviewType : request.allowedReviewTypes?.[0] ?? '';
   }
 
   protected saveExemption(request: FoiRequest): void {
@@ -362,6 +371,7 @@ export class FoiPage implements OnInit {
   }
 
   protected saveDecision(request: FoiRequest): void {
+    if (!request.canDecide) return;
     const draft = this.decisionDraft();
     if (!draft.summary.trim() || !draft.justification.trim()) {
       this.toast.error(this.t('foi.error.required'));
@@ -395,6 +405,7 @@ export class FoiPage implements OnInit {
         this.toast.success(this.t(messageKey));
         this.requests.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
         this.selectedId.set(updated.id);
+        this.load();
       },
       error: (err) => this.toast.errorFrom(err, this.t('foi.error.save')),
       complete: () => this.saving.set(false),
@@ -424,6 +435,6 @@ export class FoiPage implements OnInit {
   }
 
   protected canDisclose(request: FoiRequest): boolean {
-    return ['approved', 'partially_approved'].includes(request.status);
+    return request.canDisclose === true;
   }
 }

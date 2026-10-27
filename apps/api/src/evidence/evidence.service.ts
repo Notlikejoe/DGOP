@@ -1,3 +1,5 @@
+import { ApprovedEvidenceQueryDto } from './evidence.dto';
+import { parsePageParams, toPaged } from '../common/pagination';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
@@ -14,9 +16,10 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth.types';
-import { isSystemAdministrator } from '../auth/system-admin';
 import { isManagedDemoProfile } from '../common/demo-profile';
 import { claimGovernanceWrite } from '../common/governance-write';
+import { businessDecisionRoles } from '../auth/business-roles';
+import { fileAvailability } from '../common/file-availability';
 import { CreateEvidenceDto, EvidenceStatus, ReviewEvidenceDto } from './evidence.dto';
 import {
   EvidenceEffectiveStatus,
@@ -84,12 +87,27 @@ export class EvidenceService {
   }
 
   /** Adds a derived `effectiveStatus` using the shared helper (approved + past expiry -> expired). */
-  private decorate<T extends { status: EvidenceStatus; expiryDate: Date | null }>(e: T) {
-    return { ...e, effectiveStatus: effectiveEvidenceStatus(e) as EvidenceStatus };
+  private decorate<T extends { status: EvidenceStatus; expiryDate: Date | null; fileName: string; sha256: string; sizeBytes: number }>(e: T) {
+    let path: string | null = null;
+    try { path = this.storagePath(e.fileName); } catch { /* Keep legacy invalid references visible. */ }
+    return { ...e, effectiveStatus: effectiveEvidenceStatus(e) as EvidenceStatus, ...fileAvailability(path,e.sha256,e.sizeBytes) };
   }
 
   private hasBroadEvidenceAccess(actor: Pick<AuthUser, 'roles'>): boolean {
     return actor.roles.some((role) => BROAD_EVIDENCE_ROLES.has(role));
+  }
+  private async reviewContext(actor:AuthUser,specIds:string[]){
+    let actual:string[];
+    try{actual=await businessDecisionRoles(this.prisma,actor.roles,'evidence.review',['dmo_admin','ndi_reviewer']);}
+    catch(error){if(error instanceof ForbiddenException)return {all:false,specIds:new Set<string>()};throw error;}
+    if(actual.includes('dmo_admin'))return {all:true,specIds:new Set<string>()};
+    const personId=await this.actorPersonId(actor);
+    const assigned=personId?await this.prisma.ndiSpecification.findMany({where:{id:{in:specIds},ownerPersonId:personId,deletedAt:null},select:{id:true}}):[];
+    return {all:false,specIds:new Set(assigned.map(row=>row.id))};
+  }
+  private reviewActions(row:{specId:string;status:string;submittedBy:string},actor:AuthUser,context:{all:boolean;specIds:Set<string>}){
+    const independent=row.submittedBy!==actor.email&&!actor.roles.includes('auditor')&&(context.all||context.specIds.has(row.specId));
+    return {canReview:independent&&['submitted','under_review'].includes(row.status),canRevoke:independent&&row.status==='approved'};
   }
 
   private async actorPersonId(actor: Pick<AuthUser, 'id' | 'email'>): Promise<string | null> {
@@ -234,7 +252,17 @@ export class EvidenceService {
       entityId: specId,
       metadata: { specId, count: rows.length, sensitiveRead: true },
     });
-    return rows.map((r) => this.decorate(r));
+    const context=await this.reviewContext(actor,[...new Set(rows.map(row=>row.specId))]);
+    return rows.map(r=>({...this.decorate(r),...this.reviewActions(r,actor,context)}));
+  }
+
+  async approvedOptions(actor:AuthUser,query:ApprovedEvidenceQueryDto){
+    const params=parsePageParams(query.page??1,query.pageSize??25)!,now=new Date();
+    const where=await this.scopedEvidenceWhere(actor,{status:'approved',deletedAt:null,
+      provenance:{in:isManagedDemoProfile()?['operational','synthetic_demo','seeded_uat']:['operational']},
+      AND:[{OR:[{expiryDate:null},{expiryDate:{gt:now}}]},...(query.search?.trim()?[{title:{contains:query.search.trim(),mode:'insensitive' as const}}]:[])]});
+    const [rows,total]=await Promise.all([this.prisma.ndiEvidence.findMany({where,orderBy:{createdAt:'desc'},skip:params.skip,take:params.take}),this.prisma.ndiEvidence.count({where})]);
+    return toPaged(rows.map(row=>{const available=this.decorate(row);return {id:row.id,title:row.title,provenance:row.provenance,fileAvailability:available.fileAvailability,unavailableReason:available.unavailableReason};}),total,params);
   }
 
   async get(id: string, actor: AuthUser) {
@@ -255,7 +283,7 @@ export class EvidenceService {
         sensitiveRead: true,
       },
     });
-    return this.decorate(e);
+    return {...this.decorate(e),...this.reviewActions(e,actor,await this.reviewContext(actor,[e.specId]))};
   }
 
   private async requireSpec(specId: string, actor: AuthUser) {
@@ -272,11 +300,10 @@ export class EvidenceService {
 
   private async requireReviewAccess(id: string, actor: AuthUser) {
     const evidence = await this.get(id, actor);
-    if (isSystemAdministrator(actor.roles)) return evidence;
     if (evidence.submittedBy === actor.email) throw new ForbiddenException('You cannot review evidence you submitted');
     if (actor.roles.includes('auditor')) throw new ForbiddenException('Auditor access is read only');
-    if (actor.roles.includes('dmo_admin')) return evidence;
-    if (!actor.roles.includes('ndi_reviewer')) throw new ForbiddenException('An eligible assigned evidence reviewer role is required');
+    const actual=await businessDecisionRoles(this.prisma,actor.roles,'evidence.review',['dmo_admin','ndi_reviewer']);
+    if (actual.includes('dmo_admin')) return evidence;
     const personId = await this.actorPersonId(actor);
     if (personId && evidence.spec?.ownerPersonId === personId) return evidence;
     throw new ForbiddenException('Only an assigned evidence reviewer can review this evidence');
@@ -362,8 +389,11 @@ export class EvidenceService {
       throw new BadRequestException('Only submitted evidence can be reviewed');
     }
     // Separation of duties: the submitter cannot review their own evidence.
-    if (!isSystemAdministrator(actor.roles) && e.submittedBy === this.actorEmail(actor)) {
+    if (e.submittedBy === this.actorEmail(actor)) {
       throw new ForbiddenException('You cannot review evidence you submitted');
+    }
+    if(dto.decision==='approve'&&(e.fileAvailability!=='available'||(e.expiryDate&&e.expiryDate<=new Date()))) {
+      throw new BadRequestException('Approval requires a current original file with a verified checksum');
     }
     const status: EvidenceStatus = dto.decision === 'approve' ? 'approved' : 'rejected';
     const updated = await this.change(e, {
@@ -396,6 +426,7 @@ export class EvidenceService {
   /** Resolves the absolute file path for download and records the access in the audit trail. */
   async fileFor(id: string, actor: AuthUser) {
     const e = await this.get(id, actor);
+    if (e.fileAvailability !== 'available') throw new NotFoundException('The original evidence file is unavailable or cannot be verified; the historical record is preserved');
     const path = this.storagePath(e.fileName);
     if (!existsSync(path)) throw new NotFoundException('evidence file not found');
     await this.audit.log({

@@ -249,6 +249,7 @@ export class IntegrationsService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (process.env.DGOP_INTEGRATION_STARTUP_MAINTENANCE?.trim().toLowerCase() === 'false') return;
     await this.ensureDefaultIntegrationRegistry('system');
   }
 

@@ -71,6 +71,7 @@ interface DqRcaRecord {
 
 interface DqRule {
   id: string;
+  canApprove?: boolean;
   code: string;
   nameEn: string;
   nameAr: string;
@@ -492,7 +493,7 @@ export class DataQualityPage implements OnInit {
 
   protected transitionActions(rule: DqRule): string[] {
     if (rule.status === 'draft') return ['submit'];
-    if (rule.status === 'in_review') return ['approve'];
+    if (rule.status === 'in_review') return rule.canApprove ? ['approve'] : [];
     if (rule.status === 'approved') return ['deploy'];
     if (rule.status === 'deployed') return ['retire'];
     return [];

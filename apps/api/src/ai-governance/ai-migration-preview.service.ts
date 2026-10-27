@@ -1,3 +1,5 @@
+import { businessRoleCode } from '../auth/business-roles';
+import { actualRoleCodes } from './ai-authorization.service';
 import { aiReviewParams } from './ai-review-query.dto';
 import { toPaged } from '../common/pagination';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -24,19 +26,19 @@ type Saved = Prisma.AiMigrationPreviewGetPayload<{
 export class AiMigrationPreviewService {
     constructor(private readonly prisma: PrismaService, private readonly authorization: AiAuthorizationService, private readonly risks: AiRiskIntakeService, private readonly scope: ScopeService, private readonly scoring: AiRiskAssessmentService, private readonly audit: AuditService) { }
     private async access(tx: Prisma.TransactionClient, userId: string, operation: 'read' | 'propose' | 'review' = 'read') {
-        const a = await this.risks.visibility(userId, tx), scope = await this.scope.resolve(a.actor.roles);
+        const a = await this.risks.visibility(userId, tx), scope = await this.scope.resolve(actualRoleCodes(a.actor));
         // Unresolved source departments cannot safely be assigned to a partial organization/domain scope.
         if (!(a.actor.administratorOversight || a.actor.roles.some(r => ['AI_GOVERNANCE_OFFICER', 'dmo_admin', 'auditor'].includes(r))) || scope.orgUnits !== 'all' || scope.domains !== 'all' || scope.maxClassRank !== null)
             throw new ForbiddenException('Source preparation requires full organization, domain and classification coverage with a governance role');
         if (operation === 'propose') {
             await this.authorization.authorize(userId, 'refdata.propose.ai', tx);
-            if (!a.actor.administratorOverride && !a.actor.roles.includes('AI_GOVERNANCE_OFFICER'))
+            if (!a.actor.roles.includes('AI_GOVERNANCE_OFFICER'))
                 throw new ForbiddenException('Responsible AI Officer proposes source preparation');
         }
         if (operation === 'review') {
             await this.authorization.authorize(userId, 'airs.library.import', tx);
             await this.authorization.authorize(userId, 'refdata.publish', tx);
-            if (!a.actor.administratorOverride && !a.actor.roles.includes('dmo_admin'))
+            if (!a.actor.roles.includes('dmo_admin'))
                 throw new ForbiddenException('Independent DMO source-preparation review required');
         }
         return a;
@@ -61,9 +63,9 @@ export class AiMigrationPreviewService {
         throw new ConflictException('Saved source preview integrity differs'); return report; }
     private view(row: Saved) { return { id: row.id, digest: row.digest, createdAt: row.createdAt, createdBy: row.createdBy, justification: row.justification, report: this.report(row), dispositions: row.dispositions, review: row.review, productionReady: false }; }
     async context(userId: string) {
-        const a = await this.access(this.prisma, userId), permissions = await this.prisma.rolePermission.findMany({ where: { role: { code: { in: a.actor.roles }, isActive: true, deletedAt: null } }, include: { permission: true, role: { select: { code: true } } } });
-        const holds = (role: string, code: string) => permissions.some(p => p.role.code === role && p.permission.resource + '.' + p.permission.action === code);
-        const administratorOverride = a.actor.administratorOverride;
+        const a = await this.access(this.prisma, userId), permissions = await this.prisma.rolePermission.findMany({ where: { role: { code: { in: actualRoleCodes(a.actor) }, isActive: true, deletedAt: null } }, include: { permission: true, role: { select: { code: true, businessRoleCode: true } } } });
+        const holds = (role: string, code: string) => permissions.some(p => businessRoleCode(p.role) === role && p.permission.resource + '.' + p.permission.action === code);
+        const administratorOverride = false;
         return { version: MIGRATION_PREVIEW_VERSION, administratorOverride, canPropose: administratorOverride || !a.actor.roles.includes('auditor') && holds('AI_GOVERNANCE_OFFICER', 'refdata.propose.ai'), canReview: administratorOverride || !a.actor.roles.includes('auditor') && holds('dmo_admin', 'airs.library.import') && holds('dmo_admin', 'refdata.publish'), sourceMode: migrationSources().sourceMode, sources: migrationSources().sources.map(s => ({ source: s.source, file: s.file, sha256: s.sha256 })), productionReady: false };
     }
     async create(userId: string, dto: {
@@ -166,7 +168,7 @@ export class AiMigrationPreviewService {
             if (!row)
                 throw new NotFoundException('Source preview not found');
             const report = this.report(row);
-            if (!access.actor.administratorOverride && row.createdBy === userId)
+            if (row.createdBy === userId)
                 throw new ForbiddenException('Source-preparation reviewer must be independent of its proposer');
             if (row.review || dto.expectedDigest !== row.digest)
                 throw new ConflictException('Source preview changed or its review is closed');

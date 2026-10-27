@@ -55,13 +55,13 @@ export class PrivacyController {
   @RequirePermissions('privacy_operations.view')
   listDpias(@CurrentUser() user: AuthUser, @Query('search') search?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     const filters: PrivacyFilters = { search, status, page: page ?? '1', pageSize: pageSize ?? '25' };
-    return this.service.listDpias(user.roles, filters);
+    return this.service.listDpias(user.roles, filters,user.email);
   }
 
   @Get('dpia/:id')
   @RequirePermissions('privacy_operations.view')
   getDpia(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.getDpia(user.roles, id);
+    return this.service.getDpia(user.roles, id,user.email);
   }
 
   @Post('dpia')
@@ -86,7 +86,7 @@ export class PrivacyController {
   @RequirePermissions('privacy_operations.view')
   listDsr(@CurrentUser() user: AuthUser, @Query('search') search?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     const filters: PrivacyFilters = { search, status, page: page ?? '1', pageSize: pageSize ?? '25' };
-    return this.service.listDsr(user.roles, filters);
+    return this.service.listDsr(user.roles, filters,user.email);
   }
 
   @Post('dsr')
@@ -105,7 +105,7 @@ export class PrivacyController {
   @RequirePermissions('privacy_operations.view')
   listBreaches(@CurrentUser() user: AuthUser, @Query('search') search?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     const filters: PrivacyFilters = { search, status, page: page ?? '1', pageSize: pageSize ?? '25' };
-    return this.service.listBreaches(user.roles, filters);
+    return this.service.listBreaches(user.roles, filters,user.email);
   }
 
   @Post('breaches')

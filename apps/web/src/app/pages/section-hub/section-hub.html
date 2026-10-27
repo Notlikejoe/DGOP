@@ -64,15 +64,27 @@
         <div class="tool-tree">
           @for (group of groups(); track group.key) {
             <article class="tool-tree__branch">
-              <header>
-                <h3>{{ t(group.key + '.title') }}</h3>
-                <p>{{ t(group.key + '.summary') }}</p>
-              </header>
+              @if (config().id === 'governance' || config().id === 'aiGovernance') {
+                <header class="tool-tree__heading">
+                  <span class="tool-tree__heading-icon" aria-hidden="true">
+                    <app-icon [name]="group.items[0].iconName" />
+                  </span>
+                  <div>
+                    <h3>{{ t(group.key + '.title') }}</h3>
+                    <p>{{ t(group.key + '.summary') }}</p>
+                  </div>
+                </header>
+              } @else {
+                <header>
+                  <h3>{{ t(group.key + '.title') }}</h3>
+                  <p>{{ t(group.key + '.summary') }}</p>
+                </header>
 
-              <div class="tool-tree__root">
-                <span aria-hidden="true"><app-icon [name]="group.items[0].iconName" /></span>
-                <strong>{{ t(group.key + '.title') }}</strong>
-              </div>
+                <div class="tool-tree__root">
+                  <span aria-hidden="true"><app-icon [name]="group.items[0].iconName" /></span>
+                  <strong>{{ t(group.key + '.title') }}</strong>
+                </div>
+              }
 
               <div class="tool-tree__leaves">
                 @for (item of group.items; track item.link) {

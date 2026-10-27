@@ -32,3 +32,12 @@ async function capacity(){
  console.log(JSON.stringify({passed:true,scenarios:10,capacity:{risks:count,tasks:children.length,riskIdReads:sourceReads.count,taskStageReads:childReads.count,elapsedMs:Math.round(performance.now()-begin)}}));
 }
 void capacity();
+async function historicalAssetScope(){
+ const scope={orgUnits:['finance'],domains:['finance-domain'],maxClassRank:2};
+ const reports:any={access:async()=>({actor:{roles:['AI_GOVERNANCE_OFFICER'],scopeRoles:['department_fin'],administratorOversight:false},mode:'officer',aggregateOnly:false,where:{}})};
+ const tx:any={rolePermission:{findMany:async()=>[{role:{code:'department_fin',businessRoleCode:'AI_GOVERNANCE_OFFICER'},permission:{resource:'dashboard',action:'view.aiuc'}}]}};
+ const service=new AiDashboardService({} as any,reports,{resolve:async()=>scope} as any);
+ for(const historical of [false,true]){const access=await service.access(tx,'finance-officer',historical),asset=(access.registerWhere.asset as any).is;assert.equal(asset.isActive,historical?undefined:true);assert.equal(asset.deletedAt,null);assert.deepEqual(asset.orgUnitId,{in:['finance']});assert.deepEqual(asset.domainId,{in:['finance-domain']});assert.deepEqual(asset.classification,{is:{rank:{lte:2}}});}
+ console.log('Historical dashboard reads preserve retirement history while retaining organization, domain, classification and deletion filters.');
+}
+void historicalAssetScope();

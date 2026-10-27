@@ -137,6 +137,10 @@ export class TrainingController {
     return this.service.updateCertificationTrack(id, dto, user.email);
   }
 
+  @Post('assignments/:id/renew')
+  @RequirePermissions('training_assignments.create')
+  renewAssignment(@Param('id') id:string,@CurrentUser() user:AuthUser){return this.service.renewAssignment(id,user.email);}
+
   @Get('certifications/attempts')
   @RequirePermissions('certification_attempts.view')
   certificationAttempts(

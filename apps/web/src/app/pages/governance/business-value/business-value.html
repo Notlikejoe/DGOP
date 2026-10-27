@@ -45,6 +45,7 @@
           <div>
             <span class="eyebrow">{{ t('businessValue.map.eyebrow') }}</span>
             <h2>{{ t('businessValue.map.title') }}</h2>
+            <small>{{t('businessIntegrity.graphSubset')}}</small>
           </div>
           <app-status-chip [kind]="statusKind(w.summary.glossary.status)" [label]="w.summary.glossary.status" />
         </div>
@@ -77,9 +78,15 @@
                 <span>{{ assetLabel(row.asset) }} &middot; {{ row.currentStatus }} {{ t('businessValue.to') }} {{ row.proposedStatus }}</span>
               </div>
               <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              @if(row.canDecide && row.status === 'proposed') {
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideLifecycle(row, 'approved')">{{ t('extended.approve') }}</button>
+                <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideLifecycle(row, 'rejected')">{{ t('extended.reject') }}</button>
+              }
+              @if(row.canDecide && row.status === 'approved') {
               <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideLifecycle(row, 'implemented')">
                 {{ t('businessValue.implement') }}
               </button>
+              }
             </article>
           } @empty {
             <p class="empty">{{ t('businessValue.queue.empty') }}</p>
@@ -95,7 +102,7 @@
             <span class="eyebrow">BDE</span>
             <h2>{{ t('businessValue.glossary.title') }}</h2>
           </div>
-          <app-status-chip kind="info" [label]="w.glossary.length + ''" />
+          <app-status-chip kind="info" [label]="registerInfo('glossary').total + ''" />
         </div>
         <div class="form-grid">
           <input [placeholder]="t('businessValue.term')" [(ngModel)]="glossaryForm.termEn" />
@@ -117,6 +124,7 @@
           </button>
         </div>
         <div class="rows">
+          <app-register-controls [registerName]="t('businessValue.glossary.title')" [total]="registerInfo('glossary').total" [page]="registerInfo('glossary').page" [pageSize]="25" [busy]="!!registerBusy()['glossary']" (queryChange)="loadRegister('glossary',$event)" />
           @for (row of w.glossary; track row.id) {
             <article class="row-card">
               <div>
@@ -125,8 +133,10 @@
               </div>
               <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
               <div class="actions">
+                @if(row.canDecide && row.status === 'under_review') {
                 <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideGlossary(row, 'approved')">{{ t('extended.approve') }}</button>
                 <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="decideGlossary(row, 'needs_revision')">{{ t('extended.needsChanges') }}</button>
+                }
               </div>
             </article>
           } @empty {
@@ -141,7 +151,7 @@
             <span class="eyebrow">BLI</span>
             <h2>{{ t('businessValue.lineage.title') }}</h2>
           </div>
-          <app-status-chip kind="info" [label]="w.lineage.length + ''" />
+          <app-status-chip kind="info" [label]="registerInfo('lineage').total + ''" />
         </div>
         <div class="form-grid">
           <input [placeholder]="t('businessValue.process')" [(ngModel)]="lineageForm.processName" />
@@ -163,6 +173,7 @@
           </button>
         </div>
         <div class="rows">
+          <app-register-controls [registerName]="t('businessValue.lineage.title')" [total]="registerInfo('lineage').total" [page]="registerInfo('lineage').page" [pageSize]="25" [busy]="!!registerBusy()['lineage']" (queryChange)="loadRegister('lineage',$event)" />
           @for (row of w.lineage; track row.id) {
             <article class="row-card">
               <div>
@@ -170,7 +181,7 @@
                 <span>{{ row.sourceAsset?.code || '-' }} {{ t('businessValue.to') }} {{ row.targetAsset?.code || '-' }} &middot; {{ row.impactScore }}%</span>
               </div>
               <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
-              <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="updateLineage(row, 'verified')">{{ t('businessValue.verify') }}</button>
+              @if(row.canVerify && row.status !== 'verified') { <button class="ds-btn ds-btn--ghost btn-sm" type="button" (click)="updateLineage(row, 'verified')">{{ t('businessValue.verify') }}</button> }
             </article>
           } @empty {
             <p class="empty">{{ t('businessValue.lineage.empty') }}</p>
@@ -184,7 +195,7 @@
             <span class="eyebrow">BIA</span>
             <h2>{{ t('businessValue.bia.title') }}</h2>
           </div>
-          <app-status-chip kind="info" [label]="w.assessments.length + ''" />
+          <app-status-chip kind="info" [label]="registerInfo('assessments').total + ''" />
         </div>
         <div class="form-grid">
           <input [placeholder]="t('businessValue.process')" [(ngModel)]="biaForm.processName" />
@@ -199,6 +210,7 @@
           <button class="ds-btn ds-btn--primary" type="button" (click)="createBia()" [disabled]="saving()">{{ t('businessValue.createBia') }}</button>
         </div>
         <div class="rows compact">
+          <app-register-controls [registerName]="t('businessValue.bia.title')" [total]="registerInfo('assessments').total" [page]="registerInfo('assessments').page" [pageSize]="25" [busy]="!!registerBusy()['assessments']" (queryChange)="loadRegister('assessments',$event)" />
           @for (row of w.assessments; track row.id) {
             <article class="row-card">
               <div>
@@ -219,7 +231,7 @@
             <span class="eyebrow">DVR</span>
             <h2>{{ t('businessValue.value.title') }}</h2>
           </div>
-          <app-status-chip kind="info" [label]="w.valuations.length + ''" />
+          <app-status-chip kind="info" [label]="registerInfo('valuations').total + ''" />
         </div>
         <div class="form-grid">
           <select [(ngModel)]="valueForm.assetId">
@@ -236,7 +248,7 @@
         <div class="form-grid secondary">
           <select [(ngModel)]="surveyForm.valuationId">
             <option value="">{{ t('businessValue.valuation') }}</option>
-            @for (row of w.valuations; track row.id) {
+          @for (row of w.valuations; track row.id) {
               <option [value]="row.id">{{ row.code }} - {{ row.useCase }}</option>
             }
           </select>
@@ -245,13 +257,15 @@
           <button class="ds-btn ds-btn--ghost" type="button" (click)="createSurvey()" [disabled]="saving()">{{ t('businessValue.recordSurvey') }}</button>
         </div>
         <div class="rows">
+          <app-register-controls [registerName]="t('businessValue.value.title')" [total]="registerInfo('valuations').total" [page]="registerInfo('valuations').page" [pageSize]="25" [busy]="!!registerBusy()['valuations']" (queryChange)="loadRegister('valuations',$event)" />
           @for (row of w.valuations; track row.id) {
             <article class="row-card">
               <div>
                 <strong>{{ row.useCase }}</strong>
-                <span>{{ assetLabel(row.asset) }} &middot; {{ money(row.annualValue) }}</span>
+                <span>{{ assetLabel(row.asset) }} &middot; {{ money(row.annualValue) }}</span><span>{{t('businessIntegrity.actual')}}: {{row.actualAnnualValue==null?'—':money(row.actualAnnualValue)}}</span>
               </div>
-              <app-status-chip [kind]="statusKind(row.status)" [label]="row.status" />
+              <app-status-chip [kind]="row.assurance==='review_needed'?'warning':statusKind(row.status)" [label]="row.assurance==='review_needed'?t('businessIntegrity.reviewNeeded'):row.status" />
+              @if(row.canMeasure){<button type="button" class="ds-btn ds-btn--ghost" (click)="openMeasurement(row)">{{t('businessIntegrity.measure')}}</button>}
             </article>
           } @empty {
             <p class="empty">{{ t('businessValue.value.empty') }}</p>
@@ -266,7 +280,7 @@
           <span class="eyebrow">DVR</span>
           <h2>{{ t('businessValue.kpiBuilder.title') }}</h2>
         </div>
-        <app-status-chip kind="info" [label]="w.kpis.length + ''" />
+        <app-status-chip kind="info" [label]="registerInfo('kpis').total + ''" />
       </div>
       <div class="form-grid kpi-form">
         <input [placeholder]="t('businessValue.kpiName')" [(ngModel)]="kpiForm.name" />
@@ -278,7 +292,8 @@
         <button class="ds-btn ds-btn--primary" type="button" (click)="createKpi()" [disabled]="saving()">{{ t('businessValue.createKpi') }}</button>
       </div>
       <div class="kpi-list">
-        @for (row of w.kpis; track row.id) {
+        <app-register-controls [registerName]="t('businessValue.kpiBuilder.title')" [total]="registerInfo('kpis').total" [page]="registerInfo('kpis').page" [pageSize]="25" [busy]="!!registerBusy()['kpis']" (queryChange)="loadRegister('kpis',$event)" />
+          @for (row of w.kpis; track row.id) {
           <article>
             <strong>{{ row.name }}</strong>
             <span>{{ row.actualValue }} / {{ row.targetValue }} {{ row.unit || '' }}</span>
@@ -289,5 +304,20 @@
         }
       </div>
     </section>
+    <section class="ds-card"><h2>{{t('businessIntegrity.history')}}</h2>
+      @for(key of ['lifecycle','surveys'];track key){
+        <h3>{{t('businessIntegrity.register.'+key)}}</h3><app-register-controls [registerName]="t('businessIntegrity.register.'+key)" [total]="registerInfo(key).total" [page]="registerInfo(key).page" [pageSize]="25" [busy]="!!registerBusy()[key]" (queryChange)="loadRegister(key,$event)" />
+        @for(row of key==='lifecycle'?w.lifecycle:w.surveys;track row.id){<p>{{row.code||row.respondent||row.id}} · {{row.status||row.feedback||row.score}}</p>}
+      }
+    </section>
+    @if(measurementTarget();as row){<section class="ds-card" aria-live="polite"><h2>{{t('businessIntegrity.measure')}} · {{row.useCase}}</h2>
+      <label>{{t('businessIntegrity.actual')}}<input type="number" min="0" [(ngModel)]="measurementDraft.actualAnnualValue" /></label>
+      <label>{{t('businessIntegrity.measuredAt')}}<input type="date" [(ngModel)]="measurementDraft.measuredAt" /></label>
+      <app-approved-evidence-picker [selectedId]="measurementDraft.evidenceId" (selectedChange)="measurementDraft.evidenceId=$event" />
+      <label>{{t('businessIntegrity.relevance')}}<textarea minlength="10" [(ngModel)]="measurementDraft.evidenceJustification"></textarea></label>
+      <button type="button" class="ds-btn ds-btn--primary" (click)="recordMeasurement()" [disabled]="saving()||!measurementDraft.evidenceId||measurementDraft.evidenceJustification.trim().length<10">{{t('businessIntegrity.measure')}}</button>
+      <button type="button" class="ds-btn ds-btn--ghost" (click)="measurementTarget.set(null)">{{t('crud.cancel')}}</button>
+    </section>
+    }
   }
 </section>

@@ -1,3 +1,5 @@
+import { actualRoleCodes } from './ai-authorization.service';
+import { responsibilityWhere } from '../auth/business-roles';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -29,10 +31,10 @@ export class AiAnnualReviewService {
             throw new ForbiddenException('Annual reviews require register visibility');
         if (write) {
             actor=await this.authorization.authorize(userId, 'airs.cadence.manage', tx);
-            if (!actor.administratorOverride && (!actor.roles.includes('AI_GOVERNANCE_OFFICER') || actor.roles.includes('auditor')))
+            if ((!actor.roles.includes('AI_GOVERNANCE_OFFICER') || actor.roles.includes('auditor')))
                 throw new ForbiddenException('Annual comprehensive review is owned by the Responsible AI Officer');
         }
-        return { ...access, actor, scope: await this.scope.resolve(actor.roles) };
+        return { ...access, actor, scope: await this.scope.resolve(actualRoleCodes(actor)) };
     }
     async registerScope(tx: Prisma.TransactionClient, userId: string, unitId: string, write = false) {
         const access = await this.access(tx, userId, write);
@@ -40,8 +42,8 @@ export class AiAnnualReviewService {
         if (!unit || access.scope.orgUnits !== 'all' && !access.scope.orgUnits.includes(unitId))
             throw new NotFoundException('AI organization register not found');
         // Full register coverage is required; never label a partial domain/classification view comprehensive.
-        if (access.scope.domains !== 'all' || access.scope.maxClassRank !== null)
-            throw new ForbiddenException('Annual review requires full domain and classification coverage of this organization register');
+        // A finite clearance is allowed only when the comparison below proves coverage
+        // of every current member. A partial view can never become comprehensive.
         const unitWhere: Prisma.AiRiskWhereInput = { deletedAt: null, isSampleData: false, riskRef: { not: null }, workflowCase: { is: { type: 'AIRS' } }, useCase: { is: { organizationUnitId: unitId, deletedAt: null, isSampleData: false, lifecycleState:{not:'retired'}, asset: { is: { isActive: true, deletedAt: null } } } } };
         if (await tx.aiRisk.count({ where: unitWhere }) !== await tx.aiRisk.count({ where: { AND: [unitWhere, access.where] } }))
             throw new ForbiddenException('Annual review requires visibility of every register member');
@@ -52,9 +54,10 @@ export class AiAnnualReviewService {
         const a = await this.access(tx, userId);
         const unit = await tx.organizationUnit.findFirst({where:{id:unitId,deletedAt:null}});
         if (!unit || a.scope.orgUnits !== 'all' && !a.scope.orgUnits.includes(unitId)) throw new NotFoundException('AI organization register not found');
-        if (a.scope.domains !== 'all' || a.scope.maxClassRank !== null) throw new ForbiddenException('Historical register requires full domain and classification coverage');
         const where: Prisma.AiRiskWhereInput = {deletedAt:null,isSampleData:false,riskRef:{not:null},workflowCase:{is:{type:'AIRS'}},
-            useCase:{is:{organizationUnitId:unitId,deletedAt:null,isSampleData:false,asset:{is:{orgUnitId:unitId,deletedAt:null}}}}};
+            useCase:{is:{organizationUnitId:unitId,deletedAt:null,isSampleData:false,asset:{is:{orgUnitId:unitId,deletedAt:null,
+              ...(a.scope.domains==='all'?{}:{domainId:{in:a.scope.domains}}),
+              ...(a.scope.maxClassRank===null?{}:{classification:{is:{rank:{lte:a.scope.maxClassRank}}}})}}}}};
         return {...a,unit,where};
     }
     private async visibleSnapshot(tx: Prisma.TransactionClient, where: Prisma.AiRiskWhereInput, row: Annual) {
@@ -63,7 +66,7 @@ export class AiAnnualReviewService {
     }
     async units(userId: string) {
         return this.prisma.$transaction(async tx=>{
-            const a=await this.access(tx,userId), canManage=(a.actor.administratorOverride||a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor'))&&a.scope.domains==='all'&&a.scope.maxClassRank===null;
+            const a=await this.access(tx,userId), canManage=a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor');
             const units=await tx.organizationUnit.findMany({where:{deletedAt:null,OR:[{isActive:true},{aiAnnualReviews:{some:{}}},{aiMonthlyReviewReports:{some:{}}}],
                 ...(a.scope.orgUnits==='all'?{}:{id:{in:a.scope.orgUnits}})},select:{id:true,nameEn:true,nameAr:true},orderBy:[{nameEn:'asc'},{id:'asc'}]});
             return {canManage,units};
@@ -79,14 +82,14 @@ export class AiAnnualReviewService {
                 rows=>visibleSnapshots(tx,a.where,rows,r=>jsonRecord(r.sourceSnapshot)['members'] as Prisma.JsonValue),r=>{summary.total++;if(r.completion)summary.completed++;else{summary.pending++;if(r.dueAt<=evaluatedAt)summary.overdue++;}});
             const rows=await tx.aiAnnualReview.findMany({where:{id:{in:paged.ids}},include,orderBy:[{round:'desc'},{id:'asc'}]});
             let writable=false;
-            if(a.actor.administratorOverride||a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor')) {
+            if(a.actor.roles.includes('AI_GOVERNANCE_OFFICER')&&a.permissions.has('airs.cadence.manage')&&!a.actor.roles.includes('auditor')) {
                 try{await this.registerScope(tx,userId,unitId,true);writable=true;}catch(e){if(!(e instanceof ForbiddenException)&&!(e instanceof NotFoundException))throw e;}
             }
             const hasCalendar=await tx.aiAnnualReview.count({where:{organizationUnitId:unitId}})>0;
             const data=rows.map(r=>({...r,task:undefined,currentOfficerId:r.handovers[0]?.toOfficerId??r.assignedOfficerId,handoverRound:r.handovers[0]?.round??0,
                 canHandover:writable&&!r.completion&&r.task.status==='pending',status:aiReviewStatus(!!r.completion,r.dueAt),
-                canComplete:writable&&!r.completion&&(a.actor.administratorOverride||((r.handovers[0]?.toOfficerId??r.assignedOfficerId)===userId&&r.task.assigneeUserId===userId))&&r.task.status==='pending'}));
-            return {...paged.envelope,data,summary,evaluatedAt,organizationUnit:a.unit,administratorOverride:a.actor.administratorOverride,canCaptureMonthly:writable,canRegister:writable&&!hasCalendar,readOnly:true};
+                canComplete:writable&&!r.completion&&(r.handovers[0]?.toOfficerId??r.assignedOfficerId)===userId&&r.task.assigneeUserId===userId&&r.task.status==='pending'}));
+            return {...paged.envelope,data,summary,evaluatedAt,organizationUnit:a.unit,administratorOverride:false,canCaptureMonthly:writable,canRegister:writable&&!hasCalendar,readOnly:true};
         },options);
     }
     async nomineeList(userId: string, unitId: string, query: AiReviewQueryDto = new AiReviewQueryDto()) {
@@ -94,8 +97,8 @@ export class AiAnnualReviewService {
         return this.prisma.$transaction(async tx=>{
             await this.registerScope(tx,userId,unitId,true);
             const search=(query.search??'').trim(), eligibility=new Map<string,boolean>();
-            const where: Prisma.UserWhereInput={isActive:true,...(search?{email:{contains:search,mode:'insensitive'}}:{}),userRoles:{some:{role:{code:'AI_GOVERNANCE_OFFICER',isActive:true,deletedAt:null,permissions:{some:{permission:{resource:'airs.cadence',action:'manage'}}}}},none:{role:{code:'auditor',isActive:true,deletedAt:null}}}};
-            const paged=await scopedHistoryPage(query,cursor=>tx.user.findMany({where,select:{id:true,email:true,userRoles:{where:{role:{isActive:true,deletedAt:null}},select:{role:{select:{code:true}}}}},orderBy:[{email:'asc'},{id:'asc'}],take:200,...(cursor?{cursor:{id:cursor},skip:1}:{})}),async rows=>{
+            const where: Prisma.UserWhereInput={isActive:true,...(search?{email:{contains:search,mode:'insensitive'}}:{}),userRoles:{some:{role:{AND:[responsibilityWhere('AI_GOVERNANCE_OFFICER'),{permissions:{some:{permission:{resource:'airs.cadence',action:'manage'}}}}]}},none:{role:{code:'auditor',isActive:true,deletedAt:null}}}};
+            const paged=await scopedHistoryPage(query,cursor=>tx.user.findMany({where,select:{id:true,email:true,userRoles:{where:{role:{isActive:true,deletedAt:null}},select:{role: { select: { code: true, businessRoleCode: true } }}}},orderBy:[{email:'asc'},{id:'asc'}],take:200,...(cursor?{cursor:{id:cursor},skip:1}:{})}),async rows=>{
                 const result: typeof rows=[];
                 for(const user of rows){
                     // Full-register grants and ScopeService are role-based. Cache identical role sets within this snapshot.
@@ -147,7 +150,7 @@ export class AiAnnualReviewService {
                 throw new NotFoundException('Annual review not found');
             const a = await this.registerScope(tx, userId, row.organizationUnitId, true);
             await this.visibleSnapshot(tx, (await this.historyScope(tx,userId,row.organizationUnitId)).where, row);
-            const administratorOverride = a.actor.administratorOverride;
+            const administratorOverride = false;
             if (row.completion || row.round !== dto.expectedRound || (dto.expectedHandoverRound ?? 0) !== (row.handovers[0]?.round ?? 0) || row.task.status !== 'pending' || !administratorOverride && (row.task.assigneeUserId !== userId || (row.handovers[0]?.toOfficerId ?? row.assignedOfficerId) !== userId) || row.task.dueDate?.getTime() !== row.dueAt.getTime() || jsonRecord(row.task.formDataJson)['annualReviewId'] !== row.id)
                 throw new ConflictException('Annual review gate changed or belongs to another officer');
             const evidenceIds = [...new Set(dto.evidenceIds)];

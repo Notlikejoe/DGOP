@@ -48,6 +48,7 @@ interface OpenDataAssessment {
 }
 
 interface OpenDataApproval {
+  canDecide?:boolean;
   id: string;
   step: string;
   decision: string;
@@ -552,6 +553,7 @@ export class OpenDataPage implements OnInit {
   }
 
   protected decideApproval(candidate: OpenDataCandidate, approval: OpenDataApproval, decision: string): void {
+    if(approval.canDecide!==true)return;
     if (this.lifecycleSaving()) return;
     this.lifecycleSaving.set(true);
     this.http.patch<OpenDataCandidate>(`/api/open-data-candidates/${candidate.id}/approvals/${approval.id}`, {

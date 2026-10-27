@@ -11,6 +11,7 @@ import { IS_PUBLIC_KEY } from './decorators';
 import { AuthUser, JwtPayload } from './auth.types';
 import { AUTH_COOKIE_NAME, readCookie } from './auth-cookie';
 import { PrismaService } from '../prisma/prisma.service';
+import { businessRoleCode, liveRoleWhere } from './business-roles';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -43,8 +44,8 @@ export class JwtAuthGuard implements CanActivate {
           isActive: true,
           tokenVersion: true,
           userRoles: {
-            where: { role: { isActive: true, deletedAt: null } },
-            select: { role: { select: { code: true } } },
+            where: { role: liveRoleWhere() },
+            select: { role: { select: { code: true, businessRoleCode: true } } },
           },
         },
       });
@@ -56,6 +57,7 @@ export class JwtAuthGuard implements CanActivate {
         id: row.id,
         email: row.email,
         roles: row.userRoles.map((userRole) => userRole.role.code),
+        businessRoles: row.userRoles.map(({role}) => ({roleCode:role.code,businessRoleCode:businessRoleCode(role)})),
       };
       (request as Request & { user: AuthUser }).user = user;
       return true;

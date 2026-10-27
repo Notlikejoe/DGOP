@@ -1,3 +1,9 @@
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
+import { RegisterControls } from '../../../shared/register-controls';
+import { ApprovedEvidencePicker } from '../../../shared/approved-evidence-picker';
+import { ToastService } from '../../../shared/toast.service';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -41,6 +47,7 @@ interface Workspace {
     averageSurveyScore: number;
   };
   graph: { nodes: GraphNode[]; edges: unknown[] };
+  registerPages: Record<string,{data:any[];total:number;page:number;pageSize:number;totalPages:number}>;
   glossary: any[];
   lineage: any[];
   valuations: any[];
@@ -53,12 +60,25 @@ interface Workspace {
 @Component({
   selector: 'app-business-value',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, AppIcon, StatusChip],
+  imports: [FormsModule, AppIcon, StatusChip,RegisterControls,ApprovedEvidencePicker],
   templateUrl: './business-value.html',
   styleUrl: './business-value.scss',
 })
 export class BusinessValuePage implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly destroy=inject(DestroyRef);private readonly toast=inject(ToastService);
+  private readonly requests:Record<string,Subscription>={};private readonly revisions:Record<string,number>={};private loadRevision=0;
+  protected readonly registerBusy=signal<Record<string,boolean>>({});protected readonly measurementTarget=signal<any|null>(null);
+  protected measurementDraft={actualAnnualValue:0,measuredAt:new Date().toISOString().slice(0,10),evidenceId:'',evidenceJustification:''};
+  protected registerInfo(key:string){return this.workspace()?.registerPages[key]??{page:1,pageSize:25,total:0,totalPages:1};}
+  protected loadRegister(key:string,query:{page:number;search:string}){
+    this.requests[key]?.unsubscribe();const revision=(this.revisions[key]??0)+1;this.revisions[key]=revision;
+    this.registerBusy.update(state=>({...state,[key]:true}));
+    this.requests[key]=this.http.get<any>('/api/business-value/registers/'+key,{params:{page:query.page,pageSize:25,search:query.search}}).pipe(takeUntilDestroyed(this.destroy)).subscribe({next:page=>{if(this.revisions[key]!==revision)return;this.workspace.update(workspace=>workspace?({...workspace,[key]:page.data,registerPages:{...workspace.registerPages,[key]:page}}):null);this.registerBusy.update(state=>({...state,[key]:false}));},error:error=>{if(this.revisions[key]!==revision)return;this.registerBusy.update(state=>({...state,[key]:false}));this.toast.errorFrom(error);}});
+  }
+  protected openMeasurement(row:any){this.measurementTarget.set(row);this.measurementDraft={actualAnnualValue:row.actualAnnualValue??0,measuredAt:new Date().toISOString().slice(0,10),evidenceId:'',evidenceJustification:''};}
+  protected recordMeasurement(){const row=this.measurementTarget();if(!row||this.saving()||!this.measurementDraft.evidenceId)return;this.patch('/api/business-value/valuations/'+row.id+'/measure',{...this.measurementDraft,expectedVersion:row.version},()=>this.measurementTarget.set(null));}
+
   protected readonly i18n = inject(I18nService);
 
   protected readonly state = signal<'loading' | 'ready' | 'error'>('loading');
@@ -81,13 +101,14 @@ export class BusinessValuePage implements OnInit {
   }
 
   protected loadWorkspace(): void {
-    this.state.set('loading');
-    this.http.get<Workspace>('/api/business-value/workspace').subscribe({
+    this.state.set('loading');const revision=++this.loadRevision;for(const request of Object.values(this.requests))request.unsubscribe();this.registerBusy.set({});
+    this.http.get<Workspace>('/api/business-value/workspace').pipe(takeUntilDestroyed(this.destroy)).subscribe({
       next: (workspace) => {
+        if(revision!==this.loadRevision)return;
         this.workspace.set(workspace);
         this.state.set('ready');
       },
-      error: () => this.state.set('error'),
+      error: () => {if(revision===this.loadRevision)this.state.set('error');},
     });
   }
 
@@ -192,18 +213,19 @@ export class BusinessValuePage implements OnInit {
         this.saving.set(false);
         this.loadWorkspace();
       },
-      error: () => this.saving.set(false),
+      error: (error) => {this.saving.set(false);this.toast.errorFrom(error);},
     });
   }
 
-  private patch(url: string, body: unknown): void {
+  private patch(url: string, body: unknown,onSuccess?:()=>void): void {
     this.saving.set(true);
     this.http.patch(url, body).subscribe({
       next: () => {
+        onSuccess?.();
         this.saving.set(false);
         this.loadWorkspace();
       },
-      error: () => this.saving.set(false),
+      error: (error) => {this.saving.set(false);this.toast.errorFrom(error);},
     });
   }
 }

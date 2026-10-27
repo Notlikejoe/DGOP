@@ -1,4 +1,5 @@
 import { testAiSharedOperational } from './ai-shared-operational.integration';
+import { nativeIntegrationEvidence } from './ai-native-evidence.fixture';
 import { testAuthorityStrategy } from './ai-authority-strategy.integration';
 import { testAiHistory } from './ai-history.integration';
 import assert from 'node:assert/strict';
@@ -187,14 +188,7 @@ export async function testPhase2A(db: PrismaClient) {
       nameEn: 'Classification decision evidence', nameAr: 'دليل قرار التصنيف',
     },
   });
-  const decisionEvidence = await db.ndiEvidence.create({
-    data: {
-      specId: evidenceSpecification.id, title: 'Phase 2D decision minute',
-      fileName: 'phase-2d-decision.pdf', originalName: 'phase-2d-decision.pdf', mimeType: 'application/pdf',
-      sizeBytes: 4, sha256: 'a'.repeat(64), submittedBy: officer.email, status: 'approved',
-      reviewedBy: officer.email, reviewedAt: new Date('2026-09-10T08:00:00Z'),
-    },
-  });
+  const decisionEvidence = await nativeIntegrationEvidence(db, evidenceSpecification.id);
 
   await db.governedReferenceList.upsert({
     where: { code: 'R_SDAIA_TIER' },
@@ -497,7 +491,7 @@ export async function testPhase2A(db: PrismaClient) {
     await classification.assess(triageReviewer.id, caseDraft.id, 4, {
       kind: 'classification', scores: Array(6).fill({ value: 4, justification: 'High impact is supported by the governed evidence' }),
     });
-    const verified = await classification.verify(officer.id, caseDraft.id, 5, 'Confirmed High proposal');
+    const verified = await classification.verify(officer.id, caseDraft.id, 5, 'Confirmed High proposal', undefined, [decisionEvidence.id]);
     const ethics = await db.workflowTask.findFirstOrThrow({ where: {
       caseId: verified.workflowCaseId!, status: 'pending', templateStage: { is: { code: AIUC_STAGE.ethics } },
     } });
@@ -517,7 +511,7 @@ export async function testPhase2A(db: PrismaClient) {
   await classification.assess(triageReviewer.id, highReturned.id, 8, {
     kind: 'classification', scores: Array(6).fill({ value: 3, justification: 'Revised controls support the Limited tier' }),
   });
-  const revisedVerified = await classification.verify(officer.id, highReturned.id, 9);
+  const revisedVerified = await classification.verify(officer.id, highReturned.id, 9, 'Independently verified the revised proposal', undefined, [decisionEvidence.id]);
   assert.equal(revisedVerified.workflowCase!.status, 'decision_made');
   const rejectTask = await db.workflowTask.findFirstOrThrow({ where: {
     caseId: highReturned.caseId, status: 'pending', templateStage: { is: { code: AIUC_STAGE.decision } },

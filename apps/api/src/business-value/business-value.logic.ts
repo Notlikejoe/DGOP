@@ -57,3 +57,8 @@ export function averageScore(values: Array<number | null | undefined>): number {
   if (!clean.length) return 0;
   return Math.round(clean.reduce((sum, value) => sum + value, 0) / clean.length);
 }
+
+/** A forecast alone is never a measured outcome. */
+export function valuationOutcomeStatus(forecast:number,actual?:number|null):DataValueStatus {
+  return actual==null?DataValueStatus.planned:dataValueStatus(actual,forecast);
+}

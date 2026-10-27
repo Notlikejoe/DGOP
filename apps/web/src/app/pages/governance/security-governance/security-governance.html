@@ -183,7 +183,7 @@
             </div>
           </dl>
 
-          @if (item.type === 'access_review') {
+          @if (item.type === 'access_review' && canDecide && selectedReviewItem()?.canDecide === true) {
             <div class="review-actions" [attr.aria-label]="t('sec.review.actionsLabel')">
               <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="!canDecide || busy()" (click)="openReviewDecision('certified')">
                 {{ t('sec.review.action.certify') }}
@@ -213,7 +213,7 @@
           }
 
           <div class="detail-actions">
-            <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/admin/roles">{{ t('sec.openRoles') }}</a>
+            @if(canViewRoles) { <a class="ds-btn ds-btn--ghost btn-sm" routerLink="/admin/roles">{{ t('sec.openRoles') }}</a> }
             <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="load()">{{ t('crud.retry') }}</button>
           </div>
         } @else {

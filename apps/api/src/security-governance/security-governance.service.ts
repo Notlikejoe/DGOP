@@ -1,3 +1,5 @@
+import { businessDecisionRoles } from '../auth/business-roles';
+import { AuthUser } from '../auth/auth.types';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AccessDecision,
@@ -16,7 +18,6 @@ import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite } from '../common/governance-write';
-import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateAccessReviewDto,
   CreateAccessReviewCampaignDto,
@@ -485,15 +486,22 @@ export class SecurityGovernanceService {
     });
   }
 
-  async accessReviews(roleCodes: string[]) {
+  async accessReviews(roleCodes: string[],actor?:AuthUser) {
     const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
     const itemScope = this.reviewItemScope(scope, assetIds);
-    return this.prisma.accessReview.findMany({
+    const rows=await this.prisma.accessReview.findMany({
       where: Object.keys(itemScope).length ? { items: { some: itemScope } } : {},
       include: reviewInclude(itemScope),
       orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
       take: 25,
     });
+    const allowed=new Set<string>();
+    if(actor&&rows.length)try{
+      const roles=await businessDecisionRoles(this.prisma,roleCodes,'security_governance.edit'),decisionScope=await this.scope.resolve(roles),decisionAssets=await this.visibleAssetIds(roles);
+      const items=await this.prisma.accessReviewItem.findMany({where:{AND:[this.reviewItemScope(decisionScope,decisionAssets),{id:{in:rows.flatMap(row=>row.items.map(item=>item.id))}}]},select:{id:true}});
+      items.forEach(item=>allowed.add(item.id));
+    }catch(error){if(!(error instanceof ForbiddenException))throw error;}
+    return rows.map(row=>({...row,items:row.items.map(item=>({...item,canDecide:!!actor&&allowed.has(item.id)&&row.status==='active'&&item.decision==='pending'&&item.userId!==actor.id&&(!row.ownerUserId||row.ownerUserId===actor.id)}))}));
   }
 
   async dlpIncidents(roleCodes: string[]) {
@@ -800,7 +808,7 @@ export class SecurityGovernanceService {
   }
 
   async updateReviewItem(id: string, roleCodes: string[], dto: UpdateAccessReviewItemDto, actor: string) {
-    const administratorOverride = isSystemAdministrator(roleCodes);
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'security_governance.edit');
     const existing = await this.prisma.accessReviewItem.findUnique({
       where: { id },
       include: {
@@ -817,8 +825,8 @@ export class SecurityGovernanceService {
       throw new BadRequestException('Completed access reviews cannot be changed');
     }
     const actorUser = await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } });
-    if (!administratorOverride && actorUser?.id === existing.userId) throw new ForbiddenException('A reviewer cannot certify or change their own access');
-    if (!administratorOverride && existing.review.ownerUserId && actorUser?.id !== existing.review.ownerUserId) {
+    if (actorUser?.id === existing.userId) throw new ForbiddenException('A reviewer cannot certify or change their own access');
+    if (existing.review.ownerUserId && actorUser?.id !== existing.review.ownerUserId) {
       throw new ForbiddenException('Only the assigned review owner can decide this item');
     }
     if (existing.decision !== AccessReviewDecision.pending) throw new BadRequestException('This review item already has a decision');

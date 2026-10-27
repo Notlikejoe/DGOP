@@ -9,6 +9,7 @@ import { ScopeService } from '../access/scope.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { accessRevision, aiCapabilities } from './access-snapshot';
+import { liveResponsibility, ResponsibilityRole } from './business-roles';
 import {
   isProductionLikeRuntime,
   isUnsafeDefaultAdminCredential,
@@ -112,22 +113,24 @@ export class AuthService {
 
   private activeUserRoles(user: {
     userRoles: {
-      role: {
+      role: ResponsibilityRole & {
         id: string;
         code: string;
         nameEn: string;
         nameAr: string;
         isActive?: boolean;
         deletedAt?: Date | null;
+        maxClassificationRank?: number | null;
+        dataScopes?: {scopeType:string;refId:string;includeDescendants:boolean}[];
       };
     }[];
   }) {
-    return user.userRoles.filter((ur) => ur.role.isActive !== false && ur.role.deletedAt == null);
+    return user.userRoles.filter((ur) => liveResponsibility(ur.role));
   }
 
   private async toProfile(userId: string, tokenVersion?: number) {
     return this.prisma.$transaction(async tx => {
-    const user = await tx.user.findUnique({ where: { id: userId }, include: { userRoles: { include: { role: true } } } });
+    const user = await tx.user.findUnique({ where: { id: userId }, include: { userRoles: { include: { role: {include:{businessRole:true,dataScopes:true}} } } } });
     if (!user?.isActive || tokenVersion !== undefined && user.tokenVersion !== tokenVersion) return null;
     const activeRoles = this.activeUserRoles(user);
     const roleCodes = activeRoles.map((ur) => ur.role.code);
@@ -135,9 +138,14 @@ export class AuthService {
       this.access.permissionsForRoleCodes(roleCodes, tx),
       this.scope.resolve(roleCodes, tx),
       tx.rolePermission.findMany({ where: { roleId: { in: activeRoles.map(ur => ur.role.id) } },
-        include: { permission: true, role: { select: { code: true } } } }),
+        include: { permission: true, role: { select: { code: true, businessRoleCode: true } } } }),
     ]);
     const ai = aiCapabilities(roleCodes, grants, scopes);
+    const businessAuthority=activeRoles.map(({role})=>({roleCode:role.code,businessRoleCode:role.businessRoleCode??null,
+      maxClassificationRank:role.maxClassificationRank??null,
+      scopes:[...(role.dataScopes??[])].map(s=>({scopeType:s.scopeType,refId:s.refId,includeDescendants:s.includeDescendants})).sort((a,b)=>(a.scopeType+a.refId).localeCompare(b.scopeType+b.refId)),
+      permissions:grants.filter(g=>g.role.code===role.code).map(g=>g.permission.resource+'.'+g.permission.action).sort(),
+    })).sort((a,b)=>a.roleCode.localeCompare(b.roleCode));
     return {
       id: user.id,
       email: user.email,
@@ -146,13 +154,15 @@ export class AuthService {
       lastLoginAt: user.lastLoginAt,
       roles: activeRoles.map((ur) => ({
         code: ur.role.code,
+        businessRoleCode: ur.role.businessRoleCode ?? null,
         nameEn: ur.role.nameEn,
         nameAr: ur.role.nameAr,
       })),
       permissions,
+      businessPermissions:roleCodes.includes('auditor')?[]:[...new Set(grants.filter(g=>!['system_admin','auditor'].includes(g.role.code)).map(g=>g.permission.resource+'.'+g.permission.action))].sort(),
       scopes,
       aiCapabilities: ai,
-      accessRevision: accessRevision(roleCodes, permissions, scopes, ai),
+      accessRevision: accessRevision(roleCodes, permissions, scopes, ai,businessAuthority),
     };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 3000 });
   }

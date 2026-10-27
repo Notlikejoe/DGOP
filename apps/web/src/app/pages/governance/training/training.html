@@ -396,11 +396,12 @@
                 <td>{{ date(a.dueDate) }}</td>
                 <td>{{ date(a.expiresAt) }}</td>
                 <td class="actions-col">
-                  @if (canComplete && a.status !== 'completed') {
+                  @if (canComplete && ['assigned','in_progress'].includes(a.status)) {
                     <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openComplete(a)">
                       {{ t('training.complete') }}
                     </button>
                   }
+                  @if(canAssign && a.status==='expired'){<button type="button" class="ds-btn ds-btn--ghost" (click)="renewAssignment(a)" [disabled]="saving()">{{t('businessIntegrity.renew')}}</button>}
                 </td>
               </tr>
             }

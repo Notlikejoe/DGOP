@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { BusinessRegisterQueryDto, MeasureValuationDto } from './business-value.dto';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
@@ -22,8 +23,16 @@ export class BusinessValueController {
   @Get('workspace')
   @RequirePermissions('business_value.view')
   workspace(@CurrentUser() user: AuthUser) {
-    return this.service.workspace(user.roles);
+    return this.service.workspace(user.roles,user.email);
   }
+
+  @Get('registers/:register')
+  @RequirePermissions('business_value.view')
+  listRegister(@Param('register') register:string,@Query() query:BusinessRegisterQueryDto,@CurrentUser() user:AuthUser){return this.service.listRegister(register,user.roles,user.email,query);}
+
+  @Patch('valuations/:id/measure')
+  @RequirePermissions('business_value.edit')
+  measureValuation(@Param('id') id:string,@Body() dto:MeasureValuationDto,@CurrentUser() user:AuthUser){return this.service.measureValuation(user.roles,id,dto,user.email);}
 
   @Post('glossary')
   @RequirePermissions('business_value.create')

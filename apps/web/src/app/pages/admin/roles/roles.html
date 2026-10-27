@@ -294,6 +294,19 @@
           <input type="text" class="field__input" name="code" [(ngModel)]="form.code" />
           <span class="hint">{{ t('roles.codeHint') }}</span>
         </label>
+        <label class="field">
+          <span class="field__label">{{ t('roles.businessResponsibility') }}</span>
+          <select class="field__input" name="businessRoleCode" [(ngModel)]="form.businessRoleCode">
+            <option value="">{{ t('roles.noBusinessResponsibility') }}</option>
+            @for (role of roles(); track role.id) {
+              @if (role.canBindBusinessRole) { <option [value]="role.code">{{ name(role) }}</option> }
+            }
+          </select>
+          <span class="hint">{{ t('roles.businessBindingHint') }}</span>
+        </label>
+      } @else if (form.businessRoleCode) {
+        <p>{{ t('roles.businessResponsibility') }}: <strong>{{ form.businessRoleCode }}</strong></p>
+        <p class="hint">{{ t('roles.businessBindingHint') }}</p>
       }
       <label class="field">
         <span class="field__label">{{ t('crud.nameEn') }}<span class="req">*</span></span>

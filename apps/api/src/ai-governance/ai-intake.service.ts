@@ -1,3 +1,6 @@
+import { businessRoleCode, liveRoleWhere } from '../auth/business-roles';
+import { unregisteredScopeWhere } from './ai-submitted-scope';
+import { actualRoleCodes } from './ai-authorization.service';
 import { AiReviewQueryDto } from './ai-review-query.dto';
 import { readAiReviewQueue, reviewWorkflowSelection } from './ai-review-queue';
 import { logAiRequired, aiNoticeAccess } from './ai-notifications';
@@ -11,7 +14,6 @@ import { AiAuthorizationService, effectiveAiPermissions } from './ai-authorizati
 import { AiRegisterQueryDto, aiRegisterParams } from './ai-register-query.dto';
 import { toPaged } from '../common/pagination';
 import { ScopeService } from '../access/scope.service';
-import { isSystemAdministrator } from '../auth/system-admin';
 import { AiPermission, aiRoleMayHold, splitAiPermission } from './ai-permissions';
 import { AI_INTAKE_SCHEMA_VERSION, AiIntakeDraftV1, AiIntakeField, AiIntakeV1 } from './ai-governance.contracts';
 import { AiIdentifiersService } from './ai-identifiers.service';
@@ -157,8 +159,8 @@ export class AiIntakeService {
             where: { id: { in: [...new Set(ids)] }, isActive: true },
             select: {
                 id: true,
-                person: { select: { id: true, isActive: true, deletedAt: true } },
-                userRoles: { where: { role: { isActive: true, deletedAt: null } }, select: { role: { select: { code: true } } } },
+                person: { select: { id: true, isActive: true, deletedAt: true, organization:true } },
+                userRoles: { where: { role: liveRoleWhere() }, select: { role: { select: { code: true, businessRoleCode: true } } } },
             },
         }) : [];
         const byId = new Map(users.map(user => [user.id, user]));
@@ -181,24 +183,35 @@ export class AiIntakeService {
             if (!owner.person || !owner.person.isActive || owner.person.deletedAt) {
                 issues.push({ field: 'proposed_owner', code: 'OWNER_DIRECTORY_PROFILE_REQUIRED', message: 'Proposed owner must have an active person-directory profile' });
             }
-            else if (!owner.userRoles.some(row => row.role.code === 'AI_USECASE_OWNER')) {
+            else if (!owner.userRoles.some(row => businessRoleCode(row.role) === 'AI_USECASE_OWNER')) {
                 issues.push({ field: 'proposed_owner', code: 'OWNER_ROLE_REQUIRED', message: 'Proposed owner must hold the AI_USECASE_OWNER role' });
             }
         }
         const dataOwner = payload.data_owner ? byId.get(payload.data_owner) : undefined;
-        if (dataOwner && !dataOwner.userRoles.some(row => row.role.code === 'data_owner')) {
+        if (dataOwner && !dataOwner.userRoles.some(row => businessRoleCode(row.role) === 'data_owner')) {
             warnings.push({ field: 'data_owner', code: 'DATA_OWNER_ROLE_WARNING', message: 'The selected data owner does not currently hold the DATA_OWNER role' });
         }
         if (issues.length)
             throw new BadRequestException({ message: 'Organization-directory validation failed', issues });
-        return { ownerPersonId: owner?.person?.id ?? null, warnings };
+        return { ownerPersonId: owner?.person?.id ?? null, organization:owner?.person?.organization??byId.get(actorId)?.person?.organization??null, warnings };
     }
-    private async duplicateWarning(client: IntakeClient, payload: AiIntakeDraftV1, excludeId?: string): Promise<IntakeWarning[]> {
+    private async intakeDepartment(client:IntakeClient,actualRoles:string[],organization:string|null):Promise<string|null>{
+        const scope=await new ScopeService(client as PrismaService).resolve(actualRoles);
+        if(!organization?.trim()){
+            if(scope.orgUnits!=='all')throw new BadRequestException('Map the requester or proposed owner directory profile to an active department before saving a scoped AI intake');
+            return null;
+        }
+        const matches=await client.organizationUnit.findMany({where:{isActive:true,deletedAt:null,OR:[{code:organization},{nameEn:organization},{nameAr:organization}]},select:{id:true},take:2});
+        if(matches.length!==1)throw new BadRequestException('The directory organization must identify exactly one active DGOP department');
+        if(scope.orgUnits!=='all'&&!scope.orgUnits.includes(matches[0].id))throw new ForbiddenException('AI intake department is outside the granted business scope');
+        return matches[0].id;
+    }
+    private async duplicateWarning(client: IntakeClient, payload: AiIntakeDraftV1, excludeId?: string, organizationUnitId?:string|null): Promise<IntakeWarning[]> {
         const name = payload.usecase_name?.trim();
         if (!name)
             return [];
         const duplicate = await client.aiUseCase.findFirst({
-            where: { id: excludeId ? { not: excludeId } : undefined, deletedAt: null, name: { equals: name, mode: 'insensitive' } },
+            where: { id: excludeId ? { not: excludeId } : undefined, deletedAt: null, ...(organizationUnitId?{organizationUnitId}:{}), name: { equals: name, mode: 'insensitive' } },
             select: { id: true },
         });
         return duplicate ? [{ field: 'usecase_name', code: 'DUPLICATE_NAME_WARNING', message: 'An active AI use case already uses this name' }] : [];
@@ -240,12 +253,13 @@ export class AiIntakeService {
         this.assertDraft(payload);
         const references = await this.currentReferences(tx, payload, now);
         const directory = await this.directoryReferences(tx, userId, payload);
-        const duplicates = await this.duplicateWarning(tx, payload);
+        const organizationUnitId=await this.intakeDepartment(tx,actualRoleCodes(actor),directory.organization);
+        const duplicates = await this.duplicateWarning(tx, payload,undefined,organizationUnitId);
         const warnings = [...directory.warnings, ...duplicates, ...this.businessWarnings(payload, references.selected)];
         const created = await tx.aiUseCase.create({
             data: {
                 requesterUserId: userId,
-                ownerPersonId: directory.ownerPersonId,
+                ownerPersonId: directory.ownerPersonId, organizationUnitId,
                 name: payload.usecase_name?.trim() || 'AI use-case draft',
                 description: payload.problem_desc?.trim() || null,
                 createdBy: userId,
@@ -268,7 +282,7 @@ export class AiIntakeService {
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
             if (!current)
                 throw new NotFoundException('AI use-case draft not found');
-            const administratorOverride = actor.administratorOverride;
+            const administratorOverride = false;
             if (current.requesterUserId !== userId && !administratorOverride)
                 throw new ForbiddenException('Only the requester can edit this AI intake draft');
             const returnedTask = current.workflowCaseId && current.workflowCase?.status === CaseStatus.awaiting_information
@@ -288,11 +302,12 @@ export class AiIntakeService {
             const now = new Date();
             const references = await this.currentReferences(tx, payload, now);
             const directory = await this.directoryReferences(tx, userId, payload);
-            const duplicates = await this.duplicateWarning(tx, payload, id);
+        const organizationUnitId=await this.intakeDepartment(tx,actualRoleCodes(actor),directory.organization);
+            const duplicates = await this.duplicateWarning(tx, payload,id,organizationUnitId);
             const updated = await tx.aiUseCase.updateMany({
                 where: { id, version: expectedVersion, workflowCaseId: returnedTask ? current.workflowCaseId : null },
                 data: {
-                    ownerPersonId: directory.ownerPersonId,
+                    ownerPersonId: directory.ownerPersonId, organizationUnitId,
                     name: payload.usecase_name?.trim() || current.name,
                     description: payload.problem_desc?.trim() || null,
                     version: { increment: 1 },
@@ -327,10 +342,10 @@ export class AiIntakeService {
         const open = !uc.assetId && !!uc.workflowCase && !['closed', 'rejected', 'cancelled'].includes(uc.workflowCase.status);
         const task = await tx.workflowTask.findFirst({ where: { caseId: uc.workflowCaseId, status: 'pending', assigneeUserId: uc.requesterUserId, templateStage: { code: 'aiuc-completion', isActive: true, template: { code: 'AIUC_APPROVAL_V1', isActive: true, deletedAt: null } } } });
         const grants = await tx.rolePermission.findMany({ where: { role: { isActive: true, deletedAt: null, userRoles: { some: { userId } } }, permission: { OR: [{ resource: 'case.create', action: 'aiuc' }, { resource: 'case.approve', action: 'aiuc' }] } }, include: { role: true, permission: true } });
-        const withdrawRole = grants.filter(g => g.permission.resource === 'case.create' && aiRoleMayHold(g.role.code, 'case.create.aiuc')).map(g => g.role.code).sort()[0];
-        const administratorOverride = isSystemAdministrator(access.roles);
+        const withdrawRole = grants.filter(g => g.permission.resource === 'case.create' && aiRoleMayHold(businessRoleCode(g.role), 'case.create.aiuc')).map(g => g.role.code).sort()[0];
+        const administratorOverride = false;
         return { uc, access, task, withdrawRole, administratorOverride, canWithdraw: open && (administratorOverride || uc.requesterUserId === userId && !access.roles.includes('auditor') && !!withdrawRole),
-            canCloseNoAction: open && (administratorOverride || uc.workflowCase?.status === 'awaiting_information' && !!task?.dueDate && task.dueDate <= new Date() && !access.roles.includes('auditor') && grants.some(g => g.role.code === 'AI_GOVERNANCE_OFFICER' && g.permission.resource === 'case.approve')) };
+            canCloseNoAction: open && (administratorOverride || uc.workflowCase?.status === 'awaiting_information' && !!task?.dueDate && task.dueDate <= new Date() && !access.roles.includes('auditor') && grants.some(g => businessRoleCode(g.role) === 'AI_GOVERNANCE_OFFICER' && g.permission.resource === 'case.approve')) };
     }
     async closureContext(userId: string, id: string) {
         return governanceTransaction(this.prisma, async (tx) => { const g = await this.closureGate(tx, userId, id); return { version: g.uc.version, canWithdraw: g.canWithdraw, canCloseNoAction: g.canCloseNoAction, informationDueAt: g.task?.dueDate ?? null }; });
@@ -369,7 +384,7 @@ export class AiIntakeService {
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
             if (!current)
                 throw new NotFoundException('AI use-case draft not found');
-            const administratorOverride = actor.administratorOverride;
+            const administratorOverride = false;
             if (current.requesterUserId !== userId && !administratorOverride)
                 throw new ForbiddenException('Only the requester can submit this AI intake');
             if (current.workflowCaseId || current.intakeRevisions[0]?.submittedAt)
@@ -381,6 +396,7 @@ export class AiIntakeService {
             this.assertSubmission(payload, dateInRiyadh(now));
             const references = await this.currentReferences(tx, payload, now);
             const directory = await this.directoryReferences(tx, userId, payload);
+        const organizationUnitId=await this.intakeDepartment(tx,actualRoleCodes(actor),directory.organization);
             const caseCode = await this.identifiers.nextCaseCode(tx, 'AIUC', yearInRiyadh(now));
             const template = await this.routing.binding(tx);
             const workflowCase = await tx.workflowCase.create({
@@ -415,7 +431,7 @@ export class AiIntakeService {
                 where: { id, version: expectedVersion, workflowCaseId: null },
                 data: {
                     workflowCaseId: workflowCase.id,
-                    ownerPersonId: directory.ownerPersonId,
+                    ownerPersonId: directory.ownerPersonId, organizationUnitId,
                     name: payload.usecase_name.trim(),
                     description: payload.problem_desc.trim(),
                     version: { increment: 1 },
@@ -424,7 +440,7 @@ export class AiIntakeService {
             if (updated.count !== 1)
                 throw new ConflictException('AI use-case draft changed; reload before submitting');
             const conditions = this.conditions(references.selected);
-            const duplicateWarnings = await this.duplicateWarning(tx, payload, id);
+            const duplicateWarnings = await this.duplicateWarning(tx, payload,id,organizationUnitId);
             const warnings = [...directory.warnings, ...duplicateWarnings, ...this.businessWarnings(payload, references.selected)];
             await logAiRequired(this.audit, {
                 actor: userId,
@@ -452,7 +468,7 @@ export class AiIntakeService {
             const current = await tx.aiUseCase.findFirst({ where: { id, deletedAt: null }, select: intakeUseCase });
             if (!current)
                 throw new NotFoundException('AI use case not found');
-            const administratorOverride = actor.administratorOverride;
+            const administratorOverride = false;
             if (current.requesterUserId !== userId && !administratorOverride)
                 throw new ForbiddenException('Only the requester can resubmit this AI intake');
             if (!current.workflowCaseId || current.workflowCase?.status !== CaseStatus.awaiting_information) {
@@ -470,6 +486,7 @@ export class AiIntakeService {
             this.assertSubmission(payload, dateInRiyadh(now));
             const references = await this.currentReferences(tx, payload, now);
             const directory = await this.directoryReferences(tx, userId, payload);
+        const organizationUnitId=await this.intakeDepartment(tx,actualRoleCodes(actor),directory.organization);
             const revision = (current.intakeRevisions[0]?.revision ?? 0) + 1;
             await tx.aiIntakeRevision.create({
                 data: { useCaseId: id, revision, schemaVersion: AI_INTAKE_SCHEMA_VERSION, payload: asJson(payload), submittedAt: now, createdBy: userId },
@@ -486,7 +503,7 @@ export class AiIntakeService {
             const triageTask = await this.createTriageTask(tx, current.workflowCaseId, userId, now, this.conditions(references.selected));
             const updated = await tx.aiUseCase.updateMany({
                 where: { id, version: expectedVersion, workflowCaseId: current.workflowCaseId },
-                data: { ownerPersonId: directory.ownerPersonId, name: payload.usecase_name.trim(), description: payload.problem_desc.trim(), version: { increment: 1 } },
+                data: { ownerPersonId: directory.ownerPersonId, organizationUnitId, name: payload.usecase_name.trim(), description: payload.problem_desc.trim(), version: { increment: 1 } },
             });
             if (updated.count !== 1)
                 throw new ConflictException('AI use-case draft changed; reload before resubmitting');
@@ -522,7 +539,7 @@ export class AiIntakeService {
             });
             if (!task)
                 throw new ConflictException('No active AIUC triage task exists');
-            if(!actor.administratorOverride&&(!actor.roles.includes('AI_WORKING_GROUP')||task.assigneeUserId&&task.assigneeUserId!==actor.id))
+            if(!actor.roles.includes('AI_WORKING_GROUP')||task.assigneeUserId&&task.assigneeUserId!==actor.id)
                 throw new ForbiddenException('Only the assigned Working Group can complete AIUC triage');
             const now = new Date();
             const nextStatus = decision === 'accept' ? CaseStatus.under_review
@@ -589,24 +606,26 @@ export class AiIntakeService {
         const view: AiPermission[] = ['case.view.aiuc.own', 'case.view.aiuc.org', 'case.view.aiuc.all'];
         const actor = await this.authorization.authorizeAny(userId, view, tx);
         const grants = await tx.rolePermission.findMany({
-            where: { role: { code: { in: actor.roles }, isActive: true, deletedAt: null }, permission: { OR: [...view, 'case.create.aiuc' as AiPermission].map(splitAiPermission) } },
-            include: { permission: true, role: { select: { code: true } } },
+            where: { role: { code: { in: actualRoleCodes(actor) }, isActive: true, deletedAt: null }, permission: { OR: [...view, 'case.create.aiuc' as AiPermission].map(splitAiPermission) } },
+            include: { permission: true, role: { select: { code: true, businessRoleCode: true } } },
         });
         const permissions = effectiveAiPermissions(actor.roles,grants);
         const canCreate = permissions.has('case.create.aiuc') && !actor.roles.includes('auditor');
         const alternatives: Prisma.AiUseCaseWhereInput[] = [];
         if (permissions.has('case.view.aiuc.own'))
             alternatives.push({ OR: [{ requesterUserId: actor.id }, { owner: { is: { userId: actor.id } } }] });
+        alternatives.push({workflowCase:{is:{tasks:{some:{assigneeUserId:userId}}}}});
         // Named lifecycle contributors can discover their own work without gaining
         // another business role's broader queue or changing the requester's intake.
-        const taskScope = await new ScopeService(tx as PrismaService).resolve(actor.roles);
+        const taskScope = await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
+        const unregistered=await unregisteredScopeWhere(tx,taskScope);
         alternatives.push({asset:{is:{deletedAt:null,
           ...(taskScope.domains==='all'?{}:{domainId:{in:taskScope.domains}}),
           ...(taskScope.maxClassRank===null?{}:{classification:{is:{rank:{lte:taskScope.maxClassRank}}}})}},
           ...(taskScope.orgUnits==='all'?{}:{organizationUnitId:{in:taskScope.orgUnits}}),
           lifecycleRequests:{some:{workflowCase:{is:{tasks:{some:{assigneeUserId:userId}}}}}}});
         if (permissions.has('case.view.aiuc.org') || permissions.has('case.view.aiuc.all')) {
-            const scope = await new ScopeService(tx as PrismaService).resolve(actor.roles);
+            const scope = await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
             const asset: Prisma.DataAssetWhereInput = { deletedAt: null,
                 ...(scope.orgUnits === 'all' ? {} : { orgUnitId: { in: scope.orgUnits } }),
                 ...(scope.domains === 'all' ? {} : { domainId: { in: scope.domains } }),
@@ -617,10 +636,16 @@ export class AiIntakeService {
             alternatives.push({ isSampleData: false, workflowCase: { is: { type: 'AIUC', status: { not: CaseStatus.draft } } },
                 intakeRevisions: { some: { submittedAt: { not: null } } },
                 ...(scope.orgUnits === 'all' ? {} : { organizationUnitId: { in: scope.orgUnits } }),
-                OR: [{ asset: { is: asset } }, ...(scope.domains === 'all' && scope.maxClassRank === null ? [{ assetId: null }] : [])],
+                OR: [{ asset: { is: asset } }, unregistered],
             });
         }
-        return { actor, canCreate, where: { deletedAt: null, OR: alternatives } satisfies Prisma.AiUseCaseWhereInput };
+        const ownedDraft:Prisma.AiUseCaseWhereInput={requesterUserId:actor.id,workflowCaseId:null};
+        const department:Prisma.AiUseCaseWhereInput=taskScope.orgUnits==='all'?{}:{OR:[{organizationUnitId:{in:taskScope.orgUnits}},{...ownedDraft,organizationUnitId:null}]};
+        const assetScope:Prisma.DataAssetWhereInput={deletedAt:null,
+          ...(taskScope.orgUnits==='all'?{}:{orgUnitId:{in:taskScope.orgUnits}}),
+          ...(taskScope.domains==='all'?{}:{domainId:{in:taskScope.domains}}),
+          ...(taskScope.maxClassRank===null?{}:{classification:{is:{rank:{lte:taskScope.maxClassRank}}}})};
+        return { actor, canCreate, where: {AND:[{deletedAt:null,OR:alternatives},department,{OR:[{asset:{is:assetScope}},unregistered,{...ownedDraft,assetId:null}]}]} satisfies Prisma.AiUseCaseWhereInput };
     }
     async listVisible(userId: string, query:AiRegisterQueryDto=new AiRegisterQueryDto()) {
         query=Object.assign(new AiRegisterQueryDto(),query);
@@ -651,7 +676,7 @@ export class AiIntakeService {
     }
     async lookups(userId: string) {
         return this.prisma.$transaction(async (tx) => {
-            const { canCreate, where } = await this.readVisibility(userId, tx);
+            const { actor, canCreate, where } = await this.readVisibility(userId, tx);
             const now = new Date();
             const lists: Record<string, {
                 listCode: string;
@@ -692,8 +717,10 @@ export class AiIntakeService {
                             referencedUsers.add(payload[field] as string);
                 }
             }
+            const directoryScope=await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
+            const unitNames=directoryScope.orgUnits==='all'?null:(await tx.organizationUnit.findMany({where:{id:{in:directoryScope.orgUnits},isActive:true,deletedAt:null},select:{id:true,code:true,nameEn:true,nameAr:true}})).flatMap(unit=>[unit.id,unit.code,unit.nameEn,unit.nameAr]);
             const directory = await tx.user.findMany({
-                where: { isActive: true, person: { is: { isActive: true, deletedAt: null } }, ...(!canCreate ? { id: { in: [...referencedUsers] } } : {}) },
+                where: { isActive: true, person: { is: { isActive: true, deletedAt: null,...(unitNames?{organization:{in:unitNames}}:{}) } }, ...(!canCreate ? { id: { in: [...referencedUsers] } } : {}) },
                 orderBy: { displayName: 'asc' },
                 take: 1000,
                 select: {
@@ -701,7 +728,7 @@ export class AiIntakeService {
                     email: true,
                     displayName: true,
                     person: { select: { id: true, fullNameEn: true, fullNameAr: true } },
-                    userRoles: { where: { role: { isActive: true, deletedAt: null } }, select: { role: { select: { code: true } } } },
+                    userRoles: { where: { role: liveRoleWhere() }, select: { role: { select: { code: true, businessRoleCode: true } } } },
                 },
             });
             const users = directory.map(user => ({
@@ -711,7 +738,8 @@ export class AiIntakeService {
                 displayName: user.displayName,
                 nameEn: user.person!.fullNameEn,
                 nameAr: user.person!.fullNameAr,
-                roles: user.userRoles.map(row => row.role.code),
+                roles: user.userRoles.map(row => businessRoleCode(row.role)),
+                scopeRoleBindings:user.userRoles.map(row=>({roleCode:row.role.code,businessRoleCode:businessRoleCode(row.role)})),
             }));
             return {
                 canCreate,

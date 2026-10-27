@@ -30,6 +30,8 @@ interface PrivacyGate {
 }
 
 interface PrivacyDpia {
+  canDecide?:boolean;
+  allowedDecisionPhases?:string[];
   id: string;
   code: string;
   title: string;
@@ -54,6 +56,7 @@ interface PrivacyDpia {
 }
 
 interface PrivacyDsr {
+  canDecide?:boolean;
   version: number;
   identityEvidenceReference?: string | null;
   completionEvidenceReference?: string | null;
@@ -82,6 +85,7 @@ interface PrivacyDsr {
 }
 
 interface PrivacyBreach {
+  canDecide?:boolean;
   version: number;
   regulatorNotificationRequired?: boolean | null;
   subjectNotificationRequired?: boolean | null;
@@ -242,7 +246,7 @@ export class PrivacyOperationsPage implements OnInit {
 
   protected get canCreate(): boolean { return this.auth.hasPermission('privacy_operations.create'); }
   protected get canEdit(): boolean { return this.auth.hasPermission('privacy_operations.edit'); }
-  protected get canDecide(): boolean { return this.canEdit && (this.auth.currentUser()?.roles.some(role => role.code === 'privacy_officer') ?? false); }
+  protected get canDecide(): boolean { return this.auth.hasBusinessPermission('privacy_operations.edit') && this.auth.hasBusinessRole(['privacy_officer']); }
 
   ngOnInit(): void {
     this.loadLookups();
@@ -346,6 +350,8 @@ export class PrivacyOperationsPage implements OnInit {
   }
 
   private resetDecisionDrafts(): void {
+    const dpia = this.selectedDpia();
+    this.gateDraft.update(draft => ({ ...draft, phase: dpia?.allowedDecisionPhases?.[0] ?? 'requirements' }));
     this.dsrExtensionDraft.set({ dueAt: '', reason: '', communicatedAt: '', communicationReference: '' });
     const dsr = this.selectedDsr();
     if (dsr) this.dsrDraftUpdate.set({ status: dsr.status, assignedPersonId: dsr.assignedPerson?.id || '', decisionSummary: dsr.decisionSummary || '', identityValidated: dsr.identityValidated, identityEvidenceReference: dsr.identityEvidenceReference || '', completionEvidenceReference: dsr.completionEvidenceReference || '' });
@@ -399,6 +405,7 @@ export class PrivacyOperationsPage implements OnInit {
       next: updated => {
         this.toast.success(this.t('privacy.saved.dsrUpdate'));
         this.dsrs.update(rows => rows.map(row => row.id === updated.id ? updated : row));
+        this.load();
         this.resetDecisionDrafts();
       },
       error: err => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
@@ -459,6 +466,7 @@ export class PrivacyOperationsPage implements OnInit {
       next: (updated) => {
         this.toast.success(this.t('privacy.saved.gate'));
         this.dpias.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+        this.load();
       },
       error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
       complete: () => this.saving.set(false),
@@ -472,6 +480,7 @@ export class PrivacyOperationsPage implements OnInit {
       next: (updated) => {
         this.toast.success(this.t('privacy.saved.dsrUpdate'));
         this.dsrs.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+        this.load();
         this.resetDecisionDrafts();
       },
       error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },
@@ -486,6 +495,7 @@ export class PrivacyOperationsPage implements OnInit {
       next: (updated) => {
         this.toast.success(this.t('privacy.saved.breachUpdate'));
         this.breaches.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+        this.load();
         this.resetDecisionDrafts();
       },
       error: (err) => { this.saving.set(false); this.toast.errorFrom(err, this.t('privacy.error.save')); },

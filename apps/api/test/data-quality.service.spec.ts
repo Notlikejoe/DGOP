@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 /**
  * Unit tests for Data Quality service scoping and bounded list behavior.
  * Run with: ts-node test/data-quality.service.spec.ts
@@ -68,7 +69,7 @@ function includesBroadUnlinkedIssue(where: unknown): boolean {
 test('summary applies data-scope asset filtering to every count', async () => {
   const countWhere: unknown[] = [];
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: {
         findMany: async () => [{ id: 'visible-asset' }],
       },
@@ -82,7 +83,7 @@ test('summary applies data-scope asset filtering to every count', async () => {
       dataQualityRule: { count: async () => 1 },
       dataQualityProfile: { count: async () => 1 },
       dataQualityScore: { findMany: async () => [] },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({
@@ -103,7 +104,7 @@ test('summary applies data-scope asset filtering to every count', async () => {
 test('summary includes only the scoped actor own unlinked data quality issues', async () => {
   const countWhere: unknown[] = [];
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: {
         findMany: async () => [],
       },
@@ -117,7 +118,7 @@ test('summary includes only the scoped actor own unlinked data quality issues', 
       dataQualityRule: { count: async () => 0 },
       dataQualityProfile: { count: async () => 0 },
       dataQualityScore: { findMany: async () => [] },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({
@@ -138,7 +139,7 @@ test('summary includes only the scoped actor own unlinked data quality issues', 
 test('get hides unlinked data quality issues from other scoped users', async () => {
   let getWhere: unknown;
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: {
         findMany: async () => [],
       },
@@ -148,7 +149,7 @@ test('get hides unlinked data quality issues from other scoped users', async () 
           return null;
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({
@@ -170,7 +171,7 @@ test('get hides unlinked data quality issues from other scoped users', async () 
 test('list keeps legacy array shape but applies a bounded default when pagination is omitted', async () => {
   const findManyCalls: any[] = [];
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityIssue: {
         findMany: async (args: any) => {
           findManyCalls.push(args);
@@ -178,7 +179,7 @@ test('list keeps legacy array shape but applies a bounded default when paginatio
         },
         count: async () => 3,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -208,14 +209,14 @@ test('list keeps legacy array shape but applies a bounded default when paginatio
 test('list rejects invalid issue enum filters before Prisma receives them', async () => {
   let queried = false;
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityIssue: {
         findMany: async () => {
           queried = true;
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -232,14 +233,14 @@ test('list rejects invalid issue enum filters before Prisma receives them', asyn
 test('listRules rejects invalid enum filters before Prisma receives them', async () => {
   let queried = false;
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityRule: {
         findMany: async () => {
           queried = true;
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -257,7 +258,7 @@ test('refreshSlaBreachMarkers is the explicit write path for SLA breach markers'
   let breachCreated = false;
   const past = new Date(Date.now() - 60_000);
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityIssue: {
         findMany: async () => [{
           id: 'dq-overdue',
@@ -275,7 +276,7 @@ test('refreshSlaBreachMarkers is the explicit write path for SLA breach markers'
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -290,7 +291,7 @@ test('refreshSlaBreachMarkers is the explicit write path for SLA breach markers'
 test('listRules applies data-scope filtering to rule registry reads', async () => {
   let ruleWhere: unknown;
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: {
         findMany: async () => [{ id: 'visible-asset' }],
       },
@@ -300,7 +301,7 @@ test('listRules applies data-scope filtering to rule registry reads', async () =
           return [];
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({
@@ -317,7 +318,7 @@ test('listRules applies data-scope filtering to rule registry reads', async () =
 
 test('createRule rejects global rules for scoped users', async () => {
   const service = new DataQualityService(
-    {} as never,
+    Object.assign({} as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({
@@ -336,14 +337,14 @@ test('createRule rejects global rules for scoped users', async () => {
 
 test('transitionRule rejects rules outside scoped user assets', async () => {
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: {
         findMany: async () => [{ id: 'visible-asset' }],
       },
       dataQualityRule: {
         findFirst: async () => ({ id: 'rule-hidden', assetId: 'hidden-asset', domainId: null }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({
@@ -362,11 +363,11 @@ test('transitionRule rejects rules outside scoped user assets', async () => {
 
 test('update rejects closing through the generic issue patch endpoint', async () => {
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityIssue: {
         findFirst: async () => ({ id: 'dq-1', status: 'in_progress', assetId: null, detectedAt: new Date(), evidence: [] }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -390,7 +391,7 @@ test('close delegates linked workflow closure to the workflow engine', async () 
     dataQualitySlaBreach: { updateMany: async () => ({ count: 0 }) },
   };
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityIssue: {
         findFirst: async () => ({
           id: 'dq-1',
@@ -403,7 +404,7 @@ test('close delegates linked workflow closure to the workflow engine', async () 
         }),
       },
       $transaction: async (callback: any) => callback(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -427,7 +428,7 @@ test('close delegates linked workflow closure to the workflow engine', async () 
 
 test('transitionRule prevents creators from approving their own rule', async () => {
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataQualityRule: {
         findFirst: async () => ({
           id: 'rule-1',
@@ -437,7 +438,7 @@ test('transitionRule prevents creators from approving their own rule', async () 
           createdBy: 'creator@dgop.local',
         }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     {} as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -452,9 +453,9 @@ test('transitionRule prevents creators from approving their own rule', async () 
 
 test('importCsv does not distinguish hidden asset codes from unavailable codes', async () => {
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [] },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: 'all', maxClassRank: null }),
@@ -476,7 +477,7 @@ test('importCsv does not distinguish hidden asset codes from unavailable codes',
 test('importCsv rejects invalid enum values before creating issue rows', async () => {
   let createCalled = false;
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [] },
       dataQualityIssue: {
         create: async () => {
@@ -484,7 +485,7 @@ test('importCsv rejects invalid enum values before creating issue rows', async (
           return { id: 'bad-row' };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -507,9 +508,9 @@ test('importCsv rejects invalid enum values before creating issue rows', async (
 test('importCsv normalizes friendly enum casing for CSV operators', async () => {
   let capturedDto: any = null;
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [] },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -638,10 +639,10 @@ test('runProfilingEngine persists a profile, six dimension scores, and draft rul
     },
   };
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataDomain: { findFirst: async () => ({ id: 'domain-finance' }) },
       $transaction: async (callback: any) => callback(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     { log: async (entry: any) => audits.push(entry), logRequired: async (entry: any) => audits.push(entry) } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -688,10 +689,10 @@ test('runProfilingEngine can turn profiling anomalies into data quality issues',
     dataQualityRuleVersion: { create: async () => ({}) },
   };
   const service = new DataQualityService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [], findFirst: async () => ({ id: 'asset-patients' }) },
       $transaction: async (callback: any) => callback(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["data_quality_rules.edit"]),fixtureRole("dq_steward",["data_quality_rules.edit"])])}) as never,
     { log: async () => undefined, logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),

@@ -28,20 +28,29 @@ export async function testGovernanceFunctionalStability(db: PrismaClient): Promi
   const scope: any = { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) };
   const audit = new AuditService(db as any);
   const prefix = 'FST-' + Date.now();
+  const responsibilityGrants: Record<string, string[]> = { dmo_admin: ['business_value.edit', 'data_quality_rules.edit', 'extended_domains.edit', 'evidence.review'], dq_steward: ['extended_domains.edit'], data_owner: ['data_sharing_requests.edit'], security_officer: ['security_governance.edit'], foi_officer: ['foi_requests.edit'], privacy_officer: ['privacy_operations.edit'] };
+  const businessRoleIds: string[] = [];
+  for (const [code, grants] of Object.entries(responsibilityGrants)) {
+    const role = await db.role.upsert({ where: { code }, update: {}, create: { code, nameEn: 'Synthetic ' + code, nameAr: 'مسؤولية تجريبية', isSystem: true } }); businessRoleIds.push(role.id);
+    for (const grant of grants) { const at = grant.lastIndexOf('.'), resource = grant.slice(0, at), action = grant.slice(at + 1); const permission = await db.permission.upsert({ where: { resource_action: { resource, action } }, update: {}, create: { resource, action } }); await db.rolePermission.upsert({ where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } }, update: {}, create: { roleId: role.id, permissionId: permission.id } }); }
+  }
   const makeUser = async (suffix: string) => db.user.create({ data: { email: prefix.toLowerCase() + '-' + suffix + '@example.test', displayName: 'Synthetic functional reviewer', passwordHash: 'test-only-unusable' } });
   const creator = await makeUser('creator'), reviewer = await makeUser('reviewer'), other = await makeUser('other');
+  await db.userRole.createMany({ data: [creator, reviewer, other].flatMap(user => businessRoleIds.map(roleId => ({ userId: user.id, roleId }))) });
   const person = await db.person.create({ data: { email: reviewer.email, userId: reviewer.id, fullNameEn: 'Synthetic reviewer', fullNameAr: 'مراجع تجريبي' } });
   const asset = await db.dataAsset.create({ data: { code: prefix, nameEn: 'Synthetic regression asset', nameAr: 'أصل تجريبي', lifecycleStatus: 'active' } });
   const business = new BusinessValueService(db as any, audit, scope);
   const term = await db.businessGlossaryTerm.create({ data: { code: prefix, termEn: 'Synthetic term', definition: 'Synthetic governance definition', createdBy: creator.email, status: 'under_review', assetId: asset.id } });
-  await assert.rejects(() => business.decideGlossaryTerm(['system_admin'], term.id, { status: 'approved' }, creator.email), /creators cannot/);
+  await assert.rejects(() => business.decideGlossaryTerm(['system_admin'], term.id, { status: 'approved' }, creator.email), /explicit live eligible/);
+  await assert.rejects(() => business.decideGlossaryTerm(['dmo_admin'], term.id, { status: 'approved' }, creator.email), /creators cannot/);
   await business.decideGlossaryTerm(['dmo_admin'], term.id, { status: 'approved' }, reviewer.email);
   const draft = await db.businessGlossaryTerm.create({ data: { code: prefix + '-DRAFT', termEn: 'Draft term', definition: 'Draft', createdBy: creator.email, assetId: asset.id } });
   await assert.rejects(() => business.decideGlossaryTerm(['dmo_admin'], draft.id, { status: 'approved' }, reviewer.email), /preceding review/);
   const quality = new DataQualityService(db as any, audit, scope);
   const rule: any = await quality.createRule(['system_admin'], { nameEn: 'Synthetic quality rule', nameAr: 'قاعدة تجريبية', assetId: asset.id, definitionJson: { type: 'not_null' } }, creator.email);
   await quality.transitionRule(rule.id, ['system_admin'], 'submit', {}, creator.email);
-  await assert.rejects(() => quality.transitionRule(rule.id, ['system_admin'], 'approve', {}, creator.email), /creators cannot/);
+  await assert.rejects(() => quality.transitionRule(rule.id, ['system_admin'], 'approve', {}, creator.email), /explicit live eligible/);
+  await assert.rejects(() => quality.transitionRule(rule.id, ['dmo_admin'], 'approve', {}, creator.email), /creators cannot/);
   const lifecycle = await db.assetLifecycleDecision.create({ data: { code: prefix, assetId: asset.id, currentStatus: 'active', proposedStatus: 'retired', createdBy: creator.email } });
   await assert.rejects(() => business.decideLifecycle(['dmo_admin'], lifecycle.id, { status: 'implemented' }, reviewer.email), /preceding review/);
   await business.decideLifecycle(['dmo_admin'], lifecycle.id, { status: 'approved' }, reviewer.email);
@@ -111,7 +120,7 @@ export async function testGovernanceFunctionalStability(db: PrismaClient): Promi
     } })));
     const value = target[key]; return typeof value === 'function' ? value.bind(target) : value;
   } });
-  await assert.rejects(() => new SecurityGovernanceService(racingGrantDb as any, audit, scope).updateReviewItem(item.id, ['system_admin'], { decision: 'shorten_expiry', newExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), justification: 'Synthetic stale review' }, creator.email), (error: any) => error.getStatus() === 409);
+  await assert.rejects(() => new SecurityGovernanceService(racingGrantDb as any, audit, scope).updateReviewItem(item.id, ['security_officer'], { decision: 'shorten_expiry', newExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), justification: 'Synthetic stale review' }, creator.email), (error: any) => error.getStatus() === 409);
   assert.equal((await db.accessGrant.findUniqueOrThrow({ where: { id: grant.id } })).expiresAt?.toISOString(), newerExpiry.toISOString());
   assert.equal((await db.accessReviewItem.findUniqueOrThrow({ where: { id: item.id } })).decision, 'pending');
   assert.equal(await db.auditLog.count({ where: { action: 'access_review_item.decide', entityId: item.id } }), 0);
@@ -124,7 +133,8 @@ export async function testGovernanceFunctionalStability(db: PrismaClient): Promi
   await extended.decideReferenceVersion(['dmo_admin'], reference.id, { decision: 'activate' }, other.email);
   assert.equal((await db.referenceDataVersion.findUniqueOrThrow({ where: { id: reference.id } })).approvedBy, reviewer.email);
   const certification = await db.metadataCertification.create({ data: { code: prefix, assetId: asset.id, createdBy: creator.email } });
-  await assert.rejects(() => extended.saveCertification(['system_admin'], certification.id, { status: 'certified' }, reviewer.email), /required certification checks/);
+  await assert.rejects(() => extended.saveCertification(['system_admin'], certification.id, { status: 'certified' }, reviewer.email), /explicit live eligible/);
+  await assert.rejects(() => extended.saveCertification(['dmo_admin'], certification.id, { status: 'certified' }, reviewer.email), /required certification checks/);
   await assert.rejects(() => extended.saveCertification(['dq_steward'], certification.id, { status: 'certified', qualityScore: 100, completenessScore: 100, ownerConfirmed: true, glossaryAligned: true, lineageReviewed: true }, reviewer.email), /current operational proof/);
   const parsed = parseMdmRule({ sameFields: ['domainId'] }, { name: 100 }, { strategy: 'candidate' });
   assert.throws(() => parseMdmRule({ unsupported: true }, {}, null), /Supported blocking/);
@@ -204,7 +214,8 @@ export async function testGovernanceFunctionalStability(db: PrismaClient): Promi
 
   const sharing = new DataSharingService(db as any, audit, scope);
   const sharingRequest = await db.dataSharingRequest.create({ data: { requestNumber: prefix, requesterOrg: 'Synthetic requester', recipientOrg: 'Approved recipient', purpose: 'Approved purpose', status: 'approved', assetId: asset.id, createdBy: creator.email } });
-  await assert.rejects(() => sharing.saveReview(['system_admin'], sharingRequest.id, { step: 'owner', decision: 'approved' }, creator.email), /creators cannot/);
+  await assert.rejects(() => sharing.saveReview(['system_admin'], sharingRequest.id, { step: 'owner', decision: 'approved' }, creator.email), /explicit live eligible/);
+  await assert.rejects(() => sharing.saveReview(['data_owner'], sharingRequest.id, { step: 'owner', decision: 'approved' }, creator.email), /creators cannot/);
   await assert.rejects(() => sharing.createAgreement(['system_admin'], { requestId: sharingRequest.id, recipientOrg: 'Different recipient', purpose: 'Approved purpose' }, reviewer.email), /terms must match/);
   await assert.rejects(() => sharing.createAgreement(['system_admin'], { recipientOrg: 'Recipient', purpose: 'Purpose', status: 'active' }, reviewer.email), /approved request/);
   const agreement = await sharing.createAgreement(['system_admin'], { requestId: sharingRequest.id, recipientOrg: sharingRequest.recipientOrg, purpose: sharingRequest.purpose }, reviewer.email);
@@ -243,7 +254,7 @@ export async function testGovernanceFunctionalStability(db: PrismaClient): Promi
   const openCandidate: any = await db.openDataCandidate.create({ data: { code: prefix, titleEn: 'Synthetic open dataset', titleAr: 'بيانات تجريبية', assetId: asset.id, status: 'approved', eligibilityScore: 100, eligibilityJson: { overallSignal: 'ready', classificationRank: 1 }, createdBy: creator.email }, include: { asset: { include: { classification: true } } } });
   const generatedId: string = await db.$transaction((tx) => (open as any).createOpenDataSystemEvidence(tx, openCandidate, reviewer.email, 'publication', { syncStatus: 'simulated' }));
   assert.equal((await db.ndiEvidence.findUniqueOrThrow({ where: { id: generatedId } })).provenance, 'generated_simulation');
-  await assert.rejects(() => (open as any).assertApprovalAuthority(['system_admin'], openCandidate, { step: 'odiao' }, creator.email), /own Open Data/);
+  await assert.rejects(() => (open as any).assertApprovalAuthority(['system_admin'], openCandidate, { step: 'odiao' }, creator.email), /explicit live eligible/);
   await assert.rejects(() => open.publish(['system_admin'], openCandidate.id, {}, reviewer.email), /eligibility must be ready/);
 
   // Verify complete population and the actual PDF container past the old limits.

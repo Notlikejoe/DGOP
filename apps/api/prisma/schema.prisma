@@ -14,6 +14,10 @@ datasource db {
 model Role {
   id                    String                @id @default(uuid())
   code                  String                @unique
+  /// Immutable workflow responsibility; grants and scope remain on this actual role.
+  businessRoleCode      String?
+  businessRole          Role?                 @relation("BusinessResponsibility", fields: [businessRoleCode], references: [code], onDelete: Restrict, onUpdate: Restrict, map: "roles_businessRoleCode_fkey")
+  departmentalRoles     Role[]                @relation("BusinessResponsibility")
   nameEn                String
   nameAr                String
   description           String?
@@ -32,6 +36,7 @@ model Role {
   abacDecisions         AbacDecisionLog[]
   trainingRequirements  TrainingRequirement[]
 
+  @@index([businessRoleCode], map: "roles_businessRoleCode_idx")
   @@map("roles")
 }
 
@@ -1624,6 +1629,9 @@ model TrainingAssignment {
   evidenceNote String?
   assignedBy   String?
   source       String                   @default("manual")
+  renewedFromId String?                  @unique
+  renewedFrom TrainingAssignment?        @relation("TrainingRenewal", fields: [renewedFromId], references: [id], onDelete: Restrict)
+  renewal TrainingAssignment?           @relation("TrainingRenewal")
   course       TrainingCourse           @relation(fields: [courseId], references: [id], onDelete: Cascade)
   user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   person       Person?                  @relation(fields: [personId], references: [id], onDelete: SetNull)
@@ -1675,6 +1683,8 @@ model CertificationAttempt {
   renewalDueAt    DateTime?
   evidenceNote    String?
   assessor        String?
+  qualificationType String?
+  verificationProof Json?
   createdAt       DateTime                   @default(now())
   updatedAt       DateTime                   @updatedAt
   track           CertificationTrack         @relation(fields: [trackId], references: [id], onDelete: Cascade)
@@ -4055,6 +4065,7 @@ model MdmMatchRule {
 }
 
 model MdmGoldenRecord {
+  version Int @default(1)
   id                    String                @id @default(uuid())
   code                  String                @unique
   assetId               String?
@@ -4166,6 +4177,11 @@ model ArchitectureReview {
   reviewType           String                     @default("data_model")
   title                String
   decision             ArchitectureReviewDecision @default(pending)
+  version              Int                        @default(1)
+  decisionProof        Json?
+  previousReviewId     String?
+  previousReview       ArchitectureReview?        @relation("ArchitectureRevision", fields: [previousReviewId], references: [id], onDelete: Restrict)
+  revisions            ArchitectureReview[]       @relation("ArchitectureRevision")
   architectureDecision String?
   lineageImpact        String?
   riskLevel            String                     @default("medium")
@@ -4186,6 +4202,7 @@ model ArchitectureReview {
   @@index([decision])
   @@index([workflowCaseId])
   @@index([evidenceId])
+  @@index([previousReviewId])
   @@map("architecture_reviews")
 }
 
@@ -4316,6 +4333,10 @@ model DataAssetValuation {
   useCase       String
   valueDriver   String?
   annualValue   Float            @default(0)
+  version       Int              @default(1)
+  actualAnnualValue Float?
+  measuredAt    DateTime?
+  realizationProof Json?
   roiPercent    Int              @default(0)
   adoptionScore Int              @default(0)
   surveyScore   Int              @default(0)

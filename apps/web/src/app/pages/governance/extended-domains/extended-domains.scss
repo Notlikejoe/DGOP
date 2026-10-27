@@ -185,3 +185,8 @@
     grid-template-columns: 1fr;
   }
 }
+
+.golden-fields { grid-column:1 / -1; display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:.4rem;min-width:0; }
+.golden-fields dd { margin:0;overflow-wrap:anywhere; }
+.actions app-approved-evidence-picker { flex:1 1 100%;min-width:0; }
+.actions label { display:grid;max-width:100%;flex:1 1 100%; }

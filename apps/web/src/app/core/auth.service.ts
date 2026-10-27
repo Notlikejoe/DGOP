@@ -152,6 +152,14 @@ export class AuthService {
     return perms.includes('*') || perms.includes(permission);
   }
   async refreshAiCapabilities(): Promise<void> { await this.refreshAccess(); }
+  hasBusinessPermission(permission:string):boolean {
+    const user=this.currentUser();
+    const grants=user?.businessPermissions??(user?.roles.some(r=>r.code==='system_admin')?[]:user?.permissions??[]);
+    return grants.includes(permission);
+  }
+  hasBusinessRole(codes:string[]):boolean {
+    return this.currentUser()?.roles.some(role=>codes.includes(role.businessRoleCode??role.code))??false;
+  }
   hasAiPermission(permission: string): boolean { return this.aiCapabilities()?.permissions.includes(permission) ?? false; }
   hasAiScreen(screen: keyof AiCapabilities['screens']): boolean { return this.aiCapabilities()?.screens[screen] ?? false; }
   canAccessPage(url: string): boolean { return canAccessPage(this, url); }

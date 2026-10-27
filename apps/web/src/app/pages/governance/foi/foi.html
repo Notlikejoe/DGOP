@@ -167,10 +167,10 @@
                 </article>
               }
             </div>
-            @if (canEdit) {
+            @if (request.allowedReviewTypes?.length) {
               <div class="action-form action-form--compact">
-                <select class="inline-select" [ngModel]="reviewDraft().reviewType" (ngModelChange)="patchReviewDraft('reviewType', $event)">
-                  @for (type of reviewTypes(); track type) { <option [value]="type">{{ t('foi.reviewType.' + type) }}</option> }
+                <select class="inline-select" [ngModel]="reviewTypeFor(request)" (ngModelChange)="patchReviewDraft('reviewType', $event)">
+                  @for (type of request.allowedReviewTypes; track type) { <option [value]="type">{{ t('foi.reviewType.' + type) }}</option> }
                 </select>
                 <input type="text" [ngModel]="reviewDraft().evidenceSummary" (ngModelChange)="patchReviewDraft('evidenceSummary', $event)" [placeholder]="t('foi.review.evidence')" />
                 <button type="button" class="ds-btn ds-btn--ghost" [disabled]="saving()" (click)="saveReview(request)">{{ t('foi.review.complete') }}</button>
@@ -205,7 +205,7 @@
                 <h3>{{ t('foi.decision.title') }}</h3>
                 <p>{{ request.decisionSummary || t('foi.decision.help') }}</p>
               </div>
-              @if (canEdit) {
+              @if (request.canDecide) {
                 <div class="action-form">
                   <select class="inline-select" [ngModel]="decisionDraft().outcome" (ngModelChange)="patchDecisionDraft('outcome', $event)">
                     @for (decision of decisions(); track decision) { <option [value]="decision">{{ t('foi.decision.' + decision) }}</option> }

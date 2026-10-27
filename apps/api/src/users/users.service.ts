@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { liveRoleWhere } from '../auth/business-roles';
 import { AuditService } from '../audit/audit.service';
 import {
   CreateUserDto,
@@ -26,21 +27,21 @@ export class UsersService {
   findByEmailWithRoles(email: string) {
     return this.prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
-      include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
+      include: { userRoles: { where: { role: liveRoleWhere() }, include: { role: {include:{businessRole:true}} } } },
     });
   }
 
   findByIdWithRoles(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
-      include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
+      include: { userRoles: { where: { role: liveRoleWhere() }, include: { role: {include:{businessRole:true}} } } },
     });
   }
 
   async listUsers(page?: string | number, pageSize?: string | number) {
     const query = {
       orderBy: { createdAt: 'asc' as const },
-      include: { userRoles: { where: { role: { isActive: true, deletedAt: null } }, include: { role: true } } },
+      include: { userRoles: { where: { role: liveRoleWhere() }, include: { role: {include:{businessRole:true}} } } },
     };
     const params = parsePageParams(page, pageSize);
     if (!params) {

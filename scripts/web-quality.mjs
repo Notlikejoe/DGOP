@@ -124,13 +124,7 @@ const genericHttpErrors = files
   .filter((file) => file.endsWith('.ts'))
   .flatMap((file) => {
     const text = read(file);
-    const matches = [
-      ...text.matchAll(/error:\s*\([^)]*\)\s*=>[\s\S]{0,250}?this\.toast\.error\(/gu),
-    ];
-    return matches.map((match) => {
-      const line = text.slice(0, match.index).split(/\r?\n/u).length;
-      return `${relative(root, file)}:${line}`;
-    });
+    return genericToastErrorCallbacks(file,text).map(line => `${relative(root, file)}:${line}`);
   });
 if (genericHttpErrors.length) {
   fail(
@@ -185,3 +179,4 @@ if (!process.exitCode) {
 } else {
   console.error(`Web quality checks failed under ${relative(root, appDir)}.`);
 }
+import { genericToastErrorCallbacks } from './api-route-scan.mjs';

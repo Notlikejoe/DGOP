@@ -28,7 +28,7 @@ export class AiOperationalAlertsService {
   return await emitAiNotice(tx,this.audit,{...input,variables:await aiVariables(tx,input.caseId,input.variables)})?1:0;
  }
  private async recipients(tx:Prisma.TransactionClient,riskId:string,roles:string[],exactId?:string){
-  const users=await tx.user.findMany({where:{isActive:true,...(exactId?{id:exactId}:{}),userRoles:{some:{role:{is:{code:{in:roles},isActive:true,deletedAt:null}}},none:{role:{is:{code:'auditor',isActive:true,deletedAt:null}}}}},select:{id:true}});
+  const users=await tx.user.findMany({where:{isActive:true,...(exactId?{id:exactId}:{}),userRoles:{some:{role:{is:responsibilityWhere(roles)}},none:{role:{is:{code:'auditor',isActive:true,deletedAt:null}}}}},select:{id:true}});
   const result:Array<{id:string;role:string}>=[];
   for(const u of users){try{const access=await this.risks.visibility(u.id,tx);
    const role=roles.find(r=>access.actor.roles.includes(r)&&(r==='AI_GOVERNANCE_OFFICER'?access.permissionRoles['case.view.airs.org']:access.permissionRoles['airs.risk.assess'])?.includes(r));
@@ -107,3 +107,4 @@ export class AiOperationalAlertsService {
   return {created,archived,externalDelivery:false};
  }
 }
+import { responsibilityWhere } from '../auth/business-roles';

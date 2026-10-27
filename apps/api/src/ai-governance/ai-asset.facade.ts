@@ -16,7 +16,7 @@ export class AiAssetFacade {
       tx.classification.findFirst({ where: { id: proposal.classificationId, isActive: true, deletedAt: null } }),
       tx.dataDomain.findFirst({ where: { id: proposal.domainId, isActive: true, deletedAt: null } }),
       tx.organizationUnit.findFirst({ where: { id: context.organizationUnitId, isActive: true, deletedAt: null } }),
-      this.scope.resolve(roles),
+      this.scope.resolve(roles,tx),
     ]);
     if (!classification || !domain || !org) throw new BadRequestException('Active asset classification, domain and owning department are required');
     if ((scope.orgUnits !== 'all' && !scope.orgUnits.includes(org.id))

@@ -50,13 +50,13 @@ export class OpenDataController {
       page: page ?? '1',
       pageSize: pageSize ?? '25',
     };
-    return this.service.list(user.roles, filters);
+    return this.service.list(user.roles, filters,user.email);
   }
 
   @Get(':id')
   @RequirePermissions('open_data_candidates.view')
   get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.get(user.roles, id);
+    return this.service.get(user.roles, id,user.email);
   }
 
   @Post()

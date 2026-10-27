@@ -35,6 +35,29 @@ describe('Live protected-page boundary',()=>{
     const loaded=auth.bootstrap();http.expectOne('/api/auth/session').flush(profile);await loaded;
   });
   afterEach(()=>{auth.clearSession();http.verify();vi.unstubAllGlobals();});
+  it('opens an interactive mobile search synchronously and retains its query on reopen and unchanged access',async()=>{
+    const harness=await RouterTestingHarness.create('/about');
+    const shell=harness.routeDebugElement!.componentInstance as Shell;
+    (shell as any).compactNav.set(true);harness.detectChanges();
+    const sidebar=harness.routeNativeElement!.querySelector<HTMLElement>('.shell__sidebar')!;
+    expect(sidebar.hasAttribute('inert')).toBe(true);
+    harness.routeNativeElement!.querySelector<HTMLButtonElement>('.topbar__nav-toggle')!.click();
+    // No fixture render or delay between the opening event and checking interactivity.
+    expect(sidebar.hasAttribute('inert')).toBe(false);
+    const input=sidebar.querySelector<HTMLInputElement>('.nav-search input')!;
+    expect(document.activeElement).toBe(input);
+    input.value='Assets';input.dispatchEvent(new Event('input',{bubbles:true}));harness.detectChanges();
+    sidebar.querySelector<HTMLButtonElement>('.sidebar-close')!.click();harness.detectChanges();
+    harness.routeNativeElement!.querySelector<HTMLButtonElement>('.topbar__nav-toggle')!.click();
+    expect(input.value).toBe('Assets');
+    const refresh=auth.refreshAccess();http.expectOne('/api/auth/session').flush(profile);await refresh;harness.detectChanges();
+    expect(input.value).toBe('Assets');
+    (shell as any).compactNav.set(false);harness.detectChanges();
+    (shell as any).compactNav.set(true);harness.detectChanges();
+    expect(input.value).toBe('Assets');
+    const changed=auth.refreshAccess();http.expectOne('/api/auth/session').flush({...profile,accessRevision:'changed'});await changed;harness.detectChanges();
+    expect(input.value).toBe('');
+  });
   it('recreates an open page after scope changes and cancels its old data request',async()=>{
     const harness=await RouterTestingHarness.create('/assets');const old=http.expectOne('/api/assets');
     const input=harness.routeNativeElement!.querySelector<HTMLInputElement>('input[aria-label=Draft]')!;input.value='unsaved';input.dispatchEvent(new Event('input'));

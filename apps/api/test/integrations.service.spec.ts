@@ -531,6 +531,11 @@ test('default catalog connector bootstrap is idempotent and repairs the catalog 
   assert.strictEqual(jobUpserts[0].create.connectorId, 'catalog-connector-1');
 });
 
+test('explicitly disabled startup preserves existing integration configuration', async () => {
+  const service = serviceWith({});
+  await withEnv('DGOP_INTEGRATION_STARTUP_MAINTENANCE', 'false', () => service.onModuleInit());
+});
+
 test('onModuleInit bootstraps the default integration registry outside read endpoints', async () => {
   const connectorUpserts: any[] = [];
   const jobUpserts: any[] = [];

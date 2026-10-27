@@ -51,6 +51,7 @@ interface AccessMapRow {
 }
 
 interface AccessReviewItem {
+  canDecide?:boolean;
   id: string;
   decision: string;
   justification?: string | null;
@@ -183,7 +184,8 @@ export class SecurityGovernancePage implements OnInit {
   protected readonly simulatorLoading = signal(false);
   protected readonly busy = signal(false);
   protected get canCreate(): boolean { return this.auth.hasPermission('security_governance.create'); }
-  protected get canDecide(): boolean { return this.auth.hasPermission('security_governance.edit'); }
+  protected get canDecide(): boolean { return this.auth.hasBusinessPermission('security_governance.edit'); }
+  protected get canViewRoles(): boolean {return this.auth.hasPermission('roles.view');}
   protected readonly canSimulate =
     this.auth.hasPermission('security_governance.create') &&
     this.auth.hasPermission('access_grants.view') &&

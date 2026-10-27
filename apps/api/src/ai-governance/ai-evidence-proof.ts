@@ -6,6 +6,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { isManagedDemoProfile } from '../common/demo-profile';
 import { DecisionSubject, decisionTarget, evidenceExclusion, proofDigest, requiresAiDecisionProof } from './ai-evidence.logic';
+import { businessRoleCode, liveRoleWhere } from '../auth/business-roles';
 
 export async function verifyEvidenceBytes(row: { fileName: string; sha256: string; sizeBytes: number }) {
   try {
@@ -59,7 +60,21 @@ export async function prepareAiDecisionProof(tx: Prisma.TransactionClient, entry
       expiryDate:row.expiryDate?.toISOString()??null,evidenceUpdatedAt:row.updatedAt.toISOString() };
   });
   const demoOnly = documents.some(row=>row.provenance!=='operational');
+  const actor=await tx.user.findFirst({where:{isActive:true,OR:[{id:entry.actor},{email:entry.actor}]},
+    select:{id:true,userRoles:{where:{role:liveRoleWhere()},select:{role:{select:{id:true,code:true,businessRoleCode:true,maxClassificationRank:true,dataScopes:true}}}}}});
+  if(!actor)throw new BadRequestException('Verified decisions require a current identifiable business actor');
+  const recordedResponsibility=entry.metadata?.['actorRoleCode']??entry.metadata?.['actorRole']??entry.metadata?.['roleCode'];
+  const publishingDecision=/^(airs\.library\.(publish|controls\.review)|ai\.(category\.controls\.review|control\.domain\.publish|source\.corrections\.review|migration\.(preview|pilot)\.review))$/u.test(entry.action);
+  const responsibility=typeof recordedResponsibility==='string'?recordedResponsibility:publishingDecision?'dmo_admin':undefined;
+  const scopeRoleBindings=actor.userRoles.map(r=>r.role).filter(role=>!['system_admin','auditor'].includes(role.code)
+    && (typeof responsibility!=='string'||businessRoleCode(role)===responsibility)).map(role=>({roleId:role.id,roleCode:role.code,
+      businessRoleCode:businessRoleCode(role),maxClassificationRank:role.maxClassificationRank,
+      scopes:role.dataScopes.map(s=>({scopeType:s.scopeType,refId:s.refId,includeDescendants:s.includeDescendants})).sort((a,b)=>(a.scopeType+a.refId).localeCompare(b.scopeType+b.refId))}));
+  if(!scopeRoleBindings.length)throw new BadRequestException('The evaluated business responsibility has no live scope-role binding');
+  const evaluatedResponsibility=typeof responsibility==='string'?responsibility:scopeRoleBindings.length===1?scopeRoleBindings[0].businessRoleCode:null;
+  if(!evaluatedResponsibility)throw new BadRequestException('The native decision must identify its evaluated business responsibility');
   const snapshot = { policyVersion:1,...target,action:entry.action,actorId:entry.actor,evaluatedAt:evaluatedAt.toISOString(),demoOnly,operationalComplianceCredit:false,
+    evaluatedResponsibility,scopeRoleBindings,
     decisionContext:JSON.parse(JSON.stringify(entry.metadata??{})) as Prisma.InputJsonObject,documents };
   return { ...target,snapshot:snapshot as Prisma.InputJsonObject,digest:proofDigest(snapshot),demoOnly,evaluatedAt };
 }

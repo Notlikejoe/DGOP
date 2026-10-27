@@ -1,3 +1,4 @@
+import { businessDecisionRoles } from '../auth/business-roles';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   CaseStatus,
@@ -15,7 +16,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite } from '../common/governance-write';
-import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateDataSharingAgreementDto,
   CreateDataSharingRequestDto,
@@ -265,7 +265,20 @@ export class DataSharingService {
     };
   }
 
-  async listRequests(roleCodes: string[], filters: DataSharingFilters) {
+  private async reviewActions(rows: SharingRequestWithInclude[], roleCodes: string[], actor?: string) {
+    const allowed = new Map<string, Set<string>>();
+    const person = actor && rows.length ? await this.prisma.person.findFirst({ where: { isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } }) : null;
+    if (person) for (const [step, eligible] of Object.entries({ owner: ['data_owner'], privacy: ['privacy_officer'], security: ['security_officer'], technical: ['technical_steward', 'data_custodian'] })) {
+      try {
+        const roles = await businessDecisionRoles(this.prisma, roleCodes, 'data_sharing_requests.edit', eligible), scope = await this.scope.resolve(roles), assets = await this.visibleAssetIds(roles, scope);
+        const visible = await this.prisma.dataSharingRequest.findMany({ where: { AND: [this.requestScopeWhere(scope, assets), { id: { in: rows.map(row => row.id) } }] }, select: { id: true } });
+        allowed.set(step, new Set(visible.map(row => row.id)));
+      } catch (error) { if (!(error instanceof ForbiddenException)) throw error; }
+    }
+    return rows.map(row => ({ ...this.decorateRequest(row), allowedReviewSteps: person && row.createdBy !== actor && ['draft', 'under_review', 'needs_changes'].includes(row.status) ? row.reviews.filter(review => review.decision === 'pending' && review.reviewerPersonId === person.id && allowed.get(review.step)?.has(row.id)).map(review => review.step) : [] }));
+  }
+
+  async listRequests(roleCodes: string[], filters: DataSharingFilters, actor?: string) {
     const scope = await this.scope.resolve(roleCodes);
     const assetIds = await this.visibleAssetIds(roleCodes, scope);
     const pageParams = parsePageParams(filters.page, filters.pageSize)!;
@@ -284,10 +297,10 @@ export class DataSharingService {
       this.prisma.dataSharingRequest.findMany({ where, include: requestInclude, orderBy: [{ riskScore: 'desc' }, { updatedAt: 'desc' }], skip, take }),
       this.prisma.dataSharingRequest.count({ where }),
     ]);
-    return toPaged(rows.map((row) => this.decorateRequest(row)), total, pageParams);
+    return toPaged(await this.reviewActions(rows, roleCodes, actor), total, pageParams);
   }
 
-  async getRequest(roleCodes: string[], id: string) {
+  async getRequest(roleCodes: string[], id: string, actor?: string) {
     const scope = await this.scope.resolve(roleCodes);
     const assetIds = await this.visibleAssetIds(roleCodes, scope);
     const row = await this.prisma.dataSharingRequest.findFirst({
@@ -295,11 +308,20 @@ export class DataSharingService {
       include: requestInclude,
     });
     if (!row) throw new NotFoundException('data sharing request not found');
-    return this.decorateRequest(row);
+    return (await this.reviewActions([row], roleCodes, actor))[0];
   }
 
-  async createRequest(roleCodes: string[], dto: CreateDataSharingRequestDto, actor: string) {
-    const asset = await this.assertScopedWriteTarget(roleCodes, dto.assetId, dto.domainId, 'Data sharing request');
+  async createRequest(
+    roleCodes: string[],
+    dto: CreateDataSharingRequestDto,
+    actor: string,
+  ) {
+    const asset = await this.assertScopedWriteTarget(
+      roleCodes,
+      dto.assetId,
+      dto.domainId,
+      'Data sharing request',
+    );
     await this.assertOptionalReferences(roleCodes, dto);
     const risk = calculateSharingRisk({
       classificationRank: asset?.classification?.rank ?? null,
@@ -308,44 +330,76 @@ export class DataSharingService {
       hasMasking: Boolean(dto.maskingPolicyId),
       hasLegalBasis: Boolean(dto.legalBasisId),
     });
-    return this.prisma.$transaction(async (tx) => {
-      const requestNumber = await this.nextCode(tx, 'dataSharingRequest', 'requestNumber', 'DSI');
-      const request = await tx.dataSharingRequest.create({
-        data: {
-          requestNumber,
-          requesterOrg: dto.requesterOrg,
-          recipientOrg: dto.recipientOrg,
-          purpose: dto.purpose,
-          legalBasisId: dto.legalBasisId || null,
-          assetId: dto.assetId || null,
-          domainId: dto.domainId ?? asset?.domainId ?? null,
-          classificationId: dto.classificationId ?? asset?.classificationId ?? null,
-          maskingPolicyId: dto.maskingPolicyId || null,
-          roleDataAccessMapId: dto.roleDataAccessMapId || null,
-          consentRequired: dto.consentRequired ?? false,
-          crossBorderTransfer: dto.crossBorderTransfer ?? false,
-          status: DataSharingRequestStatus.under_review,
-          riskScore: risk.riskScore,
-          requiredControlsJson: risk.controls,
-          createdBy: actor,
-        },
-        select: { id: true, requestNumber: true, purpose: true, assetId: true },
-      });
-      for (const step of DATA_SHARING_REVIEW_STEPS) {
-        await tx.dataSharingReview.create({
-          data: { requestId: request.id, step, decision: DataSharingReviewDecision.pending, createdBy: actor },
+    return this.prisma
+      .$transaction(async (tx) => {
+        const requestNumber = await this.nextCode(
+          tx,
+          'dataSharingRequest',
+          'requestNumber',
+          'DSI',
+        );
+        const request = await tx.dataSharingRequest.create({
+          data: {
+            requestNumber,
+            requesterOrg: dto.requesterOrg,
+            recipientOrg: dto.recipientOrg,
+            purpose: dto.purpose,
+            legalBasisId: dto.legalBasisId || null,
+            assetId: dto.assetId || null,
+            domainId: dto.domainId ?? asset?.domainId ?? null,
+            classificationId:
+              dto.classificationId ?? asset?.classificationId ?? null,
+            maskingPolicyId: dto.maskingPolicyId || null,
+            roleDataAccessMapId: dto.roleDataAccessMapId || null,
+            consentRequired: dto.consentRequired ?? false,
+            crossBorderTransfer: dto.crossBorderTransfer ?? false,
+            status: DataSharingRequestStatus.under_review,
+            riskScore: risk.riskScore,
+            requiredControlsJson: risk.controls,
+            createdBy: actor,
+          },
+          select: {
+            id: true,
+            requestNumber: true,
+            purpose: true,
+            assetId: true,
+          },
         });
-      }
-      const workflowCaseId = await this.createWorkflow(tx, request, roleCodes, actor);
-      await tx.dataSharingRequest.update({ where: { id: request.id }, data: { workflowCaseId } });
-      await this.audit.log({
-        actor,
-        action: 'data_sharing_request.create',
-        entityType: 'data_sharing_request',
-        entityId: request.id,
-      }, tx);
-      return tx.dataSharingRequest.findUniqueOrThrow({ where: { id: request.id }, include: requestInclude });
-    }).then((row) => this.decorateRequest(row));
+        for (const step of DATA_SHARING_REVIEW_STEPS) {
+          await tx.dataSharingReview.create({
+            data: {
+              requestId: request.id,
+              step,
+              decision: DataSharingReviewDecision.pending,
+              createdBy: actor,
+            },
+          });
+        }
+        const workflowCaseId = await this.createWorkflow(
+          tx,
+          request,
+          roleCodes,
+          actor,
+        );
+        await tx.dataSharingRequest.update({
+          where: { id: request.id },
+          data: { workflowCaseId },
+        });
+        await this.audit.logRequired(
+          {
+            actor,
+            action: 'data_sharing_request.create',
+            entityType: 'data_sharing_request',
+            entityId: request.id,
+          },
+          tx,
+        );
+        return tx.dataSharingRequest.findUniqueOrThrow({
+          where: { id: request.id },
+          include: requestInclude,
+        });
+      })
+      .then((row) => this.decorateRequest(row));
   }
 
   async updateRequest(roleCodes: string[], id: string, dto: UpdateDataSharingRequestDto, actor: string) {
@@ -367,9 +421,9 @@ export class DataSharingService {
   }
 
   async saveReview(roleCodes: string[], id: string, dto: SaveDataSharingReviewDto, actor: string) {
+    if(dto.decision&&dto.decision!==DataSharingReviewDecision.pending){const eligible:Record<string,string[]>={owner:['data_owner'],privacy:['privacy_officer'],security:['security_officer'],technical:['technical_steward','data_custodian']};roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'data_sharing_requests.edit',eligible[dto.step]??[]);}
     const request = await this.getRequest(roleCodes, id);
-    const administratorOverride = isSystemAdministrator(roleCodes);
-    if (!administratorOverride && dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
+    if (dto.decision && dto.decision !== DataSharingReviewDecision.pending && request.createdBy === actor) {
       throw new ForbiddenException('Request creators cannot approve or reject their own data sharing request');
     }
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
@@ -382,10 +436,10 @@ export class DataSharingService {
     const assigned = previous?.reviewerPersonId;
     if (deciding) {
       const roles: Record<string, readonly string[]> = { owner: ['data_owner'], privacy: ['privacy_officer'], security: ['security_officer'], technical: ['technical_steward', 'data_custodian'] };
-      if (!administratorOverride && !roleCodes.some((role) => roles[dto.step]?.includes(role))) throw new ForbiddenException('An eligible business role is required for this sharing review step');
-      if (!administratorOverride && (!assigned || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assigned))) throw new BadRequestException('Assign the reviewer before deciding the sharing review');
-      const person = administratorOverride ? null : await tx.person.findFirst({ where: { id: assigned!, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
-      if (!administratorOverride && !person) throw new ForbiddenException('Only the assigned independent reviewer can decide this sharing step');
+      // Eligibility was resolved from the actual purpose grant before the scoped read.
+      if (!assigned || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== assigned)) throw new BadRequestException('Assign the reviewer before deciding the sharing review');
+      const person = await tx.person.findFirst({ where: { id: assigned, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
+      if (!person) throw new ForbiddenException('Only the assigned independent reviewer can decide this sharing step');
       if (!dto.note?.trim()) throw new BadRequestException('Document the control assessment for this review');
       if (previous?.decision !== DataSharingReviewDecision.pending) throw new BadRequestException('The review already has a decision');
     }
@@ -496,21 +550,41 @@ export class DataSharingService {
     return this.decorateAgreement(row);
   }
 
-  async recordUsage(roleCodes: string[], id: string, dto: CreateDataSharingUsageMetricDto, actor: string) {
+  async recordUsage(
+    roleCodes: string[],
+    id: string,
+    dto: CreateDataSharingUsageMetricDto,
+    actor: string,
+  ) {
     await this.assertAgreementVisible(roleCodes, id);
-    const row = await this.prisma.dataSharingUsageMetric.create({
-      data: {
-        agreementId: id,
-        metricDate: dto.metricDate ? new Date(dto.metricDate) : new Date(),
-        recordsShared: dto.recordsShared ?? 0,
-        apiCalls: dto.apiCalls ?? 0,
-        incidents: dto.incidents ?? 0,
-        status: dto.status ?? usageStatus(dto),
-        note: dto.note ?? null,
-        createdBy: actor,
-      },
+    const status = usageStatus(dto);
+    if (dto.status !== undefined && dto.status !== status)
+      throw new BadRequestException(
+        'Usage status must match its recorded incident and volume metrics',
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.dataSharingUsageMetric.create({
+        data: {
+          agreementId: id,
+          metricDate: dto.metricDate ? new Date(dto.metricDate) : new Date(),
+          recordsShared: dto.recordsShared ?? 0,
+          apiCalls: dto.apiCalls ?? 0,
+          incidents: dto.incidents ?? 0,
+          status,
+          note: dto.note ?? null,
+          createdBy: actor,
+        },
+      });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'data_sharing_usage.create',
+          entityType: 'data_sharing_usage_metric',
+          entityId: row.id,
+        },
+        tx,
+      );
+      return row;
     });
-    await this.audit.log({ actor, action: 'data_sharing_usage.create', entityType: 'data_sharing_usage_metric', entityId: row.id });
-    return row;
   }
 }

@@ -86,7 +86,7 @@ export class WorkflowController {
   @Header('Cache-Control', 'no-store, max-age=0')
   @RequirePermissions('workflow_cases.view')
   templateDesigner(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.getTemplateDesigner(id, user.roles);
+    return this.service.getTemplateDesigner(id, user.roles,user);
   }
 
   @Post('templates/:id/designer/save')

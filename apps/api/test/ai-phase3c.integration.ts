@@ -104,7 +104,7 @@ export async function testPhase3C(db: PrismaClient, f: { riskId: string; riskOwn
   const finalAdoption = context.tasks.find(task => task.kind === 'adoption')!;
   await assert.rejects(failed.review(f.officerId, f.riskId, finalAdoption.id, decision(version)), /Injected adoption audit failure/);
   const adopted = await Promise.allSettled([service.review(f.officerId, f.riskId, finalAdoption.id, decision(version)), service.review(f.officerId, f.riskId, finalAdoption.id, decision(version))]);
-  assert.equal(adopted.filter(value => value.status === 'fulfilled').length, 1); version++;
+  assert.equal(adopted.filter(value => value.status === 'fulfilled').length, 1, JSON.stringify(adopted.map(value => value.status === 'rejected' ? { status: value.status, error: value.reason?.message, response: value.reason?.getResponse?.() } : { status: value.status }))); version++;
   assert.equal((await service.context(f.officerId, f.riskId)).tasks.length, 0);
   assert.equal(await db.workflowTask.count({ where: { caseId: original.workflowCaseId!, status: 'pending', templateStage: { code: AIRS_STAGE.response } } }), 1);
   assert.equal((await db.aiRisk.findUniqueOrThrow({ where: { id: f.riskId } })).version, version);

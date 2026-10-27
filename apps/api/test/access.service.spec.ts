@@ -16,9 +16,8 @@ test('permissionsForRoleCodes grants wildcard only for active system_admin role 
     role: {
       findMany: async (args: any) => {
         assert.deepEqual(args.where, {
-          code: { in: ['system_admin'] },
-          isActive: true,
-          deletedAt: null,
+          AND:[{isActive:true,deletedAt:null,OR:[{businessRoleCode:null},{businessRole:{is:{isActive:true,deletedAt:null,businessRoleCode:null}}}]},
+            {code:{in:['system_admin']}}],
         });
         return [];
       },

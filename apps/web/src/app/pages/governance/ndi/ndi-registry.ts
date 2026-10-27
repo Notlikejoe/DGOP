@@ -143,7 +143,7 @@ export class NdiRegistryPage implements OnInit {
   protected get canImport(): boolean { return this.auth.hasPermission('ndi_specifications.import'); }
   protected get canEvidenceView(): boolean { return this.auth.hasPermission('evidence.view'); }
   protected get canEvidenceCreate(): boolean { return this.auth.hasPermission('evidence.create'); }
-  protected get canEvidenceReview(): boolean { return this.auth.hasPermission('evidence.review'); }
+  protected get canEvidenceReview(): boolean { return this.auth.hasBusinessPermission('evidence.review'); }
   protected get canEvidenceDelete(): boolean { return this.auth.hasPermission('evidence.delete'); }
 
   // ---------- loading ----------
@@ -490,6 +490,7 @@ export class NdiRegistryPage implements OnInit {
   }
 
   protected downloadEvidence(e: NdiEvidence): void {
+    if (e.fileAvailability === 'unavailable') { this.toast.error(this.t('evidence.fileUnavailable')); return; }
     this.http.get(`/api/evidence/${e.id}/file`, { responseType: 'blob' }).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);

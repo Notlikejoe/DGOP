@@ -478,13 +478,13 @@ export class WorkflowPage implements OnInit, AfterViewInit, OnDestroy {
     return 'muted';
   });
   protected readonly canSubmitWorkflowReview = computed(() =>
-    this.auth.hasAnyRole(['system_admin', 'dmo_admin', 'workflow_designer']),
+    this.designer()?.actions?.canSubmitReview === true,
   );
   protected readonly canApproveWorkflowReview = computed(() =>
-    this.auth.hasAnyRole(['system_admin', 'dmo_admin', 'workflow_reviewer']),
+    this.designer()?.actions?.canApproveReview === true,
   );
   protected readonly canPublishWorkflowRoute = computed(() =>
-    this.auth.hasAnyRole(['system_admin', 'dmo_admin', 'workflow_publisher']),
+    this.designer()?.actions?.canPublish === true,
   );
   protected readonly designerPublishGateKind = computed<StatusKind>(() => {
     if (this.designerSaving()) return 'info';

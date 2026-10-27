@@ -37,6 +37,7 @@ import {
   validateWorkflowRoute,
 } from '../src/workflow/workflow.bpmn';
 import { validateWorkflowAutomationConfig } from '../src/workflow/workflow.automation';
+import { fixtureRole, fixtureQueryCodes, liveRoleFixture } from './live-role-fixture';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -91,6 +92,7 @@ type Over = {
   scopeForRoles?: (roleCodes: string[]) => any;
   userRoleCandidates?: any[];
   userRoleCandidatesByRole?: Record<string, any[]>;
+  userRoleFindManyArgs?: any[];
   setCalls?: any[][];
   businessTaskGrant?: boolean;
   attachmentCount?: number;
@@ -100,6 +102,7 @@ type Over = {
 function makeService(over: Over): WorkflowService {
   const prisma: any = {
     $transaction: async (fn: (client: any) => unknown) => fn(prisma),
+    role: liveRoleFixture(() => ['system_admin','auditor','dmo_admin','data_owner','data_steward','dq_steward','workflow_designer','workflow_publisher','workflow_reviewer'].map(code => fixtureRole(code, over.businessTaskGrant === false || ['system_admin','auditor'].includes(code) ? [] : ['workflow_tasks.edit','workflow_cases.edit']))),
     rolePermission: { findFirst: async () => over.businessTaskGrant ? { role: {code:'dmo_admin'} } : null },
     businessSequence: {
       upsert: async () => ({ value: BigInt((over.workflowCases?.length ?? 0) + 1) }),
@@ -349,9 +352,9 @@ function makeService(over: Over): WorkflowService {
     userRole: {
       findFirst: async () => ({ userId: 'u-next' }),
       findMany: async (args: any) => {
-        const roleCode = args.where?.role?.code;
-        if (over.userRoleCandidatesByRole) return over.userRoleCandidatesByRole[roleCode] ?? [];
-        return over.userRoleCandidates ?? [
+        (over.userRoleFindManyArgs??=[]).push(args);
+        const roleCode = fixtureQueryCodes(args.where?.role)[0];
+        const rows = over.userRoleCandidatesByRole ? over.userRoleCandidatesByRole[roleCode] ?? [] : over.userRoleCandidates ?? [
           {
             userId: 'u-next',
             user: {
@@ -359,6 +362,7 @@ function makeService(over: Over): WorkflowService {
             },
           },
         ];
+        return rows.slice(args.skip??0,(args.skip??0)+(args.take??rows.length)).map(row => ({...row, role: row.role ?? {code:roleCode}}));
       },
     },
     user: { findFirst: async () => over.submitter ?? null },
@@ -1486,12 +1490,13 @@ test('workflow designer lifecycle: administrators require independent review and
   const designer = { id: 'admin-designer', email: 'admin-designer@dgop.local', roles: ['system_admin'] };
 
   await svc.submitTemplateReview(template.id, { bpmnXml: xml, comment: 'Ready' }, designer);
-  await assert.rejects(() => svc.approveTemplateReview(template.id, { comment: 'Self approval' }, designer), /different workflow actor/);
+  await assert.rejects(() => svc.approveTemplateReview(template.id, { comment: 'Self approval' }, designer), /Only workflow reviewers/);
+  await assert.rejects(() => svc.approveTemplateReview(template.id, { comment: 'Self approval' }, {...designer,roles:['system_admin','workflow_reviewer']}), /different workflow actor/);
   assert.ok(!over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
   const reviewer = { id: 'admin-reviewer', email: 'admin-reviewer@dgop.local', roles: ['system_admin', 'workflow_reviewer'] };
   const publisher = { id: 'admin-publisher', email: 'admin-publisher@dgop.local', roles: ['system_admin', 'workflow_publisher'] };
   await svc.approveTemplateReview(template.id, { comment: 'Independent administrator review' }, reviewer);
-  await assert.rejects(() => svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Self publish' }, reviewer), /different workflow actor/);
+  await assert.rejects(() => svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Self publish' }, {...reviewer,roles:['system_admin','workflow_reviewer','workflow_publisher']}), /different workflow actor/);
   await svc.publishTemplateBpmn(template.id, { bpmnXml: xml, changeSummary: 'Independent publication' }, publisher);
   assert.equal(over.templateVersionCreates?.length, 1);
   assert.ok(over.auditEntries?.some((entry) => entry.action === 'workflow_template.review.approve'));
@@ -1749,6 +1754,15 @@ test('assignUnownedRoutedTasks preserves governed AIUC role queues', async () =>
   assert.strictEqual(count, 0);
   assert.strictEqual(over.taskUpdates?.length ?? 0, 0);
   assert.strictEqual(over.events?.length ?? 0, 0);
+});
+
+test('assignment examines later pages using the actual responsibility role scope', async () => {
+  const rows=Array.from({length:201},(_,i)=>({userId:'candidate-'+i,role:{code:i===200?'finance_owner':'hr_owner'},user:{_count:{workflowTasks:0},userRoles:[]}}));
+  const over:Over={userRoleCandidates:rows,scopeForRoles:codes=>({orgUnits:'all',domains:codes.includes('finance_owner')?'all':[],maxClassRank:null})};
+  const result=await (makeService(over) as any).firstAssigneeForRole((makeService(over) as any).prisma,'data_owner','finance-asset');
+  assert.equal(result,'candidate-200');
+  assert.deepEqual(over.userRoleFindManyArgs?.map(a=>a.skip),[0,200]);
+  assert(over.userRoleFindManyArgs?.every(a=>a.take===200));
 });
 
 test('dueDateForStage keeps zero-day urgent tasks due through the current day', () => {
@@ -2034,12 +2048,14 @@ test('recordDomainTaskDecision: auto-assigns next stage only to a scoped role ho
     userRoleCandidates: [
       {
         userId: 'u-hidden',
+        role: {code:'hr_data_owner',businessRoleCode:'data_owner'},
         user: {
           userRoles: [{ role: { code: 'data_owner', isActive: true, deletedAt: null } }],
         },
       },
       {
         userId: 'u-visible',
+        role: {code:'finance_data_owner',businessRoleCode:'data_owner'},
         user: {
           userRoles: [
             { role: { code: 'data_owner', isActive: true, deletedAt: null } },
@@ -2049,7 +2065,7 @@ test('recordDomainTaskDecision: auto-assigns next stage only to a scoped role ho
       },
     ],
     scopeForRoles: (roleCodes: string[]) =>
-      roleCodes.includes('system_admin') || roleCodes.includes('finance_scope')
+      roleCodes.includes('system_admin') || roleCodes.includes('finance_data_owner')
         ? { orgUnits: 'all', domains: 'all', maxClassRank: null }
         : { orgUnits: 'all', domains: [], maxClassRank: null },
   };
@@ -2085,7 +2101,7 @@ test('decideTask: required stage evidence blocks approval until evidence exists'
   });
 
   await assert.rejects(
-    () => svc.decideTask('task-evidence', { decision: 'approved', comment: 'Looks fine' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never),
+    () => svc.decideTask('task-evidence', { decision: 'approved', comment: 'Looks fine' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never),
     /attach the required evidence/,
   );
 });
@@ -2117,7 +2133,7 @@ test('workflow inbox saves task form progress as an audited draft', async () => 
   const saved = await svc.saveTaskFormDraft(
     'task-draft',
     { data: { request_summary: 'Draft governance request' } },
-    { id: 'u1', email: 'u1@dgop.local', roles: [] } as never,
+    { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never,
   );
 
   assert.deepStrictEqual(over.taskUpdates?.[0].formDataJson, { request_summary: 'Draft governance request' });
@@ -2147,7 +2163,7 @@ test('decideTask: a complete but unsubmitted inbox draft cannot be approved', as
   });
 
   await assert.rejects(
-    () => svc.decideTask('task-form-draft', { decision: 'approved', comment: 'Approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never),
+    () => svc.decideTask('task-form-draft', { decision: 'approved', comment: 'Approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never),
     /submit the completed task form/i,
   );
 });
@@ -2249,7 +2265,7 @@ test('workflow routes: automated stages create a durable execution before the ne
     },
   };
   const svc = makeService(over);
-  await svc.decideTask('task-review', { decision: 'approved', comment: 'Proceed' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never);
+  await svc.decideTask('task-review', { decision: 'approved', comment: 'Proceed' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never);
 
   assert.strictEqual(over.createdTasks?.length, 1);
   assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-score');
@@ -2486,7 +2502,7 @@ test('decideTask: a stale concurrent decision cannot emit events or advance the 
     () => svc.decideTask(
       'task-raced',
       { decision: 'approved' } as never,
-      { id: 'u1', email: 'u1@dgop.local', roles: [] } as never,
+      { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never,
     ),
     /decided by another user/,
   );
@@ -2517,7 +2533,7 @@ test('decideTask: concurrent submissions produce exactly one committed decision'
     },
   };
   const svc = makeService(over);
-  const actor = { id: 'u1', email: 'u1@dgop.local', roles: [] } as never;
+  const actor = { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never;
 
   const results = await Promise.allSettled([
     svc.decideTask('task-concurrent', { decision: 'approved' } as never, actor),
@@ -2534,7 +2550,7 @@ test('decideTask: non-assignee without admin role is forbidden', async () => {
     task: { id: 't1', assigneeUserId: 'u-owner', status: 'pending', caseId: 'c1', case: { type: 'generic', createdBy: 'x@dgop.local' } },
   });
   await assert.rejects(
-    () => svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-other', email: 'other@dgop.local', roles: ['auditor'] } as never),
+    () => svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u-other', email: 'other@dgop.local', roles: ['dmo_admin'] } as never),
     /Only the assigned user/,
   );
 });
@@ -2585,7 +2601,7 @@ test('decideTask: cannot decide a task after the parent case is final', async ()
     },
   });
   await assert.rejects(
-    () => svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never),
+    () => svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never),
     /cannot be modified/,
   );
 });
@@ -2596,7 +2612,7 @@ test('decideTask: assignee may decide a generic task (no approval wiring)', asyn
     setCalls,
     task: { id: 't1', assigneeUserId: 'u1', status: 'pending', caseId: 'c1', case: { type: 'generic', createdBy: 'x@dgop.local', assignmentId: null } },
   });
-  const res = await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never);
+  const res = await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never);
   assert.strictEqual(res.status, 'completed');
   assert.strictEqual(setCalls.length, 0);
 });
@@ -2668,31 +2684,39 @@ test('decideTask: routed task activates the next route stage', async () => {
     },
   };
   const svc = makeService(over);
-  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: [] } as never);
+  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['dmo_admin'] } as never);
   assert.strictEqual(over.createdTasks?.[0].templateStageId, 'stage-decision');
   assert.strictEqual(over.caseUpdates?.[0].status, 'under_review');
 });
 
 // ---------- segregation of duties ----------
-test('decideTask: system administrator can approve a case they submitted', async () => {
+test('decideTask: an administrator with an eligible business grant cannot approve their own case', async () => {
   const over: Over = {
     businessTaskGrant: true,
     task: { id: 't1', assigneeUserId: 'u1', status: 'pending', caseId: 'c1', case: { type: 'owner_assignment_approval', createdBy: 'u1@dgop.local', assignmentId: 'as1' } },
     assignment: { id: 'as1', targetType: 'asset', targetId: 'asset-1', isActive: true },
   };
   const svc = makeService(over);
-  await svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin', 'dmo_admin'] } as never);
-  assert.equal(over.assignmentUpdate?.approvalStatus, 'approved');
+  await assert.rejects(svc.decideTask('t1', { decision: 'approved' } as never, { id: 'u1', email: 'u1@dgop.local', roles: ['system_admin', 'dmo_admin'] } as never), /cannot decide an approval you submitted/);
+  assert.equal(over.assignmentUpdate, undefined);
 });
 
-test('business task authority: system administrator bypasses assignment, queue role, and business grant checks', async () => {
-  const actor = { id: 'admin', email: 'admin@dgop.local', roles: ['system_admin'] } as never;
-  const task = () => ({ id: 'business-task', assigneeUserId: 'assigned', assigneeRoleCode: 'dmo_admin', status: 'pending', caseId: 'business-case', case: { type: 'general', status: 'submitted', createdBy: 'other@dgop.local' } });
-  const decision: Over = { task: task() };
-  await makeService(decision).decideTask('business-task', { decision: 'approved' } as never, actor);
-  assert.equal(decision.task?.status, 'completed');
-  await makeService({ task: task() }).saveTaskFormDraft('business-task', { data: {} }, actor);
-  await makeService({ task: task() }).submitTaskForm('business-task', { data: {} }, actor);
+test('business task authority: administrator oversight does not bypass assignment, role, or a revoked business grant', async () => {
+  const task = { id: 'business-task', assigneeUserId: 'assigned', assigneeRoleCode: 'dmo_admin', status: 'pending', caseId: 'business-case', case: { type: 'general', status: 'submitted', createdBy: 'other@dgop.local' } };
+  for (const [actor, message] of [
+    [{ id: 'other', email: 'other-admin@dgop.local', roles: ['system_admin', 'dmo_admin'] }, /Only the assigned user/],
+    [{ id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin'] }, /explicit live eligible business role grant/],
+    [{ id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin', 'dmo_admin'] }, /explicit live eligible business role grant/],
+  ] as const) {
+    const svc = makeService({ task, businessTaskGrant: actor.roles.length > 1 && actor.id === 'assigned' ? false : true });
+    await assert.rejects(svc.decideTask(task.id, { decision: 'approved' } as never, actor as never), message);
+    await assert.rejects(svc.saveTaskFormDraft(task.id, { data: {} }, actor as never));
+    await assert.rejects(svc.submitTaskForm(task.id, { data: {} }, actor as never));
+  }
+  const over: Over = { task, businessTaskGrant: true };
+  const svc = makeService(over);
+  await svc.decideTask(task.id, { decision: 'approved' } as never, { id: 'assigned', email: 'assigned@dgop.local', roles: ['system_admin', 'dmo_admin'] });
+  assert.equal(over.task?.status, 'completed');
 });
 
 test('submitAssignmentForApproval: approver must differ from submitter', async () => {

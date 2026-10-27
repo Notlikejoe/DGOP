@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { liveRoleWhere } from '../auth/business-roles';
 
 export interface EffectiveScope {
   /** Allowed organization unit ids, or 'all' when unrestricted. */
@@ -40,7 +41,7 @@ export class ScopeService {
 
   async resolve(roleCodes: string[], client: Prisma.TransactionClient = this.prisma): Promise<EffectiveScope> {
     const roles = (await client.role.findMany({
-      where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
+      where: { AND: [liveRoleWhere(), { code: { in: roleCodes } }] },
       include: { dataScopes: true },
     })) as RoleWithScope[];
     if (roles.length === 0) return EMPTY_SCOPE;

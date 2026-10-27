@@ -6,6 +6,7 @@ export type Lang = 'en' | 'ar';
 const STORAGE_KEY = 'dgop.lang';
 
 const FALLBACK_DICT: Dict = {
+  'app.logoLabel': { en: 'DGOP — Data & AI Governance', ar: 'DGOP — حوكمة البيانات والذكاء الاصطناعي' },
   'app.shortTitle': { en: 'DGOP', ar: 'منصة DGOP' },
   'app.title': { en: 'Data Governance Operations Platform', ar: 'منصة عمليات حوكمة البيانات' },
   'nav.dashboard': { en: 'Command Center', ar: 'مركز القيادة' },

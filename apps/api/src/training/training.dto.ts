@@ -105,6 +105,9 @@ export class UpdateCertificationTrackDto {
 }
 
 export class CreateCertificationAttemptDto {
+  @IsOptional() @IsIn(['external','internal']) qualificationType?: 'external'|'internal';
+  @IsOptional() @IsString() evidenceId?: string;
+  @IsOptional() @IsString() evidenceJustification?: string;
   @IsString() @IsNotEmpty() trackId!: string;
   @IsString() @IsNotEmpty() userId!: string;
   @IsOptional() @IsString() personId?: string | null;

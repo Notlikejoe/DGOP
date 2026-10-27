@@ -1,3 +1,11 @@
+import { ConflictException } from '@nestjs/common';
+import { BUSINESS_REGISTERS, BusinessRegister, BusinessRegisterQueryDto, MeasureValuationDto } from './business-value.dto';
+import { parsePageParams, toPaged } from '../common/pagination';
+import { valuationOutcomeStatus } from './business-value.logic';
+import { Optional } from '@nestjs/common';
+import { EvidenceService } from '../evidence/evidence.service';
+import { governanceDecisionActor, governanceDecisionProof } from '../common/governance-decision-proof';
+import { businessDecisionRoles } from '../auth/business-roles';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   BusinessGlossaryStatus,
@@ -13,7 +21,6 @@ import { AuditService } from '../audit/audit.service';
 import { EffectiveScope, ScopeService } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite, requireTransition } from '../common/governance-write';
-import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateBusinessImpactAssessmentDto,
   CreateBusinessLineageDto,
@@ -66,6 +73,7 @@ export class BusinessValueService {
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
     private readonly workflow?: WorkflowService,
+    @Optional() private readonly evidence?: EvidenceService,
   ) {}
 
   private isUnrestricted(scope: EffectiveScope): boolean {
@@ -146,90 +154,54 @@ export class BusinessValueService {
     return parsed;
   }
 
-  async workspace(roleCodes: string[]) {
-    const scope = await this.scope.resolve(roleCodes);
-    const assetIds = await this.visibleAssetIds(scope);
-    const optionalWhere = this.optionalScopeWhere(scope, assetIds);
-    const [glossary, lineage, valuations, lifecycle, assessments, kpis, surveys] = await Promise.all([
-      this.prisma.businessGlossaryTerm.findMany({
-        where: optionalWhere as Prisma.BusinessGlossaryTermWhereInput,
-        include: {
-          asset: { select: assetSelect },
-          domain: { select: domainSelect },
-          workflowCase: { select: workflowSelect },
-          versions: { orderBy: { version: 'desc' }, take: 3 },
-        },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.businessLineageMap.findMany({
-        where: this.lineageScopeWhere(scope, assetIds),
-        include: {
-          sourceAsset: { select: assetSelect },
-          targetAsset: { select: assetSelect },
-          domain: { select: domainSelect },
-          workflowCase: { select: workflowSelect },
-        },
-        orderBy: [{ impactScore: 'desc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.dataAssetValuation.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.DataAssetValuationWhereInput,
-        include: {
-          asset: { select: assetSelect },
-          domain: { select: domainSelect },
-          surveys: { orderBy: { createdAt: 'desc' }, take: 3 },
-        },
-        orderBy: [{ status: 'asc' }, { annualValue: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.assetLifecycleDecision.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.AssetLifecycleDecisionWhereInput,
-        include: { asset: { select: assetSelect }, workflowCase: { select: workflowSelect } },
-        orderBy: [{ status: 'asc' }, { disposalDueAt: 'asc' }],
-        take: 50,
-      }),
-      this.prisma.businessImpactAssessment.findMany({
-        where: optionalWhere as Prisma.BusinessImpactAssessmentWhereInput,
-        include: { asset: { select: assetSelect }, domain: { select: domainSelect }, workflowCase: { select: workflowSelect } },
-        orderBy: [{ impactScore: 'desc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.dataValueKpi.findMany({
-        where: optionalWhere as Prisma.DataValueKpiWhereInput,
-        include: { asset: { select: assetSelect }, domain: { select: domainSelect } },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.dataUserSurvey.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.DataUserSurveyWhereInput,
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      }),
+  async listRegister(register:string,roleCodes:string[],actor:string|undefined,query:BusinessRegisterQueryDto={}) {
+    if(!(BUSINESS_REGISTERS as readonly string[]).includes(register))throw new NotFoundException('Business register not found');
+    if((query.search?.length??0)>200)throw new BadRequestException('Search cannot exceed 200 characters');
+    const scope=await this.scope.resolve(roleCodes),assets=await this.visibleAssetIds(scope),optional=this.optionalScopeWhere(scope,assets),assetWhere=this.assetRecordWhere(assets);
+    const fields:Record<string,string[]>={glossary:['code','termEn','termAr','definition'],lineage:['code','processName','businessProcess'],valuations:['code','useCase','valueDriver','ownerName'],lifecycle:['code','proposedStatus','retentionBasis'],assessments:['code','processName','operationalImpact'],kpis:['code','name','useCase','ownerName'],surveys:['respondent','feedback']};
+    const base=register==='lineage'?this.lineageScopeWhere(scope,assets):['valuations','lifecycle','surveys'].includes(register)?assetWhere:optional;
+    const search=query.search?.trim(),where={AND:[base,...(search?[{OR:fields[register].map(field=>({[field]:{contains:search,mode:'insensitive'}}))}]:[])]};
+    const params=parsePageParams(query.page??1,query.pageSize??25)!;
+    const page=async<T>(rows:Promise<T[]>,total:Promise<number>)=>{const [data,count]=await Promise.all([rows,total]);return toPaged(data,count,params);};
+    let result:ReturnType<typeof toPaged<any>>;
+    switch(register){
+      case 'glossary':result=await page(this.prisma.businessGlossaryTerm.findMany({where:where as Prisma.BusinessGlossaryTermWhereInput,include:{asset:{select:assetSelect},domain:{select:domainSelect},workflowCase:{select:workflowSelect}},orderBy:[{status:'asc'},{updatedAt:'desc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.businessGlossaryTerm.count({where:where as Prisma.BusinessGlossaryTermWhereInput}));break;
+      case 'lineage':result=await page(this.prisma.businessLineageMap.findMany({where:where as Prisma.BusinessLineageMapWhereInput,include:{sourceAsset:{select:assetSelect},targetAsset:{select:assetSelect},domain:{select:domainSelect},workflowCase:{select:workflowSelect}},orderBy:[{impactScore:'desc'},{updatedAt:'desc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.businessLineageMap.count({where:where as Prisma.BusinessLineageMapWhereInput}));break;
+      case 'valuations':result=await page(this.prisma.dataAssetValuation.findMany({where:where as Prisma.DataAssetValuationWhereInput,include:{asset:{select:assetSelect},domain:{select:domainSelect},surveys:{orderBy:{createdAt:'desc'},take:3}},orderBy:[{status:'asc'},{annualValue:'desc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.dataAssetValuation.count({where:where as Prisma.DataAssetValuationWhereInput}));break;
+      case 'lifecycle':result=await page(this.prisma.assetLifecycleDecision.findMany({where:where as Prisma.AssetLifecycleDecisionWhereInput,include:{asset:{select:assetSelect},workflowCase:{select:workflowSelect}},orderBy:[{status:'asc'},{disposalDueAt:'asc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.assetLifecycleDecision.count({where:where as Prisma.AssetLifecycleDecisionWhereInput}));break;
+      case 'assessments':result=await page(this.prisma.businessImpactAssessment.findMany({where:where as Prisma.BusinessImpactAssessmentWhereInput,include:{asset:{select:assetSelect},domain:{select:domainSelect},workflowCase:{select:workflowSelect}},orderBy:[{impactScore:'desc'},{updatedAt:'desc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.businessImpactAssessment.count({where:where as Prisma.BusinessImpactAssessmentWhereInput}));break;
+      case 'kpis':result=await page(this.prisma.dataValueKpi.findMany({where:where as Prisma.DataValueKpiWhereInput,include:{asset:{select:assetSelect},domain:{select:domainSelect}},orderBy:[{status:'asc'},{updatedAt:'desc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.dataValueKpi.count({where:where as Prisma.DataValueKpiWhereInput}));break;
+      default:result=await page(this.prisma.dataUserSurvey.findMany({where:where as Prisma.DataUserSurveyWhereInput,orderBy:[{createdAt:'desc'},{id:'asc'}],skip:params.skip,take:params.take}),this.prisma.dataUserSurvey.count({where:where as Prisma.DataUserSurveyWhereInput}));
+    }
+    const allowed=new Set<string>();
+    if(actor&&['glossary','lineage','lifecycle','valuations'].includes(register))try{
+      const roles=await businessDecisionRoles(this.prisma,roleCodes,'business_value.edit'),decisionScope=await this.scope.resolve(roles),decisionAssets=await this.visibleAssetIds(decisionScope),ids=result.data.map(row=>row.id);
+      const filter={AND:[register==='lineage'?this.lineageScopeWhere(decisionScope,decisionAssets):['lifecycle','valuations'].includes(register)?this.assetRecordWhere(decisionAssets):this.optionalScopeWhere(decisionScope,decisionAssets),{id:{in:ids}}]};
+      const rows=register==='glossary'?await this.prisma.businessGlossaryTerm.findMany({where:filter as Prisma.BusinessGlossaryTermWhereInput,select:{id:true}}):register==='lineage'?await this.prisma.businessLineageMap.findMany({where:filter as Prisma.BusinessLineageMapWhereInput,select:{id:true}}):register==='valuations'?await this.prisma.dataAssetValuation.findMany({where:filter as Prisma.DataAssetValuationWhereInput,select:{id:true}}):await this.prisma.assetLifecycleDecision.findMany({where:filter as Prisma.AssetLifecycleDecisionWhereInput,select:{id:true}});rows.forEach(row=>allowed.add(row.id));
+    }catch(error){if(!(error instanceof ForbiddenException))throw error;}
+    result.data=result.data.map(row=>({...row,...(register==='valuations'?{canMeasure:allowed.has(row.id),assurance:row.realizationProof?'verified':row.status==='realized'?'review_needed':'forecast'}:{}),...(register==='lineage'?{canVerify:allowed.has(row.id)&&row.createdBy!==actor}:['glossary','lifecycle'].includes(register)?{canDecide:allowed.has(row.id)&&row.createdBy!==actor}:{})}));
+    return result;
+  }
+
+  async workspace(roleCodes:string[],actor?:string){
+    const scope=await this.scope.resolve(roleCodes),assets=await this.visibleAssetIds(scope),optional=this.optionalScopeWhere(scope,assets),assetWhere=this.assetRecordWhere(assets),lineageWhere=this.lineageScopeWhere(scope,assets),now=new Date();
+    const [pages,glossaryTotal,glossaryApproved,glossaryDue,lineageTotal,lineageVerified,lifecycleTotal,lifecyclePending,biaTotal,biaCritical,kpiTotal,kpiRealized,values,surveys]=await Promise.all([
+      Promise.all(BUSINESS_REGISTERS.map(key=>this.listRegister(key,roleCodes,actor))),
+      this.prisma.businessGlossaryTerm.count({where:optional as Prisma.BusinessGlossaryTermWhereInput}),
+      this.prisma.businessGlossaryTerm.count({where:{AND:[optional as Prisma.BusinessGlossaryTermWhereInput,{status:'approved'}]}}),
+      this.prisma.businessGlossaryTerm.count({where:{AND:[optional as Prisma.BusinessGlossaryTermWhereInput,{reviewDueAt:{lte:now}}]}}),
+      this.prisma.businessLineageMap.count({where:lineageWhere}),this.prisma.businessLineageMap.count({where:{AND:[lineageWhere,{status:'verified'}]}}),
+      this.prisma.assetLifecycleDecision.count({where:assetWhere}),this.prisma.assetLifecycleDecision.count({where:{AND:[assetWhere,{status:{in:['proposed','approved']}}]}}),
+      this.prisma.businessImpactAssessment.count({where:optional}),this.prisma.businessImpactAssessment.count({where:{AND:[optional,{OR:[{impactLevel:'critical'},{impactScore:{gte:85}}]}]}}),
+      this.prisma.dataValueKpi.count({where:optional}),this.prisma.dataValueKpi.count({where:{AND:[optional,{status:'realized'}]}}),
+      this.prisma.dataAssetValuation.aggregate({where:assetWhere,_sum:{annualValue:true,actualAnnualValue:true,surveyScore:true},_count:{id:true}}),
+      this.prisma.dataUserSurvey.aggregate({where:assetWhere,_sum:{score:true},_count:{id:true}}),
     ]);
-    return {
-      summary: {
-        glossary: glossaryHealth(glossary.map((row) => ({ status: row.status, reviewDueAt: row.reviewDueAt }))),
-        lineageMaps: lineage.length,
-        verifiedLineage: lineage.filter((row) => row.status === BusinessLineageStatus.verified).length,
-        lifecycleDecisions: lifecycle.length,
-        lifecyclePending: lifecycle.filter((row) => row.status !== LifecycleDecisionStatus.implemented).length,
-        impactAssessments: assessments.length,
-        criticalImpact: assessments.filter((row) => row.impactLevel === 'critical' || row.impactScore >= 85).length,
-        valueKpis: kpis.length,
-        realizedKpis: kpis.filter((row) => row.status === DataValueStatus.realized).length,
-        totalAnnualValue: Math.round(valuations.reduce((sum, row) => sum + row.annualValue, 0)),
-        averageSurveyScore: averageScore([...valuations.map((row) => row.surveyScore), ...surveys.map((row) => row.score)]),
-      },
-      graph: this.lineageGraph(lineage, assessments),
-      glossary,
-      lineage,
-      valuations,
-      lifecycle,
-      assessments,
-      kpis,
-      surveys,
-    };
+    const registers=Object.fromEntries(BUSINESS_REGISTERS.map((key,i)=>[key,pages[i]])),rows=Object.fromEntries(BUSINESS_REGISTERS.map((key,i)=>[key,pages[i].data])),score=glossaryTotal?Math.round(glossaryApproved/glossaryTotal*100):0,surveyCount=values._count.id+surveys._count.id;
+    return {summary:{glossary:{total:glossaryTotal,approved:glossaryApproved,reviewDue:glossaryDue,readinessScore:score,status:glossaryDue||score<60?'at_risk':score>=80?'healthy':'watch'},lineageMaps:lineageTotal,verifiedLineage:lineageVerified,
+      lifecycleDecisions:lifecycleTotal,lifecyclePending,impactAssessments:biaTotal,criticalImpact:biaCritical,valueKpis:kpiTotal,realizedKpis:kpiRealized,
+      totalAnnualValue:Math.round(values._sum.annualValue??0),totalActualAnnualValue:Math.round(values._sum.actualAnnualValue??0),averageSurveyScore:surveyCount?Math.round(((values._sum.surveyScore??0)+(surveys._sum.score??0))/surveyCount):0},
+      graph:{...this.lineageGraph(rows.lineage,rows.assessments),limited:true,shownLineage:rows.lineage.length,totalLineage:lineageTotal},...rows,registerPages:registers};
   }
 
   async createGlossaryTerm(roleCodes: string[], dto: CreateGlossaryTermDto, actor: string) {
@@ -269,8 +241,9 @@ export class BusinessValueService {
   }
 
   async decideGlossaryTerm(roleCodes: string[], id: string, dto: DecideGlossaryTermDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'business_value.edit');
     const existing = await this.findVisibleGlossary(roleCodes, id);
-    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
+    if (existing.createdBy === actor && FINAL_GLOSSARY_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Glossary term creators cannot make the final review decision');
     }
     requireTransition(existing.status, dto.status, {
@@ -344,8 +317,9 @@ export class BusinessValueService {
   }
 
   async updateLineage(roleCodes: string[], id: string, dto: UpdateBusinessLineageDto, actor: string) {
+    if(dto.status==='verified')roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'business_value.edit');
     const existing = await this.findVisibleLineage(roleCodes, id);
-    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
+    if (existing.createdBy === actor && dto.status === BusinessLineageStatus.verified) {
       throw new ForbiddenException('Lineage creators cannot verify their own lineage map');
     }
     const impactScore = dto.impactScore === undefined ? existing.impactScore : clampScore(dto.impactScore, existing.impactScore);
@@ -364,36 +338,69 @@ export class BusinessValueService {
     });
   }
 
-  async createValuation(roleCodes: string[], dto: CreateDataAssetValuationDto, actor: string) {
+  async createValuation(
+    roleCodes: string[],
+    dto: CreateDataAssetValuationDto,
+    actor: string,
+  ) {
     const scope = await this.scope.resolve(roleCodes);
     const asset = await this.assertAssetVisible(scope, dto.assetId);
     const code = await this.nextCode('dataAssetValuation', 'DVR');
-    const row = await this.prisma.dataAssetValuation.create({
-      data: {
-        code,
-        assetId: dto.assetId,
-        domainId: asset.domainId,
-        useCase: dto.useCase,
-        valueDriver: dto.valueDriver ?? null,
-        annualValue: dto.annualValue ?? 0,
-        roiPercent: dto.roiPercent ?? 0,
-        adoptionScore: clampScore(dto.adoptionScore, 0),
-        surveyScore: clampScore(dto.surveyScore, 0),
-        status: dataValueStatus(dto.annualValue, dto.annualValue ? dto.annualValue * 0.8 : 0),
-        ownerName: dto.ownerName ?? null,
-        createdBy: actor,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.dataAssetValuation.create({
+        data: {
+          code,
+          assetId: dto.assetId,
+          domainId: asset.domainId,
+          useCase: dto.useCase,
+          valueDriver: dto.valueDriver ?? null,
+          annualValue: dto.annualValue ?? 0,
+          roiPercent: dto.roiPercent ?? 0,
+          adoptionScore: clampScore(dto.adoptionScore, 0),
+          surveyScore: clampScore(dto.surveyScore, 0),
+          status: valuationOutcomeStatus(dto.annualValue ?? 0),
+          ownerName: dto.ownerName ?? null,
+          createdBy: actor,
+        },
+      });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'business_value.valuation.create',
+          entityType: 'data_asset_valuation',
+          entityId: row.id,
+          metadata: { code },
+        },
+        tx,
+      );
+      return row;
     });
-    await this.audit.log({ actor, action: 'business_value.valuation.create', entityType: 'data_asset_valuation', entityId: row.id, metadata: { code } });
-    return row;
   }
 
-  async createSurvey(roleCodes: string[], dto: CreateDataUserSurveyDto, actor: string) {
+  async measureValuation(roleCodes:string[],id:string,dto:MeasureValuationDto,actor:string){
+    const roles=await businessDecisionRoles(this.prisma,roleCodes,'business_value.edit'),existing=await this.findVisibleValuation(roles,id),measuredAt=new Date(dto.measuredAt);
+    if(!Number.isFinite(dto.actualAnnualValue)||dto.actualAnnualValue<0||!Number.isFinite(measuredAt.getTime())||measuredAt>new Date())throw new BadRequestException('A nonnegative measured value and a nonfuture measurement date are required');
+    if(dto.expectedVersion!==existing.version)throw new ConflictException('Valuation changed; reload before measuring');
+    return this.prisma.$transaction(async tx=>{const identity=await governanceDecisionActor(tx,actor,'business_value.edit'),status=valuationOutcomeStatus(existing.annualValue,dto.actualAnnualValue),proof=await governanceDecisionProof(tx,this.evidence,identity,{evidenceId:dto.evidenceId,justification:dto.evidenceJustification,targetType:'data_asset_valuation',targetId:id,context:{assetId:existing.assetId,forecast:existing.annualValue,actualAnnualValue:dto.actualAnnualValue,measuredAt:measuredAt.toISOString(),version:existing.version+1}});
+      const claimed=await tx.dataAssetValuation.updateMany({where:{id,version:dto.expectedVersion},data:{actualAnnualValue:dto.actualAnnualValue,measuredAt,status,realizationProof:proof as unknown as Prisma.InputJsonValue,version:{increment:1},updatedBy:actor}});if(claimed.count!==1)throw new ConflictException('Valuation changed; reload before measuring');
+      await this.audit.logRequired({actor,action:'business_value.valuation.measure',entityType:'data_asset_valuation',entityId:id,metadata:{status,previousVersion:existing.version,newVersion:existing.version+1,realizationProof:proof}},tx);return tx.dataAssetValuation.findUniqueOrThrow({where:{id}});
+    });
+  }
+
+  async createSurvey(
+    roleCodes: string[],
+    dto: CreateDataUserSurveyDto,
+    actor: string,
+  ) {
     const scope = await this.scope.resolve(roleCodes);
-    if (!dto.valuationId && !dto.assetId) throw new BadRequestException('Survey requires a valuation or asset');
+    if (!dto.valuationId && !dto.assetId)
+      throw new BadRequestException('Survey requires a valuation or asset');
     let assetId = dto.assetId ?? null;
     if (dto.valuationId) {
-      const valuation = await this.findVisibleValuation(roleCodes, dto.valuationId);
+      const valuation = await this.findVisibleValuation(
+        roleCodes,
+        dto.valuationId,
+      );
       assetId = valuation.assetId;
     }
     if (assetId) await this.assertAssetVisible(scope, assetId);
@@ -409,15 +416,28 @@ export class BusinessValueService {
         },
       });
       if (dto.valuationId) {
-        const surveys = await tx.dataUserSurvey.findMany({ where: { valuationId: dto.valuationId }, select: { score: true } });
+        const surveys = await tx.dataUserSurvey.findMany({
+          where: { valuationId: dto.valuationId },
+          select: { score: true },
+        });
         await tx.dataAssetValuation.update({
           where: { id: dto.valuationId },
-          data: { surveyScore: averageScore(surveys.map((survey) => survey.score)) },
+          data: {
+            surveyScore: averageScore(surveys.map((survey) => survey.score)),
+          },
         });
       }
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'business_value.survey.create',
+          entityType: 'data_user_survey',
+          entityId: created.id,
+        },
+        tx,
+      );
       return created;
     });
-    await this.audit.log({ actor, action: 'business_value.survey.create', entityType: 'data_user_survey', entityId: row.id });
     return row;
   }
 
@@ -446,8 +466,9 @@ export class BusinessValueService {
   }
 
   async decideLifecycle(roleCodes: string[], id: string, dto: DecideLifecycleDecisionDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'business_value.edit');
     const existing = await this.findVisibleLifecycle(roleCodes, id);
-    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
+    if (existing.createdBy === actor && FINAL_LIFECYCLE_STATUSES.has(dto.status)) {
       throw new ForbiddenException('Lifecycle decision creators cannot approve or reject their own decision');
     }
     requireTransition(existing.status, dto.status, { proposed: ['approved', 'rejected'], approved: ['implemented', 'rejected'], implemented: [], rejected: [] });
@@ -505,33 +526,57 @@ export class BusinessValueService {
     });
   }
 
-  async createKpi(roleCodes: string[], dto: CreateDataValueKpiDto, actor: string) {
+  async createKpi(
+    roleCodes: string[],
+    dto: CreateDataValueKpiDto,
+    actor: string,
+  ) {
     const scope = await this.scope.resolve(roleCodes);
-    const asset = dto.assetId ? await this.assertAssetVisible(scope, dto.assetId) : null;
+    const asset = dto.assetId
+      ? await this.assertAssetVisible(scope, dto.assetId)
+      : null;
     const domainId = dto.domainId ?? asset?.domainId ?? null;
     await this.assertDomainVisible(scope, domainId);
-    if (!asset && !domainId && !this.isUnrestricted(scope)) throw new BadRequestException('Data value KPI needs a visible asset or domain');
+    if (!asset && !domainId && !this.isUnrestricted(scope))
+      throw new BadRequestException(
+        'Data value KPI needs a visible asset or domain',
+      );
     const code = await this.nextCode('dataValueKpi', 'DVK');
-    const status = dto.status ?? dataValueStatus(dto.actualValue, dto.targetValue);
-    const row = await this.prisma.dataValueKpi.create({
-      data: {
-        code,
-        name: dto.name,
-        valueType: dto.valueType,
-        period: dto.period,
-        targetValue: dto.targetValue ?? 0,
-        actualValue: dto.actualValue ?? 0,
-        unit: dto.unit ?? null,
-        useCase: dto.useCase ?? null,
-        ownerName: dto.ownerName ?? null,
-        status,
-        assetId: dto.assetId ?? null,
-        domainId,
-        createdBy: actor,
-      },
+    const status = dataValueStatus(dto.actualValue, dto.targetValue);
+    if (dto.status !== undefined && dto.status !== status)
+      throw new BadRequestException(
+        'KPI status must match the measured actual and target values',
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.dataValueKpi.create({
+        data: {
+          code,
+          name: dto.name,
+          valueType: dto.valueType,
+          period: dto.period,
+          targetValue: dto.targetValue ?? 0,
+          actualValue: dto.actualValue ?? 0,
+          unit: dto.unit ?? null,
+          useCase: dto.useCase ?? null,
+          ownerName: dto.ownerName ?? null,
+          status,
+          assetId: dto.assetId ?? null,
+          domainId,
+          createdBy: actor,
+        },
+      });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'business_value.kpi.create',
+          entityType: 'data_value_kpi',
+          entityId: row.id,
+          metadata: { code, status },
+        },
+        tx,
+      );
+      return row;
     });
-    await this.audit.log({ actor, action: 'business_value.kpi.create', entityType: 'data_value_kpi', entityId: row.id, metadata: { code, status } });
-    return row;
   }
 
   private lineageGraph(lineage: Array<{

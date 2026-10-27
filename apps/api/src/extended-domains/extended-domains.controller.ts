@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { AuthUser } from '../auth/auth.types';
 import {
+  ExtendedRegisterQueryDto,
   CreateArchitectureReviewDto,
   CreateMdmMatchDto,
   CreateMetadataCertificationDto,
@@ -23,8 +24,12 @@ export class ExtendedDomainsController {
   @Get('workspace')
   @RequirePermissions('extended_domains.view')
   workspace(@CurrentUser() user: AuthUser) {
-    return this.service.workspace(user.roles);
+    return this.service.workspace(user.roles,user.email);
   }
+
+  @Get('registers/:register')
+  @RequirePermissions('extended_domains.view')
+  register(@Param('register') register:string,@Query() query:ExtendedRegisterQueryDto,@CurrentUser() user:AuthUser){return this.service.listRegister(register,user.roles,user.email,query);}
 
   @Post('mdm/matches')
   @RequirePermissions('extended_domains.create')
@@ -52,8 +57,8 @@ export class ExtendedDomainsController {
 
   @Get('mdm/golden-records')
   @RequirePermissions('extended_domains.view')
-  mdmGoldenRecords(@CurrentUser() user: AuthUser) {
-    return this.service.listGoldenRecords(user.roles);
+  mdmGoldenRecords(@CurrentUser() user: AuthUser,@Query() query:ExtendedRegisterQueryDto) {
+    return this.service.listGoldenRecords(user.roles,query,user.email);
   }
 
   @Patch('mdm/golden-records/:id')
@@ -97,6 +102,10 @@ export class ExtendedDomainsController {
   createArchitectureReview(@Body() dto: CreateArchitectureReviewDto, @CurrentUser() user: AuthUser) {
     return this.service.createArchitectureReview(user.roles, dto, user.email);
   }
+
+  @Post('architecture/reviews/:id/revisions')
+  @RequirePermissions('extended_domains.create')
+  reviseArchitectureReview(@Param('id') id:string,@CurrentUser() user:AuthUser){return this.service.reviseArchitectureReview(user.roles,id,user.email);}
 
   @Patch('architecture/reviews/:id/decision')
   @RequirePermissions('extended_domains.edit')

@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {businessLabel, presentBusinessLabels, sampleLabelsEnabled, labelReadAllowed} from '../src/common/sample-labels.interceptor';
+
+assert.equal(businessLabel('DEMO — Finance Operations Platform'), 'Finance Operations Platform');
+assert.equal(businessLabel('VERIFIED SYNTHETIC DEMO — 4212 — Invoice classification with human review'), 'Invoice classification with human review');
+assert.equal(businessLabel('عرض تجريبي — منصة العمليات المالية'), 'منصة العمليات المالية');
+assert.equal(businessLabel('DEMO — Demonstration Data Owner'), 'Data Owner');
+assert.equal(businessLabel('Employee demographics'), 'Employee demographics');
+assert.equal(businessLabel('ACT-006: DEMO — Validate quality and fairness'), 'ACT-006: Validate quality and fairness');
+const source={data:[{id:'DEMO_ID',code:'DEMO_FIN_V1',nameEn:'DEMO — Invoices',nameAr:'عرض تجريبي — الفواتير',version:7,status:'approved',provenance:'synthetic_demo',demoOnly:true,permissions:['case.approve.aiuc'],snapshot:{title:'DEMO — Original'},payload:{usecase_name:'DEMO — Original'},proof:{digest:'verified',snapshot:{title:'DEMO — Original'}}}],total:1,page:1,pageSize:25,totalPages:1};
+const copy=presentBusinessLabels(source) as typeof source;
+assert.equal(copy.data[0].nameEn,'Invoices');assert.equal(copy.data[0].nameAr,'الفواتير');
+for(const field of ['id','code','version','status','provenance','demoOnly','permissions','snapshot','payload','proof'] as const)assert.deepEqual(copy.data[0][field],source.data[0][field]);
+assert.equal(source.data[0].nameEn,'DEMO — Invoices','Presentation must not mutate the database result');
+assert.deepEqual(presentBusinessLabels({graph:{nodes:[{id:'asset:DEMO_ID',label:'DEMO-EMPLOYEE-V1 - DEMO — Employee directory'}]}}),{graph:{nodes:[{id:'asset:DEMO_ID',label:'EMPLOYEE-V1 - Employee directory'}]}});
+assert.deepEqual(presentBusinessLabels({data:[],total:0,page:1,pageSize:25,totalPages:0}),{data:[],total:0,page:1,pageSize:25,totalPages:0});
+const date=new Date(),bytes=Buffer.from('DEMO — original');assert.equal(presentBusinessLabels(date),date);assert.equal(presentBusinessLabels(bytes),bytes);
+const immutable={assessmentSnapshot:{title:'DEMO — Original'},obligationSnapshot:{description:'DEMO — Original'},sourceSnapshot:{name:'DEMO — Original'}};assert.deepEqual(presentBusinessLabels(immutable),immutable);
+const env={DGOP_SAMPLE_LABELS:'business',NODE_ENV:'development',DGOP_PROFILE:'main-preview',DB_NAME:'dgop_ai_preview_202610214212',DATABASE_URL:'postgresql://local@127.0.0.1:55436/dgop_ai_preview_202610214212'};
+assert(sampleLabelsEnabled(env,true));assert(!sampleLabelsEnabled(env,false));
+for(const [key,value]of Object.entries({NODE_ENV:'production',DGOP_SAMPLE_LABELS:'off',DGOP_PROFILE:'default',DB_NAME:'dgop_dev',DATABASE_URL:'postgresql://local@remote:55436/dgop_ai_preview_202610214212'}))assert(!sampleLabelsEnabled({...env,[key]:value},true),key);
+assert(labelReadAllowed('GET','/api/ai/use-cases?page=1'));
+for(const method of ['POST','PUT','PATCH','DELETE'])assert(!labelReadAllowed(method,'/api/ai/use-cases'));
+for(const path of ['/api/audit','/api/audit/chain/verify','/api/evidence/x/file','/api/ai/cases/x/history','/api/ai/risks/x/proofs','/api/export','/api/audit-packs/x'])assert(!labelReadAllowed('GET',path),path);
+console.log('PASS business labels, Arabic, immutable snapshots/proofs, unchanged authorization/counts, non-mutating formatting, exact 4212 guard and original export/history routes');

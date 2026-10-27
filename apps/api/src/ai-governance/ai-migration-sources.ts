@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
 import { isSyntheticPopulationProfile } from '../common/synthetic-population-profile';
+import { isManagedDemoProfile } from '../common/demo-profile';
 import { AI_MIGRATION_SOURCES } from './ai-migration-workbook';
 export const AI_DEMO_MIGRATION_SOURCES = [
  {source:'risk',file:'demo-risk-v1.xlsx',sha256:'2d1f1ad4b7e496b501cc852cdc60cbcc86fdd22707412bece6969fc87ed53c8e'},
@@ -24,7 +25,10 @@ export const AI_RECONCILED_POPULATION_SOURCES = [
 ];
 export function migrationSources() {
  if(!process.env.AI_MIGRATION_SOURCE_MANIFEST)return {sourceMode:'retained_source',sources:[...AI_MIGRATION_SOURCES]};
- if(!isSyntheticPopulationProfile())throw new Error('Synthetic source selection requires a trusted isolated demo/test profile.');
+ const testUrl=process.env.DATABASE_URL?new URL(process.env.DATABASE_URL):null;
+ const engineering=process.env.NODE_ENV==='test'&&testUrl?.hostname==='127.0.0.1'&&testUrl.port==='55438'
+  && /^\/dgop_ai_test_[a-z0-9_]+$/.test(testUrl.pathname)&&process.env.DGOP_AI_TEST_DATABASE_URL===process.env.DATABASE_URL&&isManagedDemoProfile();
+ if(!isSyntheticPopulationProfile()&&!engineering)throw new Error('Synthetic source selection requires a trusted isolated demo/test profile.');
  const root=resolve(process.env.AI_MIGRATION_SOURCE_DIR??''),path=resolve(process.env.AI_MIGRATION_SOURCE_MANIFEST),inside=relative(root,path);
  if(!inside||inside==='..'||inside.startsWith('..'+sep)||isAbsolute(inside))throw new Error('Synthetic source manifest must stay in its configured source directory.');
  const manifest=JSON.parse(readFileSync(path,'utf8'));

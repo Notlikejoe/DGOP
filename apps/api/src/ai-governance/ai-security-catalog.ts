@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { AI_NEW_ROLES, AI_PERMISSIONS, aiRoleMayHold, splitAiPermission } from './ai-permissions';
+import { businessRoleCode } from '../auth/business-roles';
 
 // Explicit installer, never an application-startup hook. No user memberships change.
 export async function syncAiSecurityCatalog(tx: Prisma.TransactionClient, audit: AuditService, actor: string, justification: string) {
@@ -21,14 +22,14 @@ export async function syncAiSecurityCatalog(tx: Prisma.TransactionClient, audit:
     const permission=await tx.permission.upsert({where:{resource_action:key},create:{...key,descriptionEn:code},update:{}});
     const current=await tx.rolePermission.findMany({where:{permissionId:permission.id},include:{role:true}});
     for (const grant of current) {
-      if (!aiRoleMayHold(grant.role.code,code)) {
+      if (!aiRoleMayHold(businessRoleCode(grant.role),code)) {
         await tx.rolePermission.delete({where:{roleId_permissionId:{roleId:grant.roleId,permissionId:permission.id}}});
         await audit.logRequired({actor,action:'ai.permission.revoked',entityType:'role',entityId:grant.roleId,metadata:{permission:code,oldValue:true,newValue:false,justification}},tx);
         revocations++;
       }
     }
     for (const role of roles) {
-      if (aiRoleMayHold(role.code,code) && !current.some(g=>g.roleId===role.id)) {
+      if (!role.businessRoleCode && aiRoleMayHold(role.code,code) && !current.some(g=>g.roleId===role.id)) {
         await tx.rolePermission.create({data:{roleId:role.id,permissionId:permission.id}});
         await audit.logRequired({actor,action:'ai.permission.granted',entityType:'role',entityId:role.id,metadata:{permission:code,oldValue:false,newValue:true,justification}},tx);
         grants++;

@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 import assert from 'node:assert/strict';
 import { BadRequestException } from '@nestjs/common';
 import { FoiDecisionOutcome, FoiRequestStatus } from '@prisma/client';
@@ -161,7 +162,7 @@ function makeService() {
     $transaction: async (callback: any) => callback(tx),
   };
   const service = new FoiService(
-    prisma as never,
+    Object.assign(prisma as never,{role:liveRoleFixture([fixtureRole("foi_officer",["foi_requests.edit"])])}) as never,
     { log: async (entry: any) => data.audit.push(entry), logRequired: async (entry: any) => data.audit.push(entry) } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
     {
@@ -221,7 +222,7 @@ test('create FOI request generates number, workflow task, and starter reviews', 
 test('list rejects invalid FOI status and channel filters before Prisma receives them', async () => {
   let requestFinds = 0;
   const service = new FoiService(
-    {
+    Object.assign({
       foiRequest: {
         findMany: async () => {
           requestFinds++;
@@ -229,7 +230,7 @@ test('list rejects invalid FOI status and channel filters before Prisma receives
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("foi_officer",["foi_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -248,7 +249,7 @@ test('list rejects invalid FOI status and channel filters before Prisma receives
 test('FOI scoped lists do not expose unanchored records to restricted users', async () => {
   let requestWhere: unknown;
   const service = new FoiService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       foiRequest: {
         findMany: async (args: any) => {
@@ -257,7 +258,7 @@ test('FOI scoped lists do not expose unanchored records to restricted users', as
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("foi_officer",["foi_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -274,7 +275,7 @@ test('FOI scoped lists do not expose unanchored records to restricted users', as
 test('FOI domain-only requests are visible only for matching domain-scoped users', async () => {
   let requestWhere: unknown;
   const service = new FoiService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [] },
       foiRequest: {
         findMany: async (args: any) => {
@@ -283,7 +284,7 @@ test('FOI domain-only requests are visible only for matching domain-scoped users
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("foi_officer",["foi_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: 2 }),
@@ -299,7 +300,7 @@ test('FOI domain-only requests are visible only for matching domain-scoped users
 test('FOI summary reuses one scoped SLA row query for overdue and due-soon counts', async () => {
   let requestFinds = 0;
   const service = new FoiService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       foiRequest: {
         count: async () => 0,
@@ -310,7 +311,7 @@ test('FOI summary reuses one scoped SLA row query for overdue and due-soon count
       },
       foiAppeal: { count: async () => 0 },
       foiDisclosure: { count: async () => 0 },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("foi_officer",["foi_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),

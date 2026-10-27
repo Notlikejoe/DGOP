@@ -3,7 +3,8 @@ import { environmentFiles } from './common/environment';
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { AuditContextMiddleware } from './audit/audit-context';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { SampleLabelsInterceptor } from './common/sample-labels.interceptor';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AiGovernanceModule } from './ai-governance/ai-governance.module';
@@ -82,6 +83,7 @@ import { PermissionsGuard } from './access/permissions.guard';
     AiGovernanceModule,
   ],
   providers: [
+    { provide: APP_INTERCEPTOR, useClass: SampleLabelsInterceptor },
     // Order matters: authenticate first, protect cookie writes, then authorize by role and permission.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },

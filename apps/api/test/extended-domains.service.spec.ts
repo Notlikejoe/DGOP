@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 import assert from 'node:assert/strict';
 import {
   ArchitectureReviewDecision,
@@ -154,7 +155,7 @@ test('reference and architecture decisions map to stable states', () => {
 test('extended-domain creates reject hidden or non-linkable evidence IDs', async () => {
   let workflowOpened = false;
   const service = new ExtendedDomainsService(
-    {
+    Object.assign({
       dataAsset: {
         findFirst: async () => ({ id: 'asset-1', code: 'AST-1', nameEn: 'Asset', domainId: 'domain-1' }),
       },
@@ -166,7 +167,7 @@ test('extended-domain creates reject hidden or non-linkable evidence IDs', async
           throw new Error('hidden evidence should block before metadata certification persistence');
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: ['domain-1'], maxClassRank: 2 }) } as never,
     {
@@ -197,14 +198,14 @@ test('extended-domain creates reject hidden or non-linkable evidence IDs', async
 test('restricted users cannot create unanchored reference data versions', async () => {
   let persisted = false;
   const service = new ExtendedDomainsService(
-    {
+    Object.assign({
       referenceDataVersion: {
         create: async () => {
           persisted = true;
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: ['ou-1'], domains: ['domain-1'], maxClassRank: 2 }) } as never,
   );
@@ -249,7 +250,7 @@ test('runMdmMatching creates governed candidates with engine explanations', asyn
     subjects: [{ dataSubject: different ? { code: 'EMPLOYEE', nameEn: 'Employee', nameAr: 'Employee' } : { code: 'CUSTOMER', nameEn: 'Customer', nameAr: 'Customer' } }],
   });
   const service = new ExtendedDomainsService(
-    transactionalFixture({
+    Object.assign(transactionalFixture({
       businessSequence: sequenceDelegate(),
       dataAsset: {
         findMany: async () => {
@@ -272,7 +273,7 @@ test('runMdmMatching creates governed candidates with engine explanations', asyn
           return { id: 'match-1', ...args.data };
         },
       },
-    }) as never,
+    }) as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     {
       logRequired: async (entry: any) => {
         auditMetadata = entry.metadata;
@@ -319,7 +320,7 @@ test('runMdmMatching skips existing reverse-direction match candidates', async (
   });
   let assetQuery = 0;
   const service = new ExtendedDomainsService(
-    transactionalFixture({
+    Object.assign(transactionalFixture({
       dataAsset: {
         findMany: async () => {
           assetQuery++;
@@ -334,7 +335,7 @@ test('runMdmMatching skips existing reverse-direction match candidates', async (
           return {};
         },
       },
-    }) as never,
+    }) as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { logRequired: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -354,7 +355,7 @@ test('runMdmMatching skips existing reverse-direction match candidates', async (
 test('MDM match creators cannot make their own final resolution decision', async () => {
   let updated = false;
   const service = new ExtendedDomainsService(
-    {
+    Object.assign({
       mdmMatchRule: { findMany: async () => [] },
       mdmMatchCandidate: {
         findFirst: async () => ({ id: 'match-1', createdBy: 'creator@dgop.local' }),
@@ -363,7 +364,7 @@ test('MDM match creators cannot make their own final resolution decision', async
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -371,7 +372,7 @@ test('MDM match creators cannot make their own final resolution decision', async
   await assert.rejects(
     () =>
       service.resolveMatch(
-        ['dmo_admin'],
+        ['business_steward'],
         'match-1',
         { status: MdmMatchStatus.merged },
         'creator@dgop.local',
@@ -384,7 +385,7 @@ test('MDM match creators cannot make their own final resolution decision', async
 test('reference version creators cannot approve their own version', async () => {
   let updated = false;
   const service = new ExtendedDomainsService(
-    {
+    Object.assign({
       referenceDataVersion: {
         findFirst: async () => ({ id: 'ref-1', createdBy: 'creator@dgop.local' }),
         update: async () => {
@@ -392,7 +393,7 @@ test('reference version creators cannot approve their own version', async () => 
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -400,7 +401,7 @@ test('reference version creators cannot approve their own version', async () => 
   await assert.rejects(
     () =>
       service.decideReferenceVersion(
-        ['dmo_admin'],
+        ['business_steward'],
         'ref-1',
         { decision: 'approve' },
         'creator@dgop.local',
@@ -413,7 +414,7 @@ test('reference version creators cannot approve their own version', async () => 
 test('metadata certification creators cannot certify their own metadata', async () => {
   let updated = false;
   const service = new ExtendedDomainsService(
-    {
+    Object.assign({
       metadataCertification: {
         findFirst: async () => ({
           id: 'cert-1',
@@ -429,7 +430,7 @@ test('metadata certification creators cannot certify their own metadata', async 
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -437,7 +438,7 @@ test('metadata certification creators cannot certify their own metadata', async 
   await assert.rejects(
     () =>
       service.saveCertification(
-        ['dmo_admin'],
+        ['business_steward'],
         'cert-1',
         { status: MetadataCertificationStatus.certified },
         'creator@dgop.local',
@@ -450,15 +451,15 @@ test('metadata certification creators cannot certify their own metadata', async 
 test('architecture review creators cannot make their own final decision', async () => {
   let updated = false;
   const service = new ExtendedDomainsService(
-    {
+    Object.assign({
       architectureReview: {
-        findFirst: async () => ({ id: 'review-1', createdBy: 'creator@dgop.local' }),
+        findFirst: async () => ({ id: 'review-1',decision:ArchitectureReviewDecision.pending,version:1, createdBy: 'creator@dgop.local' }),
         update: async () => {
           updated = true;
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("business_steward",["extended_domains.edit"]),fixtureRole("dmo_admin",["extended_domains.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -466,9 +467,9 @@ test('architecture review creators cannot make their own final decision', async 
   await assert.rejects(
     () =>
       service.decideArchitectureReview(
-        ['dmo_admin'],
+        ['business_steward'],
         'review-1',
-        { decision: ArchitectureReviewDecision.approved },
+        { decision: ArchitectureReviewDecision.approved,expectedVersion:1,workflowTaskId:"current-task" },
         'creator@dgop.local',
       ),
     /creators cannot make the final decision/,

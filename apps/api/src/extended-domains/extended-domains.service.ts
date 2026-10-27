@@ -1,3 +1,8 @@
+import { parsePageParams, toPaged } from '../common/pagination';
+import { Optional } from '@nestjs/common';
+import { EvidenceService } from '../evidence/evidence.service';
+import { governanceDecisionActor, governanceDecisionProof } from '../common/governance-decision-proof';
+import { businessDecisionRoles } from '../auth/business-roles';
 import { createHash } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
@@ -17,8 +22,8 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite, requireTransition } from '../common/governance-write';
 import { parseMdmRule } from './mdm-rule';
 import { operationalEvidenceWhere } from '../evidence/evidence-status';
-import { isSystemAdministrator } from '../auth/system-admin';
 import {
+  EXTENDED_REGISTERS, ExtendedRegisterQueryDto,
   CreateArchitectureReviewDto,
   CreateMdmMatchDto,
   CreateMetadataCertificationDto,
@@ -85,6 +90,7 @@ export class ExtendedDomainsService {
     private readonly audit: AuditService,
     private readonly scope: ScopeService,
     private readonly workflow?: WorkflowService,
+    @Optional() private readonly evidence?: EvidenceService,
   ) {}
 
   private assetScopeWhere(scope: EffectiveScope): Prisma.DataAssetWhereInput {
@@ -207,95 +213,440 @@ export class ExtendedDomainsService {
   }
 
   async summary(roleCodes: string[]) {
-    const scope = await this.scope.resolve(roleCodes);
-    const assetIds = await this.visibleAssetIds(roleCodes, Promise.resolve(scope));
-    const [matches, goldenRecords, referenceVersions, certifications, reviews] = await Promise.all([
-      this.prisma.mdmMatchCandidate.findMany({ where: this.matchWhere(assetIds), select: { status: true, matchScore: true } }),
-      this.prisma.mdmGoldenRecord.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
-        select: { status: true },
+    const scope = await this.scope.resolve(roleCodes),
+      assets = await this.visibleAssetIds(roleCodes, Promise.resolve(scope));
+    const matches = this.matchWhere(assets),
+      assetWhere = this.assetRecordWhere(assets),
+      references = this.referenceWhere(scope, assets);
+    const [
+      mdmCandidates,
+      highConfidenceMatches,
+      goldenRecords,
+      activeGoldenRecords,
+      referenceVersions,
+      referencePending,
+      certifications,
+      certifiedAssets,
+      architectureReviews,
+      architecturePending,
+    ] = await Promise.all([
+      this.prisma.mdmMatchCandidate.count({ where: matches }),
+      this.prisma.mdmMatchCandidate.count({
+        where: { AND: [matches, { matchScore: { gte: 90 } }] },
       }),
-      this.prisma.referenceDataVersion.findMany({ where: this.referenceWhere(scope, assetIds), select: { status: true } }),
-      this.prisma.metadataCertification.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.MetadataCertificationWhereInput,
-        select: { status: true, qualityScore: true, completenessScore: true },
+      this.prisma.mdmGoldenRecord.count({ where: assetWhere }),
+      this.prisma.mdmGoldenRecord.count({
+        where: { AND: [assetWhere, { status: 'active' }] },
       }),
-      this.prisma.architectureReview.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.ArchitectureReviewWhereInput,
-        select: { decision: true, riskLevel: true },
+      this.prisma.referenceDataVersion.count({ where: references }),
+      this.prisma.referenceDataVersion.count({
+        where: {
+          AND: [references, { status: { in: ['draft', 'under_review'] } }],
+        },
+      }),
+      this.prisma.metadataCertification.count({ where: assetWhere }),
+      this.prisma.metadataCertification.count({
+        where: { AND: [assetWhere, { status: 'certified' }] },
+      }),
+      this.prisma.architectureReview.count({ where: assetWhere }),
+      this.prisma.architectureReview.count({
+        where: {
+          AND: [assetWhere, { decision: { in: ['pending', 'needs_changes'] } }],
+        },
       }),
     ]);
     return {
-      mdmCandidates: matches.length,
-      highConfidenceMatches: matches.filter((row) => row.matchScore >= 90).length,
-      goldenRecords: goldenRecords.length,
-      activeGoldenRecords: goldenRecords.filter((row) => row.status === MdmGoldenRecordStatus.active).length,
-      referenceVersions: referenceVersions.length,
-      referencePending: referenceVersions.filter((row) => ['draft', 'under_review'].includes(row.status)).length,
-      certifications: certifications.length,
-      certifiedAssets: certifications.filter((row) => row.status === MetadataCertificationStatus.certified).length,
-      architectureReviews: reviews.length,
-      architecturePending: reviews.filter((row) => row.decision === ArchitectureReviewDecision.pending).length,
+      mdmCandidates,
+      highConfidenceMatches,
+      goldenRecords,
+      activeGoldenRecords,
+      referenceVersions,
+      referencePending,
+      certifications,
+      certifiedAssets,
+      architectureReviews,
+      architecturePending,
     };
   }
 
-  async workspace(roleCodes: string[]) {
-    const scope = await this.scope.resolve(roleCodes);
-    const assetIds = await this.visibleAssetIds(roleCodes, Promise.resolve(scope));
-    const [summary, mdmMatches, goldenRecords, referenceVersions, certifications, architectureReviews] = await Promise.all([
-      this.summary(roleCodes),
-      this.prisma.mdmMatchCandidate.findMany({
-        where: this.matchWhere(assetIds),
-        include: {
-          sourceAsset: { select: assetSelect },
-          candidateAsset: { select: assetSelect },
-          evidence: { select: { id: true, title: true, sha256: true, status: true } },
-        },
-        orderBy: [{ status: 'asc' }, { matchScore: 'desc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.mdmGoldenRecord.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
-        include: { mergeSplitEvents: { orderBy: { createdAt: 'desc' }, take: 5 } },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.referenceDataVersion.findMany({
-        where: this.referenceWhere(scope, assetIds),
-        include: {
-          domain: { select: { id: true, code: true, nameEn: true, nameAr: true } },
-          asset: { select: assetSelect },
-          evidence: { select: { id: true, title: true, sha256: true, status: true } },
-        },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.metadataCertification.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.MetadataCertificationWhereInput,
-        include: {
-          asset: { select: assetSelect },
-          workflowCase: { select: { id: true, code: true, status: true } },
-          evidence: { select: { id: true, title: true, sha256: true, status: true } },
-        },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-      this.prisma.architectureReview.findMany({
-        where: this.assetRecordWhere(assetIds) as Prisma.ArchitectureReviewWhereInput,
-        include: {
-          asset: { select: assetSelect },
-          workflowCase: { select: { id: true, code: true, status: true } },
-          evidence: { select: { id: true, title: true, sha256: true, status: true } },
-        },
-        orderBy: [{ decision: 'asc' }, { updatedAt: 'desc' }],
-        take: 50,
-      }),
-    ]);
-    return { summary, mdmMatches, goldenRecords, referenceVersions, certifications, architectureReviews };
+  async listRegister(
+    register: string,
+    roleCodes: string[],
+    actor?: string,
+    query: ExtendedRegisterQueryDto = {},
+  ) {
+    if (!(EXTENDED_REGISTERS as readonly string[]).includes(register))
+      throw new NotFoundException('Extended-domain register not found');
+    if ((query.search?.length ?? 0) > 200)
+      throw new BadRequestException('Search cannot exceed 200 characters');
+    const params = parsePageParams(query.page ?? 1, query.pageSize ?? 25)!,
+      scope = await this.scope.resolve(roleCodes),
+      assets = await this.visibleAssetIds(roleCodes, Promise.resolve(scope));
+    const base =
+      register === 'matches'
+        ? this.matchWhere(assets)
+        : register === 'references'
+          ? this.referenceWhere(scope, assets)
+          : this.assetRecordWhere(assets);
+    const term = query.search?.trim(),
+      contains = (value: string) => ({
+        contains: value,
+        mode: 'insensitive' as const,
+      });
+    const fields: Record<string, string[]> = {
+      matches: ['code', 'resolutionNote'],
+      goldenRecords: ['code', 'clusterKey'],
+      references: ['code', 'name', 'version', 'changeSummary'],
+      certifications: ['code', 'certificationNote'],
+      architecture: [
+        'code',
+        'title',
+        'reviewType',
+        'architectureDecision',
+        'lineageImpact',
+        'workflowCaseId',
+      ],
+    };
+    const matchingAssets =
+      register === 'goldenRecords' && term
+        ? await this.prisma.dataAsset.findMany({
+            where: {
+              AND: [
+                this.assetScopeWhere(scope),
+                {
+                  OR: [
+                    { code: contains(term) },
+                    { nameEn: contains(term) },
+                    { nameAr: contains(term) },
+                  ],
+                },
+              ],
+            },
+            select: { id: true },
+          })
+        : [];
+    const relations =
+      register === 'goldenRecords'
+        ? [{ assetId: { in: matchingAssets.map((row) => row.id) } }]
+        : register === 'matches'
+          ? [
+              {
+                sourceAsset: {
+                  is: {
+                    OR: [
+                      { code: contains(term ?? '') },
+                      { nameEn: contains(term ?? '') },
+                      { nameAr: contains(term ?? '') },
+                    ],
+                  },
+                },
+              },
+              {
+                candidateAsset: {
+                  is: {
+                    OR: [
+                      { code: contains(term ?? '') },
+                      { nameEn: contains(term ?? '') },
+                      { nameAr: contains(term ?? '') },
+                    ],
+                  },
+                },
+              },
+            ]
+          : [
+              {
+                asset: {
+                  is: {
+                    OR: [
+                      { code: contains(term ?? '') },
+                      { nameEn: contains(term ?? '') },
+                      { nameAr: contains(term ?? '') },
+                    ],
+                  },
+                },
+              },
+              ...(register === 'architecture'
+                ? [{ workflowCase: { is: { code: contains(term ?? '') } } }]
+                : []),
+            ];
+    const where = {
+      AND: [
+        base,
+        ...(term
+          ? [
+              {
+                OR: [
+                  ...fields[register].map((key) => ({ [key]: contains(term) })),
+                  ...relations,
+                ],
+              },
+            ]
+          : []),
+      ],
+    };
+    const page = async <T,>(rows: Promise<T[]>, total: Promise<number>) => {
+      const [data, count] = await Promise.all([rows, total]);
+      return toPaged(data, count, params);
+    };
+    let result: ReturnType<typeof toPaged<any>>;
+    switch (register) {
+      case 'matches':
+        result = await page(
+          this.prisma.mdmMatchCandidate.findMany({
+            where: where as Prisma.MdmMatchCandidateWhereInput,
+            include: {
+              sourceAsset: { select: assetSelect },
+              candidateAsset: { select: assetSelect },
+              evidence: {
+                select: { id: true, title: true, sha256: true, status: true },
+              },
+            },
+            orderBy: [
+              { status: 'asc' },
+              { matchScore: 'desc' },
+              { updatedAt: 'desc' },
+              { id: 'asc' },
+            ],
+            skip: params.skip,
+            take: params.take,
+          }),
+          this.prisma.mdmMatchCandidate.count({
+            where: where as Prisma.MdmMatchCandidateWhereInput,
+          }),
+        );
+        break;
+      case 'goldenRecords':
+        result = await page(
+          this.prisma.mdmGoldenRecord.findMany({
+            where: where as Prisma.MdmGoldenRecordWhereInput,
+            include: {
+              mergeSplitEvents: {
+                orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+                take: 5,
+              },
+            },
+            orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }, { id: 'asc' }],
+            skip: params.skip,
+            take: params.take,
+          }),
+          this.prisma.mdmGoldenRecord.count({
+            where: where as Prisma.MdmGoldenRecordWhereInput,
+          }),
+        );
+        break;
+      case 'references':
+        result = await page(
+          this.prisma.referenceDataVersion.findMany({
+            where: where as Prisma.ReferenceDataVersionWhereInput,
+            include: {
+              domain: {
+                select: { id: true, code: true, nameEn: true, nameAr: true },
+              },
+              asset: { select: assetSelect },
+              evidence: {
+                select: { id: true, title: true, sha256: true, status: true },
+              },
+            },
+            orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }, { id: 'asc' }],
+            skip: params.skip,
+            take: params.take,
+          }),
+          this.prisma.referenceDataVersion.count({
+            where: where as Prisma.ReferenceDataVersionWhereInput,
+          }),
+        );
+        break;
+      case 'certifications':
+        result = await page(
+          this.prisma.metadataCertification.findMany({
+            where: where as Prisma.MetadataCertificationWhereInput,
+            include: {
+              asset: { select: assetSelect },
+              workflowCase: { select: { id: true, code: true, status: true } },
+              evidence: {
+                select: { id: true, title: true, sha256: true, status: true },
+              },
+            },
+            orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }, { id: 'asc' }],
+            skip: params.skip,
+            take: params.take,
+          }),
+          this.prisma.metadataCertification.count({
+            where: where as Prisma.MetadataCertificationWhereInput,
+          }),
+        );
+        break;
+      default:
+        result = await page(
+          this.prisma.architectureReview.findMany({
+            where: where as Prisma.ArchitectureReviewWhereInput,
+            include: {
+              asset: { select: assetSelect },
+              workflowCase: { select: { id: true, code: true, status: true } },
+              evidence: {
+                select: { id: true, title: true, sha256: true, status: true },
+              },
+            },
+            orderBy: [
+              { decision: 'asc' },
+              { updatedAt: 'desc' },
+              { id: 'asc' },
+            ],
+            skip: params.skip,
+            take: params.take,
+          }),
+          this.prisma.architectureReview.count({
+            where: where as Prisma.ArchitectureReviewWhereInput,
+          }),
+        );
+    }
+    if (register === 'goldenRecords') {
+      const references = await this.prisma.dataAsset.findMany({
+          where: {
+            id: {
+              in: result.data
+                .map((row) => row.assetId)
+                .filter((id): id is string => typeof id === 'string'),
+            },
+          },
+          select: assetSelect,
+        }),
+        byId = new Map(references.map((row) => [row.id, row]));
+      result.data = result.data.map((row) => ({
+        ...row,
+        asset: byId.get(row.assetId) ?? null,
+      }));
+    }
+    let eligible = new Set<string>();
+    if (actor)
+      try {
+        const roles = await businessDecisionRoles(
+            this.prisma,
+            roleCodes,
+            'extended_domains.edit',
+            register === 'certifications'
+              ? ['enterprise_data_steward', 'dq_steward']
+              : undefined,
+          ),
+          decisionScope = await this.scope.resolve(roles),
+          decisionAssets = await this.visibleAssetIds(
+            roles,
+            Promise.resolve(decisionScope),
+          );
+        const decisionWhere =
+            register === 'matches'
+              ? this.matchWhere(decisionAssets)
+              : register === 'references'
+                ? this.referenceWhere(decisionScope, decisionAssets)
+                : this.assetRecordWhere(decisionAssets),
+          ids = result.data.map((row) => row.id);
+        const filter = { AND: [decisionWhere, { id: { in: ids } }] },
+          select = { id: true };
+        const rows =
+          register === 'matches'
+            ? await this.prisma.mdmMatchCandidate.findMany({
+                where: filter as Prisma.MdmMatchCandidateWhereInput,
+                select,
+              })
+            : register === 'references'
+              ? await this.prisma.referenceDataVersion.findMany({
+                  where: filter as Prisma.ReferenceDataVersionWhereInput,
+                  select,
+                })
+              : register === 'certifications'
+                ? await this.prisma.metadataCertification.findMany({
+                    where: filter as Prisma.MetadataCertificationWhereInput,
+                    select,
+                  })
+                : register === 'architecture'
+                  ? await this.prisma.architectureReview.findMany({
+                      where: filter as Prisma.ArchitectureReviewWhereInput,
+                      select,
+                    })
+                  : await this.prisma.mdmGoldenRecord.findMany({
+                      where: filter as Prisma.MdmGoldenRecordWhereInput,
+                      select,
+                    });
+        eligible = new Set(rows.map((row) => row.id));
+      } catch (error) {
+        if (!(error instanceof ForbiddenException)) throw error;
+      }
+    const tasks =
+      register === 'architecture' && this.workflow
+        ? await this.workflow.architectureDecisionAccess(
+            result.data.map((row) => row.workflowCaseId).filter(Boolean),
+            roleCodes,
+            actor,
+          )
+        : new Map();
+    result.data = result.data.map((row) => {
+      const stage = tasks.get(row.workflowCaseId),
+        canDecide = eligible.has(row.id) && row.createdBy !== actor;
+      if (register === 'architecture')
+        return {
+          ...row,
+          workflowStage: stage?.stage ?? null,
+          workflowTaskId: stage?.taskId ?? null,
+          canDecide:
+            canDecide &&
+            ['pending', 'needs_changes'].includes(row.decision) &&
+            stage?.canDecide === true,
+          assurance: ['pending', 'needs_changes'].includes(row.decision)
+            ? 'pending'
+            : row.decisionProof
+              ? 'verified'
+              : ['approved', 'approved_with_conditions'].includes(row.decision)
+                ? 'review_needed'
+                : 'recorded',
+        };
+      return {
+        ...row,
+        canSubmit:
+          register === 'references' &&
+          eligible.has(row.id) &&
+          ['draft', 'rejected'].includes(row.status),
+        canEdit: register === 'goldenRecords' && eligible.has(row.id),
+        canDecide:
+          canDecide &&
+          (register !== 'matches' ||
+            !['merged', 'rejected', 'superseded'].includes(row.status)),
+      };
+    });
+    return result;
   }
 
-  async createMatch(roleCodes: string[], dto: CreateMdmMatchDto, actor: string) {
-    if (dto.sourceAssetId === dto.candidateAssetId) throw new BadRequestException('Match candidates require two different assets');
+  async workspace(roleCodes: string[], actor?: string) {
+    const [summary, pages] = await Promise.all([
+      this.summary(roleCodes),
+      Promise.all(
+        EXTENDED_REGISTERS.map((key) =>
+          this.listRegister(key, roleCodes, actor),
+        ),
+      ),
+    ]);
+    const registerPages = Object.fromEntries(
+      EXTENDED_REGISTERS.map((key, index) => [key, pages[index]]),
+    );
+    return {
+      summary,
+      mdmMatches: registerPages.matches.data,
+      goldenRecords: registerPages.goldenRecords.data,
+      referenceVersions: registerPages.references.data,
+      certifications: registerPages.certifications.data,
+      architectureReviews: registerPages.architecture.data,
+      registerPages,
+    };
+  }
+
+  async createMatch(
+    roleCodes: string[],
+    dto: CreateMdmMatchDto,
+    actor: string,
+  ) {
+    if (dto.sourceAssetId === dto.candidateAssetId)
+      throw new BadRequestException(
+        'Match candidates require two different assets',
+      );
     await Promise.all([
       this.assertAssetVisible(roleCodes, dto.sourceAssetId),
       this.assertAssetVisible(roleCodes, dto.candidateAssetId),
@@ -303,23 +654,36 @@ export class ExtendedDomainsService {
     ]);
     const score = clampScore(dto.matchScore, 0);
     const code = await this.nextCode('mdmMatchCandidate', 'MCM');
-    const row = await this.prisma.mdmMatchCandidate.create({
-      data: {
-        code,
-        sourceAssetId: dto.sourceAssetId,
-        candidateAssetId: dto.candidateAssetId,
-        matchScore: score,
-        status: defaultMatchStatus(score),
-        resolutionStep: defaultMatchStep(score),
-        sourceTrustRank: clampScore(dto.sourceTrustRank, 50),
-        survivorshipRulesJson: dto.survivorshipRulesJson as Prisma.InputJsonValue | undefined,
-        proposedGoldenRecordJson: dto.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
-        evidenceId: dto.evidenceId ?? null,
-        createdBy: actor,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.mdmMatchCandidate.create({
+        data: {
+          code,
+          sourceAssetId: dto.sourceAssetId,
+          candidateAssetId: dto.candidateAssetId,
+          matchScore: score,
+          status: defaultMatchStatus(score),
+          resolutionStep: defaultMatchStep(score),
+          sourceTrustRank: clampScore(dto.sourceTrustRank, 50),
+          survivorshipRulesJson: dto.survivorshipRulesJson as
+            Prisma.InputJsonValue | undefined,
+          proposedGoldenRecordJson: dto.proposedGoldenRecordJson as
+            Prisma.InputJsonValue | undefined,
+          evidenceId: dto.evidenceId ?? null,
+          createdBy: actor,
+        },
+      });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'extended_domains.mdm_match.create',
+          entityType: 'mdm_match_candidate',
+          entityId: row.id,
+          metadata: { code },
+        },
+        tx,
+      );
+      return row;
     });
-    await this.audit.log({ actor, action: 'extended_domains.mdm_match.create', entityType: 'mdm_match_candidate', entityId: row.id, metadata: { code } });
-    return row;
   }
 
   async runMdmMatching(roleCodes: string[], dto: RunMdmMatchingDto, actor: string) {
@@ -475,12 +839,13 @@ export class ExtendedDomainsService {
   }
 
   async resolveMatch(roleCodes: string[], id: string, dto: ResolveMdmMatchDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'extended_domains.edit');
     const [existing] = await Promise.all([
       this.findVisibleMatch(roleCodes, id),
       this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
     ]);
     const final = dto.status === MdmMatchStatus.merged || dto.status === MdmMatchStatus.rejected || dto.status === MdmMatchStatus.superseded;
-    if (!isSystemAdministrator(roleCodes) && final && existing.createdBy === actor) {
+    if (final && existing.createdBy === actor) {
       throw new ForbiddenException('MDM match creators cannot make the final resolution decision');
     }
     if (['merged', 'rejected', 'superseded'].includes(existing.status)) throw new ConflictException('Final MDM dispositions are immutable; create a new candidate for another review');
@@ -571,80 +936,145 @@ export class ExtendedDomainsService {
     });
   }
 
-  async listGoldenRecords(roleCodes: string[]) {
-    const assetIds = await this.visibleAssetIds(roleCodes);
-    return this.prisma.mdmGoldenRecord.findMany({
-      where: this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
-      include: { mergeSplitEvents: { orderBy: { createdAt: 'desc' }, take: 10 } },
-      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-      take: 100,
-    });
+  async listGoldenRecords(
+    roleCodes: string[],
+    query: ExtendedRegisterQueryDto = {},
+    actor?: string,
+  ) {
+    return this.listRegister('goldenRecords', roleCodes, actor, query);
   }
 
-  async updateGoldenRecord(roleCodes: string[], id: string, dto: UpdateMdmGoldenRecordDto, actor: string) {
+  async updateGoldenRecord(
+    roleCodes: string[],
+    id: string,
+    dto: UpdateMdmGoldenRecordDto,
+    actor: string,
+  ) {
+    if (!Number.isInteger(dto.expectedVersion) || dto.expectedVersion < 1)
+      throw new BadRequestException(
+        'The current golden-record version is required',
+      );
     const assetIds = await this.visibleAssetIds(roleCodes);
     const existing = await this.prisma.mdmGoldenRecord.findFirst({
-      where: { AND: [{ id }, this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput] },
+      where: {
+        AND: [
+          { id },
+          this.assetRecordWhere(assetIds) as Prisma.MdmGoldenRecordWhereInput,
+        ],
+      },
     });
     if (!existing) throw new NotFoundException('mdm_golden_record not found');
+    if (existing.version !== dto.expectedVersion)
+      throw new ConflictException(
+        'Golden record changed; reload before saving',
+      );
     const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.mdmGoldenRecord.update({
-        where: { id },
+      const claimed = await tx.mdmGoldenRecord.updateMany({
+        where: { id, version: dto.expectedVersion },
         data: {
-          status: dto.status ?? existing.status,
-          masteredRecordJson: (dto.masteredRecordJson ?? existing.masteredRecordJson) as Prisma.InputJsonValue,
-          survivorshipRulesJson: (dto.survivorshipRulesJson ?? existing.survivorshipRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          status: dto.status,
+          version: { increment: 1 },
+          masteredRecordJson: dto.masteredRecordJson as
+            Prisma.InputJsonValue | undefined,
+          survivorshipRulesJson: dto.survivorshipRulesJson as
+            Prisma.InputJsonValue | undefined,
           updatedBy: actor,
         },
+      });
+      if (claimed.count !== 1)
+        throw new ConflictException(
+          'Golden record changed; reload before saving',
+        );
+      const updated = await tx.mdmGoldenRecord.findUniqueOrThrow({
+        where: { id },
       });
       await tx.mdmMergeSplitEvent.create({
         data: {
           goldenRecordId: id,
           action: dto.status ?? 'update',
           reason: dto.reason ?? 'Golden record updated.',
-          beforeJson: existing.masteredRecordJson as Prisma.InputJsonValue,
-          afterJson: updated.masteredRecordJson as Prisma.InputJsonValue,
+          beforeJson: {
+            version: existing.version,
+            status: existing.status,
+            masteredRecordJson: existing.masteredRecordJson,
+            survivorshipRulesJson: existing.survivorshipRulesJson,
+          } as Prisma.InputJsonValue,
+          afterJson: {
+            version: updated.version,
+            status: updated.status,
+            masteredRecordJson: updated.masteredRecordJson,
+            survivorshipRulesJson: updated.survivorshipRulesJson,
+          } as Prisma.InputJsonValue,
           actor,
         },
       });
-      await this.audit.log({ actor, action: 'extended_domains.mdm_golden_record.update', entityType: 'mdm_golden_record', entityId: id, metadata: { status: updated.status } }, tx);
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'extended_domains.mdm_golden_record.update',
+          entityType: 'mdm_golden_record',
+          entityId: id,
+          metadata: { status: updated.status },
+        },
+        tx,
+      );
       return updated;
     });
     return row;
   }
 
-  async createReferenceVersion(roleCodes: string[], dto: CreateReferenceVersionDto, actor: string) {
+  async createReferenceVersion(
+    roleCodes: string[],
+    dto: CreateReferenceVersionDto,
+    actor: string,
+  ) {
     const scope = await this.scope.resolve(roleCodes);
-    const asset = dto.assetId ? await this.assertAssetVisible(roleCodes, dto.assetId) : null;
+    const asset = dto.assetId
+      ? await this.assertAssetVisible(roleCodes, dto.assetId)
+      : null;
     const domainId = dto.domainId ?? asset?.domainId ?? null;
     await this.assertDomainVisible(roleCodes, domainId);
     if (!asset && !domainId && !this.isUnrestricted(scope)) {
-      throw new BadRequestException('Reference data versions need a visible asset or domain');
+      throw new BadRequestException(
+        'Reference data versions need a visible asset or domain',
+      );
     }
     await this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor);
-    const row = await this.prisma.referenceDataVersion.create({
-      data: {
-        code: dto.code,
-        name: dto.name,
-        version: dto.version,
-        domainId,
-        assetId: dto.assetId ?? null,
-        changeSummary: dto.changeSummary ?? null,
-        sourceTrustRank: clampScore(dto.sourceTrustRank, 50),
-        valuesCount: dto.valuesCount ?? 0,
-        effectiveFrom: this.parseDate(dto.effectiveFrom),
-        effectiveTo: this.parseDate(dto.effectiveTo),
-        evidenceId: dto.evidenceId ?? null,
-        createdBy: actor,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.referenceDataVersion.create({
+        data: {
+          code: dto.code,
+          name: dto.name,
+          version: dto.version,
+          domainId,
+          assetId: dto.assetId ?? null,
+          changeSummary: dto.changeSummary ?? null,
+          sourceTrustRank: clampScore(dto.sourceTrustRank, 50),
+          valuesCount: dto.valuesCount ?? 0,
+          effectiveFrom: this.parseDate(dto.effectiveFrom),
+          effectiveTo: this.parseDate(dto.effectiveTo),
+          evidenceId: dto.evidenceId ?? null,
+          createdBy: actor,
+        },
+      });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'extended_domains.reference_version.create',
+          entityType: 'reference_data_version',
+          entityId: row.id,
+          metadata: { code: row.code, version: row.version },
+        },
+        tx,
+      );
+      return row;
     });
-    await this.audit.log({ actor, action: 'extended_domains.reference_version.create', entityType: 'reference_data_version', entityId: row.id, metadata: { code: row.code, version: row.version } });
-    return row;
   }
 
   async decideReferenceVersion(roleCodes: string[], id: string, dto: ReferenceDecisionDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'extended_domains.edit');
     const existing = await this.findVisibleReference(roleCodes, id);
-    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && FINAL_REFERENCE_DECISIONS.has(dto.decision)) {
+    if (existing.createdBy === actor && FINAL_REFERENCE_DECISIONS.has(dto.decision)) {
       throw new ForbiddenException('Reference version creators cannot make the final decision');
     }
     const status = referenceVersionStatus(dto.decision);
@@ -667,14 +1097,25 @@ export class ExtendedDomainsService {
     return row;
   }
 
-  async createCertification(roleCodes: string[], dto: CreateMetadataCertificationDto, actor: string) {
+  async createCertification(
+    roleCodes: string[],
+    dto: CreateMetadataCertificationDto,
+    actor: string,
+  ) {
     await Promise.all([
       this.assertAssetVisible(roleCodes, dto.assetId),
       this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
     ]);
     const code = await this.nextCode('metadataCertification', 'META');
     return this.prisma.$transaction(async (tx) => {
-      const workflowCaseId = await this.createWorkflow(tx, 'metadata_certification', `Metadata certification ${code}`, dto.assetId, roleCodes, actor);
+      const workflowCaseId = await this.createWorkflow(
+        tx,
+        'metadata_certification',
+        `Metadata certification ${code}`,
+        dto.assetId,
+        roleCodes,
+        actor,
+      );
       const qualityScore = clampScore(dto.qualityScore, 0);
       const completenessScore = clampScore(dto.completenessScore, 0);
       const row = await tx.metadataCertification.create({
@@ -694,12 +1135,22 @@ export class ExtendedDomainsService {
           createdBy: actor,
         },
       });
-      await this.audit.log({ actor, action: 'extended_domains.metadata_certification.create', entityType: 'metadata_certification', entityId: row.id, metadata: { code, workflowCaseId } });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'extended_domains.metadata_certification.create',
+          entityType: 'metadata_certification',
+          entityId: row.id,
+          metadata: { code, workflowCaseId },
+        },
+        tx,
+      );
       return row;
     });
   }
 
   async saveCertification(roleCodes: string[], id: string, dto: SaveMetadataCertificationDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'extended_domains.edit');
     const [existing] = await Promise.all([
       this.findVisibleCertification(roleCodes, id),
       this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
@@ -712,7 +1163,7 @@ export class ExtendedDomainsService {
     const calculated = certificationStatus({ qualityScore, completenessScore, ownerConfirmed, glossaryAligned, lineageReviewed });
     if (dto.status === MetadataCertificationStatus.certified && calculated !== MetadataCertificationStatus.certified) throw new BadRequestException('Metadata does not meet the required certification checks');
     const status = dto.status === MetadataCertificationStatus.certified || dto.status === undefined ? calculated : dto.status;
-    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && status === MetadataCertificationStatus.certified) {
+    if (existing.createdBy === actor && status === MetadataCertificationStatus.certified) {
       throw new ForbiddenException('Metadata certification creators cannot certify their own metadata');
     }
     const row = await claimGovernanceWrite(() => this.prisma.$transaction(async (tx) => {
@@ -761,6 +1212,7 @@ export class ExtendedDomainsService {
       this.assertAssetVisible(roleCodes, dto.assetId),
       this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
     ]);
+    if(dto.previousReviewId){const previous=await this.findVisibleArchitectureReview(roleCodes,dto.previousReviewId);if(previous.assetId!==dto.assetId||['pending','needs_changes'].includes(previous.decision))throw new BadRequestException('A revision must follow a final review of the same asset');}
     const code = await this.nextCode('architectureReview', 'DAM');
     return this.prisma.$transaction(async (tx) => {
       const workflowCaseId = await this.createWorkflow(tx, 'architecture_review', `Architecture review ${code}`, dto.assetId, roleCodes, actor);
@@ -768,6 +1220,7 @@ export class ExtendedDomainsService {
         data: {
           code,
           assetId: dto.assetId,
+          previousReviewId:dto.previousReviewId,
           reviewType: dto.reviewType ?? 'data_model',
           title: dto.title,
           architectureDecision: dto.architectureDecision ?? null,
@@ -779,34 +1232,231 @@ export class ExtendedDomainsService {
           createdBy: actor,
         },
       });
-      await this.audit.log({ actor, action: 'extended_domains.architecture_review.create', entityType: 'architecture_review', entityId: row.id, metadata: { code, workflowCaseId } });
+      await this.audit.logRequired({ actor, action: 'extended_domains.architecture_review.create', entityType: 'architecture_review', entityId: row.id, metadata: { code, workflowCaseId } },tx);
       return row;
     });
   }
 
-  async decideArchitectureReview(roleCodes: string[], id: string, dto: DecideArchitectureReviewDto, actor: string) {
-    const [existing] = await Promise.all([
-      this.findVisibleArchitectureReview(roleCodes, id),
-      this.assertEvidenceLinkable(roleCodes, dto.evidenceId, actor),
-    ]);
-    if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor && isArchitectureDecisionFinal(dto.decision)) {
-      throw new ForbiddenException('Architecture review creators cannot make the final decision');
-    }
-    const row = await this.prisma.architectureReview.update({
-      where: { id },
-      data: {
-        decision: dto.decision,
-        architectureDecision: dto.architectureDecision,
-        lineageImpact: dto.lineageImpact,
-        conditionsJson: dto.conditionsJson as Prisma.InputJsonValue | undefined,
-        evidenceId: dto.evidenceId ?? undefined,
-        reviewedBy: isArchitectureDecisionFinal(dto.decision) ? actor : undefined,
-        reviewedAt: isArchitectureDecisionFinal(dto.decision) ? new Date() : undefined,
-        updatedBy: actor,
+  async decideArchitectureReview(
+    roleCodes: string[],
+    id: string,
+    dto: DecideArchitectureReviewDto,
+    actor: string,
+  ) {
+    const roles = await businessDecisionRoles(
+        this.prisma,
+        roleCodes,
+        'extended_domains.edit',
+      ),
+      existing = await this.findVisibleArchitectureReview(roles, id);
+    if (!['pending', 'needs_changes'].includes(existing.decision))
+      throw new ConflictException(
+        'This review has a final decision; create a new review revision',
+      );
+    if (existing.version !== dto.expectedVersion)
+      throw new ConflictException(
+        'Architecture review changed; reload before deciding',
+      );
+    if (existing.createdBy === actor && dto.decision !== 'pending')
+      throw new ForbiddenException(
+        'Architecture review creators cannot make the final decision',
+      );
+    if (!this.workflow || !existing.workflowCaseId)
+      throw new BadRequestException(
+        'A native architecture workflow is required; preserve this legacy review and open a new revision',
+      );
+    if (!dto.workflowTaskId)
+      throw new BadRequestException(
+        'The current architecture decision task is required',
+      );
+    if (
+      ['needs_changes', 'rejected'].includes(dto.decision) &&
+      (dto.decisionReason?.trim().length ?? 0) < 10
+    )
+      throw new BadRequestException(
+        'Explain the requested changes or rejection in at least ten characters',
+      );
+    return claimGovernanceWrite(() =>
+      this.prisma.$transaction(async (tx) => {
+        const identity = await governanceDecisionActor(
+          tx,
+          actor,
+          'extended_domains.edit',
+        );
+        await this.workflow!.assertArchitectureDecisionTask(
+          existing.workflowCaseId!,
+          dto.workflowTaskId,
+          identity.roles,
+          actor,
+          tx,
+        );
+        const approved = ['approved', 'approved_with_conditions'].includes(
+            dto.decision,
+          ),
+          evidenceId = dto.evidenceId ?? existing.evidenceId;
+        const proof =
+          approved || (dto.decision === 'pending' && !!dto.evidenceId)
+            ? await governanceDecisionProof(tx, this.evidence, identity, {
+                evidenceId,
+                justification: dto.evidenceJustification,
+                targetType: 'architecture_review',
+                targetId: id,
+                context: {
+                  assetId: existing.assetId,
+                  previousReviewId: existing.previousReviewId,
+                  decision: dto.decision,
+                  version: existing.version + 1,
+                  workflowTaskId: dto.workflowTaskId,
+                },
+              })
+            : null;
+        if (approved) {
+          const linked = existing.decisionProof as {
+            targetId?: string;
+            context?: { assetId?: string; workflowTaskId?: string };
+            document?: {
+              id?: string;
+              sha256?: string;
+              evidenceUpdatedAt?: string;
+            };
+          } | null;
+          if (
+            !linked ||
+            linked.targetId !== id ||
+            linked.context?.assetId !== existing.assetId ||
+            linked.context.workflowTaskId !== dto.workflowTaskId ||
+            linked.document?.id !== evidenceId ||
+            linked.document.sha256 !== proof?.document.sha256 ||
+            linked.document.evidenceUpdatedAt !==
+              proof?.document.evidenceUpdatedAt
+          )
+            throw new ConflictException(
+              'Link the current supporting document to this decision task before approving',
+            );
+        }
+        const claim = await tx.architectureReview.updateMany({
+          where: {
+            id,
+            decision: existing.decision,
+            version: dto.expectedVersion,
+          },
+          data: { version: { increment: 1 } },
+        });
+        if (claim.count !== 1)
+          throw new ConflictException(
+            'Architecture review changed; reload before deciding',
+          );
+        let decision = dto.decision;
+        if (dto.decision !== 'pending') {
+          await this.workflow!.recordDomainTaskDecision(
+            {
+              taskId: dto.workflowTaskId,
+              roleCodes: identity.roles,
+              actor,
+              decision: approved ? 'approved' : 'rejected',
+              comment: approved
+                ? dto.evidenceJustification
+                : dto.decisionReason,
+              eventAction: 'architecture_review.workflow_decision',
+              ...(approved && proof
+                ? {
+                    decisionEvidence: {
+                      evidenceId: proof.document.id,
+                      reviewId: id,
+                      sha256: proof.document.sha256,
+                    },
+                  }
+                : {}),
+              ...(dto.decision === 'rejected'
+                ? { finalOutcome: 'rejected' as const }
+                : {}),
+            },
+            tx,
+          );
+          if (approved) {
+            const open = await tx.workflowTask.findMany({
+              where: {
+                caseId: existing.workflowCaseId!,
+                status: { in: ['pending', 'in_progress'] },
+              },
+              include: { templateStage: { select: { kind: true } } },
+            });
+            // Keep parallel/further reviews pending; implementation evidence legitimately follows approval.
+            if (
+              open.some((task) => task.templateStage?.kind !== 'implementation')
+            )
+              decision = ArchitectureReviewDecision.pending;
+          }
+        }
+        const updated = await tx.architectureReview.update({
+          where: { id, version: dto.expectedVersion + 1 },
+          data: {
+            decision,
+            architectureDecision: dto.architectureDecision,
+            lineageImpact: dto.lineageImpact,
+            conditionsJson: dto.conditionsJson as
+              Prisma.InputJsonValue | undefined,
+            evidenceId: evidenceId ?? undefined,
+            decisionProof: proof
+              ? (proof as unknown as Prisma.InputJsonValue)
+              : Prisma.DbNull,
+            reviewedBy: dto.decision !== 'pending' ? actor : undefined,
+            reviewedAt: dto.decision !== 'pending' ? new Date() : undefined,
+            updatedBy: actor,
+          },
+        });
+        await this.audit.logRequired(
+          {
+            actor,
+            action:
+              dto.decision === 'pending'
+                ? 'extended_domains.architecture_review.evidence.link'
+                : 'extended_domains.architecture_review.decide',
+            entityType: 'architecture_review',
+            entityId: id,
+            metadata: {
+              previousDecision: existing.decision,
+              requestedDecision: dto.decision,
+              decision,
+              decisionReason: dto.decisionReason,
+              previousVersion: existing.version,
+              newVersion: updated.version,
+              evidenceId,
+              decisionProof: proof,
+              workflowCaseId: existing.workflowCaseId,
+              workflowTaskId: dto.workflowTaskId,
+            },
+          },
+          tx,
+        );
+        return updated;
+      }),
+    );
+  }
+
+  async reviseArchitectureReview(
+    roleCodes: string[],
+    id: string,
+    actor: string,
+  ) {
+    const previous = await this.findVisibleArchitectureReview(roleCodes, id);
+    if (previous.decision === 'pending')
+      throw new BadRequestException(
+        'Finish the current review before opening another revision',
+      );
+    return this.createArchitectureReview(
+      roleCodes,
+      {
+        assetId: previous.assetId,
+        title: previous.title,
+        previousReviewId: id,
+        reviewType: previous.reviewType,
+        riskLevel: previous.riskLevel,
+        architectureDecision: previous.architectureDecision ?? undefined,
+        lineageImpact: previous.lineageImpact ?? undefined,
       },
-    });
-    await this.audit.log({ actor, action: 'extended_domains.architecture_review.decide', entityType: 'architecture_review', entityId: id, metadata: { decision: dto.decision } });
-    return row;
+      actor,
+    );
   }
 
   private async createWorkflow(tx: Prisma.TransactionClient, type: string, title: string, assetId: string, roleCodes: string[], actor: string): Promise<string> {
@@ -876,8 +1526,18 @@ export class ExtendedDomainsService {
       code: string;
       sourceAssetId: string;
       candidateAssetId: string;
-      sourceAsset: { id: string; code: string; nameEn: string; domainId: string | null };
-      candidateAsset: { id: string; code: string; nameEn: string; domainId: string | null };
+      sourceAsset: {
+        id: string;
+        code: string;
+        nameEn: string;
+        domainId: string | null;
+      };
+      candidateAsset: {
+        id: string;
+        code: string;
+        nameEn: string;
+        domainId: string | null;
+      };
       proposedGoldenRecordJson: Prisma.JsonValue | null;
       survivorshipRulesJson: Prisma.JsonValue | null;
     },
@@ -886,48 +1546,65 @@ export class ExtendedDomainsService {
   ) {
     const orderedIds = [match.sourceAssetId, match.candidateAssetId].sort();
     const clusterKey = orderedIds.join(':');
-    const code = `GOLD-${match.sourceAsset.code}-${match.candidateAsset.code}`
-      .replace(/[^a-zA-Z0-9-]+/g, '-')
-      .replace(/-+/g, '-')
-      .slice(0, 120);
-    const masteredRecord =
-      dto.proposedGoldenRecordJson ??
-      match.proposedGoldenRecordJson ??
-      {
+    const orderedAssets = [match.sourceAsset, match.candidateAsset].sort(
+      (a, b) => a.id.localeCompare(b.id),
+    );
+    const code =
+      'GOLD-' +
+      orderedAssets
+        .map((asset) => asset.code)
+        .join('-')
+        .replace(/[^a-zA-Z0-9-]+/g, '-')
+        .slice(0, 80) +
+      '-' +
+      createHash('sha256').update(clusterKey).digest('hex').slice(0, 12);
+    const masteredRecord = dto.proposedGoldenRecordJson ??
+      match.proposedGoldenRecordJson ?? {
         name: match.sourceAsset.nameEn || match.candidateAsset.nameEn,
         sourceAssetCode: match.sourceAsset.code,
         candidateAssetCode: match.candidateAsset.code,
         winningSource: match.sourceAsset.code,
       };
-    const survivorshipRules = dto.survivorshipRulesJson ?? match.survivorshipRulesJson ?? { strategy: 'source_trust_rank' };
-    const golden = await tx.mdmGoldenRecord.upsert({
-      where: { code },
-      create: {
-        code,
-        assetId: match.sourceAssetId,
-        domainId: match.sourceAsset.domainId ?? match.candidateAsset.domainId,
-        clusterKey,
-        sourceRecordIdsJson: orderedIds,
-        masteredRecordJson: masteredRecord as Prisma.InputJsonValue,
-        survivorshipRulesJson: survivorshipRules as Prisma.InputJsonValue,
-        status: MdmGoldenRecordStatus.active,
-        createdBy: actor,
-      },
-      update: {
-        sourceRecordIdsJson: orderedIds,
-        masteredRecordJson: masteredRecord as Prisma.InputJsonValue,
-        survivorshipRulesJson: survivorshipRules as Prisma.InputJsonValue,
-        status: MdmGoldenRecordStatus.active,
-        updatedBy: actor,
-      },
+    const survivorshipRules = dto.survivorshipRulesJson ??
+      match.survivorshipRulesJson ?? { strategy: 'source_trust_rank' };
+    const existingGolden = await tx.mdmGoldenRecord.findFirst({
+      where: { OR: [{ code }, { clusterKey }] },
     });
+    if (existingGolden)
+      throw new ConflictException(
+        'This cluster already has a golden record; reload it and use its explicit versioned correction action',
+      );
+    const golden = await tx.mdmGoldenRecord
+      .create({
+        data: {
+          code,
+          assetId: match.sourceAssetId,
+          domainId: match.sourceAsset.domainId ?? match.candidateAsset.domainId,
+          clusterKey,
+          sourceRecordIdsJson: orderedIds,
+          masteredRecordJson: masteredRecord as Prisma.InputJsonValue,
+          survivorshipRulesJson: survivorshipRules as Prisma.InputJsonValue,
+          status: MdmGoldenRecordStatus.active,
+          createdBy: actor,
+        },
+      })
+      .catch((error: unknown) => {
+        if ((error as { code?: string })?.code === 'P2002')
+          throw new ConflictException(
+            'This golden-record cluster was published concurrently; reload it before correcting it',
+          );
+        throw error;
+      });
     await tx.mdmMergeSplitEvent.create({
       data: {
         goldenRecordId: golden.id,
         matchCandidateId: match.id,
         action: 'merge',
-        reason: dto.resolutionNote ?? 'High-confidence MDM match merged into a golden record.',
-        beforeJson: match.proposedGoldenRecordJson as Prisma.InputJsonValue | undefined,
+        reason:
+          dto.resolutionNote ??
+          'High-confidence MDM match merged into a golden record.',
+        beforeJson: match.proposedGoldenRecordJson as
+          Prisma.InputJsonValue | undefined,
         afterJson: golden.masteredRecordJson as Prisma.InputJsonValue,
         actor,
       },

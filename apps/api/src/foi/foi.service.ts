@@ -1,3 +1,4 @@
+import { businessDecisionRoles } from '../auth/business-roles';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   CaseStatus,
@@ -17,7 +18,6 @@ import { parsePageParams, toPaged } from '../common/pagination';
 import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
 import { claimGovernanceWrite } from '../common/governance-write';
-import { isSystemAdministrator } from '../auth/system-admin';
 import {
   CreateFoiAppealDto,
   CreateFoiDisclosureDto,
@@ -67,8 +67,7 @@ export class FoiService {
     private readonly workflow?: WorkflowService,
   ) {}
 
-  private async assertAssignedOfficer(personId: string | null, actor: string, roleCodes: string[]): Promise<void> {
-    if (isSystemAdministrator(roleCodes)) return;
+  private async assertAssignedOfficer(personId: string | null, actor: string): Promise<void> {
     if (!personId) throw new ForbiddenException('Assign an independent officer before making this decision');
     const person = await this.prisma.person.findFirst({ where: { id: personId, isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } });
     if (!person) throw new ForbiddenException('Only the assigned independent officer can make this decision');
@@ -251,7 +250,27 @@ export class FoiService {
     };
   }
 
-  async list(roleCodes: string[], filters: FoiRequestFilters) {
+  private async decisionActions(rows: RequestWithInclude[], roleCodes: string[], actor?: string) {
+    const allowed = new Map<string, Set<string>>();
+    const person = actor && rows.length ? await this.prisma.person.findFirst({ where: { isActive: true, deletedAt: null, OR: [{ email: actor }, { user: { email: actor, isActive: true } }] }, select: { id: true } }) : null;
+    if (person) for (const [action, eligible] of Object.entries({ classification: ['data_owner', 'foi_officer'], privacy: ['privacy_officer'], legal: ['dmo_admin', 'foi_officer'], decision: ['foi_officer'] })) {
+      try {
+        const roles = await businessDecisionRoles(this.prisma, roleCodes, 'foi_requests.edit', eligible);
+        const scope = await this.scope.resolve(roles), assets = await this.visibleAssetIds(roles);
+        const visible = await this.prisma.foiRequest.findMany({ where: { AND: [this.requestScopeWhere(scope, assets), { id: { in: rows.map(row => row.id) } }] }, select: { id: true } });
+        allowed.set(action, new Set(visible.map(row => row.id)));
+      } catch (error) { if (!(error instanceof ForbiddenException)) throw error; }
+    }
+    return rows.map(row => {
+      const open = ['registered', 'under_review', 'extended'].includes(row.status);
+      const independent = !!actor && row.createdBy !== actor;
+      const officer = !!person && row.assignedOfficerPersonId === person.id && !!allowed.get('decision')?.has(row.id);
+      const allowedReviewTypes = open && independent && person ? row.reviews.filter(review => review.status === 'pending' && review.reviewerPersonId === person.id && allowed.get(review.reviewType)?.has(row.id)).map(review => review.reviewType) : [];
+      return { ...this.decorate(row), allowedReviewTypes, canDecide: open && independent && officer && row.identityValidated && row.contactValidated, canDisclose: officer && canDiscloseFoi(row.status) && row.identityValidated && row.contactValidated && !!row.decisions[0] && row.decisions[0].outcome === row.decisionOutcome };
+    });
+  }
+
+  async list(roleCodes: string[], filters: FoiRequestFilters, actor?: string) {
     const scope = await this.scope.resolve(roleCodes);
     const scoped = this.requestScopeWhere(scope, await this.visibleAssetIds(roleCodes));
     const clauses: Prisma.FoiRequestWhereInput[] = [scoped];
@@ -293,14 +312,15 @@ export class FoiService {
         }),
         this.prisma.foiRequest.count({ where }),
       ]);
-      return toPaged(rows.map((row) => this.decorate(row)), total, paging);
+      return toPaged(await this.decisionActions(rows, roleCodes, actor), total, paging);
     }
     const rows = await this.prisma.foiRequest.findMany({ where, include: requestInclude, orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }] });
-    return rows.map((row) => this.decorate(row));
+    return this.decisionActions(rows, roleCodes, actor);
   }
 
-  get(roleCodes: string[], id: string) {
-    return this.requireRequest(roleCodes, id);
+  async get(roleCodes: string[], id: string, actor?: string) {
+    const row = await this.requireRequest(roleCodes, id);
+    return (await this.decisionActions([row], roleCodes, actor))[0];
   }
 
   templates() {
@@ -399,20 +419,20 @@ export class FoiService {
   }
 
   async saveReview(roleCodes: string[], id: string, dto: SaveFoiReviewDto, actor: string) {
+    if(dto.status!==FoiReviewStatus.pending){const eligible:Record<string,string[]>={classification:['data_owner','foi_officer'],privacy:['privacy_officer'],legal:['dmo_admin','foi_officer']};roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'foi_requests.edit',eligible[dto.reviewType]??[]);}
     const current = await this.requireRequest(roleCodes, id);
-    const administratorOverride = isSystemAdministrator(roleCodes);
     if (!['registered', 'under_review', 'extended'].includes(current.status)) throw new BadRequestException('Only an open FOI request can be reviewed');
     await this.assertPerson(dto.reviewerPersonId, 'Reviewer');
     const previous = current.reviews.find((review) => review.reviewType === dto.reviewType);
     const status = dto.status ?? FoiReviewStatus.completed;
     if (status !== FoiReviewStatus.pending) {
-      if (!administratorOverride && current.createdBy === actor) throw new ForbiddenException('FOI creators cannot review their own request');
+      if (current.createdBy === actor) throw new ForbiddenException('FOI creators cannot review their own request');
       const eligible: Record<string, readonly string[]> = { classification: ['data_owner', 'foi_officer'], privacy: ['privacy_officer'], legal: ['dmo_admin', 'foi_officer'] };
-      if (!administratorOverride && !roleCodes.some((role) => eligible[dto.reviewType]?.includes(role))) throw new ForbiddenException('An eligible business reviewer role is required');
-      if (!administratorOverride && (!previous?.reviewerPersonId || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== previous.reviewerPersonId))) throw new BadRequestException('Assign the FOI reviewer before making a decision');
-      await this.assertAssignedOfficer(previous?.reviewerPersonId ?? null, actor, roleCodes);
+    // The actual role grant above identifies the required business responsibility.
+      if (!previous?.reviewerPersonId || (dto.reviewerPersonId !== undefined && dto.reviewerPersonId !== previous.reviewerPersonId)) throw new BadRequestException('Assign the FOI reviewer before making a decision');
+      await this.assertAssignedOfficer(previous.reviewerPersonId, actor);
       if (!dto.note?.trim() || !dto.evidenceSummary?.trim()) throw new BadRequestException('A review conclusion and supporting evidence summary are required');
-      if (previous && previous.status !== FoiReviewStatus.pending) throw new BadRequestException('The review already has a decision');
+      if (previous.status !== FoiReviewStatus.pending) throw new BadRequestException('The review already has a decision');
     }
     await this.prisma.$transaction(async (tx) => {
     await claimGovernanceWrite(() => tx.foiRequest.update({ where: { id, updatedAt: current.updatedAt, status: current.status }, data: { status: FoiRequestStatus.under_review, updatedBy: actor } }));
@@ -459,10 +479,11 @@ export class FoiService {
   }
 
   async saveDecision(roleCodes: string[], id: string, dto: SaveFoiDecisionDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'foi_requests.edit',['foi_officer']);
     const current = await this.requireRequest(roleCodes, id);
-    if (!isSystemAdministrator(roleCodes) && current.createdBy === actor) throw new ForbiddenException('FOI creators cannot decide their own request');
-    if (!isSystemAdministrator(roleCodes) && !roleCodes.includes('foi_officer')) throw new ForbiddenException('An assigned FOI officer business role is required');
-    await this.assertAssignedOfficer(current.assignedOfficerPersonId, actor, roleCodes);
+    if (current.createdBy === actor) throw new ForbiddenException('FOI creators cannot decide their own request');
+    // The actual role grant above identifies the required business responsibility.
+    await this.assertAssignedOfficer(current.assignedOfficerPersonId, actor);
     if (!['registered', 'under_review', 'extended'].includes(current.status)) throw new BadRequestException('Only an open FOI request can receive a final decision');
     if (!current.identityValidated || !current.contactValidated) throw new BadRequestException('Validate requester identity and contact before deciding disclosure');
     if (dto.outcome !== FoiDecisionOutcome.extended && (current.reviews.length !== 3 || current.reviews.some((review) => review.status !== FoiReviewStatus.completed))) throw new BadRequestException('Complete classification, privacy and legal reviews before making a final decision');
@@ -519,6 +540,7 @@ export class FoiService {
   }
 
   async createDisclosure(roleCodes: string[], id: string, dto: CreateFoiDisclosureDto, actor: string) {
+    roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'foi_requests.edit',['foi_officer']);
     const current = await this.requireRequest(roleCodes, id);
     if (!canDiscloseFoi(current.status)) {
       throw new BadRequestException('FOI request must be approved or partially approved before disclosure');
@@ -526,8 +548,8 @@ export class FoiService {
     const decision = current.decisions[0];
     if (!decision || ![FoiDecisionOutcome.approved, FoiDecisionOutcome.partially_approved].includes(decision.outcome as any) || decision.outcome !== current.decisionOutcome) throw new BadRequestException('Disclosure requires the latest recorded approval decision');
     if (!current.identityValidated || !current.contactValidated) throw new BadRequestException('Validate the release recipient before disclosure');
-    if (!isSystemAdministrator(roleCodes) && !roleCodes.includes('foi_officer')) throw new ForbiddenException('An assigned FOI officer must record disclosure');
-    await this.assertAssignedOfficer(current.assignedOfficerPersonId, actor, roleCodes);
+    // The actual role grant above identifies the required business responsibility.
+    await this.assertAssignedOfficer(current.assignedOfficerPersonId, actor);
     if (![current.requesterEmail, current.requesterPhone, current.requesterName].filter(Boolean).includes(dto.recipient)) throw new BadRequestException('The recipient must match the validated requester');
     if (!dto.summary?.trim()) throw new BadRequestException('Document the approved release scope and delivery proof');
     await this.prisma.$transaction(async (tx) => {

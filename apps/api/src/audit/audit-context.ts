@@ -10,6 +10,7 @@ export function nativeAuditContext(action:string) {
  if(!/^(ai\.|aiuc\.|airs\.)/.test(action))return {};
  const req=requests.getStore();
  if(!req)return {actorOrigin:'background_or_internal'};
- const user=(req as Request&{user?:{id?:string}}).user;
- return {actorOrigin:'http',clientIp:req.ip??req.socket.remoteAddress??null,requestMethod:req.method,requestPath:req.path,authenticatedActorId:user?.id??null};
+ const user=(req as Request&{user?:{id?:string;roles?:string[];businessRoles?:{roleCode:string;businessRoleCode:string}[]}}).user;
+ return {actorOrigin:'http',clientIp:req.ip??req.socket.remoteAddress??null,requestMethod:req.method,requestPath:req.path,authenticatedActorId:user?.id??null,
+   authenticatedRoleCodes:user?.roles??[],responsibilityBindings:user?.businessRoles??[]};
 }

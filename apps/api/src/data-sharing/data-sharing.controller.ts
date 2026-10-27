@@ -25,13 +25,13 @@ export class DataSharingController {
   @RequirePermissions('data_sharing_requests.view')
   listRequests(@CurrentUser() user: AuthUser, @Query('search') search?: string, @Query('status') status?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
     const filters: DataSharingFilters = { search, status, page: page ?? '1', pageSize: pageSize ?? '25' };
-    return this.service.listRequests(user.roles, filters);
+    return this.service.listRequests(user.roles, filters, user.email);
   }
 
   @Get('requests/:id')
   @RequirePermissions('data_sharing_requests.view')
   getRequest(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.getRequest(user.roles, id);
+    return this.service.getRequest(user.roles, id, user.email);
   }
 
   @Post('requests')

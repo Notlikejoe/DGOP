@@ -15,7 +15,7 @@ export async function testAiRequestLifecycle(db:PrismaClient) {
  try {
   const intake=app.get(AiIntakeService),classification=app.get(AiClassificationService),routing=app.get(AiWorkflowRoutingService),ids=app.get(AiIdentifiersService),audit=app.get(AuditService);
   const requester=await db.user.findUniqueOrThrow({where:{email:'intake-requester@phase2a.test'}}),officer=await db.user.findUniqueOrThrow({where:{email:'intake-officer@phase2a.test'}}),higher=await db.user.findUniqueOrThrow({where:{email:'intake-sponsor@phase2a.test'}}),assessor=await db.user.findUniqueOrThrow({where:{email:'intake-triage@phase2a.test'}});
-  const original=await db.aiUseCase.findFirstOrThrow({where:{assetId:{not:null},deletedAt:null,isSampleData:false},include:{intakeRevisions:{orderBy:{revision:'desc'},take:1}}}),evidence=await db.ndiEvidence.findFirstOrThrow({where:{deletedAt:null}});
+  const original=await db.aiUseCase.findFirstOrThrow({where:{assetId:{not:null},deletedAt:null,isSampleData:false,intakeRevisions:{some:{}}},include:{intakeRevisions:{orderBy:{revision:'desc'},take:1}}}),evidence=await db.ndiEvidence.findFirstOrThrow({where:{title:'Native synthetic integration decision evidence',deletedAt:null,status:'approved'}});
   const template=await routing.binding(db as PrismaService),tier=await db.governedReferenceVersion.findFirstOrThrow({where:{listCode:'R_SDAIA_TIER',state:'published'}});
   async function source(status:'submitted'|'awaiting_information'|'under_review',classified=false) {
    return db.$transaction(async tx=>{

@@ -1,25 +1,28 @@
 import { createHash } from 'node:crypto';
 import { EffectiveScope } from '../access/scope.service';
 import { AI_PERMISSIONS, AiPermission, aiRoleMayHold } from '../ai-governance/ai-permissions';
+import { businessRoleCode } from './business-roles';
 
 export interface AiCapabilities {
   administratorOversight: boolean;
   readMode: 'governance' | 'audit' | 'executive' | 'own' | 'none';
   /** Eligible role grants. Record-specific eligibility and independence remain authoritative. */
   permissions: string[];
+  scopeWarnings?: string[];
   screens: { useCases: boolean; risks: boolean; review: boolean; reviewOperations: boolean; dashboard: boolean; migration: boolean };
   panels: { triage: boolean; classification: boolean; classificationVerification: boolean; specialist: boolean; decision: boolean; registration: boolean };
 }
 
 /** Mirrors this version's native read policies without invoking audited authorization denials. */
-export function aiCapabilities(roles: string[], grants: { role: { code: string }; permission: { resource: string; action: string } }[], scope: EffectiveScope): AiCapabilities {
+export function aiCapabilities(actualRoles: string[], grants: { role: { code: string; businessRoleCode?: string | null }; permission: { resource: string; action: string } }[], scope: EffectiveScope): AiCapabilities {
+  const roles=[...new Set([...actualRoles,...grants.filter(g=>actualRoles.includes(g.role.code)).map(g=>businessRoleCode(g.role))])];
   const admin = roles.includes('system_admin'), auditor = roles.includes('auditor');
   const permissions = [...new Set(grants.filter(g => {
     const code = `${g.permission.resource}.${g.permission.action}` as AiPermission;
-    return roles.includes(g.role.code) && AI_PERMISSIONS.includes(code) && aiRoleMayHold(g.role.code, code)
+    return actualRoles.includes(g.role.code) && AI_PERMISSIONS.includes(code) && aiRoleMayHold(businessRoleCode(g.role), code)
       && (code.startsWith('case.view.') || code.startsWith('dashboard.view.') || g.role.code !== 'system_admin' && !auditor);
   }).map(g => `${g.permission.resource}.${g.permission.action}`))].sort();
-  if (admin) for (const code of AI_PERMISSIONS) if (!permissions.includes(code)) permissions.push(code);
+  if (admin) for (const code of AI_PERMISSIONS) if (code.startsWith('case.view.') || code.startsWith('dashboard.view.')) if (!permissions.includes(code)) permissions.push(code);
   permissions.sort();
   const has = (code: string) => permissions.includes(code);
   const useCases = admin || ['own', 'org', 'all'].some(s => has(`case.view.aiuc.${s}`));
@@ -38,6 +41,8 @@ export function aiCapabilities(roles: string[], grants: { role: { code: string }
     administratorOversight: admin,
     readMode: report ? executive ? 'executive' : auditor ? 'audit' : governance ? 'governance' : 'own' : useCases || risks ? 'own' : 'none',
     permissions,
+    scopeWarnings:[...(scope.orgUnits!=='all'&&!scope.orgUnits.length?['business_scope_missing']:[]),
+      ...(scope.maxClassRank!==null?['classification_verification_required']:[])],
     screens: { useCases, risks, review: classification || specialist || decision || registration,
       reviewOperations: report, dashboard: report,
       migration: risks && (admin || roles.some(r => ['AI_GOVERNANCE_OFFICER', 'dmo_admin', 'auditor'].includes(r)))
@@ -46,9 +51,9 @@ export function aiCapabilities(roles: string[], grants: { role: { code: string }
   };
 }
 
-export function accessRevision(roles: string[], permissions: string[], scopes: EffectiveScope, ai: AiCapabilities): string {
+export function accessRevision(roles: string[], permissions: string[], scopes: EffectiveScope, ai: AiCapabilities, businessAuthority:unknown=null): string {
   const sorted = (v: string[]) => [...new Set(v)].sort();
   return createHash('sha256').update(JSON.stringify({ roles: sorted(roles), permissions: sorted(permissions),
     scopes: { orgUnits: scopes.orgUnits === 'all' ? 'all' : sorted(scopes.orgUnits),
-      domains: scopes.domains === 'all' ? 'all' : sorted(scopes.domains), maxClassRank: scopes.maxClassRank }, ai })).digest('hex');
+      domains: scopes.domains === 'all' ? 'all' : sorted(scopes.domains), maxClassRank: scopes.maxClassRank }, ai,businessAuthority })).digest('hex');
 }

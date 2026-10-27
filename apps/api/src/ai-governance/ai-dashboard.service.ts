@@ -1,3 +1,6 @@
+import { businessRoleCode } from '../auth/business-roles';
+import { actualRoleCodes } from './ai-authorization.service';
+import { unregisteredScopeWhere } from './ai-submitted-scope';
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,15 +51,15 @@ export class AiDashboardService {
  constructor(private readonly prisma:PrismaService,private readonly reports:AiReviewReportService,private readonly scope:ScopeService){}
  async access(tx:Prisma.TransactionClient,userId:string,historical=false){
   const a=await this.reports.access(tx,userId,historical),codes:AiPermission[]=['dashboard.view.aiuc','dashboard.view.exec.ai','case.view.aiuc.all','airs.cadence.manage'];
-  const grants=await tx.rolePermission.findMany({where:{role:{is:{code:{in:a.actor.roles},isActive:true,deletedAt:null}},permission:{is:{OR:codes.map(splitAiPermission)}}},include:{role:{select:{code:true}},permission:true}});
-  const permissions=new Set(grants.filter(g=>aiRoleMayHold(g.role.code,(g.permission.resource+'.'+g.permission.action) as AiPermission)).map(g=>g.permission.resource+'.'+g.permission.action));
+  const grants=await tx.rolePermission.findMany({where:{role:{is:{code:{in:actualRoleCodes(a.actor)},isActive:true,deletedAt:null}},permission:{is:{OR:codes.map(splitAiPermission)}}},include:{role: { select: { code: true, businessRoleCode: true } },permission:true}});
+  const permissions=new Set(grants.filter(g=>aiRoleMayHold(businessRoleCode(g.role),(g.permission.resource+'.'+g.permission.action) as AiPermission)).map(g=>g.permission.resource+'.'+g.permission.action));
   const canUseCases=a.mode!=='risk_owner'&&(a.actor.administratorOversight||permissions.has('dashboard.view.aiuc')||permissions.has('dashboard.view.exec.ai')||permissions.has('case.view.aiuc.all'));
-  const scope=await this.scope.resolve(a.actor.roles),asset:Prisma.DataAssetWhereInput={isActive:true,deletedAt:null,
+  const scope=await this.scope.resolve(actualRoleCodes(a.actor)),asset:Prisma.DataAssetWhereInput={...(historical?{}:{isActive:true}),deletedAt:null,
    ...(scope.orgUnits==='all'?{}:{orgUnitId:{in:scope.orgUnits}}),...(scope.domains==='all'?{}:{domainId:{in:scope.domains}}),...(scope.maxClassRank===null?{}:{classification:{is:{rank:{lte:scope.maxClassRank}}}})};
   const registerWhere:Prisma.AiUseCaseWhereInput={deletedAt:null,isSampleData:false,useCaseRef:{not:null},...(historical?{}:{lifecycleState:{not:'retired' as const}}),asset:{is:asset},...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}})};
   // An unlinked request has no governed asset domain/classification; fail closed on restricted scopes.
   const pipelineWhere:Prisma.AiUseCaseWhereInput={deletedAt:null,isSampleData:false,...(historical?{}:{lifecycleState:{not:'retired' as const}}),workflowCase:{is:{type:'AIUC'}},intakeRevisions:{some:{submittedAt:{not:null}}},
-   ...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}}),OR:[{asset:{is:asset}},...(scope.domains==='all'&&scope.maxClassRank===null?[{assetId:null}]:[])]};
+   ...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}}),OR:[{asset:{is:asset}},await unregisteredScopeWhere(tx,scope)]};
   return {...a,scope,permissions,canUseCases,canPipeline:canUseCases&&!a.aggregateOnly,registerWhere,pipelineWhere};
  }
  private async scopedAccess(tx:Prisma.TransactionClient,userId:string,unitId?:string,historical=false){

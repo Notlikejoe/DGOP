@@ -1,3 +1,7 @@
+import { lockVerifiedEvidence } from '../ai-governance/ai-evidence-proof';
+import { proofDigest } from '../ai-governance/ai-evidence.logic';
+import { isSystemAdministrator } from '../auth/system-admin';
+import { businessDecisionRoles, businessAuthoritySnapshot, businessRoleCode, liveRoleWhere, responsibilityWhere, CANONICAL_BUSINESS_ROLES } from '../auth/business-roles';
 import {
   BadRequestException,
   ConflictException,
@@ -34,10 +38,10 @@ import { ScopeService } from '../access/scope.service';
 import { AssignmentsService } from '../ownership/assignments.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { AuthUser } from '../auth/auth.types';
-import { isSystemAdministrator } from '../auth/system-admin';
 import { parsePageParams, toPaged } from '../common/pagination';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { sanitizeAttachmentFilename } from '../common/download';
+import { fileAvailability } from '../common/file-availability';
 import { boundedEnvInteger } from '../common/runtime-safety';
 import {
   AddTaskDto,
@@ -216,6 +220,8 @@ const taskInclude = {
 };
 
 const decisionStageSelect = {
+  isDecision: true,
+  isFinal: true,
   id: true,
   code: true,
   nameEn: true,
@@ -321,28 +327,48 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     try {
-      await this.ensureDefaultTemplates();
+      if (process.env.DGOP_WORKFLOW_STARTUP_MAINTENANCE !== 'false')
+        await this.ensureDefaultTemplates();
       if (this.shouldRunStartupMaintenance()) {
         const result = await this.runMaintenanceInternal();
         if (result.unroutedCases > 0) {
-          this.logger.log(`Backfilled ${result.unroutedCases} unrouted workflow cases into route templates`);
+          this.logger.log(
+            `Backfilled ${result.unroutedCases} unrouted workflow cases into route templates`,
+          );
         }
         if (result.reassignedTasks > 0) {
-          this.logger.log(`Assigned ${result.reassignedTasks} routed workflow tasks to eligible role holders`);
+          this.logger.log(
+            `Assigned ${result.reassignedTasks} routed workflow tasks to eligible role holders`,
+          );
         }
         if (result.normalizedSlaTasks > 0) {
-          this.logger.log(`Normalized ${result.normalizedSlaTasks} immediate workflow task due dates`);
+          this.logger.log(
+            `Normalized ${result.normalizedSlaTasks} immediate workflow task due dates`,
+          );
         }
         if (result.designerTestRuns > 0) {
-          this.logger.log(`Seeded ${result.designerTestRuns} isolated workflow designer test runs`);
+          this.logger.log(
+            `Seeded ${result.designerTestRuns} isolated workflow designer test runs`,
+          );
         }
       }
     } catch (err) {
-      this.logger.error('Failed to initialize default workflow templates', err as Error);
+      this.logger.error(
+        'Failed to initialize default workflow templates',
+        err as Error,
+      );
     }
     if (process.env.WORKFLOW_EXECUTION_SCHEDULER !== 'false') {
-      const intervalMs = boundedEnvInteger('WORKFLOW_EXECUTION_SCHEDULER_MS', 60_000, 60_000, 3_600_000);
-      this.executionWorker = setInterval(() => void this.processRunnableExecutions(), intervalMs);
+      const intervalMs = boundedEnvInteger(
+        'WORKFLOW_EXECUTION_SCHEDULER_MS',
+        60_000,
+        60_000,
+        3_600_000,
+      );
+      this.executionWorker = setInterval(
+        () => void this.processRunnableExecutions(),
+        intervalMs,
+      );
       void this.processRunnableExecutions();
     }
   }
@@ -440,62 +466,99 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       where: { id: templateId },
       include: templateInclude,
     });
-    if (!current?.isSystem || current.deletedAt || current.createdBy !== 'system') return;
+    if (
+      !current?.isSystem ||
+      current.deletedAt ||
+      current.createdBy !== 'system'
+    )
+      return;
     const designer = this.jsonRecord(current.designerJson);
     const activeStages = current.stages.filter((stage) => stage.isActive);
     const expectedStageTypes = new Map(
       seed.stages.map((stage) => [
         stage.code,
-        stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+        stage.nodeType ??
+          (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
       ]),
     );
-    const stageGraphMatches = activeStages.length === seed.stages.length && activeStages.every(
-      (stage) => expectedStageTypes.get(stage.code) === stage.nodeType,
+    const stageGraphMatches =
+      activeStages.length === seed.stages.length &&
+      activeStages.every(
+        (stage) => expectedStageTypes.get(stage.code) === stage.nodeType,
+      );
+    const expectedTransitions = new Set(
+      seed.transitions.map((transition) =>
+        [
+          transition.from,
+          transition.to,
+          transition.decision ?? '',
+          normalizeWorkflowConnectorType(transition.connectorType),
+        ].join('|'),
+      ),
     );
-    const expectedTransitions = new Set(seed.transitions.map((transition) => [
-      transition.from,
-      transition.to,
-      transition.decision ?? '',
-      normalizeWorkflowConnectorType(transition.connectorType),
-    ].join('|')));
-    const stageCodeById = new Map(activeStages.map((stage) => [stage.id, stage.code]));
-    const transitionGraphMatches = current.transitions.length === seed.transitions.length && current.transitions.every(
-      (transition) => expectedTransitions.has([
-        stageCodeById.get(transition.fromStageId) ?? '',
-        stageCodeById.get(transition.toStageId) ?? '',
-        transition.decision ?? '',
-        normalizeWorkflowConnectorType(transition.connectorType),
-      ].join('|')),
+    const stageCodeById = new Map(
+      activeStages.map((stage) => [stage.id, stage.code]),
     );
+    const transitionGraphMatches =
+      current.transitions.length === seed.transitions.length &&
+      current.transitions.every((transition) =>
+        expectedTransitions.has(
+          [
+            stageCodeById.get(transition.fromStageId) ?? '',
+            stageCodeById.get(transition.toStageId) ?? '',
+            transition.decision ?? '',
+            normalizeWorkflowConnectorType(transition.connectorType),
+          ].join('|'),
+        ),
+      );
     const graphMatches = stageGraphMatches && transitionGraphMatches;
     const stageLocalizationMatches = activeStages.every((stage) =>
-      seed.stages.some((candidate) => candidate.code === stage.code && candidate.nameAr === stage.nameAr),
+      seed.stages.some(
+        (candidate) =>
+          candidate.code === stage.code && candidate.nameAr === stage.nameAr,
+      ),
     );
-    const transitionLocalizationMatches = current.transitions.every((transition) => {
-      const from = stageCodeById.get(transition.fromStageId) ?? '';
-      const to = stageCodeById.get(transition.toStageId) ?? '';
-      return seed.transitions.some((candidate) =>
-        candidate.from === from && candidate.to === to &&
-        (candidate.decision ?? null) === (transition.decision ?? null) &&
-        candidate.labelAr === transition.labelAr,
-      );
-    });
-    const localizationMatches = current.nameAr === seed.nameAr && stageLocalizationMatches && transitionLocalizationMatches;
+    const transitionLocalizationMatches = current.transitions.every(
+      (transition) => {
+        const from = stageCodeById.get(transition.fromStageId) ?? '';
+        const to = stageCodeById.get(transition.toStageId) ?? '';
+        return seed.transitions.some(
+          (candidate) =>
+            candidate.from === from &&
+            candidate.to === to &&
+            (candidate.decision ?? null) === (transition.decision ?? null) &&
+            candidate.labelAr === transition.labelAr,
+        );
+      },
+    );
+    const localizationMatches =
+      current.nameAr === seed.nameAr &&
+      stageLocalizationMatches &&
+      transitionLocalizationMatches;
     if (
       designer['seedRevision'] === seedRevision &&
-      this.jsonRecord(current.securityJson)['bpmnLayoutVersion'] === WORKFLOW_BPMN_LAYOUT_VERSION &&
+      this.jsonRecord(current.securityJson)['bpmnLayoutVersion'] ===
+        WORKFLOW_BPMN_LAYOUT_VERSION &&
       graphMatches &&
       localizationMatches
-    ) return;
+    )
+      return;
     const source = String(designer['source'] ?? 'generated_from_route');
-    const isManagedSource = source.startsWith('route_seed') || ['generated_from_route', 'maintenance_signature'].includes(source);
+    const isManagedSource =
+      source.startsWith('route_seed') ||
+      ['generated_from_route', 'maintenance_signature'].includes(source);
     if (!isManagedSource) return;
     if (current.lastPublishedBy && current.lastPublishedBy !== 'system') return;
 
     const bpmnTemplate = this.bpmnTemplateFromSeed(seed);
-    const validation = validateWorkflowRoute(bpmnTemplate.stages, bpmnTemplate.transitions);
+    const validation = validateWorkflowRoute(
+      bpmnTemplate.stages,
+      bpmnTemplate.transitions,
+    );
     if (validation.status === 'blocked') {
-      this.logger.error(`System route seed ${seed.code} is blocked: ${validation.errors.join(' ')}`);
+      this.logger.error(
+        `System route seed ${seed.code} is blocked: ${validation.errors.join(' ')}`,
+      );
       return;
     }
     const bpmnXml = templateToBpmnXml(bpmnTemplate);
@@ -511,7 +574,8 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       orderBy: { version: 'desc' },
       select: { version: true },
     });
-    const nextVersion = Math.max(current.designerVersion, latestVersion?.version ?? 0) + 1;
+    const nextVersion =
+      Math.max(current.designerVersion, latestVersion?.version ?? 0) + 1;
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
@@ -526,18 +590,29 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             nameAr: stage.nameAr,
             description: stage.description ?? null,
             kind: stage.kind,
-            nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+            nodeType:
+              stage.nodeType ??
+              (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
             taskType: stage.taskType,
             assignmentStrategy: stage.assignmentStrategy ?? 'role',
-            assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            assignmentConfigJson: (stage.assignmentConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
             assigneeRoleCode: stage.assigneeRoleCode ?? null,
             dueDays: stage.dueDays,
-            formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            slaConfigJson: (stage.slaConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            notificationRulesJson: (stage.notificationRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            automationConfigJson: (stage.automationConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            gatewayConfigJson: (stage.gatewayConfigJson ?? (stage.isFinal ? { outcomes: workflowEndOutcomes() } : Prisma.JsonNull)) as Prisma.InputJsonValue,
+            formSchemaJson: (stage.formSchemaJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            slaConfigJson: (stage.slaConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            notificationRulesJson: (stage.notificationRulesJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            evidenceRequirementsJson: (stage.evidenceRequirementsJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            automationConfigJson: (stage.automationConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            gatewayConfigJson: (stage.gatewayConfigJson ??
+              (stage.isFinal
+                ? { outcomes: workflowEndOutcomes() }
+                : Prisma.JsonNull)) as Prisma.InputJsonValue,
             parallelGroup: stage.parallelGroup ?? null,
             sortOrder: index + 1,
             isStart: stage.isStart ?? false,
@@ -550,18 +625,29 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             nameAr: stage.nameAr,
             description: stage.description ?? null,
             kind: stage.kind,
-            nodeType: stage.nodeType ?? (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
+            nodeType:
+              stage.nodeType ??
+              (stage.taskType === 'approval' ? 'approval_task' : 'user_task'),
             taskType: stage.taskType,
             assignmentStrategy: stage.assignmentStrategy ?? 'role',
-            assignmentConfigJson: (stage.assignmentConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            assignmentConfigJson: (stage.assignmentConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
             assigneeRoleCode: stage.assigneeRoleCode ?? null,
             dueDays: stage.dueDays,
-            formSchemaJson: (stage.formSchemaJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            slaConfigJson: (stage.slaConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            notificationRulesJson: (stage.notificationRulesJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            evidenceRequirementsJson: (stage.evidenceRequirementsJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            automationConfigJson: (stage.automationConfigJson ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-            gatewayConfigJson: (stage.gatewayConfigJson ?? (stage.isFinal ? { outcomes: workflowEndOutcomes() } : Prisma.JsonNull)) as Prisma.InputJsonValue,
+            formSchemaJson: (stage.formSchemaJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            slaConfigJson: (stage.slaConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            notificationRulesJson: (stage.notificationRulesJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            evidenceRequirementsJson: (stage.evidenceRequirementsJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            automationConfigJson: (stage.automationConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            gatewayConfigJson: (stage.gatewayConfigJson ??
+              (stage.isFinal
+                ? { outcomes: workflowEndOutcomes() }
+                : Prisma.JsonNull)) as Prisma.InputJsonValue,
             parallelGroup: stage.parallelGroup ?? null,
             sortOrder: index + 1,
             isStart: stage.isStart ?? false,
@@ -574,11 +660,16 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         stageByCode.set(stage.code, saved.id);
       }
       await tx.workflowTemplateStage.updateMany({
-        where: { templateId, code: { notIn: seed.stages.map((stage) => stage.code) } },
+        where: {
+          templateId,
+          code: { notIn: seed.stages.map((stage) => stage.code) },
+        },
         data: { isActive: false },
       });
 
-      const existingTransitions = await tx.workflowTemplateTransition.findMany({ where: { templateId } });
+      const existingTransitions = await tx.workflowTemplateTransition.findMany({
+        where: { templateId },
+      });
       await tx.workflowTemplateTransition.updateMany({
         where: { templateId, isActive: true },
         data: { isActive: false, retiredAt: now, retiredBy: 'system' },
@@ -587,15 +678,18 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         const fromStageId = stageByCode.get(transition.from);
         const toStageId = stageByCode.get(transition.to);
         if (!fromStageId || !toStageId) continue;
-        const match = existingTransitions.find((candidate) =>
-          candidate.fromStageId === fromStageId &&
-          candidate.toStageId === toStageId &&
-          (candidate.decision ?? null) === (transition.decision ?? null),
+        const match = existingTransitions.find(
+          (candidate) =>
+            candidate.fromStageId === fromStageId &&
+            candidate.toStageId === toStageId &&
+            (candidate.decision ?? null) === (transition.decision ?? null),
         );
         const data = {
           labelEn: transition.labelEn,
           labelAr: transition.labelAr,
-          connectorType: normalizeWorkflowConnectorType(transition.connectorType),
+          connectorType: normalizeWorkflowConnectorType(
+            transition.connectorType,
+          ),
           decision: transition.decision ?? null,
           isDefaultPath: Boolean(transition.isDefaultPath),
           isHappyPath: transition.isHappyPath ?? true,
@@ -605,9 +699,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           retiredBy: null,
         };
         if (match) {
-          await tx.workflowTemplateTransition.update({ where: { id: match.id }, data });
+          await tx.workflowTemplateTransition.update({
+            where: { id: match.id },
+            data,
+          });
         } else {
-          await tx.workflowTemplateTransition.create({ data: { templateId, fromStageId, toStageId, ...data } });
+          await tx.workflowTemplateTransition.create({
+            data: { templateId, fromStageId, toStageId, ...data },
+          });
         }
       }
 
@@ -641,18 +740,22 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           validationJson: validation as unknown as Prisma.InputJsonValue,
           modelSignature: security.modelSignature,
           signatureAlgorithm: security.signatureAlgorithm,
-          encryptedSnapshotJson: security.encryptedSnapshotJson as Prisma.InputJsonValue,
+          encryptedSnapshotJson:
+            security.encryptedSnapshotJson as Prisma.InputJsonValue,
           securityJson: security.securityJson as Prisma.InputJsonValue,
           createdBy: 'system',
         },
       });
-      await this.audit.log({
-        actor: 'system',
-        action: 'workflow_template.system_route.upgrade',
-        entityType: 'workflow_template',
-        entityId: templateId,
-        metadata: { code: seed.code, seedRevision, version: nextVersion },
-      }, tx);
+      await this.audit.logRequired(
+        {
+          actor: 'system',
+          action: 'workflow_template.system_route.upgrade',
+          entityType: 'workflow_template',
+          entityId: templateId,
+          metadata: { code: seed.code, seedRevision, version: nextVersion },
+        },
+        tx,
+      );
     });
   }
 
@@ -1325,7 +1428,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       return tx.workflowTemplate.findUnique({ where: { id: template.id }, include: templateInclude });
     });
     if (!created) throw new BadRequestException('Could not create workflow route');
-    return this.designerResponse(created);
+    return this.designerResponse(created,undefined,user);
   }
 
   async cloneWorkflowTemplate(id: string, user: AuthUser) {
@@ -1430,16 +1533,16 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       entityId: id,
       metadata: { fromState: currentState, toState: nextState, reason, activeCases },
     });
-    return dto.action === 'delete_draft' ? { id, deleted: true } : this.designerResponse(updated);
+    return dto.action === 'delete_draft' ? { id, deleted: true } : this.designerResponse(updated,undefined,user);
   }
 
-  async getTemplateDesigner(id: string, roleCodes: string[]) {
+  async getTemplateDesigner(id: string, roleCodes: string[],user?:AuthUser) {
     const template = await this.prisma.workflowTemplate.findFirst({
       where: { id, ...(await this.templateScopeWhere(roleCodes)) },
       include: templateInclude,
     });
     if (!template) throw new NotFoundException('workflow route template not found');
-    return this.designerResponse(template);
+    return this.designerResponse(template,undefined,user);
   }
 
   async layoutTemplateBpmn(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
@@ -1503,11 +1606,11 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       entityId: id,
       metadata: { status: parsed.validation.status, errors: parsed.validation.errors.length, warnings: parsed.validation.warnings.length },
     });
-    return this.designerResponse(updated, parsed.validation);
+    return this.designerResponse(updated, parsed.validation,user);
   }
 
   async submitTemplateReview(id: string, dto: WorkflowTemplateReviewDto, user: AuthUser) {
-    this.assertWorkflowLifecycleRole(user, 'designer', 'Only workflow designers can submit workflow routes for review');
+    await this.assertWorkflowLifecycleRole(user, 'designer', 'Only workflow designers can submit workflow routes for review');
     const template = await this.assertTemplateVisible(id, user);
     const route = this.designerRouteFromPayload(template, dto.bpmnXml);
     route.validation = await this.validateTemplateVariableReferences(id, route.stages, route.transitions, route.validation);
@@ -1547,11 +1650,11 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         reviewModelSignature,
       },
     });
-    return this.designerResponse(updated, route.validation);
+    return this.designerResponse(updated, route.validation,user);
   }
 
   async approveTemplateReview(id: string, dto: WorkflowTemplateReviewDto, user: AuthUser) {
-    this.assertWorkflowLifecycleRole(user, 'reviewer', 'Only workflow reviewers can approve workflow route reviews');
+    await this.assertWorkflowLifecycleRole(user, 'reviewer', 'Only workflow reviewers can approve workflow route reviews');
     const template = await this.assertTemplateVisible(id, user);
     const route = this.currentDesignerRoute(template);
     const lifecycle = this.workflowLifecycle(template.securityJson);
@@ -1564,36 +1667,24 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     }
     const requestedBy = String(lifecycle['reviewRequestedBy'] ?? '');
     const sodOverride = this.workflowLifecycleSodOverride(user, requestedBy);
-    const updated = await this.prisma.workflowTemplate.update({
-      where: { id },
-      data: {
-        securityJson: this.workflowLifecycleMetadata('under_review', user.email, template.securityJson, {
-          reviewStatus: 'approved',
-          reviewedBy: user.email,
-          reviewedAt: new Date().toISOString(),
-          reviewDecisionComment: dto.comment ?? null,
-          approvedModelSignature: reviewModelSignature,
-          sodOverride,
-        }) as Prisma.InputJsonValue,
-      },
-      include: templateInclude,
+    const updated = await this.prisma.$transaction(async tx=>{
+      await this.assertWorkflowLifecycleRole(user,'reviewer','Only workflow reviewers can approve workflow route reviews',tx);
+      const updated=await tx.workflowTemplate.update({
+        where:{id,updatedAt:template.updatedAt},
+        data:{securityJson:this.workflowLifecycleMetadata('under_review',user.email,template.securityJson,{
+          reviewStatus:'approved',reviewedBy:user.email,reviewedAt:new Date().toISOString(),
+          reviewDecisionComment:dto.comment??null,approvedModelSignature:reviewModelSignature,sodOverride,
+        }) as Prisma.InputJsonValue},include:templateInclude,
+      });
+      await this.audit.logRequired({actor:user.email,action:'workflow_template.review.approve',entityType:'workflow_template',entityId:id,
+        metadata:{requestedBy,approvedModelSignature:reviewModelSignature,sodOverride}},tx);
+      return updated;
     });
-    await this.audit.log({
-      actor: user.email,
-      action: 'workflow_template.review.approve',
-      entityType: 'workflow_template',
-      entityId: id,
-      metadata: {
-        requestedBy,
-        approvedModelSignature: reviewModelSignature,
-        sodOverride,
-      },
-    });
-    return this.designerResponse(updated, route.validation);
+    return this.designerResponse(updated, route.validation,user);
   }
 
   async publishTemplateBpmn(id: string, dto: SaveWorkflowBpmnDto, user: AuthUser) {
-    this.assertWorkflowLifecycleRole(user, 'publisher', 'Only workflow publishers can publish workflow routes');
+    await this.assertWorkflowLifecycleRole(user, 'publisher', 'Only workflow publishers can publish workflow routes');
     const existing = await this.prisma.workflowTemplate.findFirst({
       where: { id, ...(await this.templateScopeWhere(user.roles)) },
       include: templateInclude,
@@ -1631,9 +1722,10 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     const snapshotDesignerJson = { ...this.jsonRecord(parsed.designerJson), variableDefinitions };
     const security = this.secureWorkflowModel(dto.bpmnXml, snapshotDesignerJson, user.email);
     const updated = await this.prisma.$transaction(async (tx) => {
+      await this.assertWorkflowLifecycleRole(user,'publisher','Only workflow publishers can publish workflow routes',tx);
       await this.applyPublishedBpmnRoute(tx, id, parsed.stages, parsed.transitions, user.email);
       await tx.workflowTemplate.update({
-        where: { id },
+        where: { id,updatedAt:existing.updatedAt },
         data: {
           bpmnXml: dto.bpmnXml,
           designerJson: snapshotDesignerJson as Prisma.InputJsonValue,
@@ -1693,7 +1785,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           createdBy: user.email,
         },
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: 'workflow_template.bpmn.publish',
@@ -1716,7 +1808,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       return tx.workflowTemplate.findUnique({ where: { id }, include: templateInclude });
     });
     if (!updated) throw new BadRequestException('Could not publish workflow route');
-    return this.designerResponse(updated, parsed.validation);
+    return this.designerResponse(updated, parsed.validation,user);
   }
 
   async simulateTemplateDesigner(id: string, dto: WorkflowDesignerSimulationDto, user: AuthUser) {
@@ -2087,26 +2179,40 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       return tx.workflowTemplate.findUnique({ where: { id }, include: templateInclude });
     });
     if (!updated) throw new BadRequestException('Could not rollback workflow route');
-    return this.designerResponse(updated, parsed.validation);
+    return this.designerResponse(updated, parsed.validation,user);
   }
 
-  async migrateTemplateActiveCases(id: string, dto: WorkflowTemplateMigrationExecuteDto, user: AuthUser) {
+  async migrateTemplateActiveCases(
+    id: string,
+    dto: WorkflowTemplateMigrationExecuteDto,
+    user: AuthUser,
+  ) {
     this.assertWorkflowDesignerAdmin(user);
     await this.assertTemplateVisible(id, user);
-    const result = await this.prisma.$transaction((tx) =>
-      this.migrateActiveCasesForTemplate(tx, id, user.email, {
-        fallbackStageCode: dto.fallbackStageCode ?? null,
-        dryRun: Boolean(dto.dryRun),
-      }),
-    );
-    await this.audit.log({
-      actor: user.email,
-      action: dto.dryRun ? 'workflow_template.case_migration.preview' : 'workflow_template.case_migration.execute',
-      entityType: 'workflow_template',
-      entityId: id,
-      metadata: result,
+    return this.prisma.$transaction(async (tx) => {
+      const result = await this.migrateActiveCasesForTemplate(
+        tx,
+        id,
+        user.email,
+        {
+          fallbackStageCode: dto.fallbackStageCode ?? null,
+          dryRun: Boolean(dto.dryRun),
+        },
+      );
+      await this.audit.logRequired(
+        {
+          actor: user.email,
+          action: dto.dryRun
+            ? 'workflow_template.case_migration.preview'
+            : 'workflow_template.case_migration.execute',
+          entityType: 'workflow_template',
+          entityId: id,
+          metadata: result,
+        },
+        tx,
+      );
+      return result;
     });
-    return result;
   }
 
   async processRuntimeExecutions(user: AuthUser) {
@@ -2747,7 +2853,13 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       where: { caseId },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map(({ storedName: _storedName, ...attachment }) => attachment);
+    return rows.map(({ storedName, ...attachment }) => ({...attachment,...this.attachmentAvailability({...attachment,storedName})}));
+  }
+
+  private attachmentAvailability(row:{storedName:string|null;checksum:string|null;sizeBytes:number|null}) {
+    let path:string|null=null;
+    try {if(row.storedName)path=this.attachmentStoragePath(row.storedName);} catch { /* Preserve legacy metadata. */ }
+    return fileAvailability(path,row.checksum,row.sizeBytes);
   }
 
   private attachmentStoragePath(storedName: string): string {
@@ -2845,7 +2957,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         return created;
       });
       const { storedName: _storedName, ...publicAttachment } = attachment;
-      return publicAttachment;
+      return {...publicAttachment,...this.attachmentAvailability(attachment)};
     } catch (error) {
       await unlink(storedPath).catch(() => undefined);
       throw error;
@@ -2859,6 +2971,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     });
     if (!attachment) throw new NotFoundException('workflow attachment not found');
     await this.assertCaseVisible(user.roles, attachment.case, user);
+    if (this.attachmentAvailability(attachment).fileAvailability !== 'available') throw new NotFoundException('The original attachment is unavailable or cannot be verified; the historical record is preserved');
     if (!attachment.storedName) throw new NotFoundException('A managed file is not available for this legacy attachment');
     const path = this.attachmentStoragePath(attachment.storedName);
     if (!existsSync(path)) throw new NotFoundException('workflow attachment file not found');
@@ -3042,14 +3155,16 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private assertWorkflowLifecycleRole(
+  private async assertWorkflowLifecycleRole(
     user: AuthUser,
     role: keyof typeof WORKFLOW_DESIGNER_LIFECYCLE.roles,
     message: string,
-  ): void {
+    client:Prisma.TransactionClient=this.prisma,
+  ): Promise<void> {
     if (!this.hasWorkflowLifecycleRole(user, role)) {
       throw new ForbiddenException(message);
     }
+    if(role!=='designer')await businessDecisionRoles(client,user.roles,'workflow_cases.edit',WORKFLOW_DESIGNER_LIFECYCLE.roles[role]);
   }
 
   private hasWorkflowLifecycleRole(user: AuthUser, role: keyof typeof WORKFLOW_DESIGNER_LIFECYCLE.roles): boolean {
@@ -3751,12 +3866,20 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     ];
   }
 
-  private designerResponse(
+  private async designerResponse(
     template: WorkflowTemplateWithRoute,
     validation = this.currentRouteValidation(template),
+    user?:AuthUser,
   ) {
     const bpmnXml = this.designerBpmnXmlForTemplate(template);
+    let businessRoles:string[]=[];
+    if(user)try{businessRoles=await businessDecisionRoles(this.prisma,user.roles,'workflow_cases.edit',[...WORKFLOW_DESIGNER_LIFECYCLE.roles.reviewer,...WORKFLOW_DESIGNER_LIFECYCLE.roles.publisher]);}catch(error){if(!(error instanceof ForbiddenException))throw error;}
+    const lifecycle=this.workflowLifecycle(template.securityJson),independent=(fields:string[])=>!!user&&!fields.some(field=>lifecycle[field]===user.email);
+    const actions={canSubmitReview:!!user&&this.hasWorkflowLifecycleRole(user,'designer'),
+      canApproveReview:businessRoles.some(role=>WORKFLOW_DESIGNER_LIFECYCLE.roles.reviewer.includes(role))&&lifecycle['reviewStatus']==='pending'&&independent(['reviewRequestedBy']),
+      canPublish:businessRoles.some(role=>WORKFLOW_DESIGNER_LIFECYCLE.roles.publisher.includes(role))&&lifecycle['reviewStatus']==='approved'&&independent(['reviewRequestedBy','reviewedBy','lastDesignedBy'])};
     return {
+      actions,
       template,
       bpmnXml,
       validation,
@@ -4086,13 +4209,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     actor?: string | AuthUser,
   ): Prisma.WorkflowTaskWhereInput[] {
     const visibility: Prisma.WorkflowTaskWhereInput[] = [];
+    const queueRoles=[...new Set([...roleCodes,...(actor&&typeof actor!=='string'?actor.businessRoles?.filter(binding=>roleCodes.includes(binding.roleCode)).map(binding=>binding.businessRoleCode)??[]:[])])];
     if (actor && typeof actor !== 'string') visibility.push({ assigneeUserId: actor.id });
     if (roleCodes.length) {
       visibility.push({
         assigneeUserId: null,
         OR: [
-          { assigneeRoleCode: { in: roleCodes } },
-          { templateStage: { assigneeRoleCode: { in: roleCodes } } },
+          { assigneeRoleCode: { in: queueRoles } },
+          { templateStage: { assigneeRoleCode: { in: queueRoles } } },
         ],
       });
     }
@@ -4346,7 +4470,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return {
       ...wfCase,
       ...(viewer && this.aiProjection && wfCase.type === 'AIRS' ? { aiGovernance: (await this.aiProjection.forCases(viewer.id, [id])).get(id) } : {}),
-      tasks: wfCase.tasks.map((t) => this.withSla(t)),
+      tasks: await Promise.all(wfCase.tasks.map(async t=>({...this.withSla(t),...await this.taskActionEligibility(viewer,t,wfCase)}))),
       events,
     };
   }
@@ -5343,8 +5467,15 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return updated;
   }
 
-  async controlCase(id: string, action: 'suspend' | 'resume' | 'cancel', dto: WorkflowCaseControlDto, user: AuthUser) {
-    const existing = await this.prisma.workflowCase.findUnique({ where: { id } });
+  async controlCase(
+    id: string,
+    action: 'suspend' | 'resume' | 'cancel',
+    dto: WorkflowCaseControlDto,
+    user: AuthUser,
+  ) {
+    const existing = await this.prisma.workflowCase.findUnique({
+      where: { id },
+    });
     if (!existing) throw new NotFoundException('workflow case not found');
     await this.assertGovernedAiucMutation(existing.type, user.id, id);
     await this.assertCaseVisible(user.roles, existing, user);
@@ -5355,22 +5486,26 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     }
     if (action === 'suspend') {
       this.assertCaseCanChange(currentStatus);
-      if (currentStatus === CASE_STATUS_SUSPENDED) throw new BadRequestException('Workflow case is already suspended');
+      if (currentStatus === CASE_STATUS_SUSPENDED)
+        throw new BadRequestException('Workflow case is already suspended');
     }
     if (action === 'resume' && currentStatus !== CASE_STATUS_SUSPENDED) {
-      throw new BadRequestException('Only suspended workflow cases can be resumed');
+      throw new BadRequestException(
+        'Only suspended workflow cases can be resumed',
+      );
     }
     if (action === 'cancel' && FINAL_CASE_STATUSES.includes(currentStatus)) {
       throw new BadRequestException('Final workflow cases cannot be cancelled');
     }
 
-    const previous = action === 'resume'
-      ? await this.prisma.workflowEvent.findFirst({
-        where: { caseId: id, action: 'case.control.suspend' },
-        orderBy: { createdAt: 'desc' },
-        select: { fromStatus: true },
-      })
-      : null;
+    const previous =
+      action === 'resume'
+        ? await this.prisma.workflowEvent.findFirst({
+            where: { caseId: id, action: 'case.control.suspend' },
+            orderBy: { createdAt: 'desc' },
+            select: { fromStatus: true },
+          })
+        : null;
     const resumeStatus = this.resumeStatusFromSuspension(previous?.fromStatus);
     const nextStatus =
       action === 'suspend'
@@ -5391,7 +5526,10 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           data: { state: 'suspended' },
         });
         await tx.workflowExecutionAttempt.updateMany({
-          where: { caseId: id, status: { in: ['queued', 'retrying', 'running', 'waiting_child'] } },
+          where: {
+            caseId: id,
+            status: { in: ['queued', 'retrying', 'running', 'waiting_child'] },
+          },
           data: { status: 'paused' },
         });
       } else if (action === 'resume') {
@@ -5406,16 +5544,31 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       } else {
         const now = new Date();
         await tx.workflowTask.updateMany({
-          where: { caseId: id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
-          data: { status: TaskStatus.cancelled, completedAt: now, decisionComment: reason },
+          where: {
+            caseId: id,
+            status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+          },
+          data: {
+            status: TaskStatus.cancelled,
+            completedAt: now,
+            decisionComment: reason,
+          },
         });
         await tx.workflowRuntimeToken.updateMany({
           where: { caseId: id, completedAt: null },
           data: { state: 'cancelled', completedAt: now },
         });
         await tx.workflowExecutionAttempt.updateMany({
-          where: { caseId: id, status: { notIn: ['succeeded', 'failed', 'cancelled'] } },
-          data: { status: 'cancelled', completedAt: now, outcome: 'cancelled', resultJson: { reason } as Prisma.InputJsonValue },
+          where: {
+            caseId: id,
+            status: { notIn: ['succeeded', 'failed', 'cancelled'] },
+          },
+          data: {
+            status: 'cancelled',
+            completedAt: now,
+            outcome: 'cancelled',
+            resultJson: { reason } as Prisma.InputJsonValue,
+          },
         });
       }
       await tx.workflowEvent.create({
@@ -5425,16 +5578,24 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           action: `case.control.${action}`,
           fromStatus: currentStatus,
           toStatus: nextStatus,
-          comment: reason || (action === 'resume' ? 'Workflow execution resumed from suspended state.' : null),
+          comment:
+            reason ||
+            (action === 'resume'
+              ? 'Workflow execution resumed from suspended state.'
+              : null),
         },
       });
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: `workflow_case.${action}`,
           entityType: 'workflow_case',
           entityId: id,
-          metadata: { fromStatus: currentStatus, toStatus: nextStatus, reason: reason || null },
+          metadata: {
+            fromStatus: currentStatus,
+            toStatus: nextStatus,
+            reason: reason || null,
+          },
         },
         tx,
       );
@@ -5516,6 +5677,156 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     return this.prisma.$transaction((tx) => run(tx));
   }
 
+  /** One scoped batch for the visible architecture register; decisions recheck it in their transaction. */
+  async architectureDecisionAccess(
+    caseIds: string[],
+    roleCodes: string[],
+    actor?: string,
+    client: Prisma.TransactionClient = this.prisma,
+  ) {
+    const result = new Map<
+      string,
+      {
+        taskId: string;
+        stage: { code: string; nameEn: string; nameAr: string };
+        canDecide: boolean;
+      }
+    >();
+    if (!caseIds.length) return result;
+    const tasks = await client.workflowTask.findMany({
+      where: {
+        caseId: { in: caseIds },
+        status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+        case: { type: 'architecture_review' },
+      },
+      include: { case: true, templateStage: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const user = actor
+      ? await client.user.findFirst({
+          where: { email: actor, isActive: true },
+          include: {
+            userRoles: {
+              where: { role: liveRoleWhere() },
+              include: { role: true },
+            },
+          },
+        })
+      : null;
+    const actual =
+      user?.userRoles
+        .map((v) => v.role.code)
+        .filter((code) => roleCodes.includes(code)) ?? [];
+    const decisions = tasks.filter(
+      (task) =>
+        task.templateStage?.isDecision === true && task.type === 'approval',
+    );
+    const permitted = new Set<string>();
+    if (user)
+      for (const queue of new Set(
+        decisions.map(
+          (t) =>
+            t.assigneeRoleCode ?? t.templateStage?.assigneeRoleCode ?? null,
+        ),
+      )) {
+        try {
+          const roles = await businessDecisionRoles(
+              client,
+              actual,
+              'workflow_tasks.edit',
+              queue ? [queue] : undefined,
+            ),
+            scope = await this.scope.resolve(roles, client);
+          const candidates = decisions.filter(
+            (t) =>
+              (t.assigneeRoleCode ??
+                t.templateStage?.assigneeRoleCode ??
+                null) === queue,
+          );
+          const visible = await client.dataAsset.findMany({
+              where: {
+                id: {
+                  in: candidates
+                    .map((t) => t.case.assetId)
+                    .filter((id): id is string => !!id),
+                },
+                deletedAt: null,
+                isActive: true,
+                ...(scope.orgUnits === 'all'
+                  ? {}
+                  : { orgUnitId: { in: scope.orgUnits } }),
+                ...(scope.domains === 'all'
+                  ? {}
+                  : { domainId: { in: scope.domains } }),
+                ...(scope.maxClassRank === null
+                  ? {}
+                  : {
+                      classification: {
+                        is: { rank: { lte: scope.maxClassRank } },
+                      },
+                    }),
+              },
+              select: { id: true },
+            }),
+            ids = new Set(visible.map((v) => v.id));
+          for (const task of candidates) {
+            if (
+              !task.case.assetId ||
+              !ids.has(task.case.assetId) ||
+              [user.id, user.email].includes(task.case.createdBy)
+            )
+              continue;
+            this.assertCaseCanChange(task.case.status);
+            if (
+              task.assigneeUserId === user.id ||
+              (!task.assigneeUserId && !!queue)
+            )
+              permitted.add(task.id);
+          }
+        } catch (error) {
+          if (
+            !(error instanceof ForbiddenException) &&
+            !(error instanceof BadRequestException) &&
+            !(error instanceof NotFoundException)
+          )
+            throw error;
+        }
+      }
+    for (const task of tasks) {
+      const stage = task.templateStage;
+      if (!stage) continue;
+      const current = result.get(task.caseId);
+      if (!current || permitted.has(task.id))
+        result.set(task.caseId, {
+          taskId: task.id,
+          stage: {
+            code: stage.code,
+            nameEn: stage.nameEn,
+            nameAr: stage.nameAr,
+          },
+          canDecide: permitted.has(task.id),
+        });
+    }
+    return result;
+  }
+
+  async assertArchitectureDecisionTask(
+    caseId: string,
+    taskId: string,
+    roleCodes: string[],
+    actor: string,
+    client: Prisma.TransactionClient,
+  ) {
+    const access = (
+      await this.architectureDecisionAccess([caseId], roleCodes, actor, client)
+    ).get(caseId);
+    if (!access?.canDecide || access.taskId !== taskId)
+      throw new ForbiddenException(
+        'Complete the required review stages; only the live independent assigned architecture decision reviewer may act',
+      );
+    return access;
+  }
+
   async recordDomainTaskDecision(
     input: {
       taskId: string;
@@ -5524,6 +5835,12 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       decision: WorkflowDecisionValue;
       comment?: string | null;
       eventAction: string;
+      finalOutcome?: 'rejected';
+      decisionEvidence?: {
+        evidenceId: string;
+        reviewId: string;
+        sha256: string;
+      };
     },
     client?: Prisma.TransactionClient,
   ) {
@@ -5533,26 +5850,126 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         include: { case: true, templateStage: { select: decisionStageSelect } },
       });
       if (!task) throw new NotFoundException('workflow task not found');
-      await this.assertCaseVisible(input.roleCodes, task.case, input.actor, writer);
+      await this.assertCaseVisible(
+        input.roleCodes,
+        task.case,
+        input.actor,
+        writer,
+      );
       this.assertCaseCanChange(task.case.status);
-      if (task.status === TaskStatus.completed || task.status === TaskStatus.cancelled) {
+      if (
+        task.status === TaskStatus.completed ||
+        task.status === TaskStatus.cancelled
+      ) {
         throw new BadRequestException('This task has already been decided');
       }
 
-      await this.assertStageDecisionPrerequisites(writer, task, input.decision, input.comment);
-      const routePlan = await this.planRouteAdvance(writer, task, input.decision);
+      let verifiedDecisionDocument:
+        { id: string; sha256: string; proofDigest: string } | undefined;
+      if (input.decisionEvidence) {
+        if (
+          task.case.type !== 'architecture_review' ||
+          !task.templateStage?.isDecision
+        )
+          throw new BadRequestException(
+            'Registered decision evidence is only valid for its bound architecture decision',
+          );
+        const reference = input.decisionEvidence,
+          review = await writer.architectureReview.findFirst({
+            where: {
+              id: reference.reviewId,
+              workflowCaseId: task.caseId,
+              evidenceId: reference.evidenceId,
+            },
+            select: { decisionProof: true },
+          });
+        const linked = review?.decisionProof as
+          | {
+              digest?: string;
+              targetId?: string;
+              context?: { workflowTaskId?: string };
+              document?: {
+                id?: string;
+                sha256?: string;
+                evidenceUpdatedAt?: string;
+              };
+            }
+          | undefined;
+        if (
+          !linked?.digest ||
+          linked.targetId !== reference.reviewId ||
+          linked.context?.workflowTaskId !== task.id ||
+          linked.document?.id !== reference.evidenceId
+        )
+          throw new BadRequestException(
+            'Decision evidence must be explicitly linked to this review and task',
+          );
+        const { digest, ...snapshot } = linked;
+        if (proofDigest(snapshot) !== digest)
+          throw new BadRequestException(
+            'The linked decision-proof snapshot cannot be verified',
+          );
+        const [document] = await lockVerifiedEvidence(writer, [
+          reference.evidenceId,
+        ]);
+        if (
+          document.sha256 !== reference.sha256 ||
+          document.sha256 !== linked.document.sha256 ||
+          document.updatedAt.toISOString() !== linked.document.evidenceUpdatedAt
+        )
+          throw new ConflictException(
+            'The supporting document changed; link its current approved version again',
+          );
+        verifiedDecisionDocument = {
+          id: document.id,
+          sha256: document.sha256,
+          proofDigest: digest,
+        };
+      }
+      await this.assertStageDecisionPrerequisites(
+        writer,
+        task,
+        input.decision,
+        input.comment,
+        !!verifiedDecisionDocument,
+      );
+      if (
+        input.finalOutcome &&
+        !(
+          task.case.type === 'architecture_review' &&
+          task.templateStage?.isDecision &&
+          input.decision === 'rejected'
+        )
+      )
+        throw new BadRequestException(
+          'Final rejection is only valid for the architecture decision stage',
+        );
+      const routePlan = input.finalOutcome
+        ? null
+        : await this.planRouteAdvance(writer, task, input.decision);
       const claim = await writer.workflowTask.updateMany({
-        where: { id: input.taskId, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
+        where: {
+          id: input.taskId,
+          status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+        },
         data: {
           status: TaskStatus.completed,
-          decision: input.decision === WORKFLOW_RETURN_FOR_CLARIFICATION ? null : input.decision as TaskDecision,
+          decision:
+            input.decision === WORKFLOW_RETURN_FOR_CLARIFICATION
+              ? null
+              : (input.decision as TaskDecision),
           decisionComment: input.comment ?? null,
           completedAt: new Date(),
         },
       });
-      if (claim.count !== 1) throw new ConflictException('This task was decided by another user');
-      const decided = await writer.workflowTask.findUnique({ where: { id: input.taskId }, include: taskInclude });
-      if (!decided) throw new NotFoundException('workflow task not found after decision');
+      if (claim.count !== 1)
+        throw new ConflictException('This task was decided by another user');
+      const decided = await writer.workflowTask.findUnique({
+        where: { id: input.taskId },
+        include: taskInclude,
+      });
+      if (!decided)
+        throw new NotFoundException('workflow task not found after decision');
       await writer.workflowEvent.create({
         data: {
           caseId: task.caseId,
@@ -5563,7 +5980,57 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         },
       });
       await this.completeRuntimeTokensForTask(writer, input.taskId);
-      const openedSequentialApproval = await this.maybeCreateNextSequentialApproval(writer, task, input.actor);
+      if (input.finalOutcome) {
+        const now = new Date();
+        await writer.workflowTask.updateMany({
+          where: {
+            caseId: task.caseId,
+            status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+          },
+          data: {
+            status: TaskStatus.cancelled,
+            completedAt: now,
+            decisionComment: input.comment,
+          },
+        });
+        await writer.workflowRuntimeToken.updateMany({
+          where: { caseId: task.caseId, completedAt: null },
+          data: { state: 'cancelled', completedAt: now },
+        });
+        await writer.workflowExecutionAttempt.updateMany({
+          where: {
+            caseId: task.caseId,
+            status: { notIn: ['succeeded', 'failed', 'cancelled'] },
+          },
+          data: {
+            status: 'cancelled',
+            completedAt: now,
+            outcome: 'rejected',
+            resultJson: { reason: input.comment ?? 'Architecture rejected' },
+          },
+        });
+        await writer.workflowCase.update({
+          where: { id: task.caseId },
+          data: { status: CaseStatus.rejected },
+        });
+        await writer.workflowEvent.create({
+          data: {
+            caseId: task.caseId,
+            actor: input.actor,
+            action: 'case.status',
+            fromStatus: task.case.status,
+            toStatus: CaseStatus.rejected,
+            comment: input.comment,
+          },
+        });
+      }
+      const openedSequentialApproval = input.finalOutcome
+        ? false
+        : await this.maybeCreateNextSequentialApproval(
+            writer,
+            task,
+            input.actor,
+          );
       if (openedSequentialApproval) {
         await writer.workflowEvent.create({
           data: {
@@ -5574,7 +6041,15 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             comment: 'Next approval step opened in the same stage.',
           },
         });
-      } else if (await this.hasOpenStagePeers(writer, task.caseId, task.templateStageId, input.taskId)) {
+      } else if (
+        !input.finalOutcome &&
+        (await this.hasOpenStagePeers(
+          writer,
+          task.caseId,
+          task.templateStageId,
+          input.taskId,
+        ))
+      ) {
         await writer.workflowEvent.create({
           data: {
             caseId: task.caseId,
@@ -5584,10 +6059,16 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             comment: 'Waiting for remaining approval tasks in this stage.',
           },
         });
-      } else {
-        await this.applyRouteAdvance(writer, task, routePlan, input.actor, input.decision);
+      } else if (!input.finalOutcome) {
+        await this.applyRouteAdvance(
+          writer,
+          task,
+          routePlan,
+          input.actor,
+          input.decision,
+        );
       }
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: input.actor,
           action: 'workflow_task.domain_decision',
@@ -5595,6 +6076,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           entityId: input.taskId,
           metadata: {
             eventAction: input.eventAction,
+            verifiedDecisionDocument,
             decision: input.decision,
             stageCode: task.templateStage?.code ?? null,
             routeTransitionId: routePlan?.transition?.id ?? null,
@@ -5709,21 +6191,118 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('A completed or cancelled task cannot receive form data');
     }
     const queueRole = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
-    if (!isSystemAdministrator(user.roles) && task.assigneeUserId !== user.id && !(!task.assigneeUserId && queueRole && user.roles.includes(queueRole))) {
+    const businessRoles=await this.assertBusinessTaskRole(user, queueRole);
+    await this.assertBusinessTaskResource(this.prisma,businessRoles,task.case.assetId);
+    if (task.assigneeUserId !== user.id && !(!task.assigneeUserId && queueRole && businessRoles.length)) {
       throw new ForbiddenException('Only the task assignee or owning role queue can edit this form');
     }
-    const businessRoles=await this.assertBusinessTaskRole(user, queueRole);
     await this.assertCaseVisible(businessRoles,task.case,{...user,roles:businessRoles});
     return task;
   }
 
-  /** The system administrator may operate every task; business users retain role-bound task authority. */
+  /** A technical administrator must hold the actual business role and its live grant. */
   private async assertBusinessTaskRole(user: AuthUser, queueRole: string | null) {
-    if (isSystemAdministrator(user.roles)) return user.roles;
-    if (queueRole && (queueRole === 'system_admin' || !user.roles.includes(queueRole))) {
+    if (queueRole === 'system_admin') {
       throw new ForbiddenException('The task requires its assigned business role');
     }
-    return user.roles;
+    return businessDecisionRoles(this.prisma,user.roles,'workflow_tasks.edit',queueRole?[queueRole]:undefined);
+  }
+  private async assertBusinessTaskResource(client:Prisma.TransactionClient,roles:string[],assetId:string|null){
+    const scope=await this.scope.resolve(roles,client);
+    if(!assetId){
+      if(scope.orgUnits!=='all'||scope.domains!=='all')throw new ForbiddenException('Link a governed asset with verifiable department and classification before a department-scoped business decision');
+      return;
+    }
+    const asset=await client.dataAsset.findFirst({where:{id:assetId,isActive:true,deletedAt:null,
+      ...(scope.orgUnits==='all'?{}:{orgUnitId:{in:scope.orgUnits}}),...(scope.domains==='all'?{}:{domainId:{in:scope.domains}}),
+      ...(scope.maxClassRank===null?{}:{classification:{is:{rank:{lte:scope.maxClassRank}}}})},select:{id:true}});
+    if(!asset)throw new NotFoundException('Workflow business resource is outside scope or its classification cannot be verified');
+  }
+
+  private async taskActionEligibility(
+    user: AuthUser | undefined,
+    task: {
+      status: string;
+      type: string;
+      assigneeUserId: string | null;
+      assigneeRoleCode: string | null;
+      templateStage?: {
+        assigneeRoleCode?: string | null;
+        isDecision?: boolean;
+      } | null;
+    },
+    wfCase: {
+      id: string;
+      code?: string;
+      type: string;
+      status: CaseStatus;
+      assetId: string | null;
+      createdBy: string;
+      assignmentId?: string | null;
+    },
+  ) {
+    if (
+      !user ||
+      ['AIUC', 'AIRS'].includes(wfCase.type) ||
+      task.status === TaskStatus.completed ||
+      task.status === TaskStatus.cancelled
+    )
+      return { canDecide: false, canEditForm: false };
+    try {
+      this.assertCaseCanChange(wfCase.status);
+      const queueRole =
+        task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
+      const roles = await this.assertBusinessTaskRole(user, queueRole);
+      await this.assertBusinessTaskResource(this.prisma, roles, wfCase.assetId);
+      if (
+        task.assigneeUserId !== user.id &&
+        !(!task.assigneeUserId && queueRole && roles.length)
+      )
+        return { canDecide: false, canEditForm: false };
+      await this.assertCaseVisible(roles, wfCase, { ...user, roles });
+      const approval =
+        ['owner_assignment_approval', 'steward_assignment_approval'].includes(
+          wfCase.type,
+        ) || task.type === 'approval';
+      let independent =
+        !approval || ![user.id, user.email].includes(wfCase.createdBy);
+      if (approval && wfCase.assignmentId) {
+        const assignment = await this.prisma.stewardshipAssignment.findUnique({
+          where: { id: wfCase.assignmentId },
+          select: { person: { select: { userId: true } } },
+        });
+        if (assignment?.person?.userId === user.id) independent = false;
+      }
+      if (
+        wfCase.type === 'architecture_review' &&
+        task.templateStage?.isDecision
+      ) {
+        await businessDecisionRoles(
+          this.prisma,
+          user.roles,
+          'extended_domains.edit',
+        );
+        return {
+          canDecide: false,
+          canEditForm: independent,
+          domainDecisionPath: independent
+            ? '/governance/extended-domains'
+            : undefined,
+          domainDecisionSearch: independent
+            ? (wfCase.code ?? wfCase.id)
+            : undefined,
+        };
+      }
+      return { canDecide: independent, canEditForm: true };
+    } catch (error) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      )
+        return { canDecide: false, canEditForm: false };
+      throw error;
+    }
   }
 
   async saveTaskFormDraft(id: string, dto: SaveWorkflowTaskFormDraftDto, user: AuthUser) {
@@ -5816,13 +6395,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
   }
 
   async listMyTasks(user: AuthUser, filters: { status?: string; page?: string | number; pageSize?: string | number }) {
+    const queueRoles=(await this.prisma.role.findMany({where:{AND:[liveRoleWhere(),{code:{in:user.roles}}]},select:{code:true,businessRoleCode:true}})).map(businessRoleCode);
     const ownership: Prisma.WorkflowTaskWhereInput[] = isSystemAdministrator(user.roles) ? [{}] : [{ assigneeUserId: user.id }];
     if (!isSystemAdministrator(user.roles) && user.roles.length) {
       ownership.push({
         assigneeUserId: null,
         OR: [
-          { assigneeRoleCode: { in: user.roles } },
-          { templateStage: { assigneeRoleCode: { in: user.roles } } },
+          { assigneeRoleCode: { in: queueRoles } },
+          { templateStage: { assigneeRoleCode: { in: queueRoles } } },
         ],
       });
     }
@@ -5860,12 +6440,12 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       where: { id },
       include: {
         ...taskInclude,
-        case: { select: { id: true, code: true, title: true, type: true, status: true, assetId: true } },
+        case: { select: { id: true, code: true, title: true, type: true, status: true, assetId: true, createdBy:true, assignmentId:true } },
       },
     });
     if (!task) throw new NotFoundException('workflow task not found');
     await this.assertCaseVisible(roleCodes, task.case, viewer);
-    return { ...this.withSla(task), ...(viewer && this.aiProjection && task.case.type === 'AIRS' ? { aiGovernance: (await this.aiProjection.forCases(viewer.id, [task.caseId])).get(task.caseId) } : {}) };
+    return { ...this.withSla(task),...await this.taskActionEligibility(viewer,task,task.case), ...(viewer && this.aiProjection && task.case.type === 'AIRS' ? { aiGovernance: (await this.aiProjection.forCases(viewer.id, [task.caseId])).get(task.caseId) } : {}) };
   }
 
   private caseStatusForActiveStage(stage: WorkflowStageWithRoute): CaseStatus {
@@ -6131,6 +6711,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     },
     decision: WorkflowDecisionValue,
     comment?: string | null,
+    verifiedDomainEvidence=false,
   ): Promise<void> {
     if (decision === WORKFLOW_RETURN_FOR_CLARIFICATION && !comment?.trim()) {
       throw new BadRequestException('Return for clarification requires a decision comment');
@@ -6138,7 +6719,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     if (decision !== TaskDecision.approved || !task.templateStage) return;
 
     const requiredEvidence = this.requiredRequirementNames(task.templateStage.evidenceRequirementsJson);
-    if (requiredEvidence.length > 0) {
+    if (requiredEvidence.length > 0 && !verifiedDomainEvidence) {
       const evidenceCount = await client.workflowTaskAttachment.count({
         where: {
           caseId: task.caseId,
@@ -6582,56 +7163,113 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       where: { id },
       include: {
         case: true,
-        templateStage: { select: { ...decisionStageSelect, assigneeRoleCode: true } },
+        templateStage: {
+          select: { ...decisionStageSelect, assigneeRoleCode: true },
+        },
       },
     });
     if (!task) throw new NotFoundException('workflow task not found');
+    if (
+      task.case.type === 'architecture_review' &&
+      task.templateStage?.isDecision
+    )
+      throw new ConflictException(
+        'Complete the architecture decision in Extended Domains with its current verified evidence',
+      );
     await this.assertGovernedAiucMutation(task.case.type, user.id, task.caseId);
     await this.assertCaseVisible(user.roles, task.case, user);
     this.assertCaseCanChange(task.case.status);
-    if (task.status === TaskStatus.completed || task.status === TaskStatus.cancelled) {
+    if (
+      task.status === TaskStatus.completed ||
+      task.status === TaskStatus.cancelled
+    ) {
       throw new BadRequestException('This task has already been decided');
     }
-    const taskQueueRoleCode = task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
-    const administratorOverride = isSystemAdministrator(user.roles);
+    const taskQueueRoleCode =
+      task.assigneeRoleCode ?? task.templateStage?.assigneeRoleCode ?? null;
+    const businessRoles = await this.assertBusinessTaskRole(
+      user,
+      taskQueueRoleCode,
+    );
     const isRoleQueueDecision =
-      !task.assigneeUserId &&
-      !!taskQueueRoleCode &&
-      user.roles.includes(taskQueueRoleCode);
-    if (!administratorOverride && task.assigneeUserId !== user.id && !isRoleQueueDecision) {
-      throw new ForbiddenException('Only the assigned user or owning role queue can decide this task');
+      !task.assigneeUserId && !!taskQueueRoleCode && businessRoles.length > 0;
+    if (task.assigneeUserId !== user.id && !isRoleQueueDecision) {
+      throw new ForbiddenException(
+        'Only the assigned user or owning role queue can decide this task',
+      );
     }
-    const businessRoles=await this.assertBusinessTaskRole(user, taskQueueRoleCode);
-    await this.assertCaseVisible(businessRoles,task.case,{...user,roles:businessRoles});
+    await this.assertCaseVisible(businessRoles, task.case, {
+      ...user,
+      roles: businessRoles,
+    });
 
     // Segregation of duties: the person who opened an approval case cannot also
     // decide it, regardless of role. This keeps proposer and approver separate.
     const isApprovalTask =
       task.case.type === 'owner_assignment_approval' ||
       task.case.type === 'steward_assignment_approval';
-    if (!administratorOverride && (isApprovalTask || task.type === 'approval') && task.case.createdBy === user.email) {
-      throw new ForbiddenException('You cannot decide an approval you submitted');
+    if (
+      (isApprovalTask || task.type === 'approval') &&
+      [user.email, user.id].includes(task.case.createdBy)
+    ) {
+      throw new ForbiddenException(
+        'You cannot decide an approval you submitted',
+      );
     }
-    const returnedForClarification = dto.decision === WORKFLOW_RETURN_FOR_CLARIFICATION;
+    const returnedForClarification =
+      dto.decision === WORKFLOW_RETURN_FOR_CLARIFICATION;
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.assertStageDecisionPrerequisites(tx, task, dto.decision, dto.comment);
+      await this.assertStageDecisionPrerequisites(
+        tx,
+        task,
+        dto.decision,
+        dto.comment,
+      );
+      const liveBusinessRoles = await businessDecisionRoles(
+        tx,
+        businessRoles,
+        'workflow_tasks.edit',
+        taskQueueRoleCode ? [taskQueueRoleCode] : undefined,
+      );
+      await this.assertBusinessTaskResource(
+        tx,
+        liveBusinessRoles,
+        task.case.assetId,
+      );
+      const businessAuthority = await businessAuthoritySnapshot(
+        tx,
+        liveBusinessRoles,
+        taskQueueRoleCode,
+      );
       const routePlan = isApprovalTask
         ? null
         : await this.planRouteAdvance(tx, task, dto.decision);
       const claim = await tx.workflowTask.updateMany({
-        where: { id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },
+        where: {
+          id,
+          status: { in: [TaskStatus.pending, TaskStatus.in_progress] },
+        },
         data: {
           status: TaskStatus.completed,
-          decision: returnedForClarification ? null : dto.decision as TaskDecision,
+          decision: returnedForClarification
+            ? null
+            : (dto.decision as TaskDecision),
           decisionComment: dto.comment ?? null,
           completedAt: new Date(),
-          ...(isRoleQueueDecision || administratorOverride ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode } : {}),
+          ...(isRoleQueueDecision
+            ? { assigneeUserId: user.id, assigneeRoleCode: taskQueueRoleCode }
+            : {}),
         },
       });
-      if (claim.count !== 1) throw new ConflictException('This task was decided by another user');
-      const decided = await tx.workflowTask.findUnique({ where: { id }, include: taskInclude });
-      if (!decided) throw new NotFoundException('workflow task not found after decision');
+      if (claim.count !== 1)
+        throw new ConflictException('This task was decided by another user');
+      const decided = await tx.workflowTask.findUnique({
+        where: { id },
+        include: taskInclude,
+      });
+      if (!decided)
+        throw new NotFoundException('workflow task not found after decision');
       if (isRoleQueueDecision) {
         await tx.workflowEvent.create({
           data: {
@@ -6658,13 +7296,17 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
       if (isApprovalTask && task.case.assignmentId) {
         if (returnedForClarification) {
           await this.openClarificationTask(tx, task, user.email, dto.comment);
-          await this.audit.log(
+          await this.audit.logRequired(
             {
               actor: user.email,
               action: 'workflow_task.return_for_clarification',
               entityType: 'workflow_task',
               entityId: id,
-              metadata: { assignmentId: task.case.assignmentId, commentRequired: true },
+              metadata: {
+                assignmentId: task.case.assignmentId,
+                commentRequired: true,
+                businessAuthority,
+              },
             },
             tx,
           );
@@ -6675,9 +7317,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
           where: { id: task.case.assignmentId, deletedAt: null },
           include: { roleType: true, person: true },
         });
-        if (!assignment) throw new BadRequestException('assignment not found for approval workflow');
-        if (!administratorOverride && assignment.person?.userId === user.id) {
-          throw new ForbiddenException('You cannot approve an assignment naming you as its owner or steward');
+        if (!assignment)
+          throw new BadRequestException(
+            'assignment not found for approval workflow',
+          );
+        if (assignment.person?.userId === user.id) {
+          throw new ForbiddenException(
+            'You cannot approve an assignment naming you as its owner or steward',
+          );
         }
         const demotedPrimaryCount = approved
           ? await this.demoteConflictingApprovedPrimary(tx, assignment)
@@ -6685,14 +7332,18 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         await tx.stewardshipAssignment.update({
           where: { id: assignment.id },
           data: {
-            approvalStatus: approved ? ApprovalStatus.approved : ApprovalStatus.rejected,
+            approvalStatus: approved
+              ? ApprovalStatus.approved
+              : ApprovalStatus.rejected,
             reviewedBy: user.email,
             reviewedAt: new Date(),
             isActive: approved ? assignment.isActive : false,
           },
         });
         await this.syncAssetOwner(tx, assignment);
-        const finalStatus = approved ? CaseStatus.implemented : CaseStatus.rejected;
+        const finalStatus = approved
+          ? CaseStatus.implemented
+          : CaseStatus.rejected;
         await tx.workflowCase.update({
           where: { id: task.caseId },
           data: { status: finalStatus },
@@ -6709,19 +7360,21 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
               : 'Proposed assignment rejected',
           },
         });
-        await this.audit.log(
+        await this.audit.logRequired(
           {
             actor: user.email,
             action: `assignment.${approved ? ApprovalStatus.approved : ApprovalStatus.rejected}`,
             entityType: 'stewardship_assignment',
             entityId: assignment.id,
+            metadata: { businessAuthority },
           },
           tx,
         );
       }
 
       if (!isApprovalTask) {
-        const openedSequentialApproval = await this.maybeCreateNextSequentialApproval(tx, task, user.email);
+        const openedSequentialApproval =
+          await this.maybeCreateNextSequentialApproval(tx, task, user.email);
         if (openedSequentialApproval) {
           await tx.workflowEvent.create({
             data: {
@@ -6732,7 +7385,14 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
               comment: 'Next approval step opened in the same stage.',
             },
           });
-        } else if (await this.hasOpenStagePeers(tx, task.caseId, task.templateStageId, id)) {
+        } else if (
+          await this.hasOpenStagePeers(
+            tx,
+            task.caseId,
+            task.templateStageId,
+            id,
+          )
+        ) {
           await tx.workflowEvent.create({
             data: {
               caseId: task.caseId,
@@ -6743,11 +7403,17 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             },
           });
         } else {
-          await this.applyRouteAdvance(tx, task, routePlan, user.email, dto.decision);
+          await this.applyRouteAdvance(
+            tx,
+            task,
+            routePlan,
+            user.email,
+            dto.decision,
+          );
         }
       }
 
-      await this.audit.log(
+      await this.audit.logRequired(
         {
           actor: user.email,
           action: `workflow_task.${dto.decision}`,
@@ -6757,6 +7423,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
             decision: dto.decision,
             stageCode: task.templateStage?.code ?? null,
             routeTransitionId: routePlan?.transition?.id ?? null,
+            businessAuthority,
           },
         },
         tx,
@@ -6969,6 +7636,7 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     if (!roleCode) return null;
     const directAssignee = await this.firstAssigneeForRole(client, roleCode, assetId, preferLowestWorkload);
     if (directAssignee) return directAssignee;
+    if((CANONICAL_BUSINESS_ROLES as readonly string[]).includes(roleCode))return null;
     if (roleCode !== DMO_ADMIN_CODE) {
       return this.firstAssigneeForRole(client, DMO_ADMIN_CODE, assetId, preferLowestWorkload);
     }
@@ -6981,14 +7649,19 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
     assetId?: string | null,
     preferLowestWorkload = false,
   ): Promise<string | null> {
+    let best: { userId:string; workload:number } | null = null;
+    const visibility = new Map<string,boolean>();
+    for (let skip=0;;skip+=200) {
     const matches = await client.userRole.findMany({
       where: {
-        role: { code: roleCode, deletedAt: null, isActive: true },
+        role: {AND:[responsibilityWhere(roleCode),{permissions:{some:{permission:{resource:'workflow_tasks',action:'edit'}}}}]},
         user: { isActive: true },
       },
-      orderBy: { assignedAt: 'asc' },
-      take: 25,
+      orderBy: [{ assignedAt: 'asc' },{userId:'asc'},{roleId:'asc'}],
+      take: 200,
+      skip,
       select: {
+        role:{select:{code:true}},
         userId: true,
         user: {
           select: {
@@ -7006,24 +7679,22 @@ export class WorkflowService implements OnModuleInit, OnModuleDestroy {
         },
       },
     });
-    const ordered = preferLowestWorkload
-      ? [...matches].sort((left, right) => left.user._count.workflowTasks - right.user._count.workflowTasks)
-      : matches;
-    if (!assetId && ordered[0]) {
-      return (await this.delegateForAssignee(client, ordered[0].userId, roleCode, null)) ?? ordered[0].userId;
-    }
-    if (!assetId) return null;
-
-    for (const match of ordered) {
-      const candidateRoleCodes = match.user.userRoles
-        .map((userRole) => userRole.role)
-        .filter((role) => role.isActive && !role.deletedAt)
-        .map((role) => role.code);
-      if (await this.roleCodesCanSeeAsset(candidateRoleCodes, assetId, client)) {
-        return (await this.delegateForAssignee(client, match.userId, roleCode, assetId ?? null)) ?? match.userId;
+    for (const match of matches) {
+      let visible=visibility.get(match.role.code);
+      if(visible===undefined){
+        const candidateRoleCodes=[match.role.code];
+        if(assetId)visible=await this.roleCodesCanSeeAsset(candidateRoleCodes,assetId,client);
+        else {const scope=await this.scope.resolve(candidateRoleCodes,client);visible=scope.orgUnits==='all'&&scope.domains==='all';}
+        visibility.set(match.role.code,visible);
       }
+      if(!visible)continue;
+      if(!preferLowestWorkload)return (await this.delegateForAssignee(client,match.userId,roleCode,assetId??null))??match.userId;
+      const workload=match.user._count.workflowTasks;
+      if(!best||workload<best.workload)best={userId:match.userId,workload};
     }
-    return null;
+    if(matches.length<200)break;
+    }
+    return best ? (await this.delegateForAssignee(client,best.userId,roleCode,assetId??null))??best.userId : null;
   }
 
   private async delegateForAssignee(

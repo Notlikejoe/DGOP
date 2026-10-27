@@ -1,3 +1,4 @@
+import { businessDecisionRoles, matchesBusinessRole } from '../auth/business-roles';
 import { createHash } from "node:crypto";
 import {
   BadRequestException,
@@ -23,7 +24,6 @@ import { PrismaService } from "../prisma/prisma.service";
 import { ScopeService, EffectiveScope } from "./scope.service";
 import { OwnerDelegateValidationService } from "./owner-delegate-validation.service";
 import { isManagedDemoProfile } from '../common/demo-profile';
-import { isSystemAdministrator } from '../auth/system-admin';
 import { enforcementOperationAllowed, enforcementGrantOutcome, REMOVAL_STATES, type EnforcementOperation } from './access-enforcement.logic';
 import {
   AccessMatrixQueryDto,
@@ -1567,7 +1567,7 @@ export class AccessGrantsService {
 
   async decideGrant(id: string, dto: DecideAccessGrantDto, user: AuthUser) {
     const existing = await this.getGrant(id, user);
-    if (!isSystemAdministrator(user.roles) && (existing.createdBy === user.email || existing.ownerDecision === 'pending' && existing.updatedBy === user.email)) throw new ForbiddenException('Grant creators and pending-request editors cannot approve or reject their own requests');
+    if (existing.createdBy === user.email || existing.ownerDecision === 'pending' && existing.updatedBy === user.email) throw new ForbiddenException('Grant creators and pending-request editors cannot approve or reject their own requests');
     if (!ACTIVE_GRANT_STATUSES.has(existing.status)) {
       throw new BadRequestException(
         "Only requested or active grants can receive an owner decision",
@@ -2635,7 +2635,7 @@ export class AccessGrantsService {
     const scoped = await this.assetVisibilityWhere(user.roles);
     const broadReadRoles = new Set([...ADMIN_ROLES, "auditor"]);
     if (
-      !user.roles.includes("data_owner") ||
+      !matchesBusinessRole(user, "data_owner") ||
       user.roles.some((role) => broadReadRoles.has(role))
     )
       return scoped;
@@ -2895,7 +2895,8 @@ export class AccessGrantsService {
   private async assertBusinessOwnerAuthority(user: AuthUser, assetId: string): Promise<void> {
     const validation = await this.ownerDelegate.validateActiveOwnerOrDelegate({ assetId, actorUserId: user.id, actorEmail: user.email });
     if (!validation.allowed) throw new ForbiddenException(validation.reason);
-    const roles = await this.prisma.role.findMany({ where: { code: { in: user.roles.filter(role => !ADMIN_ROLES.includes(role) && role !== 'auditor') }, isActive: true, deletedAt: null, permissions: { some: { permission: { resource: 'access_grants', action: 'edit' } } } }, select: { code: true } });
+    const roleCodes=await businessDecisionRoles(this.prisma,user.roles.filter(code=>!ADMIN_ROLES.includes(code)),'access_grants.edit');
+    const roles=roleCodes.map(code=>({code}));
     if (!roles.length) throw new ForbiddenException('A live access decision business role is required');
     const asset = await this.prisma.dataAsset.findFirst({ where: { id: assetId, ...(await this.assetVisibilityWhere(roles.map(role => role.code))) }, select: { id: true } });
     if (!asset) throw new NotFoundException('data asset not found in the business decision scope');

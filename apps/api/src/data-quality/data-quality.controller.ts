@@ -76,7 +76,7 @@ export class DataQualityController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
-    return this.service.listRules(user.roles, { search, status, dimension }, page, pageSize);
+    return this.service.listRules(user.roles, { search, status, dimension }, page, pageSize, user.email);
   }
 
   @Post('rules')

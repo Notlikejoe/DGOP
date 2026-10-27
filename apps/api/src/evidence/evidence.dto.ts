@@ -1,3 +1,5 @@
+import { Type } from 'class-transformer';
+import { IsInt, Min, Max, MaxLength } from 'class-validator';
 import { IsDateString, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export const EVIDENCE_STATUSES = [
@@ -28,4 +30,10 @@ export class CreateEvidenceDto {
 export class ReviewEvidenceDto {
   @IsIn(REVIEW_DECISIONS) decision!: ReviewDecision;
   @IsOptional() @IsString() comment?: string | null;
+}
+
+export class ApprovedEvidenceQueryDto {
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) page?:number;
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) @Max(200) pageSize?:number;
+  @IsOptional() @IsString() @MaxLength(200) search?:string;
 }

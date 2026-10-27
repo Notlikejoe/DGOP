@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { liveRoleWhere } from '../auth/business-roles';
 
 /** Wildcard permission granted to system_admin (matches every permission). */
 export const WILDCARD = '*';
@@ -16,7 +17,7 @@ export class AccessService {
   async permissionsForRoleCodes(roleCodes: string[], client: Prisma.TransactionClient = this.prisma): Promise<string[]> {
     if (roleCodes.length === 0) return [];
     const activeRoles = await client.role.findMany({
-      where: { code: { in: roleCodes }, isActive: true, deletedAt: null },
+      where: { AND: [liveRoleWhere(), { code: { in: roleCodes } }] },
       select: { id: true, code: true },
     });
     if (activeRoles.some((role) => role.code === 'system_admin')) return [WILDCARD];

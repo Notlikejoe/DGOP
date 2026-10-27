@@ -1,5 +1,7 @@
+import { businessDecisionRoles } from '../auth/business-roles';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -22,7 +24,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService, EffectiveScope } from '../access/scope.service';
 import { WorkflowService } from '../workflow/workflow.service';
-import { isSystemAdministrator } from '../auth/system-admin';
 import { parseCsv } from '../common/csv';
 import { formatBusinessSequence, nextAvailableBusinessCode } from '../common/business-sequence';
 import { boundedFirstPageParams, parsePageParams, toPaged } from '../common/pagination';
@@ -780,11 +781,23 @@ export class DataQualityService {
     };
   }
 
+  private async ruleApprovalActions<T extends { id: string; status: string; createdBy: string }>(rows: T[], roleCodes: string[], actor?: string) {
+    const allowed = new Set<string>();
+    if (actor && rows.length) try {
+      const roles = await businessDecisionRoles(this.prisma, roleCodes, 'data_quality_rules.edit');
+      const scope = await this.scope.resolve(roles), assets = await this.visibleAssetIds(roles);
+      const visible = await this.prisma.dataQualityRule.findMany({ where: { AND: [{ deletedAt: null, id: { in: rows.map(row => row.id) } }, this.qualityRecordScopeWhere<Prisma.DataQualityRuleWhereInput>(scope, assets)] }, select: { id: true } });
+      visible.forEach(row => allowed.add(row.id));
+    } catch (error) { if (!(error instanceof ForbiddenException)) throw error; }
+    return rows.map(row => ({ ...row, canApprove: row.status === 'in_review' && row.createdBy !== actor && allowed.has(row.id) }));
+  }
+
   async listRules(
     roleCodes: string[],
     filters: { search?: string; status?: string; dimension?: string },
     page?: string | number,
     pageSize?: string | number,
+    actor?: string,
   ) {
     const [scope, assetIds] = await Promise.all([this.scope.resolve(roleCodes), this.visibleAssetIds(roleCodes)]);
     const and: Record<string, unknown>[] = [
@@ -810,13 +823,13 @@ export class DataQualityService {
     const query = { where, include: ruleInclude, orderBy: [{ status: 'asc' as const }, { updatedAt: 'desc' as const }] };
     if (!params) {
       const bounded = boundedFirstPageParams(pageSize);
-      return this.prisma.dataQualityRule.findMany({ ...query, skip: bounded.skip, take: bounded.take });
+      return this.ruleApprovalActions(await this.prisma.dataQualityRule.findMany({ ...query, skip: bounded.skip, take: bounded.take }), roleCodes, actor);
     }
     const [rows, total] = await Promise.all([
       this.prisma.dataQualityRule.findMany({ ...query, skip: params.skip, take: params.take }),
       this.prisma.dataQualityRule.count({ where }),
     ]);
-    return toPaged(rows, total, params);
+    return toPaged(await this.ruleApprovalActions(rows, roleCodes, actor), total, params);
   }
 
   async createRule(roleCodes: string[], dto: CreateDataQualityRuleDto, actor: string) {
@@ -902,6 +915,7 @@ export class DataQualityService {
   }
 
   async transitionRule(id: string, roleCodes: string[], action: 'submit' | 'approve' | 'deploy' | 'retire', dto: DataQualityRuleTransitionDto, actor: string) {
+    if(action==='approve')roleCodes=await businessDecisionRoles(this.prisma,roleCodes,'data_quality_rules.edit');
     const existing = await this.prisma.dataQualityRule.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new NotFoundException('data quality rule not found');
     await this.assertQualityRecordScope(roleCodes, existing);
@@ -923,7 +937,7 @@ export class DataQualityService {
       if (existing.status !== DataQualityRuleStatus.in_review) {
         throw new BadRequestException('Only rules in review can be approved');
       }
-      if (!isSystemAdministrator(roleCodes) && existing.createdBy === actor) {
+      if (existing.createdBy === actor) {
         throw new BadRequestException('Rule creators cannot approve their own rule');
       }
       next.status = DataQualityRuleStatus.approved;

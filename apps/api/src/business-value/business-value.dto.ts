@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, MaxLength, MinLength, IsDateString } from 'class-validator';
 import {
   BusinessGlossaryStatus,
   BusinessImpactLevel,
@@ -97,4 +97,19 @@ export class CreateDataValueKpiDto {
   @IsOptional() @IsString() assetId?: string;
   @IsOptional() @IsString() domainId?: string;
   @IsOptional() @IsIn(Object.values(DataValueStatus)) status?: DataValueStatus;
+}
+
+export const BUSINESS_REGISTERS=['glossary','lineage','valuations','lifecycle','assessments','kpis','surveys'] as const;
+export type BusinessRegister=typeof BUSINESS_REGISTERS[number];
+export class BusinessRegisterQueryDto {
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) page?:number;
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) @Max(200) pageSize?:number;
+  @IsOptional() @IsString() @MaxLength(200) search?:string;
+}
+export class MeasureValuationDto {
+  @Type(()=>Number) @IsInt() @Min(1) expectedVersion!:number;
+  @Type(()=>Number) @IsNumber() @Min(0) actualAnnualValue!:number;
+  @IsDateString() measuredAt!:string;
+  @IsString() evidenceId!:string;
+  @IsString() @MinLength(10) evidenceJustification!:string;
 }

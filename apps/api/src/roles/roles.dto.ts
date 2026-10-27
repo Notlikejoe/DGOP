@@ -21,6 +21,8 @@ export class CreateRoleDto {
   @MaxLength(64)
   @Matches(/^[a-z][a-z0-9_]*$/, { message: 'code must be snake_case' })
   code!: string;
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(64)
+  businessRoleCode?: string;
 
   @IsString() @IsNotEmpty() nameEn!: string;
   @IsString() @IsNotEmpty() nameAr!: string;

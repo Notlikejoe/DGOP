@@ -1,3 +1,4 @@
+import { actualRoleCodes } from './ai-authorization.service';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,8 +14,8 @@ export class AiAssetRiskService {
  constructor(private readonly prisma:PrismaService,private readonly risks:AiRiskIntakeService,private readonly scope:ScopeService){}
  private page(page:number,size:number){if(!Number.isInteger(page)||page<1||!Number.isInteger(size)||size<1||size>100)throw new BadRequestException('Use page >=1 and page size 1–100');}
  private async access(tx:Prisma.TransactionClient,userId:string,assetId:string){
-  const a=await this.risks.visibility(userId,tx),scope=await this.scope.resolve(a.actor.roles);
-  const nativeGrant=isSystemAdministrator(a.actor.roles)||!!await tx.rolePermission.count({where:{role:{is:{code:{in:a.actor.roles},isActive:true,deletedAt:null}},permission:{is:{resource:'data_assets',action:'view'}}}});if(!nativeGrant)throw new ForbiddenException('Existing data_assets.view authority is required');
+  const a=await this.risks.visibility(userId,tx),scope=await this.scope.resolve(actualRoleCodes(a.actor));
+  const nativeGrant=isSystemAdministrator(a.actor.roles)||!!await tx.rolePermission.count({where:{role:{is:{code:{in:actualRoleCodes(a.actor)},isActive:true,deletedAt:null}},permission:{is:{resource:'data_assets',action:'view'}}}});if(!nativeGrant)throw new ForbiddenException('Existing data_assets.view authority is required');
   const asset=await tx.dataAsset.findFirst({where:{id:assetId,isActive:true,deletedAt:null,assetType:'ai_data_product',...(scope.orgUnits==='all'?{}:{orgUnitId:{in:scope.orgUnits}}),...(scope.domains==='all'?{}:{domainId:{in:scope.domains}}),...(scope.maxClassRank===null?{}:{classification:{is:{rank:{lte:scope.maxClassRank}}}})},select:{id:true,code:true,nameEn:true,nameAr:true}});if(!asset)throw new NotFoundException('Active scoped AI Data Product not found');
   const aggregateOnly=a.actor.roles.some(r=>['executive','AI_EXECUTIVE_TEAM','STEERING_COMMITTEE'].includes(r))&&!a.actor.roles.some(r=>['auditor','AI_GOVERNANCE_OFFICER','AI_COMPLIANCE_OFFICER','AI_WORKING_GROUP','dmo_admin'].includes(r));
   const where:Prisma.AiRiskWhereInput={AND:[a.where,{isSampleData:false,riskRef:{not:null},useCase:{is:{assetId,isSampleData:false,useCaseRef:{not:null},...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}})}}}]};return {...a,asset,where,aggregateOnly};

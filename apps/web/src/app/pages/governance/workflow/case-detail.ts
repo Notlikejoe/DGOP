@@ -39,6 +39,8 @@ export class WorkflowCasePage implements OnInit {
   protected readonly tokenTrace = signal<WorkflowTokenTrace | null>(null);
   protected readonly tokenTraceState = signal<'idle' | 'loading' | 'ok' | 'error'>('idle');
   protected readonly users = signal<UserRef[]>([]);
+  protected readonly attachments = signal<{id:string;fileName:string;fileAvailability?:'available'|'unavailable';unavailableReason?:string}[]>([]);
+  protected readonly attachmentsFailed = signal(false);
   private caseId = '';
 
   // decision modal
@@ -59,7 +61,7 @@ export class WorkflowCasePage implements OnInit {
   ngOnInit(): void {
     this.caseId = this.route.snapshot.paramMap.get('id') ?? '';
     this.load();
-    this.http.get<UserRef[]>('/api/users').subscribe({
+    if(this.auth.hasPermission('users.view'))this.http.get<UserRef[]>('/api/users').subscribe({
       next: (u) => this.users.set(u),
       error: () => {},
     });
@@ -79,6 +81,7 @@ export class WorkflowCasePage implements OnInit {
         this.wfCase.set(c);
         this.state.set('ok');
         this.loadTokenTrace();
+        this.http.get<{id:string;fileName:string;fileAvailability?:'available'|'unavailable';unavailableReason?:string}[]>(`/api/workflow/cases/${this.caseId}/attachments`).subscribe({next:rows=>{this.attachments.set(rows);this.attachmentsFailed.set(false);},error:()=>{this.attachments.set([]);this.attachmentsFailed.set(true);}});
       },
       error: () => this.state.set('error'),
     });
@@ -121,6 +124,10 @@ export class WorkflowCasePage implements OnInit {
 
   // ---------- helpers ----------
   protected t(key: string): string { return this.i18n.t(key); }
+  protected downloadAttachment(row:{id:string;fileName:string;fileAvailability?:string}):void {
+    if(row.fileAvailability==='unavailable'){this.toast.error(this.t('evidence.fileUnavailable'));return;}
+    this.http.get(`/api/workflow/attachments/${row.id}/file`,{responseType:'blob'}).subscribe({next:blob=>{const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=row.fileName;link.click();URL.revokeObjectURL(url);},error:error=>this.toast.errorFrom(error,this.t('evidence.downloadError'))});
+  }
   protected name(o?: { nameEn: string; nameAr: string } | null): string {
     if (!o) return '-';
     return this.i18n.lang() === 'ar' ? o.nameAr : o.nameEn;
@@ -165,13 +172,7 @@ export class WorkflowCasePage implements OnInit {
 
   /** Decisions follow actual business assignment and proposer independence. */
   protected canDecide(task: Task): boolean {
-    if (this.governedAi) return false;
-    if (task.status === 'completed' || task.status === 'cancelled') return false;
-    const user=this.auth.currentUser(),roles=user?.roles.map(role=>role.code)??[],role=task.assigneeRoleCode??task.templateStage?.assigneeRoleCode;
-    if(!user||roles.includes('auditor')||!roles.some(code=>code!=='system_admin'))return false;
-    if(role&&(role==='system_admin'||!roles.includes(role)))return false;
-    if((task.type==='approval'||['owner_assignment_approval','steward_assignment_approval'].includes(this.wfCase()?.type??''))&&this.wfCase()?.createdBy===user.email)return false;
-    return this.auth.hasPermission('workflow_tasks.edit')&&(task.assigneeUserId===user.id||!task.assigneeUserId&&!!role&&roles.includes(role));
+    return !this.governedAi && this.auth.hasBusinessPermission('workflow_tasks.edit') && task.canDecide === true;
   }
 
   protected submitCase(): void {

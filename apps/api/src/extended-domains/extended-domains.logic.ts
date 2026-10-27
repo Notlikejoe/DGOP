@@ -402,5 +402,5 @@ export function referenceVersionStatus(decision: 'submit' | 'approve' | 'reject'
 }
 
 export function isArchitectureDecisionFinal(decision: ArchitectureReviewDecision): boolean {
-  return decision !== ArchitectureReviewDecision.pending;
+  return [ArchitectureReviewDecision.approved, ArchitectureReviewDecision.approved_with_conditions, ArchitectureReviewDecision.rejected].includes(decision as 'approved'|'approved_with_conditions'|'rejected');
 }

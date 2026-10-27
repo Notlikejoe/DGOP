@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min, MinLength, MaxLength } from 'class-validator';
 import {
   ArchitectureReviewDecision,
   MdmGoldenRecordStatus,
@@ -49,6 +49,7 @@ export class UpsertMdmMatchRuleDto {
 }
 
 export class UpdateMdmGoldenRecordDto {
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
   @IsOptional() @IsIn(Object.values(MdmGoldenRecordStatus)) status?: MdmGoldenRecordStatus;
   @IsOptional() @IsObject() masteredRecordJson?: Record<string, unknown>;
   @IsOptional() @IsObject() survivorshipRulesJson?: Record<string, unknown>;
@@ -99,6 +100,7 @@ export class SaveMetadataCertificationDto {
 }
 
 export class CreateArchitectureReviewDto {
+  @IsOptional() @IsString() previousReviewId?: string;
   @IsString() assetId!: string;
   @IsOptional() @IsString() reviewType?: string;
   @IsString() title!: string;
@@ -110,10 +112,22 @@ export class CreateArchitectureReviewDto {
 }
 
 export class DecideArchitectureReviewDto {
+  @IsString() @MinLength(1) workflowTaskId!: string;
+  @IsOptional() @IsString() @MinLength(10) decisionReason?: string;
+  @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number;
+  @IsOptional() @IsString() @MinLength(10) evidenceJustification?: string;
   @IsIn(Object.values(ArchitectureReviewDecision))
   decision!: ArchitectureReviewDecision;
   @IsOptional() @IsString() architectureDecision?: string;
   @IsOptional() @IsString() lineageImpact?: string;
   @IsOptional() @IsObject() conditionsJson?: Record<string, unknown>;
   @IsOptional() @IsString() evidenceId?: string;
+}
+
+export const EXTENDED_REGISTERS=['matches','goldenRecords','references','certifications','architecture'] as const;
+export type ExtendedRegister = typeof EXTENDED_REGISTERS[number];
+export class ExtendedRegisterQueryDto {
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) page?:number;
+  @IsOptional() @Type(()=>Number) @IsInt() @Min(1) @Max(200) pageSize?:number;
+  @IsOptional() @IsString() @MaxLength(200) search?:string;
 }

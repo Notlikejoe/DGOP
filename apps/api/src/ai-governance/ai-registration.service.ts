@@ -1,3 +1,4 @@
+import { actualRoleCodes } from './ai-authorization.service';
 import { AiReviewQueryDto } from './ai-review-query.dto';
 import { readAiReviewQueue, reviewWorkflowSelection } from './ai-review-queue';
 import { logAiRequired } from './ai-notifications';
@@ -69,7 +70,7 @@ export class AiRegistrationService {
     }
     async lookups(userId: string) {
         const actor = await this.authorization.authorizeRead(userId, ['aiuc.asset.register', 'aiuc.asset.approve']);
-        const scope = await this.scope.resolve(actor.roles);
+        const scope = await this.scope.resolve(actualRoleCodes(actor));
         const [domains, classifications] = await Promise.all([
             this.prisma.dataDomain.findMany({ where: { isActive: true, deletedAt: null, ...(scope.domains === 'all' ? {} : { id: { in: scope.domains } }) }, select: { id: true, nameEn: true, nameAr: true }, orderBy: { nameEn: 'asc' } }),
             this.prisma.classification.findMany({ where: { isActive: true, deletedAt: null, ...(scope.maxClassRank === null ? {} : { rank: { lte: scope.maxClassRank } }) }, select: { id: true, nameEn: true, nameAr: true }, orderBy: { rank: 'asc' } }),
@@ -122,15 +123,15 @@ export class AiRegistrationService {
         return this.prisma.$transaction(async (tx) => {
             const actor = await this.authorization.authorize(userId, 'aiuc.asset.register', tx, id);
             const context = await this.context(tx, id, taskId, AIUC_STAGE.assetRegistration, dto.expectedVersion);
-            if (!actor.administratorOverride && (!actor.roles.includes('AI_WORKING_GROUP') || context.task.assigneeRoleCode !== 'AI_WORKING_GROUP'
-                || context.task.assigneeUserId && context.task.assigneeUserId !== actor.id))
+            if (!actor.roles.includes('AI_WORKING_GROUP') || context.task.assigneeRoleCode !== 'AI_WORKING_GROUP'
+                || context.task.assigneeUserId && context.task.assigneeUserId !== actor.id)
                 throw new ForbiddenException('The working-group registration task is required');
-            if (!actor.administratorOverride && [actor.id, context.current.requesterUserId, context.current.owner?.userId, context.adoption['actorId']].includes(context.dataOwner.userId)) {
+            if ([actor.id, context.current.requesterUserId, context.current.owner?.userId, context.adoption['actorId']].includes(context.dataOwner.userId)) {
                 throw new ConflictException('The nominated Data Owner is not independent of registration, request, ownership and tier decision');
             }
             await this.authorization.authorize(context.dataOwner.userId!, 'aiuc.asset.approve', tx, id);
             await this.validateClassification(tx, dto, context.payload);
-            await this.assets.validate(tx, actor.roles, dto, context.assetContext);
+            await this.assets.validate(tx, actualRoleCodes(actor), dto, context.assetContext);
             const proposal = { mode: dto.mode, existingAssetId: dto.existingAssetId ?? null,
                 nameEn: dto.nameEn?.trim() ?? null, nameAr: dto.nameAr?.trim() ?? null, assetSubtype: dto.assetSubtype ?? null,
                 classificationId: dto.classificationId, domainId: dto.domainId,
@@ -159,8 +160,8 @@ export class AiRegistrationService {
             const actor = await this.authorization.authorize(userId, 'aiuc.asset.approve', tx, id);
             const context = await this.context(tx, id, taskId, AIUC_STAGE.assetApproval, dto.expectedVersion);
             const proposal = record(context.form['registrationProposal']);
-            const administratorOverride = actor.administratorOverride;
-            if (!administratorOverride && (!actor.roles.includes('data_owner') || context.task.assigneeRoleCode !== 'data_owner')
+            const administratorOverride = false;
+            if (!actor.roles.includes('data_owner') || context.task.assigneeRoleCode !== 'data_owner'
                 || !administratorOverride && (actor.id !== context.task.assigneeUserId || actor.id !== context.dataOwner.userId
                     || actor.id !== proposal['dataOwnerUserId']))
                 throw new ForbiddenException('Only the nominated active Data Owner can decide asset registration');
@@ -188,7 +189,7 @@ export class AiRegistrationService {
                     nameAr: proposal['nameAr'] ?? undefined, assetSubtype: proposal['assetSubtype'] ?? undefined } as unknown as ProposeAiRegistrationDto;
                 await this.validateClassification(tx, input, context.payload);
                 const handoff = await this.handoff(tx, context.payload, context.adoption, context.assessment.ruleReferenceVersion.values, now);
-                const asset = await this.assets.register(tx, actor.roles, input, context.assetContext);
+                const asset = await this.assets.register(tx, actualRoleCodes(actor), input, context.assetContext);
                 if (input.mode === 'create') {
                     const ownerRoleType = await tx.roleType.findFirst({ where: { code: 'data_owner', isActive: true, deletedAt: null }, select: { id: true } });
                     if (!ownerRoleType)

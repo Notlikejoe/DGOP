@@ -19,6 +19,10 @@ export interface Task {
   title: string;
   type: string;
   status: string;
+  canDecide?: boolean;
+  domainDecisionPath?: string;
+  domainDecisionSearch?: string;
+  canEditForm?: boolean;
   templateStageId?: string | null;
   assigneeUserId?: string | null;
   assigneeRoleCode?: string | null;
@@ -465,6 +469,7 @@ export interface WorkflowVersionDiff {
 }
 
 export interface WorkflowDesignerResponse {
+  actions?: {canSubmitReview:boolean;canApproveReview:boolean;canPublish:boolean};
   template: WorkflowTemplate;
   bpmnXml: string;
   validation: WorkflowBpmnValidation;

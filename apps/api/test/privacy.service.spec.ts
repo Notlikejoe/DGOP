@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 import assert from 'node:assert/strict';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
@@ -93,7 +94,7 @@ test('DPIA gate status rolls up to action required or approved', () => {
 test('privacy lists do not expose unanchored records to scoped users', async () => {
   let dpiaWhere: unknown;
   const service = new PrivacyService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       privacyDpia: {
         findMany: async (args: any) => {
@@ -102,7 +103,7 @@ test('privacy lists do not expose unanchored records to scoped users', async () 
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -118,7 +119,7 @@ test('privacy lists do not expose unanchored records to scoped users', async () 
 test('privacy list filters reject invalid status values before Prisma receives them', async () => {
   const calls: string[] = [];
   const service = new PrivacyService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       privacyRopaRecord: {
         findMany: async () => {
@@ -148,7 +149,7 @@ test('privacy list filters reject invalid status values before Prisma receives t
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -165,7 +166,7 @@ test('privacy list filters reject invalid status values before Prisma receives t
 test('privacy summary scopes consent and retention counters', async () => {
   const countWheres: unknown[] = [];
   const service = new PrivacyService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       privacyDpia: { findMany: async () => [] },
       privacyDsrRequest: { findMany: async () => [] },
@@ -183,7 +184,7 @@ test('privacy summary scopes consent and retention counters', async () => {
           return 0;
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -196,7 +197,7 @@ test('privacy summary scopes consent and retention counters', async () => {
 
 test('scoped users cannot create unanchored DSR requests', async () => {
   const service = new PrivacyService(
-    {} as never,
+    Object.assign({} as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -216,7 +217,7 @@ test('scoped users cannot create unanchored DSR requests', async () => {
 
 test('direct DPIA status and risk updates are blocked', async () => {
   const service = new PrivacyService(
-    {
+    Object.assign({
       privacyDpia: {
         findFirst: async () => ({
           id: 'dpia-1',
@@ -224,7 +225,7 @@ test('direct DPIA status and risk updates are blocked', async () => {
           gates: [],
         }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -243,7 +244,7 @@ test('direct DPIA status and risk updates are blocked', async () => {
 
 test('DPIA creators cannot approve their own gates', async () => {
   const service = new PrivacyService(
-    {
+    Object.assign({
       privacyDpia: {
         findFirst: async () => ({
           id: 'dpia-1',
@@ -251,7 +252,7 @@ test('DPIA creators cannot approve their own gates', async () => {
           gates: [],
         }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -261,7 +262,7 @@ test('DPIA creators cannot approve their own gates', async () => {
   await assert.rejects(
     () =>
       service.saveGate(
-        ['dmo_admin'],
+        ['privacy_officer'],
         'dpia-1',
         { phase: PrivacyGatePhase.requirements, status: PrivacyGateStatus.approved },
         'creator@dgop.local',
@@ -323,9 +324,9 @@ test('createDpia opens a routed privacy workflow case', async () => {
     auditLog: { create: async () => ({ id: 'audit-1' }) },
   };
   const service = new PrivacyService(
-    {
+    Object.assign({
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("privacy_officer",["privacy_operations.edit"])])}) as never,
     { logRequired: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),

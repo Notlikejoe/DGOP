@@ -40,7 +40,9 @@ export class AiDashboardReportsService {
         const a = await this.dashboard.reportingAccess(tx,userId,unitId,historical);
         const unit=await tx.organizationUnit.findFirst({where:{id:unitId,deletedAt:null,...(historical?{}:{isActive:true})}});
         if (!unit || a.scope.orgUnits!=='all'&&!a.scope.orgUnits.includes(unitId)) throw new NotFoundException('Scoped reporting register not found');
-        if(a.scope.domains!=='all'||a.scope.maxClassRank!==null) throw new ForbiddenException('Saved register reporting requires full domain and classification coverage');
+        // Captures explicitly represent the current authorized scope. Historical
+        // reads additionally verify every saved source member against that scope.
+        // A finite departmental clearance does not itself remove reporting authority.
         // Register reports require full organization coverage, never a person's own-risk projection.
         if (write) {
             const actor = await this.authorization.authorize(userId, 'airs.cadence.manage', tx, unitId);

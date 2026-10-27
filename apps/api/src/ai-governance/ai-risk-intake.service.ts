@@ -1,3 +1,5 @@
+import { businessRoleCode, responsibilityWhere } from '../auth/business-roles';
+import { actualRoleCodes } from './ai-authorization.service';
 import { logAiRequired } from './ai-notifications';
 import { governanceDigest } from './ai-governance-ledger';
 import { AiControlDomainsService } from './ai-control-domains.service';
@@ -75,10 +77,10 @@ export class AiRiskIntakeService {
         const actor = await this.authorization.authorizeAny(userId, VIEW, tx);
         const candidates = [...VIEW, 'case.create.airs', 'airs.risk.assess', 'case.approve.airs',
             'airs.risk.accept.low', 'airs.risk.accept.medium', 'airs.risk.accept.high', 'airs.cadence.manage', 'airs.risk.reverse', 'airs.strategy.decide', 'airs.severity.override'] as AiPermission[];
-        const grants = await tx.rolePermission.findMany({ where: { role: { is: { code: { in: actor.roles }, isActive: true, deletedAt: null } },
-                permission: { is: { OR: candidates.map(splitAiPermission) } } }, include: { permission: true, role: { select: { code: true } } } });
+        const grants = await tx.rolePermission.findMany({ where: { role: { is: { code: { in: actualRoleCodes(actor) }, isActive: true, deletedAt: null } },
+                permission: { is: { OR: candidates.map(splitAiPermission) } } }, include: { permission: true, role: { select: { code: true, businessRoleCode: true } } } });
         const permissions = effectiveAiPermissions(actor.roles,grants);
-        const scope = await this.scope.resolve(actor.roles);
+        const scope = await this.scope.resolve(actualRoleCodes(actor));
         const asset: Prisma.DataAssetWhereInput = { deletedAt: null, ...(historical ? {} : {isActive:true}),
             ...(scope.orgUnits === 'all' ? {} : { orgUnitId: { in: scope.orgUnits } }),
             ...(scope.domains === 'all' ? {} : { domainId: { in: scope.domains } }),
@@ -94,8 +96,8 @@ export class AiRiskIntakeService {
         const permissionRoles: Record<string, string[]> = {};
         for (const grant of grants) {
             const code = grant.permission.resource + '.' + grant.permission.action;
-            if (aiRoleMayHold(grant.role.code, code as AiPermission))
-                (permissionRoles[code] ??= []).push(grant.role.code);
+            if (aiRoleMayHold(businessRoleCode(grant.role), code as AiPermission))
+                (permissionRoles[code] ??= []).push(businessRoleCode(grant.role));
         }
         return { actor, permissions, permissionRoles, where };
     }
@@ -104,10 +106,9 @@ export class AiRiskIntakeService {
     }>, actor: {
         id: string;
         roles: string[];
-        administratorOverride: boolean;
     }, permissions: Set<string>) {
         const draft = !['SUSPENDED', 'ARCHIVED'].includes(item.useCase.operationalStatusCode ?? '') && item.workflowCase?.status === 'draft' && !item.riskRef && !actor.roles.includes('auditor');
-        const administratorOverride = actor.administratorOverride;
+        const administratorOverride = false;
         const { createdBy, initiationKey, ...publicItem } = item;
         return { ...publicItem, canAssignOwner: draft && (administratorOverride || actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')),
             canEdit: draft && (administratorOverride || item.owner?.userId === actor.id && actor.roles.includes('AI_RISK_OWNER') && permissions.has('case.create.airs')),
@@ -150,10 +151,14 @@ export class AiRiskIntakeService {
     async lookups(userId: string) {
         const { actor, permissions } = await this.visibility(userId);
         const lists = await this.references();
-        const riskOwners = (actor.administratorOverride || actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')) ? await this.prisma.person.findMany({ where: {
-                isActive: true, deletedAt: null, user: { is: { isActive: true, userRoles: { none: { role: { is: { code: 'auditor', isActive: true, deletedAt: null } } }, some: { role: { is: { code: 'AI_RISK_OWNER', isActive: true, deletedAt: null,
-                                        permissions: { some: { permission: { is: splitAiPermission('case.create.airs') } } } } } } } } },
-            }, select: { userId: true, fullNameEn: true, fullNameAr: true }, orderBy: { fullNameEn: 'asc' }, take: 500 }) : [];
+        const ownerPurpose:Prisma.RoleWhereInput={AND:[responsibilityWhere('AI_RISK_OWNER'),{permissions:{some:{permission:splitAiPermission('case.create.airs')}}}]};
+        const candidates = (actor.roles.includes('AI_WORKING_GROUP') && permissions.has('case.create.airs')) ? await this.prisma.person.findMany({ where: {
+                isActive:true,deletedAt:null,user:{is:{isActive:true,userRoles:{some:{role:ownerPurpose},none:{role:{code:'auditor',isActive:true,deletedAt:null}}}}},
+            },select:{userId:true,fullNameEn:true,fullNameAr:true,user:{select:{userRoles:{where:{role:ownerPurpose},select:{role:{select:{code:true}}}}}}},orderBy:{fullNameEn:'asc'},take:500}) : [];
+        const actorScope=await this.scope.resolve(actualRoleCodes(actor));
+        const riskOwners:Array<{userId:string|null;fullNameEn:string;fullNameAr:string}>=[];
+        for(const candidate of candidates){const candidateScope=await this.scope.resolve(candidate.user!.userRoles.map(row=>row.role.code));
+            if(actorScope.orgUnits==='all'||candidateScope.orgUnits==='all'||actorScope.orgUnits.some(id=>candidateScope.orgUnits.includes(id)))riskOwners.push({userId:candidate.userId,fullNameEn:candidate.fullNameEn,fullNameAr:candidate.fullNameAr});}
         return { ready: lists.every(list => !!list.versionId && list.values.length > 0), lists, riskOwners };
     }
     private async writable(tx: Prisma.TransactionClient, userId: string, id: string, version: number, ownerOnly: boolean) {
@@ -166,7 +171,7 @@ export class AiRiskIntakeService {
             throw new ConflictException('New risk intake is paused because the linked AI use case is suspended or archived');
         if (item.version !== version)
             throw new ConflictException('AI risk changed; reload before editing');
-        if (ownerOnly && !actor.administratorOverride && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id))
+        if (ownerOnly && (!actor.roles.includes('AI_RISK_OWNER') || item.owner?.userId !== actor.id))
             throw new ForbiddenException('Only the assigned Risk Owner can edit or submit this intake');
         return { actor, item };
     }
@@ -175,7 +180,7 @@ export class AiRiskIntakeService {
             throw new BadRequestException('Owner assignment justification is required');
         return this.prisma.$transaction(async (tx) => {
             const { actor, item } = await this.writable(tx, userId, id, dto.expectedVersion, false);
-            if (!actor.administratorOverride && !actor.roles.includes('AI_WORKING_GROUP'))
+            if (!actor.roles.includes('AI_WORKING_GROUP'))
                 throw new ForbiddenException('The working group assigns the risk intake owner');
             const nominee = await this.authorization.authorize(dto.ownerUserId, 'case.create.airs', tx, id);
             if (!nominee.roles.includes('AI_RISK_OWNER'))
@@ -185,7 +190,7 @@ export class AiRiskIntakeService {
                 throw new BadRequestException('Risk Owner must have an active directory person');
             const visibleToNominee = await this.visibility(nominee.id, tx);
             // Scope check excludes the own-record relation because this is the first assignment.
-            const scope = await this.scope.resolve(nominee.roles);
+            const scope = await this.scope.resolve(actualRoleCodes(nominee));
             const asset = await tx.dataAsset.findUniqueOrThrow({ where: { id: item.useCase.assetId! }, include: { classification: true } });
             if ((scope.orgUnits !== 'all' && (!asset.orgUnitId || !scope.orgUnits.includes(asset.orgUnitId)))
                 || (scope.domains !== 'all' && (!asset.domainId || !scope.domains.includes(asset.domainId)))
@@ -250,7 +255,7 @@ export class AiRiskIntakeService {
             const { actor, item } = await this.writable(tx, userId, id, version, false);
             if (!item.initiationKey)
                 throw new ConflictException('Automatic handoff risks cannot be deleted');
-            if (!actor.administratorOverride && item.createdBy !== actor.id && !actor.roles.includes('AI_WORKING_GROUP'))
+            if (item.createdBy !== actor.id && !actor.roles.includes('AI_WORKING_GROUP'))
                 throw new ForbiddenException('Only the draft creator or AI Working Group can delete this risk draft');
             const now = new Date();
             await tx.workflowTask.updateMany({ where: { caseId: item.workflowCase!.id, status: { in: [TaskStatus.pending, TaskStatus.in_progress] } },

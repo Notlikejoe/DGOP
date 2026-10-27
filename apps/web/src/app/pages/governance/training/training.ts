@@ -412,6 +412,10 @@ export class TrainingPage implements OnInit {
     this.completeNote.set('');
   }
 
+  protected renewAssignment(row:TrainingAssignment):void {
+    if(this.saving())return;this.saving.set(true);this.http.post('/api/training/assignments/'+row.id+'/renew',{}).subscribe({next:()=>{this.saving.set(false);this.load();},error:error=>{this.saving.set(false);this.toast.errorFrom(error);}});
+  }
+
   protected complete(): void {
     const a = this.completeTarget();
     if (!a || this.saving()) return;

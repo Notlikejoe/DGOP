@@ -50,7 +50,7 @@ export class SecurityGovernanceController {
   @Get('access-reviews')
   @RequirePermissions('security_governance.view')
   accessReviews(@CurrentUser() user: AuthUser) {
-    return this.service.accessReviews(user.roles);
+    return this.service.accessReviews(user.roles,user);
   }
 
   @Post('access-reviews')

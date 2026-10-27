@@ -277,7 +277,7 @@
                       }
                     </div>
                     <app-status-chip [kind]="approvalKind(approval.decision)" [label]="t('openData.approval.decision.' + approval.decision)" />
-                    @if (canEdit && approval.decision === 'pending') {
+                      @if (canEdit && approval.canDecide === true && approval.decision === 'pending') {
                       <div class="approval-actions">
                         <button type="button" class="ds-btn ds-btn--primary btn-sm" [disabled]="lifecycleSaving()" (click)="decideApproval(candidate, approval, 'approved')">{{ t('openData.approval.approve') }}</button>
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" [disabled]="lifecycleSaving()" (click)="decideApproval(candidate, approval, 'needs_changes')">{{ t('openData.approval.needsChanges') }}</button>

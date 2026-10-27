@@ -1,3 +1,9 @@
+import { randomUUID } from 'node:crypto';
+import { ConflictException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { Optional } from '@nestjs/common';
+import { EvidenceService } from '../evidence/evidence.service';
+import { governanceDecisionActor, governanceDecisionProof } from '../common/governance-decision-proof';
 import {
   BadRequestException,
   ForbiddenException,
@@ -54,6 +60,7 @@ export class TrainingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Optional() private readonly evidence?: EvidenceService,
   ) {}
 
   private isAdmin(user: AuthUser): boolean {
@@ -151,7 +158,7 @@ export class TrainingService {
       }),
       this.prisma.certificationTrack.count({ where: { deletedAt: null, isActive: true } }),
       this.prisma.certificationAttempt.count({
-        where: { ...where, status: CertificationAttemptStatus.passed, OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] },
+        where: { ...where, status: CertificationAttemptStatus.passed, verificationProof:{not:Prisma.DbNull}, OR: [{ expiresAt: null }, { expiresAt: { gte: now } }] },
       }),
       this.prisma.continuingEducationActivity.aggregate({ where, _sum: { hours: true } }),
       this.prisma.communityArticle.count({ where: { deletedAt: null, status: 'published' } }),
@@ -417,35 +424,37 @@ export class TrainingService {
   }
 
   async completeAssignment(id: string, dto: CompleteTrainingAssignmentDto, user: AuthUser) {
-    const existing = await this.prisma.trainingAssignment.findUnique({
-      where: { id },
-      include: { course: true },
+    return this.prisma.$transaction(async tx=>{
+      const existing=await tx.trainingAssignment.findUnique({where:{id},include:{course:true}});
+      if(!existing)throw new NotFoundException('training assignment not found');
+      if(!this.isAdmin(user)&&existing.userId!==user.id)throw new ForbiddenException('You can only complete your own training assignment');
+      const replay=(row:typeof existing|null)=>{
+        if(!row?.completedAt||!['completed','expired'].includes(row.status))return false;
+        if(dto.score!==undefined&&dto.score!==row.score||dto.evidenceNote!==undefined&&dto.evidenceNote!==row.evidenceNote)throw new ConflictException('Completion already recorded with different values');
+        return true;
+      };
+      if(replay(existing))return tx.trainingAssignment.findUniqueOrThrow({where:{id},include:assignmentInclude});
+      if(!openStatuses.includes(existing.status))throw new ConflictException('Only an open assignment can be completed; use a new renewal assignment');
+      const completedAt=new Date(),expiresAt=this.addMonths(completedAt,existing.course.validityMonths);
+      const claimed=await tx.trainingAssignment.updateMany({where:{id,status:existing.status,updatedAt:existing.updatedAt},data:{status:'completed',completedAt,expiresAt,score:dto.score??null,evidenceNote:dto.evidenceNote??null}});
+      if(claimed.count!==1){const current=await tx.trainingAssignment.findUnique({where:{id},include:{course:true}});if(replay(current))return tx.trainingAssignment.findUniqueOrThrow({where:{id},include:assignmentInclude});throw new ConflictException('Assignment changed; reload before completing');}
+      await this.audit.logRequired({actor:user.email,action:'training_assignment.complete',entityType:'training_assignment',entityId:id,metadata:{courseId:existing.courseId,completedAt:completedAt.toISOString(),expiresAt:expiresAt?.toISOString()??null}},tx);
+      return tx.trainingAssignment.findUniqueOrThrow({where:{id},include:assignmentInclude});
     });
-    if (!existing) throw new NotFoundException('training assignment not found');
-    if (!this.isAdmin(user) && existing.userId !== user.id) {
-      throw new ForbiddenException('You can only complete your own training assignment');
-    }
-    const completedAt = new Date();
-    const expiresAt = this.addMonths(completedAt, existing.course.validityMonths);
-    const assignment = await this.prisma.trainingAssignment.update({
-      where: { id },
-      data: {
-        status: TrainingAssignmentStatus.completed,
-        completedAt,
-        expiresAt,
-        score: dto.score ?? null,
-        evidenceNote: dto.evidenceNote ?? null,
-      },
-      include: assignmentInclude,
+  }
+
+  async renewAssignment(id:string,actor:string){
+    return this.prisma.$transaction(async tx=>{
+      const previous=await tx.trainingAssignment.findUnique({where:{id},include:{course:true}});
+      if(!previous)throw new NotFoundException('training assignment not found');
+      if(!previous.expiresAt||previous.expiresAt>new Date())throw new BadRequestException('Only expired assignments require a renewal');
+      if(!previous.course.isActive||previous.course.deletedAt)throw new BadRequestException('The course is unavailable');
+      await tx.$queryRaw`SELECT id FROM training_assignments WHERE id=${id} FOR UPDATE`;
+      const replay=await tx.trainingAssignment.findUnique({where:{renewedFromId:id},include:assignmentInclude});if(replay)return replay;
+      const row=await tx.trainingAssignment.create({data:{courseId:previous.courseId,userId:previous.userId,personId:previous.personId,renewedFromId:id,
+        source:'renewal',assignedBy:actor,status:'assigned',dueDate:new Date(Date.now()+30*86400000)},include:assignmentInclude});
+      await this.audit.logRequired({actor,action:'training_assignment.renew',entityType:'training_assignment',entityId:row.id,metadata:{renewedFromId:id}},tx);return row;
     });
-    await this.audit.log({
-      actor: user.email,
-      action: 'training_assignment.complete',
-      entityType: 'training_assignment',
-      entityId: id,
-      metadata: { courseId: existing.courseId, expiresAt },
-    });
-    return assignment;
   }
 
   async syncRoleRequirements(actor: string) {
@@ -580,47 +589,35 @@ export class TrainingService {
       const bounded = boundedFirstPageParams(pageSize);
       rows = await this.prisma.certificationAttempt.findMany({ ...query, skip: bounded.skip, take: bounded.take });
     }
-    const mapped = rows.map((row) => ({ ...row, state: certificationState(row.status, row.expiresAt) }));
+    const mapped = rows.map((row) => ({ ...row, state: row.status==='passed'&&!row.verificationProof?'review_needed':certificationState(row.status, row.expiresAt) }));
     return params ? toPaged(mapped, total, params) : mapped;
   }
 
   async createCertificationAttempt(dto: CreateCertificationAttemptDto, actor: string) {
-    const track = await this.prisma.certificationTrack.findFirst({ where: { id: dto.trackId, deletedAt: null, isActive: true } });
-    if (!track) throw new BadRequestException('Certification track not found');
-    const userInfo = await this.assertUser(dto.userId);
-    const issuedAt = dto.issuedAt ? new Date(dto.issuedAt) : dto.status === 'passed' ? new Date() : null;
-    const expiresAt = dto.expiresAt
-      ? new Date(dto.expiresAt)
-      : issuedAt
-        ? this.addMonths(issuedAt, track.validityMonths)
-        : null;
-    const renewalDueAt = expiresAt ? new Date(expiresAt) : null;
-    if (renewalDueAt) renewalDueAt.setDate(renewalDueAt.getDate() - 60);
-    const attempt = await this.prisma.certificationAttempt.create({
-      data: {
-        trackId: dto.trackId,
-        userId: dto.userId,
-        personId: dto.personId ?? userInfo.personId,
-        status: dto.status ?? 'in_progress',
-        examScore: dto.examScore ?? null,
-        caseStudyScore: dto.caseStudyScore ?? null,
-        peerReviewScore: dto.peerReviewScore ?? null,
-        issuedAt,
-        expiresAt,
-        renewalDueAt,
-        evidenceNote: dto.evidenceNote ?? null,
-        assessor: dto.assessor ?? actor,
-      },
-      include: { track: true, user: { select: { id: true, email: true, displayName: true } }, person: true },
+    const track=await this.prisma.certificationTrack.findFirst({where:{id:dto.trackId,deletedAt:null,isActive:true}});
+    if(!track)throw new BadRequestException('Certification track not found');
+    const userInfo=await this.assertUser(dto.userId),status=dto.status??'in_progress',kind=dto.qualificationType??'external';
+    const issuedAt=dto.issuedAt?new Date(dto.issuedAt):status==='passed'?new Date():null;
+    const expiresAt=dto.expiresAt?new Date(dto.expiresAt):issuedAt?this.addMonths(issuedAt,track.validityMonths):null;
+    if(issuedAt&&issuedAt>new Date()||expiresAt&&(!issuedAt||expiresAt<=issuedAt))throw new BadRequestException('Qualification dates must be coherent and issuance cannot be in the future');
+    if(status==='passed'&&kind==='internal'&&(dto.examScore==null||dto.examScore<track.passScore))throw new BadRequestException('The internal exam must meet the track pass score');
+    const renewalDueAt=expiresAt?new Date(expiresAt):null;if(renewalDueAt)renewalDueAt.setDate(renewalDueAt.getDate()-60);
+    const id=randomUUID();
+    return this.prisma.$transaction(async tx=>{
+      let proof:Awaited<ReturnType<typeof governanceDecisionProof>>|undefined;
+      if(status==='passed'){
+        const identity=await governanceDecisionActor(tx,actor,'certification_attempts.create');
+        if(identity.id===dto.userId)throw new ForbiddenException('A qualification must be verified by someone other than its subject');
+        proof=await governanceDecisionProof(tx,this.evidence,identity,{evidenceId:dto.evidenceId,justification:dto.evidenceJustification,
+          targetType:'certification_attempt',targetId:id,context:{trackId:dto.trackId,userId:dto.userId,qualificationType:kind,issuedAt:issuedAt?.toISOString(),expiresAt:expiresAt?.toISOString()}});
+      }
+      const attempt=await tx.certificationAttempt.create({data:{id,trackId:dto.trackId,userId:dto.userId,personId:dto.personId??userInfo.personId,status,
+        qualificationType:kind,verificationProof:proof as unknown as Prisma.InputJsonValue|undefined,examScore:dto.examScore??null,
+        caseStudyScore:dto.caseStudyScore??null,peerReviewScore:dto.peerReviewScore??null,issuedAt,expiresAt,renewalDueAt,evidenceNote:dto.evidenceNote??null,assessor:actor},
+        include:{track:true,user:{select:{id:true,email:true,displayName:true}},person:true}});
+      await this.audit.logRequired({actor,action:'certification_attempt.create',entityType:'certification_attempt',entityId:id,metadata:{trackId:dto.trackId,status,verificationProof:proof??null}},tx);
+      return {...attempt,state:status==='passed'&&!proof?'review_needed':certificationState(status,expiresAt)};
     });
-    await this.audit.log({
-      actor,
-      action: 'certification_attempt.create',
-      entityType: 'certification_attempt',
-      entityId: attempt.id,
-      metadata: { trackId: dto.trackId, status: attempt.status },
-    });
-    return { ...attempt, state: certificationState(attempt.status, attempt.expiresAt) };
   }
 
   async listContinuingEducation(user: AuthUser, page?: string | number, pageSize?: string | number) {

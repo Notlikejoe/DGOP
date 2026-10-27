@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 import assert from 'node:assert/strict';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
@@ -81,7 +82,7 @@ test('usage status escalates incidents and watches abnormal volume', () => {
 test('agreement lists are constrained to visible scoped assets', async () => {
   let agreementWhere: unknown;
   const service = new DataSharingService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       dataSharingAgreement: {
         findMany: async (args: any) => {
@@ -90,7 +91,7 @@ test('agreement lists are constrained to visible scoped assets', async () => {
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -107,7 +108,7 @@ test('request and agreement list filters reject invalid lifecycle statuses', asy
   let requestFinds = 0;
   let agreementFinds = 0;
   const service = new DataSharingService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       dataSharingRequest: {
         findMany: async () => {
@@ -123,7 +124,7 @@ test('request and agreement list filters reject invalid lifecycle statuses', asy
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -145,7 +146,7 @@ test('request and agreement list filters reject invalid lifecycle statuses', asy
 test('summary scopes usage metrics through visible agreements', async () => {
   let usageWhere: unknown;
   const service = new DataSharingService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [{ id: 'visible-asset' }] },
       dataSharingRequest: { findMany: async () => [] },
       dataSharingAgreement: { findMany: async () => [] },
@@ -156,7 +157,7 @@ test('summary scopes usage metrics through visible agreements', async () => {
           return { _sum: { recordsShared: 0, apiCalls: 0, incidents: 0 } };
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -169,7 +170,7 @@ test('summary scopes usage metrics through visible agreements', async () => {
 
 test('scoped users cannot create unanchored data sharing requests', async () => {
   const service = new DataSharingService(
-    {} as never,
+    Object.assign({} as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -184,10 +185,10 @@ test('scoped users cannot create unanchored data sharing requests', async () => 
 
 test('agreement updates fail closed when the agreement is out of scope', async () => {
   const service = new DataSharingService(
-    {
+    Object.assign({
       dataAsset: { findMany: async () => [] },
       dataSharingAgreement: { findFirst: async () => null },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: ['org-1'], domains: ['domain-1'], maxClassRank: 2 }),
@@ -202,7 +203,7 @@ test('agreement updates fail closed when the agreement is out of scope', async (
 
 test('request creators cannot record their own approving review', async () => {
   const service = new DataSharingService(
-    {
+    Object.assign({
       dataSharingRequest: {
         findFirst: async () => ({
           id: 'request-1',
@@ -211,7 +212,7 @@ test('request creators cannot record their own approving review', async () => {
           agreements: [],
         }),
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
     { log: async () => undefined } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
@@ -221,7 +222,7 @@ test('request creators cannot record their own approving review', async () => {
   await assert.rejects(
     () =>
       service.saveReview(
-        ['dmo_admin'],
+        ['privacy_officer'],
         'request-1',
         { step: DataSharingReviewStep.privacy, decision: DataSharingReviewDecision.approved },
         'creator@dgop.local',
@@ -268,10 +269,10 @@ test('createRequest opens a routed data sharing workflow case', async () => {
     auditLog: { create: async () => ({ id: 'audit-1' }) },
   };
   const service = new DataSharingService(
-    {
+    Object.assign({
       $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
-    } as never,
-    { log: async () => undefined } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("data_owner",["data_sharing_requests.edit"]),fixtureRole("privacy_officer",["data_sharing_requests.edit"]),fixtureRole("security_officer",["data_sharing_requests.edit"]),fixtureRole("technical_steward",["data_sharing_requests.edit"]),fixtureRole("data_custodian",["data_sharing_requests.edit"])])}) as never,
+    { logRequired: async (_entry:unknown,writer:unknown) => assert.equal(writer,tx) } as never,
     {
       resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }),
     } as never,

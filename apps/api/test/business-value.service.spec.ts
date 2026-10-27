@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 import assert from 'node:assert/strict';
 import { BusinessGlossaryStatus, BusinessImpactLevel, DataValueStatus, LifecycleDecisionStatus } from '@prisma/client';
 import { BusinessValueService } from '../src/business-value/business-value.service';
@@ -62,14 +63,14 @@ test('survey averaging tolerates empty and null inputs', () => {
 test('lineage maps require a visible asset or domain anchor', async () => {
   let persisted = false;
   const service = new BusinessValueService(
-    {
+    Object.assign({
       businessLineageMap: {
         create: async () => {
           persisted = true;
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["business_value.edit"]),fixtureRole("business_steward",["business_value.edit"]),fixtureRole("data_owner",["business_value.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: ['ou-1'], domains: ['domain-1'], maxClassRank: 2 }) } as never,
   );
@@ -84,7 +85,7 @@ test('lineage maps require a visible asset or domain anchor', async () => {
 test('glossary creators cannot make their own final review decision', async () => {
   let updated = false;
   const service = new BusinessValueService(
-    {
+    Object.assign({
       businessGlossaryTerm: {
         findFirst: async () => ({
           id: 'term-1',
@@ -97,7 +98,7 @@ test('glossary creators cannot make their own final review decision', async () =
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["business_value.edit"]),fixtureRole("business_steward",["business_value.edit"]),fixtureRole("data_owner",["business_value.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -118,7 +119,7 @@ test('glossary creators cannot make their own final review decision', async () =
 test('lifecycle creators cannot approve their own lifecycle decision', async () => {
   let updated = false;
   const service = new BusinessValueService(
-    {
+    Object.assign({
       assetLifecycleDecision: {
         findFirst: async () => ({
           id: 'lifecycle-1',
@@ -131,7 +132,7 @@ test('lifecycle creators cannot approve their own lifecycle decision', async () 
           return {};
         },
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("dmo_admin",["business_value.edit"]),fixtureRole("business_steward",["business_value.edit"]),fixtureRole("data_owner",["business_value.edit"])])}) as never,
     { log: async () => {} } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );

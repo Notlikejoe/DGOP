@@ -1,5 +1,6 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   ElementRef,
   HostListener,
@@ -20,6 +21,7 @@ import { I18nService } from '../core/i18n.service';
 import { ThemeService } from '../core/theme.service';
 import { CRUMB_MAP, NAV_SECTIONS, NavItem, NavSection } from './navigation';
 import { AppIcon } from '../shared/app-icon';
+import { BrandLogo } from '../shared/brand-logo';
 import { canSeeTool } from '../core/page-access';
 
 const SIDEBAR_DEFAULT_WIDTH = 264;
@@ -74,7 +76,7 @@ interface GlobalSearchResponse {
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, AppIcon],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, AppIcon, BrandLogo],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -90,6 +92,7 @@ export class Shell implements OnDestroy {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
+  private readonly changes = inject(ChangeDetectorRef);
 
   private readonly url = signal(this.router.url);
   protected readonly menuOpen = signal(false);
@@ -100,6 +103,8 @@ export class Shell implements OnDestroy {
   protected readonly openTasks = signal(0);
   protected readonly accessNotice = signal<'updated' | 'removed' | ''>('');
   protected readonly accessBlocked = computed(() => this.auth.accessStatus() !== 'current');
+  protected readonly aiScopeWarnings = computed(() => this.url().startsWith('/governance/ai-')
+    ? this.auth.aiCapabilities()?.scopeWarnings ?? [] : []);
   protected readonly pageKeys = computed(() => this.auth.isAuthenticated() && this.auth.canAccessPage(this.url())
     ? [this.auth.accessGeneration()] : []);
   private seenAccessGeneration = this.auth.accessGeneration();
@@ -406,7 +411,12 @@ export class Shell implements OnDestroy {
   }
 
   protected openMobileNav(): void {
+    if(this.accessBlocked())return;
     this.mobileNavOpen.set(true);
+    // Publish the open/inert state before the next keyboard event. In zoneless
+    // rendering, focus/typing can otherwise arrive while the visible menu is inert.
+    this.changes.detectChanges();
+    this.sidebar?.nativeElement.querySelector<HTMLInputElement>('.nav-search input')?.focus({preventScroll:true});
   }
 
   private moveFocusOutOfSidebar(): void {

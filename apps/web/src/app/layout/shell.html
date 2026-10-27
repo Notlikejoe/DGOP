@@ -22,13 +22,7 @@
     [attr.inert]="sidebarHidden() ? '' : null"
   >
     <div class="brand">
-      <div class="brand__mark" aria-hidden="true">
-        <app-icon name="shield" />
-      </div>
-      <div class="brand__text">
-        <span class="brand__name">{{ t('app.shortTitle') }}</span>
-        <span class="brand__sub">{{ t('app.title') }}</span>
-      </div>
+      <app-brand-logo class="brand__logo" />
       <button
         type="button"
         class="sidebar-close"
@@ -219,6 +213,7 @@
       >
         <app-icon name="menu" />
       </button>
+      <app-brand-logo class="topbar__logo" />
       <nav class="crumbs" [attr.aria-label]="t('nav.breadcrumb')">
         <span class="crumbs__root">{{ t('app.shortTitle') }}</span>
         @if (crumbKey()) {
@@ -385,6 +380,9 @@
         </section>
       }
       <div [hidden]="accessBlocked()" [attr.inert]="accessBlocked() ? '' : null">
+        @for (warning of aiScopeWarnings(); track warning) {
+          <p class="access-notice" role="status">{{ t('ai.access.' + warning) }}</p>
+        }
         @for (generation of pageKeys(); track generation) { <router-outlet /> }
       </div>
     </main>

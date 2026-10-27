@@ -29,7 +29,7 @@ import { parseQueryEnum } from '../common/query-filters';
 import { WorkflowService } from '../workflow/workflow.service';
 import { isManagedDemoProfile } from '../common/demo-profile';
 import { claimGovernanceWrite } from '../common/governance-write';
-import { isSystemAdministrator } from '../auth/system-admin';
+import { businessDecisionRoles, responsibilityWhere } from '../auth/business-roles';
 import {
   CreateOpenDataCandidateDto,
   CreateOpenDataReviewDto,
@@ -461,24 +461,26 @@ export class OpenDataService {
     approval: { step: string; workflowTaskId?: string | null },
     actor: string,
   ): Promise<void> {
-    const administratorOverride = isSystemAdministrator(roleCodes);
-    if (!administratorOverride && candidate.createdBy === actor) {
+    const businessRoles=await businessDecisionRoles(this.prisma,roleCodes,'open_data_candidates.edit',OPEN_DATA_APPROVAL_ROLE_RULES[approval.step]??[]);
+    await this.requireCandidate(businessRoles,candidate.id);
+    if (candidate.createdBy === actor) {
       throw new ForbiddenException('The submitter cannot approve their own Open Data candidate');
     }
 
-    const roleAllowed = this.hasAnyRole(roleCodes, OPEN_DATA_APPROVAL_ROLE_RULES[approval.step] ?? []);
+    const roleAllowed = businessRoles.length > 0;
     const personAllowed =
       (approval.step === 'owner' && candidate.ownerPerson?.email === actor) ||
       (approval.step === 'steward' && candidate.stewardPerson?.email === actor) ||
       (approval.step === 'odiao' && candidate.odiaoReviewerPerson?.email === actor);
 
-    if (!administratorOverride && (!roleAllowed || (['owner', 'steward', 'odiao'].includes(approval.step) && !personAllowed))) {
+    if (!roleAllowed || (['owner', 'steward', 'odiao'].includes(approval.step) && !personAllowed)) {
       throw new ForbiddenException(`You cannot decide the ${approval.step} Open Data approval step`);
     }
     if (approval.workflowTaskId) {
       const task = await this.prisma.workflowTask.findUnique({ where: { id: approval.workflowTaskId }, select: { assigneeUserId: true, assigneeRoleCode: true } });
       const user = await this.prisma.user.findUnique({ where: { email: actor }, select: { id: true } });
-      if (!task || (!administratorOverride && ((task.assigneeUserId && task.assigneeUserId !== user?.id) || (!task.assigneeUserId && task.assigneeRoleCode && !roleCodes.includes(task.assigneeRoleCode))))) throw new ForbiddenException('Only the assigned business reviewer can decide this Open Data task');
+      const queueAllowed=task?.assigneeRoleCode&&await this.prisma.role.count({where:{AND:[responsibilityWhere(task.assigneeRoleCode),{code:{in:businessRoles}}]}})>0;
+      if (!task || (task.assigneeUserId && task.assigneeUserId !== user?.id) || (!task.assigneeUserId && task.assigneeRoleCode && !queueAllowed)) throw new ForbiddenException('Only the assigned business reviewer can decide this Open Data task');
     }
   }
 
@@ -563,7 +565,15 @@ export class OpenDataService {
     };
   }
 
-  async list(roleCodes: string[], filters: OpenDataCandidateFilters) {
+  private async approvalActions(row:CandidateWithInclude,roleCodes:string[],actor?:string) {
+    const approvals=await Promise.all(row.approvals.map(async approval=>{
+      let canDecide=false;
+      if(actor&&approval.decision==='pending')try{await this.assertApprovalAuthority(roleCodes,row,approval,actor);canDecide=true;}catch(error){if(!(error instanceof ForbiddenException)&&!(error instanceof NotFoundException)&&!(error instanceof BadRequestException))throw error;}
+      return {...approval,canDecide};
+    }));return {...row,approvals};
+  }
+
+  async list(roleCodes: string[], filters: OpenDataCandidateFilters,actor?:string) {
     const assetIds = await this.visibleAssetIds(roleCodes);
     const page = parsePageParams(filters.page ?? 1, filters.pageSize)!;
     const where: Prisma.OpenDataCandidateWhereInput = {
@@ -579,11 +589,11 @@ export class OpenDataService {
       }),
       this.prisma.openDataCandidate.count({ where }),
     ]);
-    return toPaged(data, total, page);
+    return toPaged(await Promise.all(data.map(row=>this.approvalActions(row,roleCodes,actor))), total, page);
   }
 
-  async get(roleCodes: string[], id: string) {
-    return this.requireCandidate(roleCodes, id);
+  async get(roleCodes: string[], id: string,actor?:string) {
+    return this.approvalActions(await this.requireCandidate(roleCodes,id),roleCodes,actor);
   }
 
   async create(roleCodes: string[], dto: CreateOpenDataCandidateDto, actor: string) {

@@ -39,13 +39,13 @@ export class FoiController {
     @Query('pageSize') pageSize?: string,
   ) {
     const filters: FoiRequestFilters = { search, status, channel, page: page ?? '1', pageSize: pageSize ?? '25' };
-    return this.service.list(user.roles, filters);
+    return this.service.list(user.roles, filters, user.email);
   }
 
   @Get('requests/:id')
   @RequirePermissions('foi_requests.view')
   get(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.service.get(user.roles, id);
+    return this.service.get(user.roles, id, user.email);
   }
 
   @Post('requests')

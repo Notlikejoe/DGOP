@@ -43,12 +43,13 @@ export async function testReportTrends(db:PrismaClient,app:INestApplication,f:{o
  await assert.rejects(reports.trend(execId,unitId,'GEN-81'),/outside your live/);await assert.rejects(reports.trend(f.riskOwnerId,unitId),/register visibility|authority/);
  await assert.rejects(reports.trend(f.officerId,unitId,'GEN-999'),/supported KPI/);await assert.rejects(reports.trend(f.officerId,unitId,'GEN-85','weekly'),/supported KPI/);
  const role=await db.role.findUniqueOrThrow({where:{code:'AI_GOVERNANCE_OFFICER'}}),scope=await db.roleDataScope.create({data:{roleId:role.id,scopeType:'data_domain',refId:randomUUID()}});
- try{await assert.rejects(reports.trend(f.officerId,unitId),/full domain|visibility/);}finally{await db.roleDataScope.delete({where:{id:scope.id}});}
- await db.dataAsset.update({where:{id:assetId},data:{isActive:false}});try{await assert.rejects(reports.trend(f.officerId,unitId),/outside current register/);}finally{await db.dataAsset.update({where:{id:assetId},data:{isActive:true}});}
+ try{await assert.rejects(reports.trend(f.officerId,unitId),(error:any)=>[403,404].includes(error.getStatus?.()));}finally{await db.roleDataScope.delete({where:{id:scope.id}});}
+ const beforeRetirement=await reports.trend(f.officerId,unitId);await db.dataAsset.update({where:{id:assetId},data:{isActive:false}});try{const retained=await reports.trend(f.officerId,unitId);assert.equal(retained.readOnly,true);assert.deepEqual(retained.rows,beforeRetirement.rows);}finally{await db.dataAsset.update({where:{id:assetId},data:{isActive:true}});}
  await db.user.update({where:{id:f.officerId},data:{isActive:false}});try{await assert.rejects(reports.trend(f.officerId,unitId),/inactive|not found|eligible|active/);}finally{await db.user.update({where:{id:f.officerId},data:{isActive:true}});}
  const url=(await app.getUrl())+'/api/ai/dashboard-reports/units/'+unitId+'/trend',jwt=app.get(JwtService),headers={authorization:'Bearer '+jwt.sign({sub:f.officerId,tokenVersion:0,roles:['system_admin']})};
  assert.equal((await fetch(url,{headers})).status,200);assert.equal((await fetch(url)).status,401);
- for(const query of ['?page=0','?page=x','?pageSize=x','?page=2147483648','?pageSize=101','?kpiId=GEN-999','?frequency=weekly'])assert.equal((await fetch(url+query,{headers})).status,400,query);
+ assert.equal((await fetch(url+'?pageSize=200',{headers})).status,200);
+ for(const query of ['?page=0','?page=x','?pageSize=x','?page=2147483648','?pageSize=201','?kpiId=GEN-999','?frequency=weekly'])assert.equal((await fetch(url+query,{headers})).status,400,query);
  const forbidden={authorization:'Bearer '+jwt.sign({sub:execId,tokenVersion:0,roles:['AI_GOVERNANCE_OFFICER']})};assert.equal((await fetch(url+'?kpiId=GEN-81',{headers:forbidden})).status,403);
  assert.equal((await reports.trend(f.officerId,unitId,'GEN-85','daily',999,20)).rows.length,0);
  console.log('Saved report trends passed: dated captures, stable page-boundary changes, null/tied/version comparisons, percentage points, population versus version changes, live scope/revocation, executive privacy, HTTP bounds and no reconstructed periods.');

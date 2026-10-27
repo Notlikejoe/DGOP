@@ -21,6 +21,9 @@ import { MultiSelectModule } from 'primeng/multiselect';
 interface RoleListItem {
   id: string;
   code: string;
+  businessRoleCode?: string | null;
+  canBindBusinessRole?: boolean;
+  canDeactivate?: boolean;
   nameEn: string;
   nameAr: string;
   description: string | null;
@@ -289,7 +292,7 @@ export class RolesPage implements OnInit {
   protected readonly saving = signal(false);
   protected readonly formError = signal(false);
 
-  protected form = { code: '', nameEn: '', nameAr: '', description: '', isActive: true };
+  protected form = { code: '', businessRoleCode:'', nameEn: '', nameAr: '', description: '', isActive: true };
   protected readonly permSel = signal<Set<string>>(new Set());
   protected permissionJustification = '';
   protected readonly orgSel = signal<Map<string, boolean>>(new Map());
@@ -548,7 +551,7 @@ export class RolesPage implements OnInit {
   }
 
   protected openCreate(): void {
-    this.form = { code: '', nameEn: '', nameAr: '', description: '', isActive: true };
+    this.form = { code: '', businessRoleCode:'', nameEn: '', nameAr: '', description: '', isActive: true };
     this.active.set(null);
     this.formError.set(false);
     this.mode.set('create');
@@ -558,6 +561,7 @@ export class RolesPage implements OnInit {
     this.fetchDetail(role.id, (detail) => {
       this.form = {
         code: detail.code,
+        businessRoleCode: detail.businessRoleCode ?? '',
         nameEn: detail.nameEn,
         nameAr: detail.nameAr,
         description: detail.description ?? '',
@@ -588,6 +592,7 @@ export class RolesPage implements OnInit {
         return;
       }
       body['code'] = this.form.code;
+      if(this.form.businessRoleCode)body['businessRoleCode']=this.form.businessRoleCode;
     }
     const req = creating
       ? this.http.post('/api/roles', body)

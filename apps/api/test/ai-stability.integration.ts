@@ -116,9 +116,11 @@ export async function testAiStability(db: PrismaClient) {
     const workflow = app.get(WorkflowService);
     const businessCase = await db.workflowCase.create({ data: { code: 'WFC-SYNTHETIC-STABILITY', type: 'general', title: 'Synthetic independent business decision', status: 'submitted', createdBy: requester.email, tasks: { create: { title: 'Synthetic independent approval', type: 'approval', assigneeRoleCode: 'dmo_admin', assigneeUserId: dual.id } } }, include: { tasks: true } });
     const task = businessCase.tasks[0];
-    await assert.rejects(workflow.decideTask(task.id, { decision: TaskDecision.approved }, { id: admin.id, email: admin.email, roles: ['system_admin'] }), /Only the assigned user/);
+    await assert.rejects(workflow.decideTask(task.id, { decision: TaskDecision.approved }, { id: admin.id, email: admin.email, roles: ['system_admin'] }), /explicit live eligible business role grant/);
     const editPermission = await db.permission.upsert({ where: { resource_action: { resource: 'workflow_tasks', action: 'edit' } }, create: { resource: 'workflow_tasks', action: 'edit' }, update: {} });
     await db.rolePermission.upsert({ where: { roleId_permissionId: { roleId: custodianRole.id, permissionId: editPermission.id } }, create: { roleId: custodianRole.id, permissionId: editPermission.id }, update: {} });
+    const unassigned = await actor('unassigned-custodian', [custodianRole.id]);
+    await assert.rejects(workflow.decideTask(task.id, {decision:TaskDecision.approved}, {id:unassigned.id,email:unassigned.email,roles:['dmo_admin']}), /Only the assigned user/);
     await db.workflowCase.update({where:{id:businessCase.id},data:{assetId:registered.assetId}});
     const constrainedCustodian=await db.roleDataScope.create({data:{roleId:custodianRole.id,scopeType:'org_unit',refId:randomUUID()}});
     try {await assert.rejects(workflow.decideTask(task.id,{decision:TaskDecision.approved},{id:dual.id,email:dual.email,roles:['system_admin','dmo_admin']}),/not found/);}

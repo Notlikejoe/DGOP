@@ -119,6 +119,7 @@
                       } @else { <span class="muted">{{ t('wf.taskStatus.' + task.status) }}</span> }
                     </td>
                     <td class="actions-col">
+                      @if(task.domainDecisionPath){<a class="ds-btn ds-btn--primary btn-sm" [routerLink]="task.domainDecisionPath" [queryParams]="{architectureSearch:task.domainDecisionSearch}">{{t('extended.completeDecision')}}</a>}
                       @if (canDecide(task)) {
                         <button type="button" class="ds-btn ds-btn--primary btn-sm" (click)="openDecision(task, 'approved')">{{ t('wf.approve') }}</button>
                         <button type="button" class="ds-btn ds-btn--ghost btn-sm" (click)="openDecision(task, 'return_for_clarification')">{{ t('wf.returnForClarification') }}</button>
@@ -224,6 +225,17 @@
     </div>
   }
 
+  @if (wfCase()) {
+    <section class="panel" [attr.aria-label]="t('wf.files')">
+      <h2>{{ t('wf.files') }}</h2>
+      @if(attachmentsFailed()) { <p role="status">{{ t('evidence.loadError') }}</p> }
+      @for(file of attachments();track file.id) {
+        <p><button type="button" class="link-button" [disabled]="file.fileAvailability === 'unavailable'" (click)="downloadAttachment(file)">{{ file.fileName }}</button>
+        @if(file.fileAvailability === 'unavailable') { <span role="status">{{ t('evidence.fileUnavailable') }}</span> }</p>
+      }
+      @if(!attachmentsFailed() && attachments().length === 0) { <p class="muted">{{ t('wf.filesEmpty') }}</p> }
+    </section>
+  }
   @if (decideTask(); as task) {
     <app-modal [title]="decision() === 'approved' ? t('wf.approveTitle') : decision() === 'rejected' ? t('wf.rejectTitle') : t('wf.returnTitle')" (close)="closeDecision()">
       <div class="form">

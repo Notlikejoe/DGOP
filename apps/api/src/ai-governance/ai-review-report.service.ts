@@ -1,3 +1,4 @@
+import { actualRoleCodes } from './ai-authorization.service';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -43,15 +44,15 @@ export class AiReviewReportService {
 
   async access(tx:Prisma.TransactionClient,userId:string,historical=false) {
     const actor=await this.authorization.authorizeAny(userId,reportPermissions,tx);
-    const grants=await tx.rolePermission.findMany({where:{role:{is:{code:{in:actor.roles},isActive:true,deletedAt:null}},
-      permission:{is:{OR:reportPermissions.map(splitAiPermission)}}},include:{permission:true,role:{select:{code:true}}}});
+    const grants=await tx.rolePermission.findMany({where:{role:{is:{code:{in:actualRoleCodes(actor)},isActive:true,deletedAt:null}},
+      permission:{is:{OR:reportPermissions.map(splitAiPermission)}}},include:{permission:true,role: { select: { code: true, businessRoleCode: true } }}});
     const permissions=effectiveAiPermissions(actor.roles,grants);
     const governance=actor.administratorOversight||permissions.has('case.view.airs.all')&&!permissions.has('dashboard.view.exec.ai')||permissions.has('dashboard.view.aiuc')||permissions.has('dashboard.view.airs')&&actor.roles.some(r=>['AI_WORKING_GROUP','AI_GOVERNANCE_OFFICER','AI_COMPLIANCE_OFFICER'].includes(r));
     const aggregateOnly=!governance&&!actor.roles.includes('auditor')&&permissions.has('dashboard.view.exec.ai');
     const mode=aggregateOnly?'executive':actor.roles.includes('auditor')?'audit':governance?'governance':'risk_owner';
     let where:Prisma.AiRiskWhereInput;
     if(aggregateOnly){
-      const scope=await this.scope.resolve(actor.roles);
+      const scope=await this.scope.resolve(actualRoleCodes(actor));
       where={deletedAt:null,workflowCase:{is:{type:'AIRS'}},useCase:{is:{deletedAt:null,...(historical?{}:{lifecycleState:{not:'retired' as const}}),asset:{is:{isActive:true,deletedAt:null,
         ...(scope.orgUnits==='all'?{}:{orgUnitId:{in:scope.orgUnits}}),...(scope.domains==='all'?{}:{domainId:{in:scope.domains}}),
         ...(scope.maxClassRank===null?{}:{classification:{is:{rank:{lte:scope.maxClassRank}}}})}}}}};

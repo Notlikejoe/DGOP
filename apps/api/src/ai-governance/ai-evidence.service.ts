@@ -1,3 +1,4 @@
+import { actualRoleCodes } from './ai-authorization.service';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,10 +49,11 @@ export class AiEvidenceService {
       const row=await tx.aiUseCase.findFirst({where:{id:targetId,deletedAt:null,isSampleData:false},include:{asset:true,owner:true}});
       if(!row) throw new NotFoundException('AI evidence target not found');
       if(!actor.administratorOversight) {
-        const scope=await new ScopeService(tx as PrismaService).resolve(actor.roles);
-        const grants=await tx.rolePermission.findMany({where:{role:{code:{in:actor.roles}}},include:{permission:true}});
+        const scope=await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
+        const grants=await tx.rolePermission.findMany({where:{role:{code:{in:actualRoleCodes(actor)}}},include:{permission:true}});
         const broad=grants.some(g=>['case.view.aiuc.org','case.view.aiuc.all'].includes(g.permission.resource+'.'+g.permission.action));
-        if(!broad&&row.requesterUserId!==userId&&row.owner?.userId!==userId&&!await tx.aiLifecycleRequest.findFirst({where:{useCaseId:row.id,...(write?{status:{in:['assessment','review','authority','confirmation']}}:{}),workflowCase:{is:{tasks:{some:{assigneeUserId:userId,...(write?{status:'pending'}:{})}}}}},select:{id:true}})) throw new NotFoundException('AI evidence target not found');
+        const assignedInitial=row.workflowCaseId&&await tx.workflowTask.findFirst({where:{caseId:row.workflowCaseId,assigneeUserId:userId,...(write?{status:'pending'}:{})},select:{id:true}});
+        if(!broad&&row.requesterUserId!==userId&&row.owner?.userId!==userId&&!assignedInitial&&!await tx.aiLifecycleRequest.findFirst({where:{useCaseId:row.id,...(write?{status:{in:['assessment','review','authority','confirmation']}}:{}),workflowCase:{is:{tasks:{some:{assigneeUserId:userId,...(write?{status:'pending'}:{})}}}}},select:{id:true}})) throw new NotFoundException('AI evidence target not found');
         if(scope.orgUnits!=='all'&&(!row.organizationUnitId||!scope.orgUnits.includes(row.organizationUnitId))) throw new NotFoundException('AI evidence target not found');
         if(row.asset) {
           const asset=await tx.dataAsset.findFirst({where:{id:row.asset.id,deletedAt:null,...(write?{isActive:true}:{}),
@@ -70,6 +72,8 @@ export class AiEvidenceService {
       if(write&&(!scope.unit.isActive||!actor.roles.includes('AI_GOVERNANCE_OFFICER'))) throw new ForbiddenException('An eligible register officer must link organization evidence');
     } else {
       if(!actor.administratorOversight&&!actor.roles.some(r=>['AI_GOVERNANCE_OFFICER','dmo_admin','auditor'].includes(r))) throw new ForbiddenException('Governed change evidence requires change oversight');
+      const scope=await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
+      if(scope.orgUnits!=='all'||scope.domains!=='all'||scope.maxClassRank!==null)throw new ForbiddenException('Global source and configuration evidence requires explicit full-register oversight');
       const delegate=tx[changes[targetType as keyof typeof changes]] as unknown as {findUnique:(args:{where:{id:string}})=>Promise<unknown>};
       if(!delegate||!await delegate.findUnique({where:{id:targetId}})) throw new NotFoundException('AI evidence target not found');
     }

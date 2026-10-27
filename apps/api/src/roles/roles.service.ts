@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScopeService } from '../access/scope.service';
 import { AI_PERMISSIONS, AiPermission, aiRoleMayHold } from '../ai-governance/ai-permissions';
+import { businessRoleCode, CANONICAL_BUSINESS_ROLES } from '../auth/business-roles';
 import {
   CreateRoleDto,
   SetRolePermissionsDto,
@@ -39,6 +40,9 @@ export class RolesService {
     return roles.map((r) => ({
       id: r.id,
       code: r.code,
+      businessRoleCode: r.businessRoleCode,
+      canDeactivate:r.code!=='system_admin'&&(!r.isSystem||(CANONICAL_BUSINESS_ROLES as readonly string[]).includes(r.code)),
+      canBindBusinessRole: !r.businessRoleCode && r.isActive && (CANONICAL_BUSINESS_ROLES as readonly string[]).includes(r.code),
       nameEn: r.nameEn,
       nameAr: r.nameAr,
       description: r.description,
@@ -62,6 +66,8 @@ export class RolesService {
     return {
       id: role.id,
       code: role.code,
+      businessRoleCode: role.businessRoleCode,
+      canDeactivate:role.code!=='system_admin'&&(!role.isSystem||(CANONICAL_BUSINESS_ROLES as readonly string[]).includes(role.code)),
       nameEn: role.nameEn,
       nameAr: role.nameAr,
       description: role.description,
@@ -88,9 +94,16 @@ export class RolesService {
   async create(dto: CreateRoleDto, actor: string) {
     const existing = await this.prisma.role.findUnique({ where: { code: dto.code } });
     if (existing) throw new ConflictException('Role code already exists');
+    if(dto.businessRoleCode){
+      if((CANONICAL_BUSINESS_ROLES as readonly string[]).includes(dto.code))throw new BadRequestException('Canonical responsibility codes cannot be departmental aliases');
+      if(!(CANONICAL_BUSINESS_ROLES as readonly string[]).includes(dto.businessRoleCode))throw new BadRequestException('Select an existing canonical business responsibility, never an administrative identity');
+      const canonical=await this.prisma.role.findFirst({where:{code:dto.businessRoleCode,businessRoleCode:null,isActive:true,deletedAt:null}});
+      if(!canonical)throw new BadRequestException('Canonical business responsibility is unavailable; bindings cannot form chains');
+    }
     const role = await this.prisma.role.create({
       data: {
         code: dto.code,
+        businessRoleCode: dto.businessRoleCode ?? null,
         nameEn: dto.nameEn,
         nameAr: dto.nameAr,
         description: dto.description,
@@ -104,17 +117,18 @@ export class RolesService {
       action: 'role.create',
       entityType: 'role',
       entityId: role.id,
-      metadata: { code: role.code },
+      metadata: { code: role.code, businessRoleCode: role.businessRoleCode },
     });
     return this.get(role.id);
   }
 
   async update(id: string, dto: UpdateRoleDto, actor: string) {
+    if('businessRoleCode' in dto)throw new BadRequestException('Business responsibility can only be bound during role creation');
     const role = await this.requireRole(id);
     if (role.code === 'system_admin') {
       throw new ForbiddenException('system_admin role is immutable');
     }
-    if (role.isSystem && dto.isActive === false) {
+    if (role.isSystem && dto.isActive === false && !(CANONICAL_BUSINESS_ROLES as readonly string[]).includes(role.code)) {
       throw new ForbiddenException('System roles cannot be deactivated');
     }
     const role2 = await this.prisma.role.update({
@@ -162,42 +176,95 @@ export class RolesService {
       throw new ForbiddenException('system_admin permissions are immutable');
     }
     const catalog = await this.prisma.permission.findMany();
-    const idByKey = new Map(catalog.map((p) => [`${p.resource}.${p.action}`, p.id]));
+    const idByKey = new Map(
+      catalog.map((p) => [`${p.resource}.${p.action}`, p.id]),
+    );
     const unknown = dto.permissions.filter((k) => !idByKey.has(k));
     if (unknown.length) {
-      throw new BadRequestException(`Unknown permissions: ${unknown.join(', ')}`);
+      throw new BadRequestException(
+        `Unknown permissions: ${unknown.join(', ')}`,
+      );
     }
-    const aiRequested=dto.permissions.filter(k=>(AI_PERMISSIONS as string[]).includes(k));
-    if (aiRequested.some(k=>!aiRoleMayHold(role.code,k as AiPermission))) {
-      throw new ForbiddenException('AI permissions may only be granted to their catalog roles');
+    const aiRequested = dto.permissions.filter((k) =>
+      (AI_PERMISSIONS as string[]).includes(k),
+    );
+    if (
+      aiRequested.some(
+        (k) => !aiRoleMayHold(businessRoleCode(role), k as AiPermission),
+      )
+    ) {
+      throw new ForbiddenException(
+        'AI permissions may only be granted to their catalog roles',
+      );
     }
-    const currentAi=await this.prisma.rolePermission.findMany({where:{roleId:role.id,permission:{OR:AI_PERMISSIONS.map(code=>{const at=code.lastIndexOf('.');return {resource:code.slice(0,at),action:code.slice(at+1)};})}},include:{permission:true}});
+    const currentAi = await this.prisma.rolePermission.findMany({
+      where: {
+        roleId: role.id,
+        permission: {
+          OR: AI_PERMISSIONS.map((code) => {
+            const at = code.lastIndexOf('.');
+            return { resource: code.slice(0, at), action: code.slice(at + 1) };
+          }),
+        },
+      },
+      include: { permission: true },
+    });
     if (aiRequested.length || currentAi.length) {
-      if (!dto.justification?.trim()) throw new BadRequestException('Justification required for AI permission changes');
-      await this.prisma.$transaction(async tx=>{
-        await tx.rolePermission.deleteMany({where:{roleId:role.id}});
-        await tx.rolePermission.createMany({data:dto.permissions.map(k=>({roleId:role.id,permissionId:idByKey.get(k)!})),skipDuplicates:true});
-        await this.audit.logRequired({actor,action:'ai.role.permissions.set',entityType:'role',entityId:role.id,
-          metadata:{oldValue:currentAi.map(g=>`${g.permission.resource}.${g.permission.action}`),newValue:aiRequested,justification:dto.justification}},tx);
+      if (!dto.justification?.trim())
+        throw new BadRequestException(
+          'Justification required for AI permission changes',
+        );
+      await this.prisma.$transaction(async (tx) => {
+        await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+        await tx.rolePermission.createMany({
+          data: dto.permissions.map((k) => ({
+            roleId: role.id,
+            permissionId: idByKey.get(k)!,
+          })),
+          skipDuplicates: true,
+        });
+        await this.audit.logRequired(
+          {
+            actor,
+            action: 'ai.role.permissions.set',
+            entityType: 'role',
+            entityId: role.id,
+            metadata: {
+              oldValue: currentAi.map(
+                (g) => `${g.permission.resource}.${g.permission.action}`,
+              ),
+              newValue: aiRequested,
+              justification: dto.justification,
+            },
+          },
+          tx,
+        );
       });
       return this.get(role.id);
     }
-    await this.prisma.$transaction([
-      this.prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),
-      this.prisma.rolePermission.createMany({
-        data: dto.permissions.map((k) => ({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+      await tx.rolePermission.createMany({
+        data: dto.permissions.map((key) => ({
           roleId: role.id,
-          permissionId: idByKey.get(k)!,
+          permissionId: idByKey.get(key)!,
         })),
         skipDuplicates: true,
-      }),
-    ]);
-    await this.audit.log({
-      actor,
-      action: 'role.permissions.set',
-      entityType: 'role',
-      entityId: role.id,
-      metadata: { code: role.code, count: dto.permissions.length },
+      });
+      await this.audit.logRequired(
+        {
+          actor,
+          action: 'role.permissions.set',
+          entityType: 'role',
+          entityId: role.id,
+          metadata: {
+            code: role.code,
+            count: dto.permissions.length,
+            justification: dto.justification,
+          },
+        },
+        tx,
+      );
     });
     return this.get(role.id);
   }

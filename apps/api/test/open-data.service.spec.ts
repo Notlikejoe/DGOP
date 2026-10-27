@@ -1,3 +1,4 @@
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -115,7 +116,7 @@ function makeService(overrides: Record<string, any> = {}) {
       count: async () => 0,
       findUnique: async () => null,
       findFirst: async (args: any) => {
-        if (args?.where?.AND) return data.candidate ?? null;
+        if (args?.where?.AND) return data.candidate ? { ...data.candidate, approvals: data.approvals } : null;
         return data.existingCandidate;
       },
       create: async (args: any) => {
@@ -265,7 +266,7 @@ function makeService(overrides: Record<string, any> = {}) {
       return wfCase;
     },
   };
-  return { service: new OpenDataService(prisma as any, audit as any, scope as any, workflow as any), data };
+  return { service: new OpenDataService(Object.assign(prisma as any,{role:liveRoleFixture([fixtureRole("od_officer",["open_data_candidates.edit"]),fixtureRole("data_owner",["open_data_candidates.edit"]),fixtureRole("business_steward",["open_data_candidates.edit"]),fixtureRole("privacy_officer",["open_data_candidates.edit"]),fixtureRole("dmo_admin",["open_data_candidates.edit"]),fixtureRole("dq_steward",["open_data_candidates.edit"])])}) as never, audit as any, scope as any, workflow as any), data };
 }
 
 test('eligibility flags restricted personal data as blocked', () => {
@@ -315,7 +316,7 @@ test('status lifecycle rejects direct draft to published transition', () => {
 test('list rejects invalid candidate status before Prisma receives it', async () => {
   let candidateFinds = 0;
   const service = new OpenDataService(
-    {
+    Object.assign({
       openDataCandidate: {
         findMany: async () => {
           candidateFinds++;
@@ -323,7 +324,7 @@ test('list rejects invalid candidate status before Prisma receives it', async ()
         },
         count: async () => 0,
       },
-    } as never,
+    } as never,{role:liveRoleFixture([fixtureRole("od_officer",["open_data_candidates.edit"]),fixtureRole("data_owner",["open_data_candidates.edit"]),fixtureRole("business_steward",["open_data_candidates.edit"]),fixtureRole("privacy_officer",["open_data_candidates.edit"]),fixtureRole("dmo_admin",["open_data_candidates.edit"]),fixtureRole("dq_steward",["open_data_candidates.edit"])])}) as never,
     { log: async () => undefined } as never,
     { resolve: async () => ({ orgUnits: 'all', domains: 'all', maxClassRank: null }) } as never,
   );
@@ -611,7 +612,7 @@ test('updateApproval: rejects users without authority for the approval step', as
         { decision: OpenDataApprovalDecision.approved },
         'auditor@dgop.local',
       ),
-    /cannot decide/,
+    /explicit live eligible business role grant/,
   );
 });
 

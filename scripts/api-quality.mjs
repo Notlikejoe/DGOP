@@ -1,4 +1,4 @@
-import { controllerRoutes } from './api-route-scan.mjs';
+import { controllerRoutes, liveRoleQueryContract } from './api-route-scan.mjs';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -577,9 +577,10 @@ if (
 }
 const accessServiceText = readFileSync(join(root, 'apps', 'api', 'src', 'access', 'access.service.ts'), 'utf8');
 const scopeServiceText = readFileSync(join(root, 'apps', 'api', 'src', 'access', 'scope.service.ts'), 'utf8');
+const businessRolesText = readFileSync(join(srcDir,'auth','business-roles.ts'),'utf8');
 if (
   accessServiceText.includes("roleCodes.includes('system_admin')") ||
-  !accessServiceText.includes("where: { code: { in: roleCodes }, isActive: true, deletedAt: null }") ||
+  !liveRoleQueryContract('access.service.ts',accessServiceText,'permissionsForRoleCodes',businessRolesText) ||
   !accessServiceText.includes("activeRoles.some((role) => role.code === 'system_admin')")
 ) {
   fail('AccessService must resolve active role rows before granting system_admin wildcard permissions.');
@@ -600,7 +601,7 @@ if (
 }
 if (
   /async\s+resolve\s*\([^)]*\)\s*\{[\s\S]{0,250}?roleCodes\.includes\(['"]system_admin['"]\)/u.test(scopeServiceText) ||
-  !scopeServiceText.includes('where: { code: { in: roleCodes }, isActive: true, deletedAt: null }')
+  !liveRoleQueryContract('scope.service.ts',scopeServiceText,'resolve',businessRolesText)
 ) {
   fail('ScopeService must resolve active role rows before granting unrestricted system-role scope.');
 }

@@ -11,6 +11,8 @@ import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 process.env.EVIDENCE_STORAGE_DIR = mkdtempSync(join(tmpdir(), 'dgop-evidence-'));
 
 import { EvidenceService } from '../src/evidence/evidence.service';
+import { fixtureRole,liveRoleFixture } from './live-role-fixture';
+import {createHash} from 'node:crypto';
 
 type Over = {
   evidenceRow?: any;
@@ -25,6 +27,7 @@ type Over = {
 
 function makeService(over: Over): EvidenceService {
   const prisma = {
+    role:liveRoleFixture([fixtureRole('dmo_admin',['evidence.review']),fixtureRole('ndi_reviewer',['evidence.review'])]),
     ndiEvidence: {
       findMany: async (args: any) => {
         over.onFindMany?.(args);
@@ -45,6 +48,7 @@ function makeService(over: Over): EvidenceService {
     },
     ndiSpecification: {
       findFirst: async () => over.spec ?? { id: 'spec1', code: 'DG.1.1' },
+      findMany:async()=>over.spec?.ownerPersonId===over.person?.id?[over.spec]:[],
     },
     person: {
       findFirst: async () => over.person ?? null,
@@ -55,6 +59,8 @@ function makeService(over: Over): EvidenceService {
   return new EvidenceService(prisma as never, audit as never);
 }
 
+const originalBytes=Buffer.from('%PDF-1.4\nSynthetic unit evidence');
+writeFileSync(join(process.env.EVIDENCE_STORAGE_DIR!,'x.pdf'),originalBytes);
 const base = {
   id: 'e1',
   specId: 'spec1',
@@ -63,8 +69,8 @@ const base = {
   fileName: 'x.pdf',
   originalName: 'policy.pdf',
   mimeType: 'application/pdf',
-  sizeBytes: 10,
-  sha256: 'abc',
+  sizeBytes: originalBytes.length,
+  sha256: createHash('sha256').update(originalBytes).digest('hex'),
   submittedBy: 'alice@dgop.local',
   submittedAt: new Date(),
   reviewedBy: null,
@@ -78,6 +84,27 @@ const test = (name: string, fn: () => Promise<void> | void) => tests.push({ name
 const adminUser = { id: 'u-admin', email: 'admin@dgop.local', roles: ['system_admin'] };
 const aliceUser = { id: 'u-alice', email: 'alice@dgop.local', roles: ['ndi_evidence_owner'] };
 const bobReviewer = { id: 'u-bob', email: 'bob@dgop.local', roles: ['dmo_admin'] };
+
+test('authorized legacy records remain visible with explicit missing-file metadata and blocked downloads',async()=>{
+  const missing={...base,fileName:'missing-original.pdf'};
+  const svc=makeService({rows:[missing],evidenceRow:missing});
+  const [row]=await svc.listBySpec('spec1',adminUser);
+  assert.equal(row.fileAvailability,'unavailable');
+  assert.equal(row.unavailableReason,'original_file_unavailable');
+  await assert.rejects(()=>svc.fileFor(base.id,adminUser),/historical record is preserved/);
+  await assert.rejects(()=>svc.review(base.id,{decision:'approve'},bobReviewer),/verified checksum/);
+});
+
+test('available downloads require matching original bytes and metadata',async()=>{
+  const bytes=Buffer.from('synthetic file integrity test'),fileName='integrity.txt';
+  writeFileSync(join(process.env.EVIDENCE_STORAGE_DIR!,fileName),bytes);
+  const row={...base,fileName,sizeBytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
+  const svc=makeService({evidenceRow:row});
+  assert.equal((await svc.get(row.id,adminUser)).fileAvailability,'available');
+  writeFileSync(join(process.env.EVIDENCE_STORAGE_DIR!,fileName),Buffer.alloc(bytes.length,120));
+  assert.equal((await svc.get(row.id,adminUser)).unavailableReason,'checksum_mismatch');
+  await assert.rejects(()=>svc.fileFor(row.id,adminUser),/cannot be verified/);
+});
 
 test('effectiveStatus: approved past expiry reads as expired', async () => {
   const svc = makeService({
@@ -136,11 +163,12 @@ test('submit: approved cannot be submitted', async () => {
   await assert.rejects(() => svc.submit('e1', adminUser), /draft or rejected/i);
 });
 
-test('review: system administrator can review evidence they submitted', async () => {
-  let captured: any = null;
-  const svc = makeService({ evidenceRow: { ...base, status: 'submitted', submittedBy: 'admin@dgop.local' }, onUpdate: (a) => (captured = a.data) });
-  await svc.review('e1', { decision: 'approve' }, adminUser);
-  assert.strictEqual(captured.status, 'approved');
+test('review: submitter cannot review own evidence (SoD)', async () => {
+  const svc = makeService({ evidenceRow: { ...base, status: 'submitted', submittedBy: 'admin@dgop.local' } });
+  await assert.rejects(
+    () => svc.review('e1', { decision: 'approve' }, adminUser),
+    /cannot review evidence you submitted/i,
+  );
 });
 
 test('review: approve sets approved status', async () => {
@@ -155,11 +183,9 @@ test('review: approve sets approved status', async () => {
   assert.strictEqual(captured.reviewComment, 'ok');
 });
 
-test('review: system administrator can review another submitter without a business review role', async () => {
-  let captured: any = null;
-  const svc = makeService({ evidenceRow: { ...base, status: 'submitted' }, onUpdate: (a) => (captured = a.data) });
-  await svc.review('e1', { decision: 'approve' }, adminUser);
-  assert.strictEqual(captured.status, 'approved');
+test('review: platform administrator needs a business review role for another submitter', async () => {
+  const svc = makeService({ evidenceRow: { ...base, status: 'submitted' } });
+  await assert.rejects(() => svc.review('e1', { decision: 'approve' }, adminUser), /explicit live eligible business role grant/i);
 });
 
 test('review: reject sets rejected status', async () => {
@@ -257,13 +283,13 @@ test('fileFor: rejects legacy file names that escape evidence storage', async ()
 
   await assert.rejects(
     () => svc.fileFor('e1', adminUser),
-    /evidence file not found/i,
+    /original evidence file is unavailable/i,
   );
 });
 
 test('fileFor: resolves stored files only inside evidence storage', async () => {
   const svc = makeService({
-    evidenceRow: { ...base, fileName: 'inside.txt', mimeType: 'text/plain', originalName: 'inside.txt' },
+    evidenceRow: { ...base, fileName: 'inside.txt', mimeType: 'text/plain', originalName: 'inside.txt',sizeBytes:2,sha256:createHash('sha256').update('ok').digest('hex') },
   });
   const storageDir = (svc as unknown as { storageDir: string }).storageDir;
   writeFileSync(join(storageDir, 'inside.txt'), 'ok');

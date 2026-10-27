@@ -55,6 +55,10 @@ export interface NdiEvidence {
   descriptionEn?: string | null;
   status: EvidenceStatus;
   effectiveStatus: EvidenceStatus;
+  canReview?: boolean;
+  canRevoke?: boolean;
+  fileAvailability?: 'available' | 'unavailable';
+  unavailableReason?: string;
   fileName: string;
   originalName: string;
   mimeType: string;

@@ -401,13 +401,13 @@ export const WORKFLOW_DESIGNER_LIFECYCLE = {
   states: ['draft', 'under_review', 'published', 'active', 'suspended', 'retired', 'archived'],
   roles: {
     designer: ['system_admin', 'dmo_admin', 'workflow_designer'],
-    reviewer: ['system_admin', 'dmo_admin', 'workflow_reviewer'],
-    publisher: ['system_admin', 'dmo_admin', 'workflow_publisher'],
+    reviewer: ['dmo_admin', 'workflow_reviewer'],
+    publisher: ['dmo_admin', 'workflow_publisher'],
   },
   segregationOfDuties: [
     'Designer saves draft changes and cannot be the only evidence of publish approval in production pilot.',
     'Reviewer comments and publisher actions are audit logged.',
-    'System administrators may operate all roles in local/demo mode, but production pilot review gates must name separate accountable roles.',
+    'Technical administration confers no review or publication authority; explicit business grants and independent actors are required.',
   ],
 };
 
@@ -1151,7 +1151,7 @@ export const DEFAULT_WORKFLOW_TEMPLATES: WorkflowTemplateSeed[] = [
     defaultSlaDays: 7,
     stages: [
       stage('impact', 'Architecture impact review', 'مراجعة أثر المعمارية', 'Assess lineage, integration, platform, and operational impact.', 'analysis', 'review', 'technical_steward', 2, { isStart: true }),
-      stage('controls', 'Governance controls review', 'مراجعة ضوابط الحوكمة', 'Validate ownership, quality, security, and retention controls.', 'review', 'review', 'data_steward', 2),
+      stage('controls', 'Governance controls review', 'مراجعة ضوابط الحوكمة', 'Validate ownership, quality, security, and retention controls.', 'review', 'review', 'business_steward', 2),
       stage('decision', 'Architecture decision', 'قرار المعمارية', 'Approve implementation or request remediation.', 'decision', 'approval', 'dmo_admin', 2, { isDecision: true }),
       stage('implementation-note', 'Implementation evidence', 'دليل التنفيذ', 'Capture change evidence and post-implementation checks.', 'implementation', 'review', 'technical_steward', 1, { isFinal: true }),
     ],

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, isDevMode, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { BrandLogo } from '../../shared/brand-logo';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import { I18nService } from '../../core/i18n.service';
@@ -11,7 +12,7 @@ import { loginErrorKey, loginReturnUrl } from './login.logic';
 @Component({
   selector: 'app-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, BrandLogo],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })

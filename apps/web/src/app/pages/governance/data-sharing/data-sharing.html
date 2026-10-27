@@ -195,11 +195,11 @@
               <div class="action-box">
                 <h3>{{ t('dsi.reviewAction') }}</h3>
                 <div class="form-grid">
-                  <select [ngModel]="reviewDraft().step" (ngModelChange)="patchReview('step', $event)">
-                    @for (step of reviewSteps(); track step) { <option [value]="step">{{ statusLabel('dsi.step', step) }}</option> }
+                  <select [ngModel]="reviewStepFor(request)" (ngModelChange)="patchReview('step', $event)">
+                    @for (step of request.allowedReviewSteps?.length ? request.allowedReviewSteps! : reviewSteps(); track step) { <option [value]="step">{{ statusLabel('dsi.step', step) }}</option> }
                   </select>
-                  <select [ngModel]="reviewDraft().decision" (ngModelChange)="patchReview('decision', $event)">
-                    @for (decision of reviewDecisions(); track decision) { <option [value]="decision">{{ statusLabel('dsi.decision', decision) }}</option> }
+                  <select [ngModel]="request.allowedReviewSteps?.length ? reviewDraft().decision : 'pending'" (ngModelChange)="patchReview('decision', $event)">
+                    @for (decision of request.allowedReviewSteps?.length ? reviewDecisions() : ['pending']; track decision) { <option [value]="decision">{{ statusLabel('dsi.decision', decision) }}</option> }
                   </select>
                   <select [ngModel]="reviewDraft().reviewerPersonId" (ngModelChange)="patchReview('reviewerPersonId', $event)">
                     <option value="">{{ t('dsi.unassigned') }}</option>

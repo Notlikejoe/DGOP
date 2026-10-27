@@ -26,6 +26,25 @@ try {
   const saved=process.env[key];process.env[key]=value;assert.equal(isSyntheticPopulationProfile(),false,key);process.env[key]=saved;
  }
  writeFileSync(file,JSON.stringify({...manifest,isComplianceProof:true}));assert.equal(isSyntheticPopulationProfile(),false);
+ process.env.DGOP_PROFILE='main-preview';process.env.DB_NAME='dgop_ai_preview_20261021';
+ process.env.DATABASE_URL='postgresql://example:example@127.0.0.1:55436/'+process.env.DB_NAME;
+ process.env.DGOP_DEMO='true';process.env.DGOP_DEMO_ROOT=base;process.env.DGOP_DEMO_INSTALLATION_ID='fixture-main-preview';
+ process.env.DGOP_DEMO_PROFILE_FILE=join(base,'demo-profile.json');
+ const profile={profileVersion:1,demoOnly:true,database:process.env.DB_NAME,installationId:process.env.DGOP_DEMO_INSTALLATION_ID,installationRoot:base,bindHost:'127.0.0.1'};
+ const nextManifest={...manifest,database:process.env.DB_NAME,profile:'main-preview'};
+ writeFileSync(process.env.DGOP_DEMO_PROFILE_FILE,JSON.stringify(profile));writeFileSync(file,JSON.stringify(nextManifest));
+ assert.equal(isSyntheticPopulationProfile(),true,'Managed main preview retains synthetic fixtures');
+ process.env.DGOP_DEMO='false';assert.equal(isSyntheticPopulationProfile(),false);process.env.DGOP_DEMO='true';
+ process.env.NODE_ENV='production';assert.equal(isSyntheticPopulationProfile(),false);process.env.NODE_ENV='development';
+ writeFileSync(file,JSON.stringify({...nextManifest,root:base}));assert.equal(isSyntheticPopulationProfile(),false);
+ writeFileSync(file,JSON.stringify(nextManifest));writeFileSync(process.env.DGOP_DEMO_PROFILE_FILE,JSON.stringify({...profile,database:'dgop_dev'}));assert.equal(isSyntheticPopulationProfile(),false);
  delete process.env.DGOP_SYNTHETIC_POPULATION_MANIFEST;assert.equal(isSyntheticPopulationProfile(),false);
- console.log('PASS exact synthetic population guard, mismatched database/profile and operational fallback');
+ process.env.NODE_ENV='test';process.env.DATABASE_URL='postgresql://example:example@127.0.0.1:55438/dgop_ai_test_source_guard';process.env.DGOP_AI_TEST_DATABASE_URL=process.env.DATABASE_URL;
+ writeFileSync(process.env.DGOP_DEMO_PROFILE_FILE,JSON.stringify({...profile,database:'dgop_ai_test_source_guard'}));
+ writeFileSync(join(sources,'manifest.json'),JSON.stringify(sourceManifest));process.env.AI_MIGRATION_SOURCE_MANIFEST=join(sources,'manifest.json');
+ assert.equal(migrationSources().sourceMode,'synthetic_demo','Managed engineering fallback must remain usable without the development population profile');
+ for(const [key,value]of Object.entries({NODE_ENV:'production',DGOP_DEMO:'false',DGOP_AI_TEST_DATABASE_URL:'postgresql://example:example@127.0.0.1:55438/dgop_ai_test_other',DATABASE_URL:'postgresql://example:example@127.0.0.1:55436/dgop_ai_test_source_guard'})){
+  const saved=process.env[key];process.env[key]=value;assert.throws(()=>migrationSources(),/trusted isolated/,key);process.env[key]=saved;
+ }
+ console.log('PASS exact synthetic population and managed engineering guards, mismatched database/profile and operational fallback');
 } finally {process.chdir(cwd);for(const key of Object.keys(process.env))if(!(key in previous))delete process.env[key];Object.assign(process.env,previous);rmSync(base,{recursive:true,force:true});}

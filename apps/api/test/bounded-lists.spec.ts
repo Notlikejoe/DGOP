@@ -159,7 +159,7 @@ test('user auth lookups only load active non-deleted role assignments', async ()
   await service.findByEmailWithRoles('admin@dgop.local');
 
   assert.deepEqual(findUniqueArgs.include.userRoles.where, {
-    role: { isActive: true, deletedAt: null },
+    role: { isActive: true, deletedAt: null, OR:[{businessRoleCode:null},{businessRole:{is:{isActive:true,deletedAt:null,businessRoleCode:null}}}] },
   });
 });
 

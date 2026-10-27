@@ -1,3 +1,4 @@
+import { actualRoleCodes } from './ai-authorization.service';
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,7 +38,7 @@ export class AiAuditQueryService {
     if(kind==='all')await this.authorization.authorize(userId,'case.view.aiuc.all',tx);
    }
    // Resolve the installed DGOP scope against the same snapshot as native event population.
-   const scope=await new ScopeService(tx as PrismaService).resolve(actor.roles);
+   const scope=await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
    const asset:Prisma.DataAssetWhereInput={deletedAt:null,...(scope.orgUnits==='all'?{}:{orgUnitId:{in:scope.orgUnits}}),...(scope.domains==='all'?{}:{domainId:{in:scope.domains}}),...(scope.maxClassRank===null?{}:{classification:{is:{rank:{lte:scope.maxClassRank}}}})};
    const useCase:Prisma.AiUseCaseWhereInput={deletedAt:null,isSampleData:false,...(scope.orgUnits==='all'?{}:{organizationUnitId:{in:scope.orgUnits}}),OR:[{asset:{is:asset}},...(scope.domains==='all'&&scope.maxClassRank===null?[{assetId:null}]:[])],...(filter.assetId?{assetId:filter.assetId}:{})};
    const populations:Prisma.AuditLogWhereInput[]=[],caseIds:string[]=[];
@@ -84,7 +85,7 @@ export class AiAuditQueryService {
   const actor=await this.authorization.authorize(userId,'case.view.aiuc.all',tx);
   await this.authorization.authorize(userId,'case.view.airs.all',tx);
   if(!isSystemAdministrator(actor.roles)&&!actor.roles.includes('auditor'))throw new ForbiddenException('Global chain verification requires a live Auditor or System Administrator');
-  const scope=await new ScopeService(tx as PrismaService).resolve(actor.roles);
+  const scope=await new ScopeService(tx as PrismaService).resolve(actualRoleCodes(actor));
   if(scope.orgUnits!=='all'||scope.domains!=='all'||scope.maxClassRank!==null)throw new ForbiddenException('Global chain verification requires unrestricted native audit scope');
   return {scope:'global_dgop_chain',...await this.audit.verifyChain(undefined,tx)};
   },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:60000});

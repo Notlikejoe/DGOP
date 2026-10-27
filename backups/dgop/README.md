@@ -1,5 +1,7 @@
 # DGOP database snapshots
 
+**Latest populated preview:** [repaired-4212 — 27 October 2026](2026-10-27/repaired-4212/SETUP.md), matching source commit 24f5a95bf00800153102126537b504b499427c42. Restore this snapshot for the current 4212 records, 59 accounts, departmental roles and recent workflow repairs. It has a separate private decryption key. The four archives below are preserved historical versions.
+
 These encrypted PostgreSQL archives preserve all four application database versions captured on 9 October 2026:
 
 | Snapshot | Purpose |

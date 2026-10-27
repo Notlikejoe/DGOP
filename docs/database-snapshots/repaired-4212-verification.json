@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-27",
+  "snapshot": "repaired-4212",
+  "sourceCommit": "24f5a95bf00800153102126537b504b499427c42",
+  "status": "passed",
+  "verification": {
+    "tables": 207,
+    "rows": 9797,
+    "users": 59,
+    "files": 23,
+    "allTableCountsMatch": true,
+    "allRestoredTableContentsMatchCurrentSource": true,
+    "constraintsMatch": true,
+    "triggersMatch": true,
+    "filesChecksumsMatch": true,
+    "preservedKeysMatch": true,
+    "prismaReadWriteRollback": true
+  },
+  "configuration": {
+    "status": "passed",
+    "managedDemoGuard": true,
+    "syntheticProvenanceGuard": true,
+    "sourceManifestAccepted": true,
+    "sourceFixtures": 2,
+    "databaseMutation": false,
+    "note": "Configuration and native profile checks only; persisted-state read/write was verified separately against the fresh restore."
+  },
+  "missingSourceFiles": 11,
+  "fileGroups": {
+    "evidence": 8,
+    "attachments": 2,
+    "population": 11,
+    "profiles": 1,
+    "configuration": 1
+  },
+  "artifacts": {
+    "database": {
+      "file": "database.dgop.enc",
+      "bytes": 3127799,
+      "sha256": "264b721ef6807cef219d2b30dfab76fad059391976d21f1d4fc38ec5235256fd",
+      "plainSha256": "49c98ef54f03b729abfa18dacf2c84d2c97cdf6b555c0e26e6d6326e8a80099b"
+    },
+    "files": {
+      "file": "files.dgop.enc",
+      "bytes": 502999,
+      "sha256": "97f95420b61ed2895015807c07441f87bfe6d4eca1201ac379b5790eea8cd141",
+      "plainSha256": "e98dd279b06e2f4f35d5acb8eeee6990fa2e6a722eec50c6783e36a03bdf2e0e"
+    }
+  },
+  "testResults": {
+    "archiveAndRestoreTests": 6,
+    "configurationTests": 2
+  },
+  "scope": "Recovery/configuration only; no new full application acceptance",
+  "failureRecovery": "Original ENAMETOOLONG failure retained privately; repaired stdin transport, then resumed remaining verification against the existing fresh restore.",
+  "privateReceiptSha256": "aba45c030d6bc85d784e1a303eca67ee3cde57bc17584c0233b646512a68d044"
+}
